@@ -3,8 +3,8 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aind-library-template"
-description = "Prints messages to stdout. Simple boilerplate for libraries."
+name = "deep-neurographs"
+description = "Generated from aind-library-template"
 license = {text = "MIT"}
 requires-python = ">=3.7"
 authors = [
@@ -17,7 +17,6 @@ readme = "README.md"
 dynamic = ["version"]
 
 dependencies = [
-    'pandas'
 ]
 
 [project.optional-dependencies]
@@ -35,7 +34,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.dynamic]
-version = {attr = "aind_library_template.__version__"}
+version = {attr = "deep_neurographs.__version__"}
 
 [tool.black]
 line-length = 79
@@ -60,7 +59,7 @@ exclude = '''
 
 [tool.coverage.run]
 omit = ["*__init__*"]
-source = ["aind_library_template", "tests"]
+source = ["deep_neurographs", "tests"]
 
 [tool.coverage.report]
 exclude_lines = [
