@@ -8,9 +8,6 @@ Builds graph for postprocessing with GNN.
 
 """
 
-from time import time
-from scipy.spatial import KDTree
-
 from deep_neurographs import feature_extraction as extractor
 from deep_neurographs import s3_utils, swc_utils, utils
 from deep_neurographs import graph_classes as gclass
@@ -53,41 +50,35 @@ def build_graph(
         access_key_id=None, secret_access_key=None
     )
 
-    # Build graph
-    graph = create_nodes(
+    # Build supergraph
+    graph = gclass.SuperGraph()
+    graph = create_nodes_from_swc(
+        graph,
         bucket,
-        swc_path,
-        label_path,
         s3_client,
+        swc_path,
         anisotropy=anisotropy,
     )
-    return graph
-    #edge_features = create_edges(xyz_to_id)
+    graph.create_edges()
 
     # Create PyG graph
+    
+    return graph
 
 
-def create_nodes(
-    bucket, swc_path, label_path, s3_client, anisotropy=[1.0, 1.0, 1.0]
+def create_nodes_from_swc(
+    graph, bucket, s3_client, swc_path, anisotropy=[1.0, 1.0, 1.0],
 ):
-    graph = gclass.SuperGraph()
+    """
+    """
     file_keys = s3_utils.listdir(bucket, swc_path, s3_client, ext=".swc")
     for node_id, key in enumerate(file_keys):
-        # Read and process data
+        # Read and process swc
         raw_swc = s3_utils.read_from_s3(bucket, key, s3_client)
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
 
-        # Populate graph
-        graph.add_node(node_id)
-        graph.set_node_attribute(node_id, "radius", swc_dict["radius"])
-        graph.set_node_attribute(node_id, "subnodes", swc_dict["subnodes"])
-        graph.set_node_attribute(node_id, "xyz", swc_dict["xyz"])
-
-        leafs, junctions = swc_utils.extract_topo_nodes(swc_dict["subnodes"], swc_dict["parents"])
-        graph.set_node_attribute(node_id, "leafs", leafs)
-        graph.set_node_attribute(node_id, "junctions", junctions)
-
         # Feature extraction
+        graph.add_node_from_swc(node_id, swc_dict)
         skel_features = extractor.generate_skel_features(swc_dict)
         graph.add_node_feature(skel_features)
 
@@ -95,19 +86,14 @@ def create_nodes(
         f = key.split("/")[-1]
         graph.old_node_ids[node_id] = int(f.split(".")[0])
         graph.upd_xyz_to_id(node_id)
-        #= upd_dict(xyz_to_id, swc_dict["xyz"], node_id)
 
     return graph
 
 
-def upd_dict(my_dict, keys, scalar):
-    my_dict.update(dict(zip_broadcast(keys, scalar)))
-    return my_dict
-
-
-def create_edges(xyz_to_id):
-    kdtree = KDTree(list(xyz_to_id.keys()))
-    t, unit = utils.time_writer(time() - t0)
+def create_nodes_from_mask():
+    """
+    """
+    pass
 
 
 def get_target_labels(bucket, mistake_log_path):
