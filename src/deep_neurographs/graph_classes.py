@@ -8,14 +8,11 @@ Implementation of subclass of Networkx.Graph called "SuperGraph".
 
 """
 
-import itertools
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import networkx as nx
-import numpy as np
 from deep_neurographs import swc_utils, utils
 from more_itertools import zip_broadcast
-from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial import KDTree
 
 
@@ -29,14 +26,16 @@ class SuperGraph(nx.Graph):
     segmentation. 
 
     """
-    def __init__(self, max_degree=5, max_edge_dist=200):
+
+    def __init__(self, max_degree=5, max_edge_dist=200.0):
         """
         Parameters
         ----------
-        max_degree : TYPE, optional
-            DESCRIPTION. The default is 5.
-        max_edge_dist : TYPE, optional
-            DESCRIPTION. The default is 200.
+        max_degree : int, optional
+            Maximum degree of any given node. The default is 5.
+        max_edge_dist : float, optional
+            Maximum between any two nodes that form an edge.
+            The default is 200.
 
         Returns
         -------
@@ -44,15 +43,8 @@ class SuperGraph(nx.Graph):
 
         """
         super(SuperGraph, self).__init__()
-        # Feature vectors
-        self.node_features = []
-        self.edge_features = []
-
-        # Graph properties
         self.max_degree = max_degree
         self.max_edge_dist = max_edge_dist
-
-        # Book keeping
         self.old_node_ids = dict()
         self.xyz_to_id = dict()
 
@@ -65,9 +57,10 @@ class SuperGraph(nx.Graph):
         Parameters
         ----------
         node_id : int
-            DESCRIPTION.
+            Node id.
         swc_dict : dict
-            DESCRIPTION.
+            Dictionary generated from an swc where the keys are swc type
+            attributes.
 
         Returns
         -------
@@ -75,12 +68,17 @@ class SuperGraph(nx.Graph):
 
         """
         swc_keys = set(["parents", "radius", "subnodes", "xyz"])
-        assert swc_keys == set(swc_dict.keys()), "swc_dict must have the keys {}".format(swc_keys)
-        leafs, junctions = swc_utils.extract_topo_nodes(swc_dict["subnodes"], swc_dict["parents"])
+        assert swc_keys == set(
+            swc_dict.keys()
+        ), "swc_dict must have the keys {}".format(swc_keys)
+        leafs, junctions = swc_utils.extract_topo_nodes(
+            swc_dict["subnodes"], swc_dict["parents"]
+        )
         self.add_node(
             node_id,
             junctions=junctions,
             leafs=leafs,
+            parents=swc_dict["parents"],
             radius=swc_dict["radius"],
             subnodes=swc_dict["subnodes"],
             xyz=swc_dict["xyz"],
@@ -88,10 +86,11 @@ class SuperGraph(nx.Graph):
 
     def create_edges(self):
         """
+        Generates edges for the graph.
+
         Returns
         -------
-        bool
-            DESCRIPTION.
+        None
 
         """
         self._init_kdtree()
@@ -121,13 +120,14 @@ class SuperGraph(nx.Graph):
         """
         Parameters
         ----------
-        query : TYPE
-            DESCRIPTION.
+        query : int
+            Node id.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
+        generator[tuple]
+            Generator that generates the xyz coordinates cooresponding to all
+            nodes within a distance of "self.max_edge_dist" from "query".
 
         """
         idxs = self.kdtree.query_ball_point(query, self.max_edge_dist)
@@ -138,12 +138,13 @@ class SuperGraph(nx.Graph):
         """
         Parameters
         ----------
-        query_id : TYPE
-            DESCRIPTION.
-        query_xyz : TYPE
-            DESCRIPTION.
-        nbs_xyz : TYPE
-            DESCRIPTION.
+        query_id : int
+            Node id of the query node.
+        query_xyz : tuple[float]
+            The (x,y,z) coordinates of the query node.
+        nbs_xyz : generator[tuple]
+            Generator that generates the xyz coordinates cooresponding to all
+            nodes within a distance of "self.max_edge_dist" from "query".
 
         Returns
         -------
@@ -171,17 +172,9 @@ class SuperGraph(nx.Graph):
         # Add best edges
         best_dist = self._get_best_edges(best_dist)
         for nb_id in best_dist.keys():
-            print("nb_id:", nb_id)
-            print("Add edge from {} to {}".format(query_id, nb_id))
-            print("xyz coordinates are {} and {}".format(query_xyz, best_xyz[nb_id]))
-            print("dist =", best_dist[nb_id])
             self._add_edge(
-                query_id,
-                query_xyz,
-                nb_id, 
-                best_xyz[nb_id],
-                best_dist[nb_id],
-                )
+                query_id, query_xyz, nb_id, best_xyz[nb_id], best_dist[nb_id],
+            )
             print("")
 
     def _get_best_edges(self, best_dist):
@@ -191,7 +184,7 @@ class SuperGraph(nx.Graph):
 
         Parameters
         ----------
-        best_dist : dicts
+        best_dist : dict
             Dictionary where the keys are node_ids and values are distance
             from the target node.
 
@@ -203,26 +196,26 @@ class SuperGraph(nx.Graph):
         """
         if len(best_dist.keys()) > self.max_degree:
             sorted_keys = sorted(best_dist, key=best_dist.__getitem__)
-            for key in sorted_keys[self.max_degree::]:
+            for key in sorted_keys[self.max_degree : :]:
                 del best_dist[key]
         return best_dist
 
     def _add_edge(self, id1, xyz1, id2, xyz2, dist):
         """
-        
+        Adds the edge {id1, id2} to the graph.
 
         Parameters
         ----------
         id1 : int
-            DESCRIPTION.
+            Node id.
         xyz1 : tuple(float)
-            DESCRIPTION.
+            The (x,y,z) coordinates of node "id1".
         id2 : int
-            DESCRIPTION.
+            Node id.
         xyz2 : tuple(float)
-            DESCRIPTION.
+            The (x,y,z) coordinates of node "id1".
         dist : float
-            DESCRIPTION.
+            Distance between nodes "id1" and "id2".
 
         Returns
         -------
@@ -231,90 +224,63 @@ class SuperGraph(nx.Graph):
         """
         if self._check_to_add_edge(id1, id2, dist):
             print("--> Added edge ({}, {})".format(id1, id2))
-            self.add_edge(id1, id2, distance=dist, xyz={id1: xyz1, id2: xyz2})        
+            print("xyz coordinates are {} and {}".format(xyz1, xyz2))
+            print("dist =", dist)
+            self.add_edge(id1, id2, distance=dist, xyz={id1: xyz1, id2: xyz2})
 
     def _check_to_add_edge(self, id1, id2, dist):
         """
-        
+        Checks whether the edge {id1, id2} already exists. If so, the edge
+        with a smaller distance is kept.
 
         Parameters
         ----------
-        id1 : TYPE
-            DESCRIPTION.
-        id2 : TYPE
-            DESCRIPTION.
-        dist : TYPE
-            DESCRIPTION.
+        id1 : int
+            Node id.
+        id2 : int
+            Node id.
+        dist : float
+            Distance between nodes "id1" and "id2".
 
         Returns
         -------
         bool
-            DESCRIPTION.
+            Indication of whether to add proposed edge.
 
         """
         edge = (id1, id2)
         if self.has_edge(*edge):
             if self.edges[edge]["distance"] < dist:
                 return False
-            print("Updating edge ({}, {}) because better match found".format(id1, id2))
         return True
-        
+
     # --- Graph/Node/Edge Attribute routines ---
     def upd_xyz_to_id(self, node_id):
         """
-
+        Updates self attribute "xyz_to_id" to include the newly added node
+        (i.e. "node_id").
 
         Parameters
         ----------
-        node_id : TYPE
-            DESCRIPTION.
+        node_id : int
+            Node id.
 
         Returns
         -------
         None.
 
         """
-        self.check_node_id(node_id)
+        self.node_exists(node_id)
         new_entries = dict(zip_broadcast(self.nodes[node_id]["xyz"], node_id))
         self.xyz_to_id.update(new_entries)
-
-    # --- Add features ---
-    def add_node_feature(self, feature):
-        """
-        Parameters
-        ----------
-        feature : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
-        self.node_features.append(feature)
-        assert len(self.node_features) == len(self.nodes), "Number of nodes and node features not equal!"
-
-    def add_edge_feature(self, feature):
-        """
-        Parameters
-        ----------
-        feature : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
-        pass
 
     # --- Visualization ---
     def _init_figure(self):
         fig = plt.figure(figsize=(12, 12))
-        ax = fig.add_subplot(111, projection='3d')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
+        ax = fig.add_subplot(111, projection="3d")
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
         return fig, ax
 
     def visualize_node(self, node_id):
@@ -323,22 +289,22 @@ class SuperGraph(nx.Graph):
 
         Parameters
         ----------
-        node_id : TYPE
-            DESCRIPTION.
+        node_id : int
+            Node id.
 
         Returns
         -------
         None.
 
         """
-        fig, ax = self._init_figure()
+        _, ax = self._init_figure()
         for (x, y, z), label in self._get_subnodes_data(node_id):
             ax.scatter(x, y, z)
             ax.text(x, y, z, label)
         plt.show()
 
     def _get_subnodes_data(self, node_id):
-        self.check_node_id(node_id)
+        self.node_exists(node_id)
         xyz = self.nodes[node_id]["xyz"]
         labels = self.nodes[node_id]["subnodes"]
         return list(zip(xyz, labels))
@@ -347,10 +313,10 @@ class SuperGraph(nx.Graph):
         """
         Parameters
         ----------
-        node_ids : TYPE, optional
-            DESCRIPTION. The default is None.
-        edge_ids : TYPE, optional
-            DESCRIPTION. The default is None.
+        node_ids : list[int], optional
+            List of node ids to be plotted. The default is None.
+        edge_ids : list[tuple], optional
+            List of edge ids to be plotted. The default is None.
 
         Returns
         -------
@@ -361,13 +327,15 @@ class SuperGraph(nx.Graph):
         nodes = self.nodes if node_ids is None else node_ids
         for i, node_id in enumerate(nodes):
             color = COLORS[i % nCOLORS]
-            for (x, y, z), label in self._get_subnodes_data(node_id):
+            for (x, y, z), _ in self._get_subnodes_data(node_id):
                 ax.scatter(x, y, z, c=color)
         plt.show()
 
     # --- I/O Routines ---
     def write_swc(self):
         """
+        Writes graph to swc file
+
         Returns
         -------
         None.
@@ -375,13 +343,15 @@ class SuperGraph(nx.Graph):
         """
         pass
 
-    # --- Assertions ---
-    def check_node_id(self, node_id):
+    # --- Utils ---
+    def node_exists(self, node_id):
         """
+        Determines with node "node_id" exists in graph.
+
         Parameters
         ----------
-        node_id : TYPE
-            DESCRIPTION.
+        node_id : int
+            Node id.
 
         Returns
         -------
@@ -389,3 +359,35 @@ class SuperGraph(nx.Graph):
 
         """
         assert node_id in self.nodes, "Node does not exist!"
+
+    def num_nodes(self):
+        """
+        Computes number of nodes in the graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Number of nodes in the graph.
+
+        """
+        return self.number_of_nodes()
+
+    def num_edges(self):
+        """
+        Computes number of edges in the graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Number of edges in the graph.
+
+        """
+        return self.number_of_edges()
