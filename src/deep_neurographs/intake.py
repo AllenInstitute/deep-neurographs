@@ -9,7 +9,7 @@ Builds graph for postprocessing with GNN.
 """
 
 from deep_neurographs import feature_extraction as extractor
-from deep_neurographs import s3_utils, swc_utils, utils
+from deep_neurographs import s3_utils, swc_utils
 from deep_neurographs import graph_classes as gclass
 
 """
@@ -74,6 +74,9 @@ def create_nodes_from_swc(
     file_keys = s3_utils.listdir(bucket, swc_path, s3_client, ext=".swc")
     for node_id, key in enumerate(file_keys):
         # Read and process swc
+        print("node_id:", node_id)
+        print(key)
+        print("")
         raw_swc = s3_utils.read_from_s3(bucket, key, s3_client)
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
 
