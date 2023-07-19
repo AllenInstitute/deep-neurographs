@@ -15,7 +15,9 @@ import numpy as np
 
 def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
     """
-    Parses a raw swc file to extract the (x,y,z) coordinates and radii.
+    Parses a raw swc file to extract the (x,y,z) coordinates and radii. Note
+    that node_ids from swc are refactored to index from 0 to n-1 where n is
+    the number of entries in the swc file.
 
     Parameters
     ----------
@@ -31,6 +33,7 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
         The (x,y,z) coordinates and radii stored in "raw_swc".
 
     """
+    min_id = np.inf
     nRows = len(raw_swc)
     swc_dict = {
         "subnodes": nRows * [None],
@@ -44,6 +47,10 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
         swc_dict["xyz"][i] = read_xyz(parts[2:5], anisotropy=anisotropy)
         swc_dict["radius"][i] = float(parts[-2])
         swc_dict["parents"][i] = int(parts[-1])
+        if swc_dict["subnodes"][i] < min_id:
+            min_id = swc_dict["subnodes"][i]
+        swc_dict["subnodes"][i] -= min_id
+        swc_dict["parents"][i] -= min_id
     return swc_dict
 
 

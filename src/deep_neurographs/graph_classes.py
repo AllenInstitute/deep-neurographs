@@ -4,8 +4,7 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Implementation of subclasses of Networkx.Graph called "SuperNode"
-and "SuperGraph".
+Implementation of subclass of Networkx.Graph called "SuperGraph".
 
 """
 
@@ -32,15 +31,22 @@ class SuperGraph(nx.Graph):
     """
     def __init__(self, max_degree=5, max_edge_dist=200):
         """
+        Parameters
+        ----------
+        max_degree : TYPE, optional
+            DESCRIPTION. The default is 5.
+        max_edge_dist : TYPE, optional
+            DESCRIPTION. The default is 200.
+
+        Returns
+        -------
+        None.
+
         """
         super(SuperGraph, self).__init__()
         # Feature vectors
         self.node_features = []
         self.edge_features = []
-
-        # Attributes
-        self.node_attributes = ["subnodes", "xyz", "radius", "leafs", "junctions"]
-        self.edge_attributes = []
 
         # Graph properties
         self.max_degree = max_degree
@@ -53,6 +59,20 @@ class SuperGraph(nx.Graph):
     # --- Add node or edge ---
     def add_node_from_swc(self, node_id, swc_dict):
         """
+        Adds a node to the graph. The node's attributes are stored in
+        "swc_dict" which is generated from the corresponding swc file. 
+
+        Parameters
+        ----------
+        node_id : int
+            DESCRIPTION.
+        swc_dict : dict
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
         """
         swc_keys = set(["parents", "radius", "subnodes", "xyz"])
         assert swc_keys == set(swc_dict.keys()), "swc_dict must have the keys {}".format(swc_keys)
@@ -68,13 +88,18 @@ class SuperGraph(nx.Graph):
 
     def create_edges(self):
         """
+        Returns
+        -------
+        bool
+            DESCRIPTION.
+
         """
         self._init_kdtree()
         for query_id in self.nodes:
             for leaf in self.nodes[query_id]["leafs"]:
                 query_xyz = self.nodes[query_id]["xyz"][leaf]
                 nbs_xyz = self._query_kdtree(query_xyz)
-                self._extract_edges(query_id, query_xyz, nbs_xyz)      
+                self._extract_edges(query_id, query_xyz, nbs_xyz)
 
     def _init_kdtree(self):
         """
@@ -94,12 +119,37 @@ class SuperGraph(nx.Graph):
 
     def _query_kdtree(self, query):
         """
+        Parameters
+        ----------
+        query : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
         """
         idxs = self.kdtree.query_ball_point(query, self.max_edge_dist)
         xyz = self.kdtree.data[idxs].tolist()
         return map(tuple, xyz)
 
     def _extract_edges(self, query_id, query_xyz, nbs_xyz):
+        """
+        Parameters
+        ----------
+        query_id : TYPE
+            DESCRIPTION.
+        query_xyz : TYPE
+            DESCRIPTION.
+        nbs_xyz : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         # Search for best edges
         best_xyz = dict()
         best_dist = dict()
@@ -111,8 +161,6 @@ class SuperGraph(nx.Graph):
 
             if self.xyz_to_id[xyz] != query_id:
                 d = utils.dist(xyz, query_xyz)
-                #print(d)
-                #print(xyz)
                 if not utils.check_key(best_xyz, self.xyz_to_id[xyz]):
                     best_xyz[self.xyz_to_id[xyz]] = xyz
                     best_dist[self.xyz_to_id[xyz]] = d
@@ -127,29 +175,104 @@ class SuperGraph(nx.Graph):
             print("Add edge from {} to {}".format(query_id, nb_id))
             print("xyz coordinates are {} and {}".format(query_xyz, best_xyz[nb_id]))
             print("dist =", best_dist[nb_id])
+            self._add_edge(
+                query_id,
+                query_xyz,
+                nb_id, 
+                best_xyz[nb_id],
+                best_dist[nb_id],
+                )
             print("")
-            self._add_edge(query_id, query_xyz, nb_id,  best_xyz[nb_id])
-        self.visualize_supergraph(node_ids=list(best_dist.keys()) + [0])
-        print("Done")
-        stop
 
     def _get_best_edges(self, best_dist):
+        """
+        Gets the at most "self.max_degree" nodes that are closest to the
+        target node.
+
+        Parameters
+        ----------
+        best_dist : dicts
+            Dictionary where the keys are node_ids and values are distance
+            from the target node.
+
+        Returns
+        -------
+        best_dist : dict
+            Dictionary of nodes that are closest to the target node.
+
+        """
         if len(best_dist.keys()) > self.max_degree:
-            # to do...
-            return best_dist
-        else:
-            return best_dist
+            sorted_keys = sorted(best_dist, key=best_dist.__getitem__)
+            for key in sorted_keys[self.max_degree::]:
+                del best_dist[key]
+        return best_dist
 
-    def _add_edge(self, id1, xyz1, id2, xyz2):
-        # check whether edge has already been added
-        # add edge to self by using id1 and id2
-        # add xyz1 and xyz2 as attributes
-        # generate features
-        pass
+    def _add_edge(self, id1, xyz1, id2, xyz2, dist):
+        """
+        
 
-    # --- Update attribute ---
+        Parameters
+        ----------
+        id1 : int
+            DESCRIPTION.
+        xyz1 : tuple(float)
+            DESCRIPTION.
+        id2 : int
+            DESCRIPTION.
+        xyz2 : tuple(float)
+            DESCRIPTION.
+        dist : float
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self._check_to_add_edge(id1, id2, dist):
+            print("--> Added edge ({}, {})".format(id1, id2))
+            self.add_edge(id1, id2, distance=dist, xyz={id1: xyz1, id2: xyz2})        
+
+    def _check_to_add_edge(self, id1, id2, dist):
+        """
+        
+
+        Parameters
+        ----------
+        id1 : TYPE
+            DESCRIPTION.
+        id2 : TYPE
+            DESCRIPTION.
+        dist : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        bool
+            DESCRIPTION.
+
+        """
+        edge = (id1, id2)
+        if self.has_edge(*edge):
+            if self.edges[edge]["distance"] < dist:
+                return False
+            print("Updating edge ({}, {}) because better match found".format(id1, id2))
+        return True
+        
+    # --- Graph/Node/Edge Attribute routines ---
     def upd_xyz_to_id(self, node_id):
         """
+
+
+        Parameters
+        ----------
+        node_id : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
         """
         self.check_node_id(node_id)
         new_entries = dict(zip_broadcast(self.nodes[node_id]["xyz"], node_id))
@@ -158,73 +281,111 @@ class SuperGraph(nx.Graph):
     # --- Add features ---
     def add_node_feature(self, feature):
         """
+        Parameters
+        ----------
+        feature : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
         """
         self.node_features.append(feature)
         assert len(self.node_features) == len(self.nodes), "Number of nodes and node features not equal!"
 
     def add_edge_feature(self, feature):
         """
+        Parameters
+        ----------
+        feature : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
         """
         pass
 
     # --- Visualization ---
-    def visualize_supernode(self, node_id):
+    def _init_figure(self):
+        fig = plt.figure(figsize=(12, 12))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        return fig, ax
+
+    def visualize_node(self, node_id):
         """
+        Generates a plot of node "node_id" that includes of the subnodes.
+
+        Parameters
+        ----------
+        node_id : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
         """
-        # Extract data
+        fig, ax = self._init_figure()
+        for (x, y, z), label in self._get_subnodes_data(node_id):
+            ax.scatter(x, y, z)
+            ax.text(x, y, z, label)
+        plt.show()
+
+    def _get_subnodes_data(self, node_id):
         self.check_node_id(node_id)
         xyz = self.nodes[node_id]["xyz"]
         labels = self.nodes[node_id]["subnodes"]
-        points = list(zip(xyz, labels))
+        return list(zip(xyz, labels))
 
-        # Create a 3D plot
-        fig = plt.figure(figsize=(12, 12))
-        ax = fig.add_subplot(111, projection='3d')
-
-        # Plot each point with labels
-        for (x, y, z), label in points:
-            ax.scatter(x, y, z)
-            ax.text(x, y, z, label)
-
-        # Set labels for the axes
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-
-        # Show the plot
-        plt.show()
-
-    def visualize_supergraph(self, node_ids=None):
+    def visualize_supergraph(self, node_ids=None, edge_ids=None):
         """
+        Parameters
+        ----------
+        node_ids : TYPE, optional
+            DESCRIPTION. The default is None.
+        edge_ids : TYPE, optional
+            DESCRIPTION. The default is None.
+
+        Returns
+        -------
+        None.
+
         """
-        fig = plt.figure(figsize=(12, 12))
-        ax = fig.add_subplot(111, projection='3d')
+        fig, ax = self._init_figure()
         nodes = self.nodes if node_ids is None else node_ids
-        print("Plotting...")
         for i, node_id in enumerate(nodes):
-            # Extract data
-            print(node_id)
-            self.check_node_id(node_id)
-            xyz = self.nodes[node_id]["xyz"]
-            labels = self.nodes[node_id]["subnodes"]
-            points = list(zip(xyz, labels))
-
-            # Plot each point with labels
             color = COLORS[i % nCOLORS]
-            for (x, y, z), label in points:
+            for (x, y, z), label in self._get_subnodes_data(node_id):
                 ax.scatter(x, y, z, c=color)
-
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
         plt.show()
 
     # --- I/O Routines ---
     def write_swc(self):
         """
+        Returns
+        -------
+        None.
+
         """
         pass
 
     # --- Assertions ---
     def check_node_id(self, node_id):
+        """
+        Parameters
+        ----------
+        node_id : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         assert node_id in self.nodes, "Node does not exist!"
