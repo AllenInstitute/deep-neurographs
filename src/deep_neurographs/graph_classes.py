@@ -11,10 +11,10 @@ Implementation of subclass of Networkx.Graph called "SuperGraph".
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import networkx as nx
-from deep_neurographs import swc_utils, utils
 from more_itertools import zip_broadcast
 from scipy.spatial import KDTree
 
+from deep_neurographs import swc_utils, utils
 
 COLORS = list(mcolors.TABLEAU_COLORS.keys())
 nCOLORS = len(COLORS)
@@ -23,7 +23,7 @@ nCOLORS = len(COLORS)
 class SuperGraph(nx.Graph):
     """
     A class of graphs whose nodes correspond to super voxels in a predicted
-    segmentation. 
+    segmentation.
 
     """
 
@@ -52,7 +52,7 @@ class SuperGraph(nx.Graph):
     def add_node_from_swc(self, node_id, swc_dict):
         """
         Adds a node to the graph. The node's attributes are stored in
-        "swc_dict" which is generated from the corresponding swc file. 
+        "swc_dict" which is generated from the corresponding swc file.
 
         Parameters
         ----------
@@ -196,7 +196,7 @@ class SuperGraph(nx.Graph):
         """
         if len(best_dist.keys()) > self.max_degree:
             sorted_keys = sorted(best_dist, key=best_dist.__getitem__)
-            for key in sorted_keys[self.max_degree : :]:
+            for key in sorted_keys[self.max_degree:]:
                 del best_dist[key]
         return best_dist
 
@@ -323,7 +323,7 @@ class SuperGraph(nx.Graph):
         None.
 
         """
-        fig, ax = self._init_figure()
+        _, ax = self._init_figure()
         nodes = self.nodes if node_ids is None else node_ids
         for i, node_id in enumerate(nodes):
             color = COLORS[i % nCOLORS]

@@ -8,8 +8,8 @@ Builds graph for postprocessing with GNN.
 
 """
 
-from deep_neurographs import s3_utils, swc_utils
 from deep_neurographs import graph_classes as graph_class
+from deep_neurographs import s3_utils, swc_utils
 
 
 def build_graph(
@@ -58,5 +58,10 @@ def create_nodes_from_mask():
     pass
 
 
-def get_target_edges(bucket, file_key, s3_client):
+def get_target_edges(supergraph, bucket, file_key, access_key_id=None, secret_access_key=None):
+    s3_client = s3_utils.init_session(
+        access_key_id=access_key_id, secret_access_key=secret_access_key
+    )
     mistake_log = s3_utils.read_from_s3(bucket, file_key, s3_client)
+    # convert edges to new ids
+    return mistake_log
