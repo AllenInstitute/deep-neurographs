@@ -8,9 +8,7 @@ Builds graph for postprocessing with GNN.
 
 """
 
-import networkx as nx
 import numpy as np
-
 
 NUM_IMG_FEATURES = 0
 NUM_SKEL_FEATURES = 4
