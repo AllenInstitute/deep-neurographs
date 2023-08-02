@@ -35,22 +35,31 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
     """
     min_id = np.inf
     nRows = len(raw_swc)
+    
     swc_dict = {
         "subnodes": nRows * [None],
         "xyz": nRows * [None],
         "radius": nRows * [None],
         "parents": nRows * [None],
     }
+    delete = []
     for i, line in enumerate(raw_swc):
-        parts = line.split()
-        swc_dict["subnodes"][i] = int(parts[0])
-        swc_dict["xyz"][i] = read_xyz(parts[2:5], anisotropy=anisotropy)
-        swc_dict["radius"][i] = float(parts[-2])
-        swc_dict["parents"][i] = int(parts[-1])
-        if swc_dict["subnodes"][i] < min_id:
-            min_id = swc_dict["subnodes"][i]
-        swc_dict["subnodes"][i] -= min_id
-        swc_dict["parents"][i] -= min_id
+        if not line.startswith("#") and len(line) > 0:
+            parts = line.split()
+            swc_dict["subnodes"][i] = int(parts[0])
+            swc_dict["xyz"][i] = read_xyz(parts[2:5], anisotropy=anisotropy)
+            swc_dict["radius"][i] = float(parts[-2])
+            swc_dict["parents"][i] = int(parts[-1])
+            if swc_dict["subnodes"][i] < min_id:
+                min_id = swc_dict["subnodes"][i]
+                swc_dict["subnodes"][i] -= min_id
+                swc_dict["parents"][i] -= min_id
+        else:
+            delete.append(i)
+    delete.reverse()
+    for i in delete:
+        for key in swc_dict.keys():
+            del swc_dict[key][i]
     return swc_dict
 
 
