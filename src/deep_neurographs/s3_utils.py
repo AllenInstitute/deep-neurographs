@@ -15,8 +15,7 @@ import boto3
 
 
 def init_session(access_key_id=None, secret_access_key=None):
-    """
-    """
+    """ """
     if access_key_id is None or access_key_id is None:
         session = boto3.Session()
     else:
@@ -28,8 +27,7 @@ def init_session(access_key_id=None, secret_access_key=None):
 
 
 def listdir(bucket, dir_prefix, s3_client, ext=None):
-    """
-    """
+    """ """
     response = s3_client.list_objects_v2(Bucket=bucket, Prefix=dir_prefix)
     filenames = []
     for file in response["Contents"]:
@@ -43,8 +41,7 @@ def listdir(bucket, dir_prefix, s3_client, ext=None):
 
 
 def read_from_s3(bucket, file_key, s3_client):
-    """
-    """
+    """ """
     if ".txt" in file_key or ".swc" in file_key:
         return read_txt(bucket, file_key, s3_client)
     elif ".json" in file_key:
@@ -54,15 +51,14 @@ def read_from_s3(bucket, file_key, s3_client):
 
 
 def read_json(bucket, file_key, s3_client):
-    """
-    """
+    """ """
     response = s3_client.get_object(Bucket=bucket, Key=file_key)
-    json_data = response['Body'].read().decode('utf-8')
+    json_data = response["Body"].read().decode("utf-8")
     return json.loads(json_data)
 
+
 def read_txt(bucket, file_key, s3_client):
-    """
-    """
+    """ """
     body = []
     s3_object = s3_client.get_object(Bucket=bucket, Key=file_key)
     for line in io.TextIOWrapper(s3_object["Body"]):

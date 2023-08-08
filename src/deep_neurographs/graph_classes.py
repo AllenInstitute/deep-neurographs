@@ -173,9 +173,12 @@ class SuperGraph(nx.Graph):
         best_dist = self._get_best_edges(best_dist)
         for nb_id in best_dist.keys():
             self._add_edge(
-                query_id, query_xyz, nb_id, best_xyz[nb_id], best_dist[nb_id],
+                query_id,
+                query_xyz,
+                nb_id,
+                best_xyz[nb_id],
+                best_dist[nb_id],
             )
-            print("")
 
     def _get_best_edges(self, best_dist):
         """
@@ -196,7 +199,7 @@ class SuperGraph(nx.Graph):
         """
         if len(best_dist.keys()) > self.max_degree:
             sorted_keys = sorted(best_dist, key=best_dist.__getitem__)
-            for key in sorted_keys[self.max_degree:]:
+            for key in sorted_keys[self.max_degree :]:
                 del best_dist[key]
         return best_dist
 
@@ -223,9 +226,6 @@ class SuperGraph(nx.Graph):
 
         """
         if self._check_to_add_edge(id1, id2, dist):
-            print("--> Added edge ({}, {})".format(id1, id2))
-            print("xyz coordinates are {} and {}".format(xyz1, xyz2))
-            print("dist =", dist)
             self.add_edge(id1, id2, distance=dist, xyz={id1: xyz1, id2: xyz2})
 
     def _check_to_add_edge(self, id1, id2, dist):
@@ -391,3 +391,22 @@ class SuperGraph(nx.Graph):
 
         """
         return self.number_of_edges()
+    
+    def to_line_graph(self):
+        """
+        Converts graph to a line graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        networkx.Graph
+            Line graph.
+
+        """
+        graph = nx.Graph()
+        graph.add_nodes_from(self.nodes)
+        graph.add_edges_from(self.edges)
+        return nx.line_graph(graph)
