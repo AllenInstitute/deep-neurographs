@@ -15,8 +15,7 @@ import numpy as np
 
 
 def remove_item(my_set, item):
-    """
-    """
+    """ """
     try:
         my_set.remove(item)
     except:

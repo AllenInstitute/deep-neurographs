@@ -10,6 +10,7 @@ Builds graph for postprocessing with GNN.
 
 import numpy as np
 
+NUM_EDGE_FEATURES = 1
 NUM_IMG_FEATURES = 0
 NUM_SKEL_FEATURES = 4
 NUM_PC_FEATURES = 0
@@ -31,9 +32,9 @@ def generate_node_features(supergraph, img=True, pointcloud=True, skel=True):
 
 
 def generate_edge_features(supergraph):
-    features = []
-    for edge in supergraph.edges():
-        features.append(supergraph.edges[edge]["distance"])
+    features = np.zeros((supergraph.num_edges(), NUM_EDGE_FEATURES))
+    for i, edge in enumerate(supergraph.edges()):
+        features[i] = supergraph.edges[edge]["distance"]
     return features
 
 
@@ -84,7 +85,9 @@ def compute_num_features(features):
     return num_features
 
 
-def extract_feature_vec(features,):
+def extract_feature_vec(
+    features,
+):
     feature_vec = None
     for key in features.keys():
         if feature_vec is None:
