@@ -61,7 +61,7 @@ def _init_edge(swc_dict=None, node=None):
         edge["radius"].append(swc_dict["radius"][node])
         edge["xyz"].append(swc_dict["xyz"][node])
     return edge
- 
+
 
 def get_edge_attr(graph, edge, attr):
     edge_data = graph.get_edge_data(*edge)
