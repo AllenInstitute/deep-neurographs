@@ -85,9 +85,7 @@ def compute_num_features(features):
     return num_features
 
 
-def extract_feature_vec(
-    features,
-):
+def extract_feature_vec(features,):
     feature_vec = None
     for key in features.keys():
         if feature_vec is None:

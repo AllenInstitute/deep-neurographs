@@ -26,12 +26,10 @@ if __name__ == "__main__":
     block_id = "block_003"
     pred_id = "pred_3"
 
-
     # Initialize paths
     root_path = f"agrim-postprocessing-exps/data/{dataset}/{block_id}"
     swc_path = f"{root_path}/swcs/{pred_id}"
     mistake_log_path = f"{root_path}/mistake_logs/{pred_id}.txt"
-
 
     # Build graph
     supergraph = intake.build_graph(bucket, swc_path)
@@ -40,7 +38,6 @@ if __name__ == "__main__":
     print("Number of edges:", supergraph.num_edges())
     print("")
 
-    
     # Feature extraction
     node_features = extracter.generate_node_features(
         supergraph, img=False, pointcloud=False
@@ -51,29 +48,28 @@ if __name__ == "__main__":
     print("Number of edge features:", edge_features.shape[1])
     print("")
 
-
     # Initialize training data
     data, mistake_log = intake.init_data(
-        supergraph, node_features, edge_features, bucket, mistake_log_path,
+        supergraph, node_features, edge_features, bucket, mistake_log_path
     )
-
 
     # Training parameters
     num_feats = node_features.shape[1]
     model = net.GCN(num_feats, num_feats // 2, num_feats // 4).to(device)
     optimizer = torch.optim.Adam(params=model.parameters(), lr=0.01)
     criterion = torch.nn.BCEWithLogitsLoss()
-    transform = T.Compose([
-        T.NormalizeFeatures(),
-        T.ToDevice(device),
-        T.RandomLinkSplit(
-            num_val=0.05,
-            num_test=0.1,
-            is_undirected=True,
-            add_negative_train_samples=False,
-        ),
-    ])
-
+    transform = T.Compose(
+        [
+            T.NormalizeFeatures(),
+            T.ToDevice(device),
+            T.RandomLinkSplit(
+                num_val=0.05,
+                num_test=0.1,
+                is_undirected=True,
+                add_negative_train_samples=False,
+            ),
+        ]
+    )
 
     # Train
     print("Training...")
@@ -86,10 +82,12 @@ if __name__ == "__main__":
         if val_auc > best_val_auc:
             best_val_auc = val_auc
             final_test_auc = test_auc
-        print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Val: {val_auc:.4f}, '
-              f'Test: {test_auc:.4f}')
+        print(
+            f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Val: {val_auc:.4f}, "
+            f"Test: {test_auc:.4f}"
+        )
 
-    print(f'Final Test: {final_test_auc:.4f}')
+    print(f"Final Test: {final_test_auc:.4f}")
 
     z = model.encode(test_data.x, test_data.edge_index)
     final_edge_index = model.decode_all(z)

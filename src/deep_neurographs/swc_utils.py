@@ -34,12 +34,7 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
 
     """
     # Initialize swc
-    swc_dict = {
-        "id": [],
-        "xyz": [],
-        "radius": [],
-        "pid": [],
-    }
+    swc_dict = {"id": [], "xyz": [], "radius": [], "pid": []}
 
     # Parse raw data
     min_id = np.inf

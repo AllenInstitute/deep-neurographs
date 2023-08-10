@@ -38,10 +38,9 @@ def generate_immutables(
         neurograph.generate_immutables(swc_id, swc_dict)
     return neurograph
 
+
 def build_immutable_from_local(
-    neurograph,
-    swc_dir,
-    anisotropy=[1.0, 1.0, 1.0],
+    neurograph, swc_dir, anisotropy=[1.0, 1.0, 1.0]
 ):
     """
     To do...
@@ -125,15 +124,16 @@ def read_mistake_log(bucket, file_key, s3_client):
     hash_table = dict()
     mistake_log = s3_utils.read_from_s3(bucket, file_key, s3_client)
     for entry in mistake_log:
-        entry= entry.replace("[", "")
-        entry= entry.replace("]", "")
+        entry = entry.replace("[", "")
+        entry = entry.replace("]", "")
         entry = entry.split(",")
         entry = list(map(float, entry))
-        
+
         edge = (int(entry[0]), int(entry[1]))
         xyz_coords = (entry[2:5], entry[5:])
         hash_table[edge] = xyz_coords
     return hash_table
+
 
 """
 def build_supergraph(

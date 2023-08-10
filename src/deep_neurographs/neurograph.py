@@ -12,9 +12,12 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+import plotly.tools as tls
+import plotly.graph_objects as go
 from more_itertools import zip_broadcast
 from scipy.spatial import KDTree
 from deep_neurographs import graph_utils as gutils, swc_utils, utils
+from plotly.subplots import make_subplots
 
 COLORS = list(mcolors.TABLEAU_COLORS.keys())
 nCOLORS = len(COLORS)
@@ -28,7 +31,13 @@ class NeuroGraph(nx.Graph):
 
     """
 
-    def __init__(self, max_mutable_degree=5, max_mutable_edge_dist=150.0, prune=True, prune_depth=10):
+    def __init__(
+        self,
+        max_mutable_degree=5,
+        max_mutable_edge_dist=120.0,
+        prune=True,
+        prune_depth=10,
+    ):
         """
         Parameters
         ----------
@@ -95,11 +104,11 @@ class NeuroGraph(nx.Graph):
             self.add_edge(
                 node_id[i],
                 node_id[j],
-                xyz=np.array(edges[(i,j)]["xyz"]),
-                radius=np.array(edges[(i,j)]["radius"]),
+                xyz=np.array(edges[(i, j)]["xyz"]),
+                radius=np.array(edges[(i, j)]["radius"]),
                 swc_id=swc_id,
             )
-            xyz_to_edge = dict([(xyz, edge) for xyz in edges[(i, j)]["xyz"]])
+            xyz_to_edge = dict((xyz, edge) for xyz in edges[(i, j)]["xyz"])
             self.xyz_to_edge.update(xyz_to_edge)
 
         # Update leafs and junctions
@@ -123,7 +132,7 @@ class NeuroGraph(nx.Graph):
         for leaf in self.leafs:
             xyz_leaf = self.nodes[leaf]["xyz"]
             for xyz in self._get_mutables(leaf, xyz_leaf):
-                # Extract info on mutable connection                
+                # Extract info on mutable connection
                 (i, j) = self.xyz_to_edge[xyz]
                 attrs = self.get_edge_data(i, j)
 
@@ -192,7 +201,7 @@ class NeuroGraph(nx.Graph):
         """
         if len(dist.keys()) > self.max_mutable_degree:
             keys = sorted(dist, key=dist.__getitem__)
-            return [xyz[key] for key in keys[:self.max_mutable_degree]]
+            return [xyz[key] for key in keys[: self.max_mutable_degree]]
         else:
             return list(xyz.values())
 
@@ -210,10 +219,10 @@ class NeuroGraph(nx.Graph):
             radius=attrs["radius"][idx],
             swc_id=attrs["swc_id"],
         )
-        self._add_edge((i, node_id), attrs, np.arange(0, idx+1))
+        self._add_edge((i, node_id), attrs, np.arange(0, idx + 1))
         self._add_edge((node_id, j), attrs, np.arange(idx, len(attrs["xyz"])))
         return node_id
-    
+
     def _add_edge(self, edge, attrs, idxs):
         self.add_edge(
             edge[0],
@@ -260,14 +269,6 @@ class NeuroGraph(nx.Graph):
         return self.kdtree.data[idxs]
 
     # --- Visualization ---
-    def _init_figure(self):
-        fig = plt.figure(figsize=(10, 10))
-        ax = fig.add_subplot(111, projection="3d")
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_zlabel("Z")
-        return fig, ax
-
     def visualize_immutables(self):
         """
         Parameters
@@ -282,36 +283,55 @@ class NeuroGraph(nx.Graph):
         None.
 
         """
-        _, ax = self._init_figure()
-        self._plot_edges(ax, self.immutable_edges)
-        plt.show()
+        data = [self._plot_nodes()]
+        data.extend(self._plot_edges(self.immutable_edges))
+        self._plot(data, "Immutable Graph")
 
     def visualize_mutables(self):
-        _, ax = self._init_figure()
-        self._plot_edges(ax, self.immutable_edges, color="k")
-        self._plot_edges(ax, self.mutable_edges)
-        plt.show()
+        data = [self._plot_nodes()]
+        data.extend(self._plot_edges(self.immutable_edges, color="black"))
+        data.extend(self._plot_edges(self.mutable_edges))
+        self._plot(data, "Mutable Graph")
 
-    def _plot_node(self, ax, i, color="r"):
-        ax.scatter(
-            self.nodes[i]["xyz"][0],
-            self.nodes[i]["xyz"][1],
-            self.nodes[i]["xyz"][2],
-            color=color,
+    def _plot(self, data, title):
+        fig = go.Figure(data=data)
+        fig.update_layout(
+            title=title,
+            scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
         )
+        fig.update_layout(
+            scene=dict(aspectmode="manual", aspectratio=dict(x=1, y=1, z=0.8)),
+            height=600,
+        )
+        fig.show()
 
-    def _plot_edges(self, ax, edges, color=None):
+    def _plot_nodes(self):
+        xyz = nx.get_node_attributes(self, "xyz")
+        xyz = np.array(list(xyz.values()))
+        points = go.Scatter3d(
+            x=xyz[:, 0],
+            y=xyz[:, 1],
+            z=xyz[:, 2],
+            mode="markers",
+            name="Nodes"
+            marker=dict(size=3, color="red"),
+        )
+        return points
+
+    def _plot_edges(self, edges, color=None):
+        traces = []
+        line = dict(color=color) if color is not None else dict()
         for (i, j) in edges:
-            ax.plot(
-                self.edges[(i, j)]["xyz"][:, 0],
-                self.edges[(i, j)]["xyz"][:, 1],
-                self.edges[(i, j)]["xyz"][:, 2],
-                color=color,
+            trace = go.Scatter3d(
+                x=self.edges[(i, j)]["xyz"][:, 0],
+                y=self.edges[(i, j)]["xyz"][:, 1],
+                z=self.edges[(i, j)]["xyz"][:, 2],
+                mode="lines",
+                line=line,
             )
-            self._plot_node(ax, i)
-            self._plot_node(ax, j)
-        
-        
+            traces.append(trace)
+        return traces
+
     # --- Utils ---
     def num_nodes(self):
         """
@@ -344,7 +364,7 @@ class NeuroGraph(nx.Graph):
 
         """
         return self.number_of_edges()
-    
+
     def to_line_graph(self):
         """
         Converts graph to a line graph.

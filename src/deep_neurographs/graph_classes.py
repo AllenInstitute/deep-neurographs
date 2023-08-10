@@ -173,11 +173,7 @@ class SuperGraph(nx.Graph):
         best_dist = self._get_best_edges(best_dist)
         for nb_id in best_dist.keys():
             self._add_edge(
-                query_id,
-                query_xyz,
-                nb_id,
-                best_xyz[nb_id],
-                best_dist[nb_id],
+                query_id, query_xyz, nb_id, best_xyz[nb_id], best_dist[nb_id]
             )
 
     def _get_best_edges(self, best_dist):
@@ -391,7 +387,7 @@ class SuperGraph(nx.Graph):
 
         """
         return self.number_of_edges()
-    
+
     def to_line_graph(self):
         """
         Converts graph to a line graph.
