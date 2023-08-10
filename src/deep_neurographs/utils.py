@@ -10,7 +10,7 @@ General routines for various tasks.
 
 
 import os
-
+import json
 import numpy as np
 
 
@@ -75,3 +75,22 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
+
+
+def read_json(path):
+    """
+    Reads json file stored at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path where json file is stored.
+
+    Returns
+    -------
+    dict
+
+    """
+    with open(path, "r") as f:
+        data = json.load(f)
+    return data

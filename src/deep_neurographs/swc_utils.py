@@ -33,33 +33,30 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
         The (x,y,z) coordinates and radii stored in "raw_swc".
 
     """
-    min_id = np.inf
-    nRows = len(raw_swc)
-    
+    # Initialize swc
     swc_dict = {
-        "subnodes": nRows * [None],
-        "xyz": nRows * [None],
-        "radius": nRows * [None],
-        "parents": nRows * [None],
+        "id": [],
+        "xyz": [],
+        "radius": [],
+        "pid": [],
     }
-    delete = []
-    for i, line in enumerate(raw_swc):
+
+    # Parse raw data
+    min_id = np.inf
+    for line in raw_swc:
         if not line.startswith("#") and len(line) > 0:
             parts = line.split()
-            swc_dict["subnodes"][i] = int(parts[0])
-            swc_dict["xyz"][i] = read_xyz(parts[2:5], anisotropy=anisotropy)
-            swc_dict["radius"][i] = float(parts[-2])
-            swc_dict["parents"][i] = int(parts[-1])
-            if swc_dict["subnodes"][i] < min_id:
-                min_id = swc_dict["subnodes"][i]
-                swc_dict["subnodes"][i] -= min_id
-                swc_dict["parents"][i] -= min_id
-        else:
-            delete.append(i)
-    delete.reverse()
-    for i in delete:
-        for key in swc_dict.keys():
-            del swc_dict[key][i]
+            swc_dict["id"].append(int(parts[0]))
+            swc_dict["xyz"].append(read_xyz(parts[2:5], anisotropy=anisotropy))
+            swc_dict["radius"].append(float(parts[-2]))
+            swc_dict["pid"].append(int(parts[-1]))
+            if swc_dict["id"][-1] < min_id:
+                min_id = swc_dict["id"][-1]
+
+    # Reindex from zero
+    for i in range(len(swc_dict["id"])):
+        swc_dict["id"][i] -= min_id
+        swc_dict["pid"][i] -= min_id
     return swc_dict
 
 
@@ -82,14 +79,34 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0]):
         The (x,y,z) coordinates from an swc file.
 
     """
-    xyz = list(map(float, xyz))
-    xyz.reverse()
-    return tuple([xyz[i] / anisotropy[i] for i in range(3)])
+    return tuple([int(float(xyz[i]) * anisotropy[i]) for i in range(3)])
 
 
-def extract_topo_nodes(nodes, parents):
-    parents = set(parents)
-    nodes = set(nodes)
-    leafs = nodes.difference(parents)
-    # add junctions
-    return leafs, None
+def write_swc(path_to_swc, list_of_entries, color=None):
+    """
+    Writes an swc file.
+
+    Parameters
+    ----------
+    path_to_swc : str
+        Path that swc will be written to.
+    list_of_entries : list[list[int]]
+        List of entries that will be written to an swc file.
+    color : str, optional
+        Color of nodes. The default is None.
+
+    Returns
+    -------
+    None.
+
+    """
+    with open(path_to_swc, "w") as f:
+        if color is not None:
+            f.write("# COLOR" + color)
+        else:
+            f.write("# id, type, z, y, x, r, pid")
+        f.write("\n")
+        for i, entry in enumerate(list_of_entries):
+            for x in entry:
+                f.write(str(x) + " ")
+            f.write("\n")
