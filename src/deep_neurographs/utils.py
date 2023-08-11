@@ -9,8 +9,9 @@ General routines for various tasks.
 """
 
 
-import os
 import json
+import os
+
 import numpy as np
 
 
@@ -48,6 +49,24 @@ def check_key(my_dict, key):
 def mkdir(path_to_dir):
     if not os.path.exists(path_to_dir):
         os.mkdir(path_to_dir)
+
+
+def listdir(path, ext=None):
+    if ext is None:
+        return [f for f in os.listdir(path)]
+    else:
+        return [f for f in os.listdir(path) if ext in f]
+
+
+def listsubdirs(path, keyword=None):
+    subdirs = []
+    for d in os.listdir(path):
+        if os.path.isdir(os.path.join(path, d)):
+            if keyword is None:
+                subdirs.append(d)
+            elif keyword in d:
+                subdirs.append(d)
+    return subdirs
 
 
 def dist(x, y):

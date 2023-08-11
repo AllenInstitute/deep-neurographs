@@ -12,12 +12,14 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-import plotly.tools as tls
 import plotly.graph_objects as go
+import plotly.tools as tls
 from more_itertools import zip_broadcast
-from scipy.spatial import KDTree
-from deep_neurographs import graph_utils as gutils, swc_utils, utils
 from plotly.subplots import make_subplots
+from scipy.spatial import KDTree
+
+from deep_neurographs import graph_utils as gutils
+from deep_neurographs import swc_utils, utils
 
 COLORS = list(mcolors.TABLEAU_COLORS.keys())
 nCOLORS = len(COLORS)
@@ -34,7 +36,7 @@ class NeuroGraph(nx.Graph):
     def __init__(
         self,
         max_mutable_degree=5,
-        max_mutable_edge_dist=120.0,
+        max_mutable_edge_dist=50.0,
         prune=True,
         prune_depth=10,
     ):
@@ -139,8 +141,10 @@ class NeuroGraph(nx.Graph):
                 # Get connecting node
                 if utils.dist(xyz, attrs["xyz"][0]) < 32:
                     node = i
+                    xyz = self.nodes[node]["xyz"]
                 elif utils.dist(xyz, attrs["xyz"][-1]) < 32:
                     node = j
+                    xyz = self.nodes[node]["xyz"]
                 else:
                     idxs = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0]
                     node = self.add_immutable_node((i, j), attrs, idxs[0])
@@ -201,7 +205,7 @@ class NeuroGraph(nx.Graph):
         """
         if len(dist.keys()) > self.max_mutable_degree:
             keys = sorted(dist, key=dist.__getitem__)
-            return [xyz[key] for key in keys[: self.max_mutable_degree]]
+            return [xyz[key] for key in keys[0 : self.max_mutable_degree]]
         else:
             return list(xyz.values())
 
@@ -296,6 +300,7 @@ class NeuroGraph(nx.Graph):
     def _plot(self, data, title):
         fig = go.Figure(data=data)
         fig.update_layout(
+            plot_bgcolor="white",
             title=title,
             scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
         )
@@ -313,7 +318,7 @@ class NeuroGraph(nx.Graph):
             y=xyz[:, 1],
             z=xyz[:, 2],
             mode="markers",
-            name="Nodes"
+            name="Nodes",
             marker=dict(size=3, color="red"),
         )
         return points
