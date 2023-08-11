@@ -10,6 +10,7 @@ Routines for working with graphs.
 """
 
 import networkx as nx
+from deep_neurographs import utils
 
 
 def get_irreducibles(graph):
@@ -23,38 +24,123 @@ def get_irreducibles(graph):
     return leafs, junctions
 
 
-def extract_irreducible_graph(swc_dict):
+def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16):
     # Initialize graph
     graph = nx.Graph()
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
 
-    # Extract nodes
+    # Extract irreducibles
     leafs, junctions = get_irreducibles(graph)
     irreducible_nodes = set(leafs + junctions)
+    irreducible_edges, leafs = extract_irreducible_edges(
+        graph,
+        leafs,
+        junctions,
+        swc_dict,
+        prune,
+        prune_depth,
+    )
 
-    # Extract edges
-    irreducible_edges = dict()
+    # Check irreducility holds after pruning
+    if prune:
+       irreducible_edges, junctions = check_irreducibility(
+            junctions,
+            irreducible_edges,
+        )
+    return leafs, junctions, irreducible_edges
+
+
+def extract_irreducible_edges(
+    graph,
+    leafs,
+    junctions,
+    swc_dict,
+    prune,
+    prune_depth,
+):
     cur_root = None
-    cur_edge = _init_edge()
+    irreducible_edges = dict()
     for (i, j) in nx.dfs_edges(graph, source=leafs[0]):
         # Check start of path is valid
         if cur_root is None:
-            assert i in irreducible_nodes, "Logical error in ingest_swc()"
             cur_root = i
             cur_edge = _init_edge(swc_dict=swc_dict, node=i)
+            path_length = 0
 
         # Add to path
         cur_edge["radius"].append(swc_dict["radius"][j])
         cur_edge["xyz"].append(swc_dict["xyz"][j])
+        path_length += 1
 
         # Check whether to end path
-        if j in irreducible_nodes:
-            irreducible_edges[(cur_root, j)] = cur_edge
+        if j in leafs or j in junctions:
+            if prune and path_length <= prune_depth:
+                condition1 = j in leafs and cur_root in junctions
+                condition2 = cur_root in leafs and j in junctions
+                if condition1 or condition2:
+                    leafs.remove(j if condition1 else cur_root)
+                else:
+                    irreducible_edges[(cur_root, j)] = cur_edge
+            else:
+                irreducible_edges[(cur_root, j)] = cur_edge
             cur_root = None
+    return irreducible_edges, leafs
+    
 
-    return leafs, junctions, irreducible_edges
+def check_irreducibility(junctions, irreducible_edges):
+    graph = nx.Graph()
+    graph.add_edges_from(irreducible_edges.keys())
+    nx.set_edge_attributes(graph, irreducible_edges)
+    for j in junctions:
+        if j not in graph.nodes:
+            junctions.remove(j)
+        elif graph.degree[j] == 2:
+            # Get join edges
+            nbs = list(graph.neighbors(j))
+            edge1 = graph.get_edge_data(j, nbs[0])
+            edge2 = graph.get_edge_data(j, nbs[1])
+            edge = join_edges(edge1, edge2)
 
+            # Update irreducible edges
+            junctions.remove(j)
+            irreducible_edges = utils.remove_key(irreducible_edges, (j, nbs[0]))
+            irreducible_edges = utils.remove_key(irreducible_edges, (j, nbs[1]))
+            irreducible_edges[tuple(nbs)] = edge
 
+            graph.remove_edge(j, nbs[0])
+            graph.remove_edge(j, nbs[1])
+            graph.remove_node(j)
+            graph.add_edge(*tuple(nbs), xyz=edge["xyz"], radius=edge["radius"])
+            if graph.degree[nbs[0]] > 2:
+                junctions.append(nbs[0])
+
+            if graph.degree[nbs[1]] > 2:
+                junctions.append(nbs[1])
+
+    return irreducible_edges, junctions
+    
+
+def join_edges(edge1, edge2):
+    # Last point in edge1 must connect to first point in edge2
+    if edge1["xyz"][0] == edge2["xyz"][0]:
+        edge1 = reverse_edge(edge1)
+    elif edge1["xyz"][-1] == edge2["xyz"][-1]:
+        edge2 = reverse_edge(edge2)
+    elif edge1["xyz"][0] == edge2["xyz"][-1]:
+        edge1 = reverse_edge(edge1)
+        edge2 = reverse_edge(edge2)
+    edge = {
+        "xyz": edge1["xyz"] + edge2["xyz"][1:],
+        "radius": edge1["radius"] + edge2["radius"],
+    }
+    return edge
+    
+    
+def reverse_edge(edge):
+    edge["xyz"].reverse()
+    edge["radius"].reverse()
+    return edge
+    
 def _init_edge(swc_dict=None, node=None):
     edge = {"radius": [], "xyz": []}
     if node is not None:

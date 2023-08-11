@@ -28,7 +28,14 @@ if __name__ == "__main__":
     s3_root = f"agrim-postprocessing-exps/data/{dataset}/{block_id}"
     swc_dir = f"{s3_root}/swcs/{pred_id}"
 
-    neurograph_s3 = intake.build_neurograph(swc_dir, bucket=bucket)
+    neurograph_s3 = intake.build_neurograph(
+        swc_dir,
+        bucket=bucket,
+        max_mutable_degree=5,
+        max_mutable_edge_dist=50.0,
+        prune=True,
+        prune_depth=16,
+    )
     print("Graph built from s3 data...")
     print("Number of nodes:", neurograph_s3.num_nodes())
     print("Number of immutable edges:", len(neurograph_s3.immutable_edges))
@@ -43,7 +50,13 @@ if __name__ == "__main__":
     local_root = f"/home/jupyter/workspace/data/{dataset}/pred_swcs/{pred_id}"
     swc_dir = f"{local_root}/{block_id}"
 
-    neurograph_local = intake.build_neurograph(swc_dir)
+    neurograph_local = intake.build_neurograph(
+        swc_dir,
+        max_mutable_degree=5,
+        max_mutable_edge_dist=50.0,
+        prune=True,
+        prune_depth=16,
+    )
     print("Graph built from local data...")
     print("Number of nodes:", neurograph_local.num_nodes())
     print("Number of immutable edges:", len(neurograph_local.immutable_edges))
