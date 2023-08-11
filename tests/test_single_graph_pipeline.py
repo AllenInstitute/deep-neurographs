@@ -11,11 +11,9 @@ Tests routines that build graph and generate features
 import networkx as nx
 import torch
 import torch_geometric.transforms as T
-from deep_neurographs import feature_extraction as extracter
-from deep_neurographs import intake
-from deep_neurographs import net
-from deep_neurographs import train
 
+from deep_neurographs import feature_extraction as extracter
+from deep_neurographs import intake, net, train
 
 if __name__ == "__main__":
     # Parmaters

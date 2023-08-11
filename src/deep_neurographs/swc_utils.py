@@ -77,7 +77,7 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0]):
     return tuple([int(float(xyz[i]) * anisotropy[i]) for i in range(3)])
 
 
-def write_swc(path_to_swc, list_of_entries, color=None):
+def write_swc(path, list_of_entries, color=None):
     """
     Writes an swc file.
 
@@ -95,7 +95,7 @@ def write_swc(path_to_swc, list_of_entries, color=None):
     None.
 
     """
-    with open(path_to_swc, "w") as f:
+    with open(path, "w") as f:
         if color is not None:
             f.write("# COLOR" + color)
         else:
@@ -105,3 +105,10 @@ def write_swc(path_to_swc, list_of_entries, color=None):
             for x in entry:
                 f.write(str(x) + " ")
             f.write("\n")
+
+
+def read_swc(path):
+    with open(path, "r") as file:
+        contents = file.readlines()
+        file.close()
+    return contents
