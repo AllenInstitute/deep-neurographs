@@ -4,7 +4,7 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Builds graph for postprocessing with GNN.
+Builds neurograph for postprocessing with GNN.
 
 """
 
@@ -25,7 +25,17 @@ def build_neurograph(
     bucket=None,
     access_key_id=None,
     secret_access_key=None,
+    max_mutable_degree=5,
+    max_mutable_edge_dist=50.0,
+    prune=True,
+    prune_depth=16,
 ):
+    """
+    Builds a neurograph from a directory of swc files, where each swc
+    represents a neuron and these neurons are assumed to be near each
+    other.
+
+    """
     neurograph = ng.NeuroGraph()
     if bucket is not None:
         neurograph = init_immutables_from_s3(
@@ -38,7 +48,11 @@ def build_neurograph(
         )
     else:
         neurograph = init_immutables_from_local(
-            neurograph, swc_dir, anisotropy=anisotropy
+            neurograph,
+            swc_dir,
+            anisotropy=anisotropy,
+            prune=prune,
+            prune_depth=prune_depth,
         )
     neurograph.generate_mutables()
     return neurograph
@@ -51,6 +65,10 @@ def init_immutables_from_s3(
     anisotropy=[1.0, 1.0, 1.0],
     access_key_id=None,
     secret_access_key=None,
+    max_mutable_degree=5,
+    max_mutable_edge_dist=50.0,
+    prune=True,
+    prune_depth=16,
 ):
     """
     To do...
@@ -58,24 +76,34 @@ def init_immutables_from_s3(
     s3_client = s3_utils.init_session(
         access_key_id=access_key_id, secret_access_key=secret_access_key
     )
-    file_keys = s3_utils.listdir(bucket, swc_dir, s3_client, ext=".swc")
-    for swc_id, file_key in enumerate(file_keys):
+    for file_key in s3_utils.listdir(bucket, swc_dir, s3_client, ext=".swc"):
+        swc_id = file_key.split("/")[-1]
         raw_swc = s3_utils.read_from_s3(bucket, file_key, s3_client)
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
-        neurograph.generate_immutables(swc_id, swc_dict)
+        neurograph.generate_immutables(
+            swc_id, swc_dict, prune=prune, prune_depth=prune_depth
+        )
     return neurograph
 
 
 def init_immutables_from_local(
-    neurograph, swc_dir, anisotropy=[1.0, 1.0, 1.0]
+    neurograph,
+    swc_dir,
+    anisotropy=[1.0, 1.0, 1.0],
+    max_mutable_degree=5,
+    max_mutable_edge_dist=50.0,
+    prune=True,
+    prune_depth=16,
 ):
     """
     To do...
     """
-    for swc_id, file_key in enumerate(utils.listdir(swc_dir, ext=".swc")):
-        raw_swc = swc_utils.read_swc(os.path.join(swc_dir, file_key))
+    for swc_id in utils.listdir(swc_dir, ext=".swc"):
+        raw_swc = swc_utils.read_swc(os.path.join(swc_dir, swc_id))
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
-        neurograph.generate_immutables(swc_id, swc_dict)
+        neurograph.generate_immutables(
+            swc_id, swc_dict, prune=prune, prune_depth=prune_depth
+        )
     return neurograph
 
 
@@ -137,15 +165,6 @@ def get_target_edges(
     print("Number of mistakes:", len(hash_table))
     print("Number of hits:", cnt)
     return torch.tensor(target_edges), hash_table
-
-
-def get_old_edge(supergraph, edge):
-    """
-    To do...
-    """
-    id_0 = supergraph.old_node_ids[edge[0]]
-    id_1 = supergraph.old_node_ids[edge[1]]
-    return (id_0, id_1), (id_1, id_0)
 
 
 def read_mistake_log(bucket, file_key, s3_client):

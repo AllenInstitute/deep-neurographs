@@ -33,13 +33,7 @@ class NeuroGraph(nx.Graph):
 
     """
 
-    def __init__(
-        self,
-        max_mutable_degree=5,
-        max_mutable_edge_dist=50.0,
-        prune=True,
-        prune_depth=10,
-    ):
+    def __init__(self, max_mutable_degree=5, max_mutable_edge_dist=50.0):
         """
         Parameters
         ----------
@@ -57,8 +51,6 @@ class NeuroGraph(nx.Graph):
         """
         super(NeuroGraph, self).__init__()
         # Parameters
-        self.prune = prune
-        self.prune_depth = prune_depth
         self.max_mutable_degree = max_mutable_degree
         self.max_mutable_edge_dist = max_mutable_edge_dist
 
@@ -70,7 +62,9 @@ class NeuroGraph(nx.Graph):
         self.xyz_to_edge = dict()
 
     # --- Add nodes or edges ---
-    def generate_immutables(self, swc_id, swc_dict):
+    def generate_immutables(
+        self, swc_id, swc_dict, prune=True, prune_depth=16
+    ):
         """
         Adds nodes to graph from a dictionary generated from an swc files.
 
@@ -88,7 +82,9 @@ class NeuroGraph(nx.Graph):
 
         """
         # Add nodes
-        leafs, junctions, edges = gutils.extract_irreducible_graph(swc_dict)
+        leafs, junctions, edges = gutils.extract_irreducible_graph(
+            swc_dict, prune=prune, prune_depth=prune_depth
+        )
         node_id = dict()
         for i in leafs + junctions:
             node_id[i] = len(self.nodes)

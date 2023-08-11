@@ -46,6 +46,20 @@ def check_key(my_dict, key):
         return False
 
 
+def remove_key(my_dict, key):
+    """
+    Removes key from dict in the case when key may need to be reversed
+
+    """
+    if check_key(my_dict, key):
+        my_dict.pop(key)
+    elif check_key(my_dict, (key[1], key[0])):
+        my_dict.pop((key[1], key[0]))
+    else:
+        print("key not found")
+    return my_dict
+
+
 def mkdir(path_to_dir):
     if not os.path.exists(path_to_dir):
         os.mkdir(path_to_dir)
