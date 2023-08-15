@@ -63,10 +63,7 @@ def remove_key(my_dict, key):
     return my_dict
 
 
-<<<<<<< HEAD
 # --- os utils ---
-=======
->>>>>>> f905f42eae83771de233bef42e64b3460fbd9f4e
 def mkdir(path_to_dir):
     if not os.path.exists(path_to_dir):
         os.mkdir(path_to_dir)
@@ -126,19 +123,25 @@ def plot(data, title):
 
 
 def subplot(data1, data2, title):
-    fig = make_subplots(rows=1, cols=2, specs=[[{'type': 'scene'}, {'type': 'scene'}]])
+    fig = make_subplots(
+        rows=1, cols=2, specs=[[{"type": "scene"}, {"type": "scene"}]]
+    )
     fig.add_trace(data1, row=1, col=1)
     fig.add_trace(data2, row=1, col=2)
     fig.update_layout(title_text=title, showlegend=True)
 
-    fig.update_xaxes(row=1, col=1, matches='y')
-    fig.update_yaxes(row=1, col=1, matches='x')
-    fig.update_layout(scene_aspectmode='manual', scene_aspectratio=dict(x=1, y=1, z=1))
+    fig.update_xaxes(row=1, col=1, matches="y")
+    fig.update_yaxes(row=1, col=1, matches="x")
+    fig.update_layout(
+        scene_aspectmode="manual", scene_aspectratio=dict(x=1, y=1, z=1)
+    )
 
     # Update the size of the second subplot
-    fig.update_xaxes(row=1, col=2, matches='y')
-    fig.update_yaxes(row=1, col=2, matches='x')
-    fig.update_layout(scene_aspectmode='manual', scene_aspectratio=dict(x=1, y=1, z=1))
+    fig.update_xaxes(row=1, col=2, matches="y")
+    fig.update_yaxes(row=1, col=2, matches="x")
+    fig.update_layout(
+        scene_aspectmode="manual", scene_aspectratio=dict(x=1, y=1, z=1)
+    )
 
     fig.update_layout(width=1200, height=600)
     fig.show()
@@ -170,8 +173,3 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
-
-
-
-
-

@@ -33,11 +33,7 @@ class NeuroGraph(nx.Graph):
 
     """
 
-<<<<<<< HEAD
     def __init__(self):
-=======
-    def __init__(self, max_mutable_degree=5, max_mutable_edge_dist=50.0):
->>>>>>> f905f42eae83771de233bef42e64b3460fbd9f4e
         """
         Parameters
         ----------
@@ -49,14 +45,6 @@ class NeuroGraph(nx.Graph):
 
         """
         super(NeuroGraph, self).__init__()
-<<<<<<< HEAD
-=======
-        # Parameters
-        self.max_mutable_degree = max_mutable_degree
-        self.max_mutable_edge_dist = max_mutable_edge_dist
-
-        # Initializations
->>>>>>> f905f42eae83771de233bef42e64b3460fbd9f4e
         self.leafs = set()
         self.junctions = set()
         self.mutable_edges = set()
@@ -204,7 +192,7 @@ class NeuroGraph(nx.Graph):
         """
         if len(dist.keys()) > max_degree:
             keys = sorted(dist, key=dist.__getitem__)
-            return [xyz[key] for key in keys[0 : max_degree]]
+            return [xyz[key] for key in keys[0:max_degree]]
         else:
             return list(xyz.values())
 

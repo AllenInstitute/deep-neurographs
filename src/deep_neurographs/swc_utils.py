@@ -10,13 +10,15 @@ Routines for working with swc files.
 """
 
 import os
-import numpy as np
-import networkx as nx
 import random
 from copy import deepcopy as cp
-from deep_neurographs import utils
+
+import networkx as nx
+import numpy as np
 from more_itertools import zip_broadcast
 from scipy.signal import savgol_filter
+
+from deep_neurographs import utils
 
 
 def read_swc(path):
@@ -172,8 +174,9 @@ def dir_to_volume(swc_dir):
     volume = dict()
     for vid, f in enumerate(utils.listdir(swc_dir, ext=".swc")):
         swc_dict = parse(read_swc(os.path.join(swc_dir, f)))
-        volume.update(file_to_volume(swc_dict, sparse=True, vid=vid+1))
+        volume.update(file_to_volume(swc_dict, sparse=True, vid=vid + 1))
     return volume
+
 
 def resample_swc(swc_dict):
     graph = file_to_graph(swc_dict, set_attrs=True)
@@ -209,7 +212,7 @@ def run_randomwalk(start, end):
     pointer = start.copy()
     idx = 0
     while (pointer != end).any():
-        #idx = random.sample([0, 1, 2], 1)
+        # idx = random.sample([0, 1, 2], 1)
         idx = (idx + 1) % 3
         if pointer[idx] != end[idx]:
             pointer[idx] += np.sign(end[idx] - pointer[idx])
@@ -220,11 +223,11 @@ def run_randomwalk(start, end):
 def moving_average(data, window):
     data = np.array(data)
     weights = np.ones(window) / window
-    padded_data = np.pad(
-        data, ((window - 1, window - 1), (0, 0)), mode='edge',
-    )
+    padded_data = np.pad(data, ((window - 1, window - 1), (0, 0)), mode="edge")
     smoothed_data = np.apply_along_axis(
-        lambda x: np.convolve(x, weights, mode='valid'), axis=0, arr=padded_data
+        lambda x: np.convolve(x, weights, mode="valid"),
+        axis=0,
+        arr=padded_data,
     )
     return smoothed_data.astype(np.int)
 
@@ -249,6 +252,6 @@ def generate_coords(center, r):
     for x in range(-r, r + 1):
         for y in range(-r, r + 1):
             for z in range(-r, r + 1):
-                if x**2 + y**2 + z**2 <= r**2:
+                if x ** 2 + y ** 2 + z ** 2 <= r ** 2:
                     xyz.append((center[0] + x, center[1] + y, center[2] + z))
     return xyz

@@ -11,10 +11,7 @@ Routines for working with graphs.
 
 import networkx as nx
 
-from deep_neurographs import utils, swc_utils
-
-
-
+from deep_neurographs import swc_utils, utils
 
 
 def get_irreducibles(graph):
@@ -30,52 +27,26 @@ def get_irreducibles(graph):
 
 def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16):
 
-    
-    graph = swc_utils.swc_to_graph(swc_dict)
-
-    
-   
-    
+    graph = swc_utils.file_to_graph(swc_dict)
 
     # Extract irreducibles
 
     leafs, junctions = get_irreducibles(graph)
     irreducible_nodes = set(leafs + junctions)
     irreducible_edges, leafs = extract_irreducible_edges(
-        graph,
-        leafs,
-        junctions,
-        swc_dict,
-
-        prune=prune,
-        prune_depth=prune_depth,
-
-  
-        
-
+        graph, leafs, junctions, swc_dict, prune=prune, prune_depth=prune_depth
     )
 
     # Check irreducility holds after pruning
     if prune:
-       irreducible_edges, junctions = check_irreducibility(
-            junctions,
-            irreducible_edges,
+        irreducible_edges, junctions = check_irreducibility(
+            junctions, irreducible_edges
         )
     return leafs, junctions, irreducible_edges
 
 
 def extract_irreducible_edges(
-    graph,
-    leafs,
-    junctions,
-    swc_dict,
-
-    prune=True,
-    prune_depth=16,
-
-
-    
-
+    graph, leafs, junctions, swc_dict, prune=True, prune_depth=16
 ):
     cur_root = None
     irreducible_edges = dict()
@@ -104,7 +75,7 @@ def extract_irreducible_edges(
                 irreducible_edges[(cur_root, j)] = cur_edge
             cur_root = None
     return irreducible_edges, leafs
-    
+
 
 def check_irreducibility(junctions, irreducible_edges):
     graph = nx.Graph()
@@ -122,8 +93,12 @@ def check_irreducibility(junctions, irreducible_edges):
 
             # Update irreducible edges
             junctions.remove(j)
-            irreducible_edges = utils.remove_key(irreducible_edges, (j, nbs[0]))
-            irreducible_edges = utils.remove_key(irreducible_edges, (j, nbs[1]))
+            irreducible_edges = utils.remove_key(
+                irreducible_edges, (j, nbs[0])
+            )
+            irreducible_edges = utils.remove_key(
+                irreducible_edges, (j, nbs[1])
+            )
             irreducible_edges[tuple(nbs)] = edge
 
             graph.remove_edge(j, nbs[0])
@@ -137,7 +112,7 @@ def check_irreducibility(junctions, irreducible_edges):
                 junctions.append(nbs[1])
 
     return irreducible_edges, junctions
-    
+
 
 def join_edges(edge1, edge2):
     # Last point in edge1 must connect to first point in edge2
@@ -153,13 +128,14 @@ def join_edges(edge1, edge2):
         "radius": edge1["radius"] + edge2["radius"],
     }
     return edge
-    
-    
+
+
 def reverse_edge(edge):
     edge["xyz"].reverse()
     edge["radius"].reverse()
     return edge
-    
+
+
 def _init_edge(swc_dict=None, node=None):
     edge = {"radius": [], "xyz": []}
     if node is not None:
