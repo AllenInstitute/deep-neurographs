@@ -63,7 +63,10 @@ def remove_key(my_dict, key):
     return my_dict
 
 
+<<<<<<< HEAD
 # --- os utils ---
+=======
+>>>>>>> f905f42eae83771de233bef42e64b3460fbd9f4e
 def mkdir(path_to_dir):
     if not os.path.exists(path_to_dir):
         os.mkdir(path_to_dir)
