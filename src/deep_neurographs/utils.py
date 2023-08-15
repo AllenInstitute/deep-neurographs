@@ -116,7 +116,8 @@ def plot(data, title):
         scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
     )
     fig.update_layout(
-        scene=dict(aspectmode="manual", aspectratio=dict(x=1, y=1, z=0.8)),
+        scene=dict(aspectmode="manual", aspectratio=dict(x=1, y=1, z=1)),
+        width=1200,
         height=600,
     )
     fig.show()

@@ -53,13 +53,19 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
 
     # Parse raw data
     min_id = np.inf
+    offset = [0.0, 0.0, 0.0]
     for line in raw_swc:
+        if line.startswith("# OFFSET"):
+            parts = line.split()
+            offset = read_xyz(parts[2:5])
         if not line.startswith("#") and len(line) > 0:
             parts = line.split()
             swc_dict["id"].append(int(parts[0]))
-            swc_dict["xyz"].append(read_xyz(parts[2:5], anisotropy=anisotropy))
             swc_dict["radius"].append(float(parts[-2]))
             swc_dict["pid"].append(int(parts[-1]))
+            swc_dict["xyz"].append(
+                read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
+            )
             if swc_dict["id"][-1] < min_id:
                 min_id = swc_dict["id"][-1]
 
@@ -70,7 +76,7 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
     return swc_dict
 
 
-def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0]):
+def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[1.0, 1.0, 1.0]):
     """
     Reads the (z,y,x) coordinates from an swc file, then reverses and scales
     them.
@@ -89,7 +95,8 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0]):
         The (x,y,z) coordinates from an swc file.
 
     """
-    return tuple([int(float(xyz[i]) * anisotropy[i]) for i in range(3)])
+    xyz = [int(float(xyz[i]) * anisotropy[i] + offset[i]) for i in range(3)]
+    return tuple(xyz)
 
 
 def write_swc(path, list_of_entries, color=None):
