@@ -33,16 +33,11 @@ class NeuroGraph(nx.Graph):
 
     """
 
-    def __init__(self, max_mutable_degree=5, max_mutable_edge_dist=50.0):
+    def __init__(self):
         """
         Parameters
         ----------
-        max_mutable_degree : int, optional
-            Maximum degree of any given node with respect to the number of
-            mutable edges. The default is 5.
-        max_mutable_edge_dist : float, optional
-            Maximum between any two nodes that form a mutable edge.
-            The default is 200.
+        None.
 
         Returns
         -------
@@ -50,11 +45,6 @@ class NeuroGraph(nx.Graph):
 
         """
         super(NeuroGraph, self).__init__()
-        # Parameters
-        self.max_mutable_degree = max_mutable_degree
-        self.max_mutable_edge_dist = max_mutable_edge_dist
-
-        # Initializations
         self.leafs = set()
         self.junctions = set()
         self.mutable_edges = set()
@@ -116,7 +106,7 @@ class NeuroGraph(nx.Graph):
         for j in junctions:
             self.junctions.add(node_id[j])
 
-    def generate_mutables(self):
+    def generate_mutables(self, max_degree=5, max_dist=100.0):
         """
         Generates edges for the graph.
 
@@ -129,16 +119,17 @@ class NeuroGraph(nx.Graph):
         self._init_kdtree()
         for leaf in self.leafs:
             xyz_leaf = self.nodes[leaf]["xyz"]
-            for xyz in self._get_mutables(leaf, xyz_leaf):
+            mutables = self._get_mutables(leaf, xyz_leaf, max_degree, max_dist)
+            for xyz in mutables:
                 # Extract info on mutable connection
                 (i, j) = self.xyz_to_edge[xyz]
                 attrs = self.get_edge_data(i, j)
 
                 # Get connecting node
-                if utils.dist(xyz, attrs["xyz"][0]) < 32:
+                if utils.dist(xyz, attrs["xyz"][0]) < 16:
                     node = i
                     xyz = self.nodes[node]["xyz"]
-                elif utils.dist(xyz, attrs["xyz"][-1]) < 32:
+                elif utils.dist(xyz, attrs["xyz"][-1]) < 16:
                     node = j
                     xyz = self.nodes[node]["xyz"]
                 else:
@@ -149,7 +140,7 @@ class NeuroGraph(nx.Graph):
                 self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
                 self.mutable_edges.add(frozenset((leaf, node)))
 
-    def _get_mutables(self, query_id, query_xyz):
+    def _get_mutables(self, query_id, query_xyz, max_degree, max_dist):
         """
         Parameters
         ----------
@@ -168,7 +159,7 @@ class NeuroGraph(nx.Graph):
         query_swc_id = gutils.get_edge_attr(self, query_edge, "swc_id")
         best_xyz = dict()
         best_dist = dict()
-        for xyz in self._query_kdtree(query_xyz):
+        for xyz in self._query_kdtree(query_xyz, max_dist):
             xyz = tuple(xyz.astype(int))
             edge = self.xyz_to_edge[xyz]
             swc_id = gutils.get_edge_attr(self, edge, "swc_id")
@@ -180,11 +171,11 @@ class NeuroGraph(nx.Graph):
                 elif d < best_dist[edge]:
                     best_xyz[edge] = xyz
                     best_dist[edge] = d
-        return self._get_best_edges(best_dist, best_xyz)
+        return self._get_best_edges(best_dist, best_xyz, max_degree)
 
-    def _get_best_edges(self, dist, xyz):
+    def _get_best_edges(self, dist, xyz, max_degree):
         """
-        Gets the at most "self.max_degree" nodes that are closest to the
+        Gets the at most "max_degree" nodes that are closest to the
         target node.
 
         Parameters
@@ -199,9 +190,9 @@ class NeuroGraph(nx.Graph):
             Dictionary of nodes that are closest to the target node.
 
         """
-        if len(dist.keys()) > self.max_mutable_degree:
+        if len(dist.keys()) > max_degree:
             keys = sorted(dist, key=dist.__getitem__)
-            return [xyz[key] for key in keys[0 : self.max_mutable_degree]]
+            return [xyz[key] for key in keys[0 : max_degree]]
         else:
             return list(xyz.values())
 
@@ -251,7 +242,7 @@ class NeuroGraph(nx.Graph):
         """
         self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
 
-    def _query_kdtree(self, query):
+    def _query_kdtree(self, query, max_dist):
         """
         Parameters
         ----------
@@ -262,10 +253,10 @@ class NeuroGraph(nx.Graph):
         -------
         generator[tuple]
             Generator that generates the xyz coordinates cooresponding to all
-            nodes within a distance of "self.max_edge_dist" from "query".
+            nodes within a distance of "max_dist" from "query".
 
         """
-        idxs = self.kdtree.query_ball_point(query, self.max_mutable_edge_dist)
+        idxs = self.kdtree.query_ball_point(query, max_dist)
         return self.kdtree.data[idxs]
 
     # --- Visualization ---
@@ -285,26 +276,13 @@ class NeuroGraph(nx.Graph):
         """
         data = [self._plot_nodes()]
         data.extend(self._plot_edges(self.immutable_edges))
-        self._plot(data, "Immutable Graph")
+        utils.plot(data, "Immutable Graph")
 
     def visualize_mutables(self):
         data = [self._plot_nodes()]
         data.extend(self._plot_edges(self.immutable_edges, color="black"))
         data.extend(self._plot_edges(self.mutable_edges))
-        self._plot(data, "Mutable Graph")
-
-    def _plot(self, data, title):
-        fig = go.Figure(data=data)
-        fig.update_layout(
-            plot_bgcolor="white",
-            title=title,
-            scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
-        )
-        fig.update_layout(
-            scene=dict(aspectmode="manual", aspectratio=dict(x=1, y=1, z=0.8)),
-            height=600,
-        )
-        fig.show()
+        utils.plot(data, "Mutable Graph")
 
     def _plot_nodes(self):
         xyz = nx.get_node_attributes(self, "xyz")
