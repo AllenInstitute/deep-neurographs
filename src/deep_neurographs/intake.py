@@ -26,7 +26,11 @@ def build_neurograph(
     access_key_id=None,
     secret_access_key=None,
     max_mutable_degree=5,
+<<<<<<< HEAD
+    max_mutable_dist=50.0,
+=======
     max_mutable_edge_dist=50.0,
+>>>>>>> f905f42eae83771de233bef42e64b3460fbd9f4e
     prune=True,
     prune_depth=16,
 ):
@@ -54,7 +58,10 @@ def build_neurograph(
             prune=prune,
             prune_depth=prune_depth,
         )
-    neurograph.generate_mutables()
+    neurograph.generate_mutables(
+        max_degree=max_mutable_degree,
+        max_dist=max_mutable_dist,
+    )
     return neurograph
 
 
@@ -65,8 +72,11 @@ def init_immutables_from_s3(
     anisotropy=[1.0, 1.0, 1.0],
     access_key_id=None,
     secret_access_key=None,
+<<<<<<< HEAD
+=======
     max_mutable_degree=5,
     max_mutable_edge_dist=50.0,
+>>>>>>> f905f42eae83771de233bef42e64b3460fbd9f4e
     prune=True,
     prune_depth=16,
 ):
@@ -90,8 +100,11 @@ def init_immutables_from_local(
     neurograph,
     swc_dir,
     anisotropy=[1.0, 1.0, 1.0],
+<<<<<<< HEAD
+=======
     max_mutable_degree=5,
     max_mutable_edge_dist=50.0,
+>>>>>>> f905f42eae83771de233bef42e64b3460fbd9f4e
     prune=True,
     prune_depth=16,
 ):
@@ -102,7 +115,14 @@ def init_immutables_from_local(
         raw_swc = swc_utils.read_swc(os.path.join(swc_dir, swc_id))
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
         neurograph.generate_immutables(
+<<<<<<< HEAD
+            swc_id,
+            swc_dict,
+            prune=prune,
+            prune_depth=prune_depth,
+=======
             swc_id, swc_dict, prune=prune, prune_depth=prune_depth
+>>>>>>> f905f42eae83771de233bef42e64b3460fbd9f4e
         )
     return neurograph
 

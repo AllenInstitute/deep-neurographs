@@ -19,6 +19,12 @@ from deep_neurographs import train
 
 if __name__ == "__main__":
 
+    # Parameters
+    max_mutable_degree=5
+    max_mutable_dist=100.0
+    prune=True
+    prune_depth=16
+
     # Build graph from s3
     dataset = "651324"
     block_id = "block_003"
@@ -31,10 +37,17 @@ if __name__ == "__main__":
     neurograph_s3 = intake.build_neurograph(
         swc_dir,
         bucket=bucket,
-        max_mutable_degree=5,
-        max_mutable_edge_dist=50.0,
-        prune=True,
-        prune_depth=16,
+
+        max_mutable_degree=max_mutable_degree,
+        max_mutable_dist=max_mutable_dist,
+        prune=prune,
+        prune_depth=prune_depth,
+
+
+
+
+
+
     )
     print("Graph built from s3 data...")
     print("Number of nodes:", neurograph_s3.num_nodes())
@@ -44,7 +57,7 @@ if __name__ == "__main__":
 
     # Build graph from local machine
     dataset = "653158"
-    block_id = "block_002"
+    block_id = "block_003"
     pred_id = "20230801_2steps_segmentation_filtered"
 
     local_root = f"/home/jupyter/workspace/data/{dataset}/pred_swcs/{pred_id}"
@@ -52,10 +65,17 @@ if __name__ == "__main__":
 
     neurograph_local = intake.build_neurograph(
         swc_dir,
-        max_mutable_degree=5,
-        max_mutable_edge_dist=50.0,
-        prune=True,
-        prune_depth=16,
+
+        max_mutable_degree=max_mutable_degree,
+        max_mutable_dist=max_mutable_dist,
+        prune=prune,
+        prune_depth=prune_depth,
+
+
+
+
+
+
     )
     print("Graph built from local data...")
     print("Number of nodes:", neurograph_local.num_nodes())

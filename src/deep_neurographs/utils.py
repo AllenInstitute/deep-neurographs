@@ -13,8 +13,11 @@ import json
 import os
 
 import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 
+# --- dictionary utils ---
 def remove_item(my_set, item):
     """ """
     try:
@@ -60,6 +63,10 @@ def remove_key(my_dict, key):
     return my_dict
 
 
+<<<<<<< HEAD
+# --- os utils ---
+=======
+>>>>>>> f905f42eae83771de233bef42e64b3460fbd9f4e
 def mkdir(path_to_dir):
     if not os.path.exists(path_to_dir):
         os.mkdir(path_to_dir)
@@ -83,6 +90,61 @@ def listsubdirs(path, keyword=None):
     return subdirs
 
 
+# --- io utils ---
+def read_json(path):
+    """
+    Reads json file stored at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path where json file is stored.
+
+    Returns
+    -------
+    dict
+
+    """
+    with open(path, "r") as f:
+        data = json.load(f)
+    return data
+
+
+# --- plot utils ---
+def plot(data, title):
+    fig = go.Figure(data=data)
+    fig.update_layout(
+        plot_bgcolor="white",
+        title=title,
+        scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
+    )
+    fig.update_layout(
+        scene=dict(aspectmode="manual", aspectratio=dict(x=1, y=1, z=0.8)),
+        height=600,
+    )
+    fig.show()
+
+
+def subplot(data1, data2, title):
+    fig = make_subplots(rows=1, cols=2, specs=[[{'type': 'scene'}, {'type': 'scene'}]])
+    fig.add_trace(data1, row=1, col=1)
+    fig.add_trace(data2, row=1, col=2)
+    fig.update_layout(title_text=title, showlegend=True)
+
+    fig.update_xaxes(row=1, col=1, matches='y')
+    fig.update_yaxes(row=1, col=1, matches='x')
+    fig.update_layout(scene_aspectmode='manual', scene_aspectratio=dict(x=1, y=1, z=1))
+
+    # Update the size of the second subplot
+    fig.update_xaxes(row=1, col=2, matches='y')
+    fig.update_yaxes(row=1, col=2, matches='x')
+    fig.update_layout(scene_aspectmode='manual', scene_aspectratio=dict(x=1, y=1, z=1))
+
+    fig.update_layout(width=1200, height=600)
+    fig.show()
+
+
+# --- miscellaneous ---
 def dist(x, y):
     """
     Computes Euclidean distance between "x" and "y".
@@ -110,20 +172,6 @@ def time_writer(t, unit="seconds"):
     return t, unit
 
 
-def read_json(path):
-    """
-    Reads json file stored at "path".
 
-    Parameters
-    ----------
-    path : str
-        Path where json file is stored.
 
-    Returns
-    -------
-    dict
 
-    """
-    with open(path, "r") as f:
-        data = json.load(f)
-    return data
