@@ -26,11 +26,7 @@ def get_irreducibles(graph):
 
 
 def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16):
-
     graph = swc_utils.file_to_graph(swc_dict)
-
-    # Extract irreducibles
-
     leafs, junctions = get_irreducibles(graph)
     irreducible_nodes = set(leafs + junctions)
     irreducible_edges, leafs = extract_irreducible_edges(
