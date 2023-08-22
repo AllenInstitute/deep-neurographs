@@ -97,6 +97,11 @@ class NeuroGraph(nx.Graph):
                 swc_id=swc_id,
             )
             xyz_to_edge = dict((xyz, edge) for xyz in edges[(i, j)]["xyz"])
+            check_xyz = set(xyz_to_edge.keys())
+            collisions = check_xyz.intersection(set(self.xyz_to_edge.keys()))
+            if len(collisions) > 0:
+                for xyz in collisions:
+                    del xyz_to_edge[xyz]
             self.xyz_to_edge.update(xyz_to_edge)
 
         # Update leafs and junctions
@@ -132,12 +137,17 @@ class NeuroGraph(nx.Graph):
                 elif utils.dist(xyz, attrs["xyz"][-1]) < 16:
                     node = j
                     xyz = self.nodes[node]["xyz"]
+                    if node == leaf:
+                        stop
                 else:
                     idxs = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0]
                     node = self.add_immutable_node((i, j), attrs, idxs[0])
 
                 # Add edge
                 self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
+                if frozenset((leaf, node)) == frozenset({309}):
+                    print((leaf, node))
+                    stop
                 self.mutable_edges.add(frozenset((leaf, node)))
 
     def _get_mutables(self, query_id, query_xyz, max_degree, max_dist):
@@ -155,10 +165,9 @@ class NeuroGraph(nx.Graph):
 
         """
         # Search for connections
-        query_edge = self.xyz_to_edge[tuple(query_xyz)]
-        query_swc_id = gutils.get_edge_attr(self, query_edge, "swc_id")
         best_xyz = dict()
         best_dist = dict()
+        query_swc_id = self.nodes[query_id]["swc_id"]
         for xyz in self._query_kdtree(query_xyz, max_dist):
             xyz = tuple(xyz.astype(int))
             edge = self.xyz_to_edge[xyz]
@@ -260,7 +269,7 @@ class NeuroGraph(nx.Graph):
         return self.kdtree.data[idxs]
 
     # --- Visualization ---
-    def visualize_immutables(self):
+    def visualize_immutables(self, return_data=False):
         """
         Parameters
         ----------
@@ -274,9 +283,12 @@ class NeuroGraph(nx.Graph):
         None.
 
         """
-        data = [self._plot_nodes()]
-        data.extend(self._plot_edges(self.immutable_edges))
-        utils.plot(data, "Immutable Graph")
+        data = self._plot_edges(self.immutable_edges)
+        data.append(self._plot_nodes())
+        if return_data:
+            return data
+        else:
+            utils.plot(data, "Immutable Graph")
 
     def visualize_mutables(self):
         data = [self._plot_nodes()]
@@ -299,7 +311,7 @@ class NeuroGraph(nx.Graph):
 
     def _plot_edges(self, edges, color=None):
         traces = []
-        line = dict(color=color) if color is not None else dict()
+        line = dict(width=4) if color is None else dict(color=color, width=3)
         for (i, j) in edges:
             trace = go.Scatter3d(
                 x=self.edges[(i, j)]["xyz"][:, 0],

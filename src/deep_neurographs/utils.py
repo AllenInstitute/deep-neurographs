@@ -14,7 +14,9 @@ import os
 
 import numpy as np
 import plotly.graph_objects as go
+import shutil
 from plotly.subplots import make_subplots
+from scipy.interpolate import UnivariateSpline
 
 
 # --- dictionary utils ---
@@ -69,6 +71,11 @@ def mkdir(path_to_dir):
         os.mkdir(path_to_dir)
 
 
+def rmdir(path):
+    if os.path.exists(path):
+        shutil.rmtree(path)
+
+
 def listdir(path, ext=None):
     if ext is None:
         return [f for f in os.listdir(path)]
@@ -76,7 +83,7 @@ def listdir(path, ext=None):
         return [f for f in os.listdir(path) if ext in f]
 
 
-def listsubdirs(path, keyword=None):
+def list_subdirs(path, keyword=None):
     subdirs = []
     for d in os.listdir(path):
         if os.path.isdir(os.path.join(path, d)):
@@ -144,7 +151,7 @@ def subplot(data1, data2, title):
         scene_aspectmode="manual", scene_aspectratio=dict(x=1, y=1, z=1)
     )
 
-    fig.update_layout(width=1200, height=600)
+    fig.update_layout(width=1200, height=800)
     fig.show()
 
 
@@ -162,6 +169,17 @@ def dist(x, y):
 
     """
     return np.linalg.norm(np.subtract(x, y))
+
+
+def smooth_branch(xyz, k=3, smooth_factor=6):
+    t = np.arange(len(xyz[:, 0]))
+    cs_x = UnivariateSpline(t, xyz[:, 0], k=k, s=smooth_factor)
+    cs_y = UnivariateSpline(t, xyz[:, 1], k=k, s=smooth_factor)
+    cs_z = UnivariateSpline(t, xyz[:, 2], k=k, s=smooth_factor)
+    smoothed_x = cs_x(t)
+    smoothed_y = cs_y(t)
+    smoothed_z = cs_z(t)
+    return np.column_stack((smoothed_x, smoothed_y, smoothed_z))
 
 
 def time_writer(t, unit="seconds"):
