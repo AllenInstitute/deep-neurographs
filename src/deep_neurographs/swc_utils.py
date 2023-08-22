@@ -16,9 +16,7 @@ from copy import deepcopy as cp
 import networkx as nx
 import numpy as np
 from more_itertools import zip_broadcast
-from scipy.signal import savgol_filter
-
-from deep_neurographs import utils
+from deep_neurographs import graph_utils as gutils, utils
 
 
 def read_swc(path):
@@ -73,10 +71,11 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
     for i in range(len(swc_dict["id"])):
         swc_dict["id"][i] -= min_id
         swc_dict["pid"][i] -= min_id
+
     return swc_dict
 
 
-def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[1.0, 1.0, 1.0]):
+def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0.0, 0.0, 0.0]):
     """
     Reads the (z,y,x) coordinates from an swc file, then reverses and scales
     them.
@@ -168,24 +167,52 @@ def dir_to_graphs(swc_dir):
     return list_of_graphs
 
 
-def file_to_volume(swc_dict, sparse=False, vid=None):
+def file_to_volume(swc_dict, sparse=False, vid=None, radius_plus=0):
     volume = []
     for i in swc_dict["id"]:
-        r = int(np.round(swc_dict["radius"][i]))
+        r = max(3 * int(np.round(swc_dict["radius"][i] + radius_plus)), 5)
         xyz = cp(swc_dict["xyz"][i])
         volume.extend(generate_coords(xyz, r))
     return dict(zip_broadcast(volume, vid)) if sparse else np.array(volume)
 
 
-def dir_to_volume(swc_dir):
+def dir_to_volume(swc_dir, radius_plus=0):
     volume = dict()
     for vid, f in enumerate(utils.listdir(swc_dir, ext=".swc")):
-        swc_dict = parse(read_swc(os.path.join(swc_dir, f)))
-        volume.update(file_to_volume(swc_dict, sparse=True, vid=vid + 1))
+        swc_dict = resample_swc(parse(read_swc(os.path.join(swc_dir, f))))
+        volume.update(
+            file_to_volume(
+                swc_dict, sparse=True, vid=f, radius_plus=radius_plus
+            )
+        )
     return volume
 
 
-def resample_swc(swc_dict):
+def smooth(swc_dict, k=3, smooth_factor=4):
+    graph = file_to_graph(swc_dict)
+    leafs, junctions =  gutils.get_irreducibles(graph)
+    if len(junctions) < 1:
+        swc_dict["xyz"] = utils.smooth_branch(swc_dict["xyz"])
+    else:
+        idxs = []
+        for (i, j) in nx.dfs_edges(graph, source=leafs[0]):
+            # Check start of path is valid
+            if cur_root is None:
+                cur_root = i
+                indices = [i]
+
+            # Add to path
+            idxs.append(j)
+
+            # Check whether to end path
+            if j in leafs or j in junctions:
+                idxs = np.array(idxs)
+                branch = swc_dict["xyz"][idxs].copy()
+                swc_dict["xyz"][idxs] = utils.smooth_branch(branch)
+    return swc_dict
+
+
+def old_resample_swc(swc_dict):
     graph = file_to_graph(swc_dict, set_attrs=True)
     root = random.sample(graph.nodes, 1)[0]
     old_to_new = {root: 0}
@@ -203,7 +230,7 @@ def resample_swc(swc_dict):
         r_2 = graph.nodes[j]["radius"]
 
         # Generate path between nodes
-        if np.sum(abs(xyz_1 - xyz_2)) > 2:
+        if np.sum(abs(xyz_1 - xyz_2)) > 1:
             xyz = run_randomwalk(xyz_1, xyz_2)
             r = np.mean([r_1, r_2]) * np.ones(len(xyz))
         else:
@@ -259,6 +286,6 @@ def generate_coords(center, r):
     for x in range(-r, r + 1):
         for y in range(-r, r + 1):
             for z in range(-r, r + 1):
-                if x ** 2 + y ** 2 + z ** 2 <= r ** 2:
+                if abs(x) + abs(y) + abs(z) <= r:
                     xyz.append((center[0] + x, center[1] + y, center[2] + z))
     return xyz

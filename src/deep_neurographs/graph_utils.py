@@ -10,7 +10,7 @@ Routines for working with graphs.
 """
 
 import networkx as nx
-
+import numpy as np
 from deep_neurographs import swc_utils, utils
 
 
@@ -25,12 +25,12 @@ def get_irreducibles(graph):
     return leafs, junctions
 
 
-def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16):
+def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16, smooth=True):
     graph = swc_utils.file_to_graph(swc_dict)
     leafs, junctions = get_irreducibles(graph)
     irreducible_nodes = set(leafs + junctions)
     irreducible_edges, leafs = extract_irreducible_edges(
-        graph, leafs, junctions, swc_dict, prune=prune, prune_depth=prune_depth
+        graph, leafs, junctions, swc_dict, prune=prune, prune_depth=prune_depth, smooth=smooth,
     )
 
     # Check irreducility holds after pruning
@@ -42,36 +42,45 @@ def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16):
 
 
 def extract_irreducible_edges(
-    graph, leafs, junctions, swc_dict, prune=True, prune_depth=16
+    graph, leafs, junctions, swc_dict, prune=True, prune_depth=16, smooth=True,
 ):
-    cur_root = None
+    root = None
     irreducible_edges = dict()
     for (i, j) in nx.dfs_edges(graph, source=leafs[0]):
         # Check start of path is valid
-        if cur_root is None:
-            cur_root = i
-            cur_edge = _init_edge(swc_dict=swc_dict, node=i)
+        if root is None:
+            root = i
+            edge = _init_edge(swc_dict=swc_dict, node=i)
             path_length = 0
 
         # Add to path
-        cur_edge["radius"].append(swc_dict["radius"][j])
-        cur_edge["xyz"].append(swc_dict["xyz"][j])
+        edge["radius"].append(swc_dict["radius"][j])
+        edge["xyz"].append(swc_dict["xyz"][j])
         path_length += 1
 
         # Check whether to end path
         if j in leafs or j in junctions:
             if prune and path_length <= prune_depth:
-                condition1 = j in leafs and cur_root in junctions
-                condition2 = cur_root in leafs and j in junctions
+                condition1 = j in leafs and root in junctions
+                condition2 = root in leafs and j in junctions
                 if condition1 or condition2:
-                    leafs.remove(j if condition1 else cur_root)
+                    leafs.remove(j if condition1 else root)
                 else:
-                    irreducible_edges[(cur_root, j)] = cur_edge
+                    irreducible_edges[(root, j)] = add_edge(edge, smooth)
             else:
-                irreducible_edges[(cur_root, j)] = cur_edge
-            cur_root = None
+                irreducible_edges[(root, j)] = add_edge(edge, smooth)
+            root = None
     return irreducible_edges, leafs
 
+
+def add_edge(edge, smooth):    
+    if smooth and len(edge) > 5:
+        print(edge["xyz"].shape)
+        edge["xyz"] = np.array(edge["xyz"])
+        edge["xyz"] = utils.smooth_branch(edge["xyz"].copy())
+        edge["xyz"] = [tuple(row) for row in edge["xyz"].tolist()]
+    return edge
+    
 
 def check_irreducibility(junctions, irreducible_edges):
     graph = nx.Graph()
