@@ -96,7 +96,9 @@ class NeuroGraph(nx.Graph):
                 radius=np.array(edges[(i, j)]["radius"]),
                 swc_id=swc_id,
             )
-            xyz_to_edge = dict((tuple(xyz), edge) for xyz in edges[(i, j)]["xyz"])
+            xyz_to_edge = dict(
+                (tuple(xyz), edge) for xyz in edges[(i, j)]["xyz"]
+            )
             check_xyz = set(xyz_to_edge.keys())
             collisions = check_xyz.intersection(set(self.xyz_to_edge.keys()))
             if len(collisions) > 0:

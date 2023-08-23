@@ -16,7 +16,9 @@ from copy import deepcopy as cp
 import networkx as nx
 import numpy as np
 from more_itertools import zip_broadcast
-from deep_neurographs import graph_utils as gutils, utils
+
+from deep_neurographs import graph_utils as gutils
+from deep_neurographs import utils
 
 
 def read_swc(path):
@@ -192,7 +194,7 @@ def smooth(swc_dict):
     if len(swc_dict["xyz"]) > 10:
         xyz = np.array(swc_dict["xyz"], dtype=int)
         graph = file_to_graph(swc_dict)
-        leafs, junctions =  gutils.get_irreducibles(graph)
+        leafs, junctions = gutils.get_irreducibles(graph)
         if len(junctions) == 0:
             xyz = utils.smooth_branch(xyz)
         else:
@@ -202,7 +204,7 @@ def smooth(swc_dict):
                 # Check start of path is valid
                 if root is None:
                     root = i
-                    idxs = [i]                
+                    idxs = [i]
 
                 # Check whether to end path
                 idxs.append(j)
@@ -218,6 +220,7 @@ def upd_edge(xyz, idxs):
     idxs = np.array(idxs)
     xyz[idxs] = utils.smooth_branch(xyz[idxs].copy())
     return xyz
+
 
 def upd_dict(upd, path, radius, pid):
     for k in range(len(path)):

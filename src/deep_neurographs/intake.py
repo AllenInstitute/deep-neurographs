@@ -45,6 +45,9 @@ def build_neurograph(
             anisotropy=anisotropy,
             access_key_id=access_key_id,
             secret_access_key=secret_access_key,
+            prune=prune,
+            prune_depth=prune_depth,
+            smooth=True,
         )
     else:
         neurograph = init_immutables_from_local(
@@ -53,6 +56,7 @@ def build_neurograph(
             anisotropy=anisotropy,
             prune=prune,
             prune_depth=prune_depth,
+            smooth=True,
         )
     neurograph.generate_mutables(
         max_degree=max_mutable_degree, max_dist=max_mutable_dist
@@ -69,12 +73,13 @@ def init_immutables_from_s3(
     secret_access_key=None,
     prune=True,
     prune_depth=16,
+    smooth=True,
 ):
     """
     To do...
     """
     s3_client = s3_utils.init_session(
-        access_key_id=access_key_id, secret_access_key=secret_access_key, smooth=True,
+        access_key_id=access_key_id, secret_access_key=secret_access_key
     )
     for file_key in s3_utils.listdir(bucket, swc_dir, s3_client, ext=".swc"):
         swc_id = file_key.split("/")[-1]
@@ -89,7 +94,12 @@ def init_immutables_from_s3(
 
 
 def init_immutables_from_local(
-    neurograph, swc_dir, anisotropy=[1.0, 1.0, 1.0], prune=True, prune_depth=16, smooth=True,
+    neurograph,
+    swc_dir,
+    anisotropy=[1.0, 1.0, 1.0],
+    prune=True,
+    prune_depth=16,
+    smooth=True,
 ):
     """
     To do...

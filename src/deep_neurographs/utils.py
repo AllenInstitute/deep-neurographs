@@ -11,12 +11,12 @@ General routines for various tasks.
 
 import json
 import os
+import shutil
 
 import numpy as np
 import plotly.graph_objects as go
-import shutil
 from plotly.subplots import make_subplots
-from scipy.interpolate import UnivariateSpline, SmoothBivariateSpline
+from scipy.interpolate import SmoothBivariateSpline, UnivariateSpline
 
 
 # --- dictionary utils ---

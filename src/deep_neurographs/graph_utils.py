@@ -9,9 +9,11 @@ Routines for working with graphs.
 
 """
 
+from copy import deepcopy as cp
+
 import networkx as nx
 import numpy as np
-from copy import deepcopy as cp
+
 from deep_neurographs import swc_utils, utils
 
 
@@ -31,7 +33,7 @@ def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16):
     leafs, junctions = get_irreducibles(graph)
     irreducible_nodes = set(leafs + junctions)
     irreducible_edges, leafs = extract_irreducible_edges(
-        graph, leafs, junctions, swc_dict, prune=prune, prune_depth=prune_depth,
+        graph, leafs, junctions, swc_dict, prune=prune, prune_depth=prune_depth
     )
 
     # Check irreducility holds after pruning
@@ -72,6 +74,7 @@ def extract_irreducible_edges(
                 irreducible_edges[(root, j)] = edge
             root = None
     return irreducible_edges, leafs
+
 
 def check_irreducibility(junctions, irreducible_edges):
     graph = nx.Graph()

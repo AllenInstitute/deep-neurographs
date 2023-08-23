@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # Build graph from local machine
     dataset = "653158"
     block_id = "block_003"
-    pred_id = "20230801_2steps_segmentation_filtered"
+    pred_id = "20230801_lower_mean_stddev_extracted"
 
     local_root = f"/home/jupyter/workspace/data/{dataset}/pred_swcs/{pred_id}"
     swc_dir = f"{local_root}/{block_id}"
