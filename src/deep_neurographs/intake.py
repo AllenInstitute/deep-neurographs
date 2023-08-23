@@ -74,12 +74,14 @@ def init_immutables_from_s3(
     To do...
     """
     s3_client = s3_utils.init_session(
-        access_key_id=access_key_id, secret_access_key=secret_access_key
+        access_key_id=access_key_id, secret_access_key=secret_access_key, smooth=True,
     )
     for file_key in s3_utils.listdir(bucket, swc_dir, s3_client, ext=".swc"):
         swc_id = file_key.split("/")[-1]
         raw_swc = s3_utils.read_from_s3(bucket, file_key, s3_client)
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
+        if smooth:
+            swc_dict = swc_utils.smooth(swc_dict)
         neurograph.generate_immutables(
             swc_id, swc_dict, prune=prune, prune_depth=prune_depth
         )
@@ -87,7 +89,7 @@ def init_immutables_from_s3(
 
 
 def init_immutables_from_local(
-    neurograph, swc_dir, anisotropy=[1.0, 1.0, 1.0], prune=True, prune_depth=16
+    neurograph, swc_dir, anisotropy=[1.0, 1.0, 1.0], prune=True, prune_depth=16, smooth=True,
 ):
     """
     To do...
@@ -95,6 +97,8 @@ def init_immutables_from_local(
     for swc_id in utils.listdir(swc_dir, ext=".swc"):
         raw_swc = swc_utils.read_swc(os.path.join(swc_dir, swc_id))
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
+        if smooth:
+            swc_dict = swc_utils.smooth(swc_dict)
         neurograph.generate_immutables(
             swc_id, swc_dict, prune=prune, prune_depth=prune_depth
         )
