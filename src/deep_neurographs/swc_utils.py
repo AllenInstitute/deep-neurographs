@@ -179,7 +179,7 @@ def file_to_volume(swc_dict, sparse=False, vid=None, radius_plus=0):
 def dir_to_volume(swc_dir, radius_plus=0):
     volume = dict()
     for vid, f in enumerate(utils.listdir(swc_dir, ext=".swc")):
-        swc_dict = resample_swc(parse(read_swc(os.path.join(swc_dir, f))))
+        swc_dict = smooth(parse(read_swc(os.path.join(swc_dir, f))))
         volume.update(
             file_to_volume(
                 swc_dict, sparse=True, vid=f, radius_plus=radius_plus
@@ -188,83 +188,36 @@ def dir_to_volume(swc_dir, radius_plus=0):
     return volume
 
 
-def smooth(swc_dict, k=3, smooth_factor=4):
-    graph = file_to_graph(swc_dict)
-    leafs, junctions =  gutils.get_irreducibles(graph)
-    if len(junctions) < 1:
-        swc_dict["xyz"] = utils.smooth_branch(swc_dict["xyz"])
-    else:
-        idxs = []
-        for (i, j) in nx.dfs_edges(graph, source=leafs[0]):
-            # Check start of path is valid
-            if cur_root is None:
-                cur_root = i
-                indices = [i]
+def smooth(swc_dict):
+    if len(swc_dict["xyz"]) > 10:
+        xyz = np.array(swc_dict["xyz"], dtype=int)
+        graph = file_to_graph(swc_dict)
+        leafs, junctions =  gutils.get_irreducibles(graph)
+        if len(junctions) == 0:
+            xyz = utils.smooth_branch(xyz)
+        else:
+            idxs = []
+            root = None
+            for (i, j) in nx.dfs_edges(graph, source=leafs[0]):
+                # Check start of path is valid
+                if root is None:
+                    root = i
+                    idxs = [i]                
 
-            # Add to path
-            idxs.append(j)
-
-            # Check whether to end path
-            if j in leafs or j in junctions:
-                idxs = np.array(idxs)
-                branch = swc_dict["xyz"][idxs].copy()
-                swc_dict["xyz"][idxs] = utils.smooth_branch(branch)
+                # Check whether to end path
+                idxs.append(j)
+                if j in leafs + junctions:
+                    root = None
+                    if len(idxs) > 10:
+                        xyz = upd_edge(xyz, idxs)
+        swc_dict["xyz"] = [tuple(xyz_i) for xyz_i in xyz]
     return swc_dict
 
 
-def old_resample_swc(swc_dict):
-    graph = file_to_graph(swc_dict, set_attrs=True)
-    root = random.sample(graph.nodes, 1)[0]
-    old_to_new = {root: 0}
-    upd = {
-        "id": [0],
-        "xyz": [graph.nodes[root]["xyz"]],
-        "radius": [graph.nodes[root]["radius"]],
-        "pid": [],
-    }
-    for (i, j) in nx.bfs_edges(graph, source=root):
-        # Extract info
-        xyz_1 = np.array(graph.nodes[i]["xyz"])
-        xyz_2 = np.array(graph.nodes[j]["xyz"])
-        r_1 = graph.nodes[i]["radius"]
-        r_2 = graph.nodes[j]["radius"]
-
-        # Generate path between nodes
-        if np.sum(abs(xyz_1 - xyz_2)) > 1:
-            xyz = run_randomwalk(xyz_1, xyz_2)
-            r = np.mean([r_1, r_2]) * np.ones(len(xyz))
-        else:
-            xyz = [xyz_1, xyz_2]
-            r = [r_1, r_2]
-        upd, new_id_j = upd_dict(upd, xyz, r, old_to_new[i])
-        old_to_new[j] = new_id_j
-    return upd
-
-
-def run_randomwalk(start, end):
-    walk = []
-    pointer = start.copy()
-    idx = 0
-    while (pointer != end).any():
-        # idx = random.sample([0, 1, 2], 1)
-        idx = (idx + 1) % 3
-        if pointer[idx] != end[idx]:
-            pointer[idx] += np.sign(end[idx] - pointer[idx])
-            walk.append(pointer.copy())
-    return moving_average(walk, 4)
-
-
-def moving_average(data, window):
-    data = np.array(data)
-    weights = np.ones(window) / window
-    padded_data = np.pad(data, ((window - 1, window - 1), (0, 0)), mode="edge")
-    smoothed_data = np.apply_along_axis(
-        lambda x: np.convolve(x, weights, mode="valid"),
-        axis=0,
-        arr=padded_data,
-    )
-    return smoothed_data.astype(np.int)
-
+def upd_edge(xyz, idxs):
+    idxs = np.array(idxs)
+    xyz[idxs] = utils.smooth_branch(xyz[idxs].copy())
+    return xyz
 
 def upd_dict(upd, path, radius, pid):
     for k in range(len(path)):

@@ -16,7 +16,7 @@ import numpy as np
 import plotly.graph_objects as go
 import shutil
 from plotly.subplots import make_subplots
-from scipy.interpolate import UnivariateSpline
+from scipy.interpolate import UnivariateSpline, SmoothBivariateSpline
 
 
 # --- dictionary utils ---
@@ -171,15 +171,16 @@ def dist(x, y):
     return np.linalg.norm(np.subtract(x, y))
 
 
-def smooth_branch(xyz, k=3, smooth_factor=6):
+def smooth_branch(xyz, k=3):
     t = np.arange(len(xyz[:, 0]))
-    cs_x = UnivariateSpline(t, xyz[:, 0], k=k, s=smooth_factor)
-    cs_y = UnivariateSpline(t, xyz[:, 1], k=k, s=smooth_factor)
-    cs_z = UnivariateSpline(t, xyz[:, 2], k=k, s=smooth_factor)
+    s = len(t) // 2
+    cs_x = UnivariateSpline(t, xyz[:, 0], k=k, s=s)
+    cs_y = UnivariateSpline(t, xyz[:, 1], k=k, s=s)
+    cs_z = UnivariateSpline(t, xyz[:, 2], k=k, s=s)
     smoothed_x = cs_x(t)
     smoothed_y = cs_y(t)
     smoothed_z = cs_z(t)
-    return np.column_stack((smoothed_x, smoothed_y, smoothed_z))
+    return np.column_stack((smoothed_x, smoothed_y, smoothed_z)).astype(int)
 
 
 def time_writer(t, unit="seconds"):

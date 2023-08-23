@@ -11,6 +11,7 @@ Routines for working with graphs.
 
 import networkx as nx
 import numpy as np
+from copy import deepcopy as cp
 from deep_neurographs import swc_utils, utils
 
 
@@ -25,12 +26,12 @@ def get_irreducibles(graph):
     return leafs, junctions
 
 
-def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16, smooth=True):
+def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16):
     graph = swc_utils.file_to_graph(swc_dict)
     leafs, junctions = get_irreducibles(graph)
     irreducible_nodes = set(leafs + junctions)
     irreducible_edges, leafs = extract_irreducible_edges(
-        graph, leafs, junctions, swc_dict, prune=prune, prune_depth=prune_depth, smooth=smooth,
+        graph, leafs, junctions, swc_dict, prune=prune, prune_depth=prune_depth,
     )
 
     # Check irreducility holds after pruning
@@ -42,7 +43,7 @@ def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16, smooth=True)
 
 
 def extract_irreducible_edges(
-    graph, leafs, junctions, swc_dict, prune=True, prune_depth=16, smooth=True,
+    graph, leafs, junctions, swc_dict, prune=True, prune_depth=16
 ):
     root = None
     irreducible_edges = dict()
@@ -66,21 +67,11 @@ def extract_irreducible_edges(
                 if condition1 or condition2:
                     leafs.remove(j if condition1 else root)
                 else:
-                    irreducible_edges[(root, j)] = add_edge(edge, smooth)
+                    irreducible_edges[(root, j)] = edge
             else:
-                irreducible_edges[(root, j)] = add_edge(edge, smooth)
+                irreducible_edges[(root, j)] = edge
             root = None
     return irreducible_edges, leafs
-
-
-def add_edge(edge, smooth):    
-    if smooth and len(edge) > 5:
-        print(edge["xyz"].shape)
-        edge["xyz"] = np.array(edge["xyz"])
-        edge["xyz"] = utils.smooth_branch(edge["xyz"].copy())
-        edge["xyz"] = [tuple(row) for row in edge["xyz"].tolist()]
-    return edge
-    
 
 def check_irreducibility(junctions, irreducible_edges):
     graph = nx.Graph()
