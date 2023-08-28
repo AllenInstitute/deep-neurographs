@@ -114,6 +114,11 @@ def read_json(path):
     return data
 
 
+def read_txt(path):
+    with open(path, "r") as f:
+        return f.read()
+
+
 # --- plot utils ---
 def plot(data, title):
     fig = go.Figure(data=data)
@@ -173,7 +178,7 @@ def dist(x, y):
 
 def smooth_branch(xyz, k=3):
     t = np.arange(len(xyz[:, 0]))
-    s = len(t) // 2
+    s = len(t) / 4
     cs_x = UnivariateSpline(t, xyz[:, 0], k=k, s=s)
     cs_y = UnivariateSpline(t, xyz[:, 1], k=k, s=s)
     cs_z = UnivariateSpline(t, xyz[:, 2], k=k, s=s)
