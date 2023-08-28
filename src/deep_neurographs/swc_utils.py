@@ -160,10 +160,10 @@ def file_to_graph(swc_dict, graph_id=None, set_attrs=False):
     return graph
 
 
-def dir_to_graphs(swc_dir):
+def dir_to_graphs(swc_dir, anisotropy=[1.0, 1.0, 1.0]):
     list_of_graphs = []
     for f in utils.listdir(swc_dir, ext=".swc"):
-        swc_dict = parse(read_swc(os.path.join(swc_dir, f)))
+        swc_dict = parse(read_swc(os.path.join(swc_dir, f)), anisotropy=anisotropy)
         graph = file_to_graph(swc_dict, graph_id=f, set_attrs=True)
         list_of_graphs.append(graph)
     return list_of_graphs
