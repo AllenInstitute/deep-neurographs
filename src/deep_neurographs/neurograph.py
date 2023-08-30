@@ -86,7 +86,7 @@ class NeuroGraph(nx.Graph):
             )
 
         # Add edges
-        for (i, j) in edges.keys():
+        for i, j in edges.keys():
             edge = (node_id[i], node_id[j])
             self.immutable_edges.add(frozenset(edge))
             self.add_edge(
@@ -123,6 +123,7 @@ class NeuroGraph(nx.Graph):
 
         """
         # Search for mutable connections
+        self.mutable_edges = set()
         self._init_kdtree()
         for leaf in self.leafs:
             xyz_leaf = self.nodes[leaf]["xyz"]
@@ -271,7 +272,7 @@ class NeuroGraph(nx.Graph):
         return self.kdtree.data[idxs]
 
     # --- Visualization ---
-    def visualize_immutables(self, return_data=False):
+    def visualize_immutables(self, return_data=False, title="Immutable Graph"):
         """
         Parameters
         ----------
@@ -290,13 +291,19 @@ class NeuroGraph(nx.Graph):
         if return_data:
             return data
         else:
-            utils.plot(data, "Immutable Graph")
+            utils.plot(data, title)
 
-    def visualize_mutables(self):
+    def visualize_mutables(self, title="Mutable Graph"):
         data = [self._plot_nodes()]
         data.extend(self._plot_edges(self.immutable_edges, color="black"))
         data.extend(self._plot_edges(self.mutable_edges))
-        utils.plot(data, "Mutable Graph")
+        utils.plot(data, title)
+
+    def visualize_targets(self, target_edges, title="Target Edges"):
+        data = [self._plot_nodes()]
+        data.extend(self._plot_edges(self.immutable_edges, color="black"))
+        data.extend(self._plot_edges(target_edges))
+        utils.plot(data, title)
 
     def _plot_nodes(self):
         xyz = nx.get_node_attributes(self, "xyz")
@@ -314,7 +321,7 @@ class NeuroGraph(nx.Graph):
     def _plot_edges(self, edges, color=None):
         traces = []
         line = dict(width=4) if color is None else dict(color=color, width=3)
-        for (i, j) in edges:
+        for i, j in edges:
             trace = go.Scatter3d(
                 x=self.edges[(i, j)]["xyz"][:, 0],
                 y=self.edges[(i, j)]["xyz"][:, 1],
@@ -357,6 +364,11 @@ class NeuroGraph(nx.Graph):
 
         """
         return self.number_of_edges()
+
+    def get_edge_attr(self, key, i, j):
+        attr_1 = self.nodes[i][key]
+        attr_2 = self.nodes[j][key]
+        return attr_1, attr_2
 
     def to_line_graph(self):
         """
