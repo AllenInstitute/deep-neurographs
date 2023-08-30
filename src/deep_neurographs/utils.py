@@ -21,7 +21,6 @@ from scipy.interpolate import SmoothBivariateSpline, UnivariateSpline
 
 # --- dictionary utils ---
 def remove_item(my_set, item):
-    """ """
     try:
         my_set.remove(item)
     except:
@@ -161,9 +160,9 @@ def subplot(data1, data2, title):
 
 
 # --- miscellaneous ---
-def dist(x, y):
+def dist(x, y, metric="l2")
     """
-    Computes Euclidean distance between "x" and "y".
+    Computes distance between "x" and "y".
 
     Parameters
     ----------
@@ -173,7 +172,11 @@ def dist(x, y):
     float
 
     """
-    return np.linalg.norm(np.subtract(x, y))
+    if metric == "l1":
+        return np.linalg.norm(x - y, ord=1)
+    else:
+        return np.linalg.norm(x - y, ord=2)
+    
 
 
 def smooth_branch(xyz, k=3):
