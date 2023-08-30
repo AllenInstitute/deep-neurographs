@@ -53,7 +53,7 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
 
     # Parse raw data
     min_id = np.inf
-    offset = [0.0, 0.0, 0.0]
+    offset = [0, 0, 0]
     for line in raw_swc:
         if line.startswith("# OFFSET"):
             parts = line.split()
@@ -77,7 +77,7 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
     return swc_dict
 
 
-def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0.0, 0.0, 0.0]):
+def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
     """
     Reads the (z,y,x) coordinates from an swc file, then reverses and scales
     them.
@@ -163,7 +163,9 @@ def file_to_graph(swc_dict, graph_id=None, set_attrs=False):
 def dir_to_graphs(swc_dir, anisotropy=[1.0, 1.0, 1.0]):
     list_of_graphs = []
     for f in utils.listdir(swc_dir, ext=".swc"):
-        swc_dict = parse(read_swc(os.path.join(swc_dir, f)), anisotropy=anisotropy)
+        swc_dict = parse(
+            read_swc(os.path.join(swc_dir, f)), anisotropy=anisotropy
+        )
         graph = file_to_graph(swc_dict, graph_id=f, set_attrs=True)
         list_of_graphs.append(graph)
     return list_of_graphs
@@ -200,7 +202,7 @@ def smooth(swc_dict):
         else:
             idxs = []
             root = None
-            for (i, j) in nx.dfs_edges(graph, source=leafs[0]):
+            for i, j in nx.dfs_edges(graph, source=leafs[0]):
                 # Check start of path is valid
                 if root is None:
                     root = i
