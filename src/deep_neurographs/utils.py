@@ -173,9 +173,9 @@ def dist(x, y, metric="l2"):
 
     """
     if metric == "l1":
-        return np.linalg.norm(x - y, ord=1)
+        return np.linalg.norm(np.subtract(x, y), ord=1)
     else:
-        return np.linalg.norm(x - y, ord=2)
+        return np.linalg.norm(np.subtract(x, y), ord=2)
     
 
 
