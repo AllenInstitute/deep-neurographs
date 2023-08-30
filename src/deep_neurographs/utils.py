@@ -160,7 +160,7 @@ def subplot(data1, data2, title):
 
 
 # --- miscellaneous ---
-def dist(x, y, metric="l2")
+def dist(x, y, metric="l2"):
     """
     Computes distance between "x" and "y".
 
