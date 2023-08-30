@@ -118,6 +118,26 @@ def read_txt(path):
         return f.read()
 
 
+def write_json(path, contents):
+    """
+    Writes "contents" to a .json file at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path that .txt file is written to.
+    contents : dict
+        Contents to be written to .txt file.
+
+    Returns
+    -------
+    None
+
+    """
+    with open(path, "w") as f:
+        json.dump(contents, f)
+
+
 # --- plot utils ---
 def plot(data, title):
     fig = go.Figure(data=data)
