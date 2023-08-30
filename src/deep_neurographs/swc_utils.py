@@ -24,7 +24,6 @@ from deep_neurographs import utils
 def read_swc(path):
     with open(path, "r") as file:
         contents = file.readlines()
-        file.close()
     return contents
 
 
