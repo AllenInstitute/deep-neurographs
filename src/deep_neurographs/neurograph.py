@@ -47,8 +47,9 @@ class NeuroGraph(nx.Graph):
         super(NeuroGraph, self).__init__()
         self.leafs = set()
         self.junctions = set()
-        self.mutable_edges = set()
         self.immutable_edges = set()
+        self.mutable_edges = set()
+        self.target_edges = set()
         self.xyz_to_edge = dict()
 
     # --- Add nodes or edges ---
@@ -80,7 +81,7 @@ class NeuroGraph(nx.Graph):
             node_id[i] = len(self.nodes)
             self.add_node(
                 node_id[i],
-                xyz=swc_dict["xyz"][i],
+                xyz=np.array(swc_dict["xyz"][i]),
                 radius=swc_dict["radius"][i],
                 swc_id=swc_id,
             )
@@ -134,10 +135,10 @@ class NeuroGraph(nx.Graph):
                 attrs = self.get_edge_data(i, j)
 
                 # Get connecting node
-                if utils.dist(xyz, attrs["xyz"][0]) < 16:
+                if utils.dist(xyz, attrs["xyz"][0]) < 8:
                     node = i
                     xyz = self.nodes[node]["xyz"]
-                elif utils.dist(xyz, attrs["xyz"][-1]) < 16:
+                elif utils.dist(xyz, attrs["xyz"][-1]) < 8:
                     node = j
                     xyz = self.nodes[node]["xyz"]
                     if node == leaf:
@@ -148,9 +149,6 @@ class NeuroGraph(nx.Graph):
 
                 # Add edge
                 self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
-                if frozenset((leaf, node)) == frozenset({309}):
-                    print((leaf, node))
-                    stop
                 self.mutable_edges.add(frozenset((leaf, node)))
 
     def _get_mutables(self, query_id, query_xyz, max_degree, max_dist):
@@ -270,6 +268,32 @@ class NeuroGraph(nx.Graph):
         """
         idxs = self.kdtree.query_ball_point(query, max_dist)
         return self.kdtree.data[idxs]
+
+    def init_targets(self, log_path, dist_threshold):
+        # Initializations
+        splits_log = utils.read_mistake_log(log_path)
+        split_edges = set(splits_log.keys())
+        target_edges = set()
+
+        # Parse mutables
+        for edge in self.mutable_edges:
+            i, j = tuple(edge)
+            key = frozenset(self.get_edge_attr("swc_id", i, j))
+            if key in split_edges:
+                k, l = list(edge)
+                mutable_xyz_1 = self.nodes[k]["xyz"]
+                mutable_xyz_2 = self.nodes[l]["xyz"]
+                log_xyz_1 = splits_log[key]["xyz"][0]
+                log_xyz_2 = splits_log[key]["xyz"][1]
+
+                pair_1 = [mutable_xyz_1, mutable_xyz_2]
+                pair_2 = [log_xyz_1, log_xyz_2]
+                d = utils.pair_dist(pair_1, pair_2)
+                if d < dist_threshold:
+                    target_edges.add(frozenset((i, j)))
+        self.target_edges = target_edges
+        print("% target edges in mistake log:", len(target_edges) / len(split_edges))
+        print("% target edges in mutable:", len(target_edges) / len(self.mutable_edges))
 
     # --- Visualization ---
     def visualize_immutables(self, return_data=False, title="Immutable Graph"):
