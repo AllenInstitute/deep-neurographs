@@ -118,6 +118,29 @@ def read_txt(path):
         return f.read()
 
 
+def read_mistake_log(path):
+    splits_log = dict()
+    with open(path, "r") as file:
+        for line in file:
+            if not line.startswith("#") and len(line) > 0:
+                parts = line.split()
+                xyz_1 = extract_coords(parts[0:3])
+                xyz_2 = extract_coords(parts[3:6])
+                swc_1 = parts[6].replace(",", "")
+                swc_2 = parts[7].replace(",", "")
+                key = frozenset([swc_1, swc_2])
+                splits_log[key] = {"swc": [swc_1, swc_2], "xyz": [xyz_1, xyz_2]}
+    return splits_log
+
+
+def extract_coords(parts):
+    coords = []
+    for p in parts:
+        p = p.replace("[", "").replace("]", "").replace(",", "")
+        coords.append(float(p))
+    return np.array(coords, dtype=int)
+
+
 def write_json(path, contents):
     """
     Writes "contents" to a .json file at "path".
@@ -196,7 +219,21 @@ def dist(x, y, metric="l2"):
         return np.linalg.norm(np.subtract(x, y), ord=1)
     else:
         return np.linalg.norm(np.subtract(x, y), ord=2)
+
     
+def pair_dist(pair_1, pair_2, metric="l2"):
+    pair_1.reverse()
+    d1 = _pair_dist(pair_1, pair_2)
+
+    pair_1.reverse()
+    d2 = _pair_dist(pair_1, pair_2)
+    return min(d1, d2)
+
+
+def _pair_dist(pair_1, pair_2,  metric="l2"):
+    d1 = dist(pair_1[0], pair_2[0], metric=metric)
+    d2 = dist(pair_1[1], pair_2[1], metric=metric)
+    return max(d1, d2)
 
 
 def smooth_branch(xyz, k=3):

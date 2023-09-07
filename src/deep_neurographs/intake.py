@@ -25,6 +25,7 @@ def build_neurograph(
     bucket=None,
     access_key_id=None,
     secret_access_key=None,
+    generate_mutables=True,
     max_mutable_degree=5,
     max_mutable_dist=50.0,
     prune=True,
@@ -82,7 +83,7 @@ def init_immutables_from_s3(
         access_key_id=access_key_id, secret_access_key=secret_access_key
     )
     for file_key in s3_utils.listdir(bucket, swc_dir, s3_client, ext=".swc"):
-        swc_id = file_key.split("/")[-1]
+        swc_id = file_key.split("/")[-1].replace(".swc", "")
         raw_swc = s3_utils.read_from_s3(bucket, file_key, s3_client)
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
         if smooth:
@@ -106,6 +107,7 @@ def init_immutables_from_local(
     """
     for swc_id in utils.listdir(swc_dir, ext=".swc"):
         raw_swc = swc_utils.read_swc(os.path.join(swc_dir, swc_id))
+        swc_id = swc_id.replace(".0.swc", "")
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
         #if smooth:
         #    swc_dict = swc_utils.smooth(swc_dict)
