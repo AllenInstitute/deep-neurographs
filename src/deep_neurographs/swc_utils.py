@@ -21,13 +21,14 @@ from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 
 
+# -- io utils --
 def read_swc(path):
     with open(path, "r") as file:
         contents = file.readlines()
     return contents
 
 
-def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
+def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0], idx=False):
     """
     Parses a raw swc file to extract the (x,y,z) coordinates and radii. Note
     that node_ids from swc are refactored to index from 0 to n-1 where n is
@@ -48,7 +49,11 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
 
     """
     # Initialize swc
-    swc_dict = {"id": [], "xyz": [], "radius": [], "pid": []}
+    swc_dict = {"id": [], "radius": [], "pid": []}
+    if idx:
+        swc_dict["idx"] = []
+    else:
+        swc_dict["xyz"] = []
 
     # Parse raw data
     min_id = np.inf
@@ -62,9 +67,14 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0]):
             swc_dict["id"].append(int(parts[0]))
             swc_dict["radius"].append(float(parts[-2]))
             swc_dict["pid"].append(int(parts[-1]))
-            swc_dict["xyz"].append(
-                read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
-            )
+            if idx:
+                swc_dict["idx"].append(
+                    read_idx(parts[2:5], anisotropy=anisotropy, offset=offset)
+                ) 
+            else:
+                swc_dict["xyz"].append(
+                    read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
+                )
             if swc_dict["id"][-1] < min_id:
                 min_id = swc_dict["id"][-1]
 
@@ -95,11 +105,45 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
         The (x,y,z) coordinates from an swc file.
 
     """
-    xyz = [int(float(xyz[i]) * anisotropy[i] + offset[i]) for i in range(3)]
+    xyz = [float(xyz[i]) * anisotropy[i] + offset[i] for i in range(3)]
     return tuple(xyz)
 
 
-def write_swc(path, list_of_entries, color=None):
+def read_idx(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
+    """
+    Reads the (z,y,x) coordinates from an swc file, then reverses and scales
+    them.
+
+    Parameters
+    ----------
+    zyx : str
+        (z,y,x) coordinates.
+    anisotropy : list[float]
+        Image to real-world coordinates scaling factors for [x, y, z] due to
+        anistropy of the microscope.
+
+    Returns
+    -------
+    list
+        The (x,y,z) coordinates from an swc file.
+
+    """
+    xyz = [int(float(xyz[i]) * anisotropy[i]) + offset[i] for i in range(3)]
+    return xyz
+
+
+def write_swc(path, contents):
+    if type(content) is list:
+        write_list(path, contents)
+    elif type(content) is dict:
+        write_dict(path, contents)
+    elif type(content) is nx.Graph:
+        write_graph(path, contents)
+    else:
+        assert True, "Unable to write {} to swc".format(type(content))
+
+
+def write_list(path, entry_list, color=None):
     """
     Writes an swc file.
 
@@ -123,13 +167,13 @@ def write_swc(path, list_of_entries, color=None):
         else:
             f.write("# id, type, z, y, x, r, pid")
         f.write("\n")
-        for i, entry in enumerate(list_of_entries):
+        for i, entry in enumerate(entry_list):
             for x in entry:
                 f.write(str(x) + " ")
             f.write("\n")
 
 
-def write_swc_dict(path, swc_dict, color=None):
+def write_dict(path, swc_dict, color=None):
     with open(path, "w") as f:
         if color is not None:
             f.write("# COLOR" + color)
@@ -149,6 +193,57 @@ def write_swc_dict(path, swc_dict, color=None):
             first = False
 
 
+def write_graph(path, graph):
+    """
+    Makes a list of entries to be written in an swc file.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph that edges in "edge_list" belong to.
+    edge_list : list[tuple[int]]
+        List of edges to be written to an swc file.
+
+    Returns
+    -------
+    list[str]
+        List of swc file entries to be written.
+
+    """
+    # loop through connected components
+    
+    reindex = dict()
+    edges = graph.edges if edge_list is None else edge_list
+    for i, j in edges:
+        if len(reindex) < 1:
+            entry, reindex = make_entry(graph, i, -1, reindex, anisotropy)
+            entry_list = [entry]
+        entry, reindex = make_entry(graph, j, reindex[i], reindex, anisotropy)
+        entry_list.append(entry)
+    return entry_list
+
+
+def make_entry(graph, i, parent, r, reindex):
+    """
+    Makes an entry to be written in an swc file.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph that "i" and "parent" belong to.
+    i : int
+        Node that entry corresponds to.
+    parent : int
+         Parent of node "i".
+
+    """
+    reindex[i] = len(reindex) + 1
+    r = graph.nodes[i]["radius"]
+    x, y, z = tuple(map(str, graph.nodes[i]["xyz"]))
+    return [x, y, z, r, parent], reindex
+
+
+# -- Conversions --
 def file_to_graph(swc_dict, graph_id=None, set_attrs=False):
     graph = nx.Graph(graph_id=graph_id)
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
@@ -173,7 +268,7 @@ def dir_to_graphs(swc_dir, anisotropy=[1.0, 1.0, 1.0]):
 def file_to_volume(swc_dict, sparse=False, vid=None, radius_plus=0):
     volume = []
     for i in swc_dict["id"]:
-        r = max(3 * int(np.round(swc_dict["radius"][i] + radius_plus)), 5)
+        r = max(int(np.round(swc_dict["radius"][i] + radius_plus)), 5)
         xyz = cp(swc_dict["xyz"][i])
         volume.extend(generate_coords(xyz, r))
     return dict(zip_broadcast(volume, vid)) if sparse else np.array(volume)
@@ -191,9 +286,10 @@ def dir_to_volume(swc_dir, radius_plus=0):
     return volume
 
 
+# -- miscellaneous --
 def smooth(swc_dict):
     if len(swc_dict["xyz"]) > 10:
-        xyz = np.array(swc_dict["xyz"], dtype=int)
+        xyz = np.array(swc_dict["xyz"])
         graph = file_to_graph(swc_dict)
         leafs, junctions = gutils.get_irreducibles(graph)
         if len(junctions) == 0:

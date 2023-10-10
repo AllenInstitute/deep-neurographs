@@ -14,6 +14,7 @@ import networkx as nx
 import numpy as np
 import plotly.graph_objects as go
 import plotly.tools as tls
+import tensorstore as ts
 from more_itertools import zip_broadcast
 from plotly.subplots import make_subplots
 from scipy.spatial import KDTree
@@ -21,8 +22,11 @@ from scipy.spatial import KDTree
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import swc_utils, utils
 
+from tifffile import imwrite
+
 COLORS = list(mcolors.TABLEAU_COLORS.keys())
 nCOLORS = len(COLORS)
+SUPPORTED_LABEL_MASK_TYPES = [dict, np.array, ts.TensorStore]
 
 
 class NeuroGraph(nx.Graph):
@@ -33,7 +37,7 @@ class NeuroGraph(nx.Graph):
 
     """
 
-    def __init__(self):
+    def __init__(self, label_mask=None):
         """
         Parameters
         ----------
@@ -45,6 +49,7 @@ class NeuroGraph(nx.Graph):
 
         """
         super(NeuroGraph, self).__init__()
+        self.label_mask = label_mask
         self.leafs = set()
         self.junctions = set()
         self.immutable_edges = set()
@@ -135,10 +140,10 @@ class NeuroGraph(nx.Graph):
                 attrs = self.get_edge_data(i, j)
 
                 # Get connecting node
-                if utils.dist(xyz, attrs["xyz"][0]) < 8:
+                if utils.dist(xyz, attrs["xyz"][0]) < 5:
                     node = i
                     xyz = self.nodes[node]["xyz"]
-                elif utils.dist(xyz, attrs["xyz"][-1]) < 8:
+                elif utils.dist(xyz, attrs["xyz"][-1]) < 5:
                     node = j
                     xyz = self.nodes[node]["xyz"]
                     if node == leaf:
@@ -170,7 +175,7 @@ class NeuroGraph(nx.Graph):
         best_dist = dict()
         query_swc_id = self.nodes[query_id]["swc_id"]
         for xyz in self._query_kdtree(query_xyz, max_dist):
-            xyz = tuple(xyz.astype(int))
+            xyz = tuple(xyz) #.astype(int))
             edge = self.xyz_to_edge[xyz]
             swc_id = gutils.get_edge_attr(self, edge, "swc_id")
             if swc_id != query_swc_id:
@@ -269,34 +274,52 @@ class NeuroGraph(nx.Graph):
         idxs = self.kdtree.query_ball_point(query, max_dist)
         return self.kdtree.data[idxs]
 
-    def init_targets(self, log_path, dist_threshold):
-        # Initializations
-        splits_log = utils.read_mistake_log(log_path)
-        split_edges = set(splits_log.keys())
-        target_edges = set()
 
-        # Parse mutables
+    def init_targets(self, target_labels, log_path, anisotropy=[1.0, 1.0, 1.0], shift=[0, 0, 0]):
+        labels_to_edge = dict()
+        mistakes_xyz = utils.read_mistake_coords(log_path, anisotropy=anisotropy, shift=shift)
+        mistakes_kdtree = KDTree(mistakes_xyz)
         for edge in self.mutable_edges:
+            # Get edge
             i, j = tuple(edge)
-            key = frozenset(self.get_edge_attr("swc_id", i, j))
-            if key in split_edges:
-                k, l = list(edge)
-                mutable_xyz_1 = self.nodes[k]["xyz"]
-                mutable_xyz_2 = self.nodes[l]["xyz"]
-                log_xyz_1 = splits_log[key]["xyz"][0]
-                log_xyz_2 = splits_log[key]["xyz"][1]
+            xyz_1 = utils.to_img(self.nodes[i]["xyz"], anisotropy, shift=shift)
+            xyz_2 = utils.to_img(self.nodes[j]["xyz"], anisotropy, shift=shift)
 
-                pair_1 = [mutable_xyz_1, mutable_xyz_2]
-                pair_2 = [log_xyz_1, log_xyz_2]
-                d = utils.pair_dist(pair_1, pair_2)
-                if d < dist_threshold:
-                    target_edges.add(frozenset((i, j)))
-        self.target_edges = target_edges
-        print("% target edges in mistake log:", len(target_edges) / len(split_edges))
-        print("% target edges in mutable:", len(target_edges) / len(self.mutable_edges))
+            # Check coords in bounds
+            bounds_1 = [xyz_1[i] >= target_labels.shape[i] for i in range(3)]
+            bounds_2 = [xyz_2[i] >= target_labels.shape[i] for i in range(3)]
+            if any(bounds_1) or any(bounds_2):
+                continue
+
+            # Check img
+            cond_1 = utils.check_img_path(target_labels, xyz_1, xyz_2)
+
+            # Check mistake log
+            d_1, _ = mistakes_kdtree.query(xyz_1, k=1)
+            d_2, _ = mistakes_kdtree.query(xyz_2, k=1)
+            cond_2 = d_1 < 10 and d_2 < 10
+            if cond_1 and cond_2:
+                key = frozenset([self.nodes[i]["swc_id"], self.nodes[j]["swc_id"]])
+                if key in labels_to_edge.keys():
+                    # Check whether to update target edge
+                    cur_dist = self.compute_length(labels_to_edge[key])
+                    new_dist = self.compute_length(edge)
+                    if cur_dist < new_dist:
+                        continue
+                    else:
+                        self.target_edges.remove(labels_to_edge[key])
+
+                # Add new target edge
+                labels_to_edge[key] = edge
+                self.target_edges.add(edge)
+        print("# target edges:", len(self.target_edges))
+        print(
+            "% target edges in mutable:",
+            len(self.target_edges) / len(self.mutable_edges),
+        )
 
     # --- Visualization ---
-    def visualize_immutables(self, return_data=False, title="Immutable Graph"):
+    def visualize_immutables(self, title="Immutable Graph", return_data=False):
         """
         Parameters
         ----------
@@ -317,16 +340,31 @@ class NeuroGraph(nx.Graph):
         else:
             utils.plot(data, title)
 
-    def visualize_mutables(self, title="Mutable Graph"):
+    def visualize_mutables(self, title="Mutable Graph", return_data=False):
         data = [self._plot_nodes()]
         data.extend(self._plot_edges(self.immutable_edges, color="black"))
         data.extend(self._plot_edges(self.mutable_edges))
-        utils.plot(data, title)
+        if return_data:
+            return data
+        else:
+            utils.plot(data, title)
+        
 
-    def visualize_targets(self, target_edges, title="Target Edges"):
+    def visualize_targets(self, target_graph=None, title="Target Edges", return_data=False):
         data = [self._plot_nodes()]
         data.extend(self._plot_edges(self.immutable_edges, color="black"))
-        data.extend(self._plot_edges(target_edges))
+        data.extend(self._plot_edges(self.target_edges))
+        if target_graph is not None:
+            data.extend(target_graph._plot_edges(target_graph.immutable_edges, color="blue"))
+        if return_data:
+            return data
+        else:
+            utils.plot(data, title)
+
+    def visualize_subset(self, edges, title=""):
+        data = [self._plot_nodes()]
+        data.extend(self._plot_edges(self.immutable_edges, color="black"))
+        data.extend(self._plot_edges(edges))
         utils.plot(data, title)
 
     def _plot_nodes(self):
@@ -389,6 +427,49 @@ class NeuroGraph(nx.Graph):
         """
         return self.number_of_edges()
 
+    def num_immutables(self):
+        """
+        Computes number of immutable edges in the graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Number of immutable edges in the graph.
+
+        """
+        return len(self.immutable_edges)
+
+    def num_mutables(self):
+        """
+        Computes number of mutable edges in the graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Number of mutable edges in the graph.
+
+        """
+        return len(self.mutable_edges)
+    
+    def compute_length(self, edge, metric="l2"):
+        i, j = tuple(edge)
+        xyz_1, xyz_2 = self.get_edge_attr("xyz", i, j)
+        return utils.dist(xyz_1, xyz_2, metric=metric)
+
+    def path_length(self, metric="l2"):
+        length = 0
+        for edge in self.immutable_edges:
+            length += self.compute_length(edge, metric=metric)
+        return length
+
     def get_edge_attr(self, key, i, j):
         attr_1 = self.nodes[i][key]
         attr_2 = self.nodes[j][key]
@@ -411,4 +492,38 @@ class NeuroGraph(nx.Graph):
         graph = nx.Graph()
         graph.add_nodes_from(self.nodes)
         graph.add_edges_from(self.edges)
-        return nx.line_graph(graph)
+        return nx.line_graph(graph)        
+
+    
+
+    def init_targets_old(self, log_path, dist_threshold):
+        # Initializations
+        splits_log = utils.read_mistake_log(log_path)
+        split_edges = set(splits_log.keys())
+        target_edges = set()
+
+        # Parse mutables
+        for edge in self.mutable_edges:
+            i, j = tuple(edge)
+            key = frozenset(self.get_edge_attr("swc_id", i, j))
+            if key in split_edges:
+                k, l = list(edge)
+                mutable_xyz_1 = self.nodes[k]["xyz"]
+                mutable_xyz_2 = self.nodes[l]["xyz"]
+                log_xyz_1 = splits_log[key]["xyz"][0]
+                log_xyz_2 = splits_log[key]["xyz"][1]
+
+                pair_1 = [mutable_xyz_1, mutable_xyz_2]
+                pair_2 = [log_xyz_1, log_xyz_2]
+                d = utils.pair_dist(pair_1, pair_2)
+                if d < dist_threshold:
+                    target_edges.add(frozenset((i, j)))
+        self.target_edges = target_edges
+        print(
+            "% target edges in mistake log:",
+            len(target_edges) / len(split_edges),
+        )
+        print(
+            "% target edges in mutable:",
+            len(target_edges) / len(self.mutable_edges),
+        )
