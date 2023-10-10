@@ -12,11 +12,13 @@ General routines for various tasks.
 import json
 import os
 import shutil
+import zarr
 
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from scipy.interpolate import SmoothBivariateSpline, UnivariateSpline
+from scipy.interpolate import UnivariateSpline, CubicSpline
+from scipy.linalg import svd
 
 
 # --- dictionary utils ---
@@ -65,9 +67,11 @@ def remove_key(my_dict, key):
 
 
 # --- os utils ---
-def mkdir(path_to_dir):
-    if not os.path.exists(path_to_dir):
-        os.mkdir(path_to_dir)
+def mkdir(path, delete=False):
+    if os.path.exists(path) and delete:
+        shutil.rmtree(path)
+    if not os.path.exists(path):
+        os.mkdir(path)
 
 
 def rmdir(path):
@@ -94,6 +98,22 @@ def list_subdirs(path, keyword=None):
 
 
 # --- io utils ---
+def read_n5(path):
+    """
+    Reads n5 file at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path to n5.
+
+    Returns
+    -------
+    np.array
+        Image volume.
+    """
+    return zarr.open(zarr.N5FSStore(path), "r").volume
+
 def read_json(path):
     """
     Reads json file stored at "path".
@@ -118,6 +138,19 @@ def read_txt(path):
         return f.read()
 
 
+def read_mistake_coords(path, anisotropy=[1.0, 1.0, 1.0], shift=[0, 0, 0]):
+    xyz = []
+    with open(path, "r") as file:
+        for line in file:
+            if not line.startswith("#") and len(line) > 0:
+                parts = line.split()
+                xyz_1 = extract_coords(parts[0:3])
+                xyz_2 = extract_coords(parts[3:6])
+                xyz.append(to_img(xyz_1, anisotropy, shift=shift))
+                xyz.append(to_img(xyz_2, anisotropy, shift=shift))
+    return np.array(xyz)
+
+
 def read_mistake_log(path):
     splits_log = dict()
     with open(path, "r") as file:
@@ -129,7 +162,10 @@ def read_mistake_log(path):
                 swc_1 = parts[6].replace(",", "")
                 swc_2 = parts[7].replace(",", "")
                 key = frozenset([swc_1, swc_2])
-                splits_log[key] = {"swc": [swc_1, swc_2], "xyz": [xyz_1, xyz_2]}
+                splits_log[key] = {
+                    "swc": [swc_1, swc_2],
+                    "xyz": [xyz_1, xyz_2],
+                }
     return splits_log
 
 
@@ -220,7 +256,7 @@ def dist(x, y, metric="l2"):
     else:
         return np.linalg.norm(np.subtract(x, y), ord=2)
 
-    
+
 def pair_dist(pair_1, pair_2, metric="l2"):
     pair_1.reverse()
     d1 = _pair_dist(pair_1, pair_2)
@@ -230,22 +266,75 @@ def pair_dist(pair_1, pair_2, metric="l2"):
     return min(d1, d2)
 
 
-def _pair_dist(pair_1, pair_2,  metric="l2"):
+def _pair_dist(pair_1, pair_2, metric="l2"):
     d1 = dist(pair_1[0], pair_2[0], metric=metric)
     d2 = dist(pair_1[1], pair_2[1], metric=metric)
     return max(d1, d2)
 
 
-def smooth_branch(xyz, k=3):
-    t = np.arange(len(xyz[:, 0]))
-    s = len(t) / 4
-    cs_x = UnivariateSpline(t, xyz[:, 0], k=k, s=s)
-    cs_y = UnivariateSpline(t, xyz[:, 1], k=k, s=s)
-    cs_z = UnivariateSpline(t, xyz[:, 2], k=k, s=s)
-    smoothed_x = cs_x(t)
-    smoothed_y = cs_y(t)
-    smoothed_z = cs_z(t)
-    return np.column_stack((smoothed_x, smoothed_y, smoothed_z)).astype(int)
+def smooth_branch(xyz, round=True):
+    t = np.arange(len(xyz[:, 0]) + 12)
+    s = len(t) / 10
+    cs_x = UnivariateSpline(t, extend_boundary(xyz[:, 0]), s=s, k=3)
+    cs_y = UnivariateSpline(t, extend_boundary(xyz[:, 1]), s=s, k=3)
+    cs_z = UnivariateSpline(t, extend_boundary(xyz[:, 2]), s=s, k=3)
+    smoothed_x = trim_boundary(cs_x(t))
+    smoothed_y = trim_boundary(cs_y(t))
+    smoothed_z = trim_boundary(cs_z(t))
+    smoothed = np.column_stack((smoothed_x, smoothed_y, smoothed_z))
+    if round:
+        return smoothed #np.round(smoothed).astype(int)
+    else:
+        return smoothed
+
+
+def extend_boundary(x, num_boundary_points=6):
+    extended_x = np.concatenate((
+        np.linspace(x[0], x[1], num_boundary_points, endpoint=False),
+        x,
+        np.linspace(x[-2], x[-1], num_boundary_points, endpoint=False)
+    ))
+    return extended_x
+
+
+def trim_boundary(x, num_boundary_points=6):
+    return x[num_boundary_points:-num_boundary_points]
+
+
+def check_img_path(target_labels, xyz_1, xyz_2):
+    d = dist(xyz_1, xyz_2)
+    t_steps = np.arange(0, 1, 1 / d)
+    num_steps = len(t_steps)
+    labels = set()
+    collisions = set()
+    for t in t_steps:
+        xyz = tuple([int(line(xyz_1[i], xyz_2[i], t)) for i in range(3)])
+        if target_labels[xyz] != 0:
+            # Check for repeat collisions
+            if xyz in collisions:
+                num_steps -= 1
+            else:
+                collisions.add(xyz)
+
+            # Check for collision with multiple labels
+            labels.add(target_labels[xyz])
+            if len(labels) > 1:
+                return False
+    ratio = len(collisions) / len(t_steps)
+    return True if ratio > 1 / 3 else False
+        
+    
+    
+def line(xyz_1, xyz_2, t):
+    return np.round((1 - t) * xyz_1 + t * xyz_2)
+
+
+def to_world(xyz, anisotropy, shift=[0, 0, 0]):
+    return tuple([int((xyz[i] - shift[i]) * anisotropy[i]) for i in range(3)])
+
+
+def to_img(xyz, anisotropy, shift=[0, 0, 0]):
+    return tuple([int((xyz[i] - shift[i]) / anisotropy[i]) for i in range(3)])
 
 
 def time_writer(t, unit="seconds"):

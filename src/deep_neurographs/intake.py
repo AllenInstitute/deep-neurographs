@@ -100,7 +100,7 @@ def init_immutables_from_local(
     anisotropy=[1.0, 1.0, 1.0],
     prune=True,
     prune_depth=16,
-    smooth=True,
+    smooth=False,
 ):
     """
     To do...
@@ -109,8 +109,8 @@ def init_immutables_from_local(
         raw_swc = swc_utils.read_swc(os.path.join(swc_dir, swc_id))
         swc_id = swc_id.replace(".0.swc", "")
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
-        #if smooth:
-        #    swc_dict = swc_utils.smooth(swc_dict)
+        if smooth:
+            swc_dict = swc_utils.smooth(swc_dict)
         neurograph.generate_immutables(
             swc_id, swc_dict, prune=prune, prune_depth=prune_depth
         )
