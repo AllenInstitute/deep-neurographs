@@ -15,7 +15,7 @@ import torch
 from torch_geometric.data import Data
 
 from deep_neurographs import neurograph as ng
-from deep_neurographs import s3_utils, swc_utils, utils
+from deep_neurographs import geometry_utils, s3_utils, swc_utils, utils
 
 
 # --- Build graph ---
@@ -25,11 +25,12 @@ def build_neurograph(
     bucket=None,
     access_key_id=None,
     secret_access_key=None,
-    generate_mutables=True,
     max_mutable_degree=5,
     max_mutable_dist=50.0,
     prune=True,
     prune_depth=16,
+    origin=None,
+    shape=None,
 ):
     """
     Builds a neurograph from a directory of swc files, where each swc
@@ -37,7 +38,7 @@ def build_neurograph(
     other.
 
     """
-    neurograph = ng.NeuroGraph()
+    neurograph = ng.NeuroGraph(origin=origin, shape=shape)
     if bucket is not None:
         neurograph = init_immutables_from_s3(
             neurograph,
@@ -48,7 +49,6 @@ def build_neurograph(
             secret_access_key=secret_access_key,
             prune=prune,
             prune_depth=prune_depth,
-            smooth=True,
         )
     else:
         neurograph = init_immutables_from_local(
@@ -57,11 +57,10 @@ def build_neurograph(
             anisotropy=anisotropy,
             prune=prune,
             prune_depth=prune_depth,
-            smooth=True,
         )
     neurograph.generate_mutables(
-        max_degree=max_mutable_degree, max_dist=max_mutable_dist
-    )
+            max_degree=max_mutable_degree, max_dist=max_mutable_dist
+        )
     return neurograph
 
 
@@ -74,7 +73,7 @@ def init_immutables_from_s3(
     secret_access_key=None,
     prune=True,
     prune_depth=16,
-    smooth=True,
+    smooth=False,
 ):
     """
     To do...

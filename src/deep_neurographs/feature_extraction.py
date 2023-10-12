@@ -8,11 +8,13 @@ Builds graph for postprocessing with GNN.
 
 """
 
-import numpy as np
 from copy import deepcopy
-from deep_neurographs import utils, geometry_utils
 from random import sample
+
+import numpy as np
 from scipy.linalg import svd
+
+from deep_neurographs import geometry_utils, utils
 
 NUM_IMG_FEATURES = 0
 NUM_SKEL_FEATURES = 9
@@ -20,7 +22,9 @@ NUM_PC_FEATURES = 0
 
 
 # -- Wrappers --
-def generate_mutable_features(neurograph, img=True, pointcloud=True, skel=True):
+def generate_mutable_features(
+    neurograph, img=True, pointcloud=True, skel=True
+):
     features = dict()
     if img:
         features["img"] = generate_img_features(neurograph)
@@ -74,15 +78,15 @@ def generate_mutable_skel_features(neurograph):
         radius_i, radius_j = get_radii(neurograph, edge)
 
         dot1, dot2, dot3 = get_directionals(neurograph, edge, 5)
-        ddot1, ddot2, ddot3 = get_directionals(neurograph, edge, 10)
-        features[edge] = np.concatenate((length, dot1, dot2, dot3), axis=None)
+        ddot1, ddot2, ddot3 = get_directionals(neurograph, edge, 5)
+        features[edge] = np.concatenate((length, radius_i, radius_j, dot1, dot2, dot3), axis=None)
     return features
 
 
 def compute_length(neurograph, edge, metric="l2"):
     i, j = tuple(edge)
     xyz_1, xyz_2 = neurograph.get_edge_attr("xyz", i, j)
-    return utils.dist(xyz_1, xyz_2, metric=metric)
+    return geometry_utils.dist(xyz_1, xyz_2, metric=metric)
 
 
 def get_directionals(neurograph, edge, window_size):
@@ -91,15 +95,19 @@ def get_directionals(neurograph, edge, window_size):
     mutable_xyz_i, mutable_xyz_j = neurograph.get_edge_attr("xyz", i, j)
     mutable_xyz = np.array([mutable_xyz_i, mutable_xyz_j])
     mutable_tangent = geometry_utils.compute_tangent(mutable_xyz)
-    context_tangent_1 = geometry_utils.compute_context_vec(neurograph, i, mutable_tangent, window_size=window_size)
-    context_tangent_2 = geometry_utils.compute_context_vec(neurograph, j, mutable_tangent, window_size=window_size)
-    
+    context_tangent_i = geometry_utils.compute_context_vec(
+        neurograph, i, mutable_tangent, window_size=window_size
+    )
+    context_tangent_j = geometry_utils.compute_context_vec(
+        neurograph, j, mutable_tangent, window_size=window_size
+    )
+
     # Compute features
-    inner_product_1 = abs(np.dot(mutable_tangent, context_tangent_1))
-    inner_product_2 = abs(np.dot(mutable_tangent, context_tangent_2))
-    inner_product_3 = np.dot(context_tangent_1, context_tangent_2)
+    inner_product_1 = abs(np.dot(mutable_tangent, context_tangent_i))
+    inner_product_2 = abs(np.dot(mutable_tangent, context_tangent_j))
+    inner_product_3 = np.dot(context_tangent_i, context_tangent_j)
     return inner_product_1, inner_product_2, inner_product_3
-    
+
 
 def get_radii(neurograph, edge):
     i, j = tuple(edge)
@@ -114,15 +122,13 @@ def build_feature_matrix(neurographs, features, blocks):
     X = None
     block_to_idxs = dict()
     idx_to_edge = dict()
-    
+
     # Feature extraction
     for block_id in blocks:
         # Get features
         idx_shift = 0 if X is None else X.shape[0]
         X_i, y_i, idx_to_edge_i = build_feature_submatrix(
-            neurographs[block_id],
-            features[block_id],
-            idx_shift,
+            neurographs[block_id], features[block_id], idx_shift
         )
 
         # Concatenate
@@ -173,7 +179,6 @@ def combine_feature_vecs(features):
         else:
             vec = np.concatenate((vec, features[key]), axis=1)
     return vec
-
 
 
 """
