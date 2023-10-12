@@ -11,11 +11,22 @@ Routines for working with graphs.
 
 from copy import deepcopy as cp
 
+import os
 import networkx as nx
 import numpy as np
 
 from deep_neurographs import swc_utils, utils
 
+
+def init_dense_graphs(swc_dir):
+    dense_graphs = dict()
+    for f in utils.listdir(swc_dir, ext=".swc"):
+        raw_txt = swc_utils.read_swc(os.path.join(swc_dir, f))
+        swc_dict = swc_utils.parse(raw_txt)
+        graph_id = f.replace(".0.swc", "")
+        graph = swc_utils.file_to_graph(swc_dict, graph_id=graph_id, set_attrs=True)
+        dense_graphs[graph_id] = graph
+    return dense_graphs
 
 def get_irreducibles(graph):
     leafs = []

@@ -1,17 +1,27 @@
 import numpy as np
-from deep_neurographs import utils
+from scipy.interpolate import CubicSpline, UnivariateSpline
 from scipy.linalg import svd
+from deep_neurographs import utils
 
 
 # Context Tangent Vectors
-def compute_context_vec(neurograph, i, mutable_tangent, window_size=5, return_pts=False, vec_type="tangent"):
+def compute_context_vec(
+    neurograph,
+    i,
+    mutable_tangent,
+    window_size=5,
+    return_pts=False,
+    vec_type="tangent",
+):
     # Compute context vecs
     branches = get_branches(neurograph, i)
     context_vec_list = []
     xyz_list = []
     ref_xyz = neurograph.nodes[i]["xyz"]
     for branch in branches:
-        context_vec, xyz = _compute_context_vec(branch, ref_xyz, window_size, vec_type)
+        context_vec, xyz = _compute_context_vec(
+            branch, ref_xyz, window_size, vec_type
+        )
         context_vec_list.append(context_vec)
         xyz_list.append(xyz)
 
@@ -69,10 +79,63 @@ def compute_svd(xyz):
 
 def compute_tangent(xyz):
     if xyz.shape[0] == 2:
-        tangent = (xyz[1] - xyz[0]) / utils.dist(xyz[1], xyz[0])
+        tangent = (xyz[1] - xyz[0]) / dist(xyz[1], xyz[0])
     else:
+        xyz = smooth_branch(xyz)
         U, S, VT = compute_svd(xyz)
         tangent = VT[0]
     return tangent / np.linalg.norm(tangent)
 
 
+# Smoothing
+def smooth_branch(xyz):
+    t = np.arange(len(xyz[:, 0]) + 12)
+    s = len(t) / 10
+    cs_x = UnivariateSpline(t, extend_boundary(xyz[:, 0]), s=s, k=3)
+    cs_y = UnivariateSpline(t, extend_boundary(xyz[:, 1]), s=s, k=3)
+    cs_z = UnivariateSpline(t, extend_boundary(xyz[:, 2]), s=s, k=3)
+    smoothed_x = trim_boundary(cs_x(t))
+    smoothed_y = trim_boundary(cs_y(t))
+    smoothed_z = trim_boundary(cs_z(t))
+    smoothed = np.column_stack((smoothed_x, smoothed_y, smoothed_z))
+    return smoothed
+
+
+def extend_boundary(x, num_boundary_points=6):
+    extended_x = np.concatenate(
+        (
+            np.linspace(x[0], x[1], num_boundary_points, endpoint=False),
+            x,
+            np.linspace(x[-2], x[-1], num_boundary_points, endpoint=False),
+        )
+    )
+    return extended_x
+
+
+def trim_boundary(x, num_boundary_points=6):
+    return x[num_boundary_points:-num_boundary_points]
+
+
+# Miscellaneous
+def compare_edges(xyx_i, xyz_j, xyz_k):
+    dist_ij = dist(xyx_i, xyz_j)
+    dist_ik = dist(xyx_i, xyz_k)
+    return dist_ij < dist_ik
+    
+
+def dist(x, y, metric="l2"):
+    """
+    Computes distance between "x" and "y".
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    float
+
+    """
+    if metric == "l1":
+        return np.linalg.norm(np.subtract(x, y), ord=1)
+    else:
+        return np.linalg.norm(np.subtract(x, y), ord=2)

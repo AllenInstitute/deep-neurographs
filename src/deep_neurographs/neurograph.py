@@ -18,11 +18,10 @@ import tensorstore as ts
 from more_itertools import zip_broadcast
 from plotly.subplots import make_subplots
 from scipy.spatial import KDTree
+from tifffile import imwrite
 
 from deep_neurographs import graph_utils as gutils
-from deep_neurographs import swc_utils, utils
-
-from tifffile import imwrite
+from deep_neurographs import geometry_utils, swc_utils, utils
 
 COLORS = list(mcolors.TABLEAU_COLORS.keys())
 nCOLORS = len(COLORS)
@@ -37,7 +36,7 @@ class NeuroGraph(nx.Graph):
 
     """
 
-    def __init__(self, label_mask=None):
+    def __init__(self, label_mask=None, origin=None, shape=None):
         """
         Parameters
         ----------
@@ -56,8 +55,17 @@ class NeuroGraph(nx.Graph):
         self.mutable_edges = set()
         self.target_edges = set()
         self.xyz_to_edge = dict()
+        if origin is not None and shape is not None:
+            self.init_bbox(origin, shape)
+        else:
+            self.bbox = None
 
     # --- Add nodes or edges ---
+    def init_bbox(self, origin, shape):
+        self.bbox = dict()
+        self.bbox["min"] = list(origin)
+        self.bbox["max"] = [self.bbox["min"][i] + shape[i] for i in range(3)]
+
     def generate_immutables(
         self, swc_id, swc_dict, prune=True, prune_depth=16
     ):
@@ -119,7 +127,7 @@ class NeuroGraph(nx.Graph):
         for j in junctions:
             self.junctions.add(node_id[j])
 
-    def generate_mutables(self, max_degree=5, max_dist=100.0):
+    def generate_mutables(self, max_degree=5, max_dist=50.0):
         """
         Generates edges for the graph.
 
@@ -133,21 +141,23 @@ class NeuroGraph(nx.Graph):
         self._init_kdtree()
         for leaf in self.leafs:
             xyz_leaf = self.nodes[leaf]["xyz"]
+            if not self.is_contained(xyz_leaf):
+                continue
             mutables = self._get_mutables(leaf, xyz_leaf, max_degree, max_dist)
             for xyz in mutables:
+                if not self.is_contained(xyz):
+                    continue
                 # Extract info on mutable connection
                 (i, j) = self.xyz_to_edge[xyz]
                 attrs = self.get_edge_data(i, j)
 
                 # Get connecting node
-                if utils.dist(xyz, attrs["xyz"][0]) < 5:
+                if geometry_utils.dist(xyz, attrs["xyz"][0]) < 5:
                     node = i
                     xyz = self.nodes[node]["xyz"]
-                elif utils.dist(xyz, attrs["xyz"][-1]) < 5:
+                elif geometry_utils.dist(xyz, attrs["xyz"][-1]) < 5:
                     node = j
                     xyz = self.nodes[node]["xyz"]
-                    if node == leaf:
-                        stop
                 else:
                     idxs = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0]
                     node = self.add_immutable_node((i, j), attrs, idxs[0])
@@ -155,6 +165,7 @@ class NeuroGraph(nx.Graph):
                 # Add edge
                 self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
                 self.mutable_edges.add(frozenset((leaf, node)))
+        print("# mutable edges:", len(self.mutable_edges))
 
     def _get_mutables(self, query_id, query_xyz, max_degree, max_dist):
         """
@@ -170,22 +181,21 @@ class NeuroGraph(nx.Graph):
         None.
 
         """
-        # Search for connections
         best_xyz = dict()
         best_dist = dict()
         query_swc_id = self.nodes[query_id]["swc_id"]
         for xyz in self._query_kdtree(query_xyz, max_dist):
-            xyz = tuple(xyz) #.astype(int))
+            xyz = tuple(xyz)
             edge = self.xyz_to_edge[xyz]
             swc_id = gutils.get_edge_attr(self, edge, "swc_id")
             if swc_id != query_swc_id:
-                d = utils.dist(xyz, query_xyz)
-                if edge not in best_dist.keys():
-                    best_xyz[edge] = xyz
-                    best_dist[edge] = d
-                elif d < best_dist[edge]:
-                    best_xyz[edge] = xyz
-                    best_dist[edge] = d
+                d = geometry_utils.dist(xyz, query_xyz)
+                if swc_id not in best_dist.keys():
+                    best_xyz[swc_id] = xyz
+                    best_dist[swc_id] = d
+                elif d < best_dist[swc_id]:
+                    best_xyz[swc_id] = xyz
+                    best_dist[swc_id] = d
         return self._get_best_edges(best_dist, best_xyz, max_degree)
 
     def _get_best_edges(self, dist, xyz, max_degree):
@@ -257,66 +267,92 @@ class NeuroGraph(nx.Graph):
         """
         self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
 
-    def _query_kdtree(self, query, max_dist):
+    def _query_kdtree(self, query, dist):
         """
         Parameters
         ----------
         query : int
             Node id.
+        dist : float
+            Distance from query that is searched.
 
         Returns
         -------
         generator[tuple]
             Generator that generates the xyz coordinates cooresponding to all
-            nodes within a distance of "max_dist" from "query".
+            nodes within a distance of "dist" from "query".
 
         """
-        idxs = self.kdtree.query_ball_point(query, max_dist)
+        idxs = self.kdtree.query_ball_point(query, dist, return_sorted=True)
         return self.kdtree.data[idxs]
-
-
-    def init_targets(self, target_labels, log_path, anisotropy=[1.0, 1.0, 1.0], shift=[0, 0, 0]):
-        labels_to_edge = dict()
-        mistakes_xyz = utils.read_mistake_coords(log_path, anisotropy=anisotropy, shift=shift)
-        mistakes_kdtree = KDTree(mistakes_xyz)
+    
+    def init_targets_via_path(self, target_neurograph, target_densegraph):
+        site_to_site = dict()
+        pair_to_edge = dict()
         for edge in self.mutable_edges:
-            # Get edge
+            # Get projection
             i, j = tuple(edge)
-            xyz_1 = utils.to_img(self.nodes[i]["xyz"], anisotropy, shift=shift)
-            xyz_2 = utils.to_img(self.nodes[j]["xyz"], anisotropy, shift=shift)
-
-            # Check coords in bounds
-            bounds_1 = [xyz_1[i] >= target_labels.shape[i] for i in range(3)]
-            bounds_2 = [xyz_2[i] >= target_labels.shape[i] for i in range(3)]
-            if any(bounds_1) or any(bounds_2):
+            xyz_i, d_i = target_neurograph.get_projection(self.nodes[i]["xyz"])
+            xyz_j, d_j = target_neurograph.get_projection(self.nodes[j]["xyz"])
+            if d_i > 8 or d_j > 8:
                 continue
+            
+            # Check criteria
+            edge_i = target_neurograph.xyz_to_edge[xyz_i]
+            edge_j = target_neurograph.xyz_to_edge[xyz_j]
+            inclusion_i = xyz_i in site_to_site.keys()
+            inclusion_j = xyz_j in site_to_site.keys()
+            if edge_i != edge_j:
+                True
+            elif not inclusion_i and not inclusion_j:
+                site_to_site, pair_to_edge = self.add_site(
+                    site_to_site, pair_to_edge, xyz_i, xyz_j, edge
+                )
+            else:
+                xyz_i = xyz_i if inclusion_i else xyz_j
+                xyz_k = site_to_site[xyz_i] if inclusion_i else site_to_site[xyz_j]
+                if geometry_utils.compare_edges(xyz_i, xyz_j, xyz_k):
+                    site_to_site, pair_to_edge = self.remove_site(
+                        site_to_site, pair_to_edge, xyz_i, xyz_k
+                    )
+                    site_to_site, pair_to_edge = self.add_site(
+                        site_to_site, pair_to_edge, xyz_i, xyz_j, edge
+                    )
 
-            # Check img
-            cond_1 = utils.check_img_path(target_labels, xyz_1, xyz_2)
-
-            # Check mistake log
-            d_1, _ = mistakes_kdtree.query(xyz_1, k=1)
-            d_2, _ = mistakes_kdtree.query(xyz_2, k=1)
-            cond_2 = d_1 < 10 and d_2 < 10
-            if cond_1 and cond_2:
-                key = frozenset([self.nodes[i]["swc_id"], self.nodes[j]["swc_id"]])
-                if key in labels_to_edge.keys():
-                    # Check whether to update target edge
-                    cur_dist = self.compute_length(labels_to_edge[key])
-                    new_dist = self.compute_length(edge)
-                    if cur_dist < new_dist:
-                        continue
-                    else:
-                        self.target_edges.remove(labels_to_edge[key])
-
-                # Add new target edge
-                labels_to_edge[key] = edge
-                self.target_edges.add(edge)
         print("# target edges:", len(self.target_edges))
         print(
             "% target edges in mutable:",
             len(self.target_edges) / len(self.mutable_edges),
         )
+
+    def remove_site(self, site_to_site, pair_to_edge, xyz_i, xyz_j):
+        del site_to_site[xyz_i]
+        del site_to_site[xyz_j]
+        pair_to_edge = self._remove_pair_edge(pair_to_edge, xyz_i, xyz_j)
+        return site_to_site, pair_to_edge
+
+    def add_site(self, site_to_site, pair_to_edge, xyz_i, xyz_j, edge):
+        self.target_edges.add(edge)
+        site_to_site[xyz_i] = xyz_j
+        site_to_site[xyz_j] = xyz_i
+        pair_to_edge = self._add_pair_edge(pair_to_edge, xyz_i, xyz_j, edge)
+        return site_to_site, pair_to_edge
+
+    def _add_pair_edge(self, pair_to_edge, xyz_i, xyz_j, edge):
+        key = frozenset([xyz_i, xyz_j])
+        if key not in pair_to_edge.keys():
+            pair_to_edge[key] = set([edge])
+        else:
+            pair_to_edge[key].add(edge)
+        return pair_to_edge
+
+    def _remove_pair_edge(self, pair_to_edge, xyz_i, xyz_j):
+        key = frozenset([xyz_i, xyz_j])
+        edges = list(pair_to_edge[key])
+        if len(edges) == 1:
+            self.target_edges.remove(edges[0])
+            del pair_to_edge[key]
+        return pair_to_edge
 
     # --- Visualization ---
     def visualize_immutables(self, title="Immutable Graph", return_data=False):
@@ -348,14 +384,19 @@ class NeuroGraph(nx.Graph):
             return data
         else:
             utils.plot(data, title)
-        
 
-    def visualize_targets(self, target_graph=None, title="Target Edges", return_data=False):
+    def visualize_targets(
+        self, target_graph=None, title="Target Edges", return_data=False
+    ):
         data = [self._plot_nodes()]
         data.extend(self._plot_edges(self.immutable_edges, color="black"))
         data.extend(self._plot_edges(self.target_edges))
         if target_graph is not None:
-            data.extend(target_graph._plot_edges(target_graph.immutable_edges, color="blue"))
+            data.extend(
+                target_graph._plot_edges(
+                    target_graph.immutable_edges, color="blue"
+                )
+            )
         if return_data:
             return data
         else:
@@ -458,18 +499,33 @@ class NeuroGraph(nx.Graph):
 
         """
         return len(self.mutable_edges)
-    
+
     def compute_length(self, edge, metric="l2"):
         i, j = tuple(edge)
         xyz_1, xyz_2 = self.get_edge_attr("xyz", i, j)
-        return utils.dist(xyz_1, xyz_2, metric=metric)
+        return geometry_utils.dist(xyz_1, xyz_2, metric=metric)
 
     def path_length(self, metric="l2"):
         length = 0
         for edge in self.immutable_edges:
             length += self.compute_length(edge, metric=metric)
         return length
+    
+    def get_projection(self, xyz):
+        _, idx = self.kdtree.query(xyz, k=1)
+        proj_xyz = tuple(self.kdtree.data[idx])
+        proj_dist = geometry_utils.dist(proj_xyz, xyz)
+        return proj_xyz, proj_dist
 
+    def is_contained(self, xyz):
+        if type(self.bbox) is dict:
+            for i in range(3):
+                lower_bool = xyz[i] < self.bbox["min"][i]
+                upper_bool = xyz[i] > self.bbox["max"][i]
+                if lower_bool or upper_bool:
+                    return False
+        return True
+                
     def get_edge_attr(self, key, i, j):
         attr_1 = self.nodes[i][key]
         attr_2 = self.nodes[j][key]
@@ -492,9 +548,63 @@ class NeuroGraph(nx.Graph):
         graph = nx.Graph()
         graph.add_nodes_from(self.nodes)
         graph.add_edges_from(self.edges)
-        return nx.line_graph(graph)        
+        return nx.line_graph(graph)
+        
+        
+"""
 
-    
+    def init_targets(
+        self,
+        target_labels,
+        log_path,
+        anisotropy=[1.0, 1.0, 1.0],
+        shift=[0, 0, 0],
+    ):
+        labels_to_edge = dict()
+        mistakes_xyz = utils.read_mistake_coords(
+            log_path, anisotropy=anisotropy, shift=shift
+        )
+        mistakes_kdtree = KDTree(mistakes_xyz)
+        for edge in self.mutable_edges:
+            # Get edge
+            i, j = tuple(edge)
+            xyz_1 = utils.to_img(self.nodes[i]["xyz"], anisotropy, shift=shift)
+            xyz_2 = utils.to_img(self.nodes[j]["xyz"], anisotropy, shift=shift)
+
+            # Check coords in bounds
+            bounds_1 = [xyz_1[i] >= target_labels.shape[i] for i in range(3)]
+            bounds_2 = [xyz_2[i] >= target_labels.shape[i] for i in range(3)]
+            if any(bounds_1) or any(bounds_2):
+                continue
+
+            # Check img
+            cond_1 = utils.check_img_path(target_labels, xyz_1, xyz_2)
+
+            # Check mistake log
+            d_1, _ = mistakes_kdtree.query(xyz_1, k=1)
+            d_2, _ = mistakes_kdtree.query(xyz_2, k=1)
+            cond_2 = d_1 < 10 and d_2 < 10
+            if cond_1 and cond_2:
+                key = frozenset(
+                    [self.nodes[i]["swc_id"], self.nodes[j]["swc_id"]]
+                )
+                if key in labels_to_edge.keys():
+                    # Check whether to update target edge
+                    cur_dist = self.compute_length(labels_to_edge[key])
+                    new_dist = self.compute_length(edge)
+                    if cur_dist < new_dist:
+                        continue
+                    else:
+                        self.target_edges.remove(labels_to_edge[key])
+
+                # Add new target edge
+                labels_to_edge[key] = edge
+                self.target_edges.add(edge)
+        print("# target edges:", len(self.target_edges))
+        print(
+            "% target edges in mutable:",
+            len(self.target_edges) / len(self.mutable_edges),
+        )
 
     def init_targets_old(self, log_path, dist_threshold):
         # Initializations
@@ -527,3 +637,5 @@ class NeuroGraph(nx.Graph):
             "% target edges in mutable:",
             len(target_edges) / len(self.mutable_edges),
         )
+
+"""

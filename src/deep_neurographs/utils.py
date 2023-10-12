@@ -12,13 +12,11 @@ General routines for various tasks.
 import json
 import os
 import shutil
-import zarr
 
 import numpy as np
 import plotly.graph_objects as go
+import zarr
 from plotly.subplots import make_subplots
-from scipy.interpolate import UnivariateSpline, CubicSpline
-from scipy.linalg import svd
 
 
 # --- dictionary utils ---
@@ -113,6 +111,7 @@ def read_n5(path):
         Image volume.
     """
     return zarr.open(zarr.N5FSStore(path), "r").volume
+
 
 def read_json(path):
     """
@@ -239,24 +238,6 @@ def subplot(data1, data2, title):
 
 
 # --- miscellaneous ---
-def dist(x, y, metric="l2"):
-    """
-    Computes distance between "x" and "y".
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    float
-
-    """
-    if metric == "l1":
-        return np.linalg.norm(np.subtract(x, y), ord=1)
-    else:
-        return np.linalg.norm(np.subtract(x, y), ord=2)
-
-
 def pair_dist(pair_1, pair_2, metric="l2"):
     pair_1.reverse()
     d1 = _pair_dist(pair_1, pair_2)
@@ -270,35 +251,6 @@ def _pair_dist(pair_1, pair_2, metric="l2"):
     d1 = dist(pair_1[0], pair_2[0], metric=metric)
     d2 = dist(pair_1[1], pair_2[1], metric=metric)
     return max(d1, d2)
-
-
-def smooth_branch(xyz, round=True):
-    t = np.arange(len(xyz[:, 0]) + 12)
-    s = len(t) / 10
-    cs_x = UnivariateSpline(t, extend_boundary(xyz[:, 0]), s=s, k=3)
-    cs_y = UnivariateSpline(t, extend_boundary(xyz[:, 1]), s=s, k=3)
-    cs_z = UnivariateSpline(t, extend_boundary(xyz[:, 2]), s=s, k=3)
-    smoothed_x = trim_boundary(cs_x(t))
-    smoothed_y = trim_boundary(cs_y(t))
-    smoothed_z = trim_boundary(cs_z(t))
-    smoothed = np.column_stack((smoothed_x, smoothed_y, smoothed_z))
-    if round:
-        return smoothed #np.round(smoothed).astype(int)
-    else:
-        return smoothed
-
-
-def extend_boundary(x, num_boundary_points=6):
-    extended_x = np.concatenate((
-        np.linspace(x[0], x[1], num_boundary_points, endpoint=False),
-        x,
-        np.linspace(x[-2], x[-1], num_boundary_points, endpoint=False)
-    ))
-    return extended_x
-
-
-def trim_boundary(x, num_boundary_points=6):
-    return x[num_boundary_points:-num_boundary_points]
 
 
 def check_img_path(target_labels, xyz_1, xyz_2):
@@ -322,9 +274,8 @@ def check_img_path(target_labels, xyz_1, xyz_2):
                 return False
     ratio = len(collisions) / len(t_steps)
     return True if ratio > 1 / 3 else False
-        
-    
-    
+
+
 def line(xyz_1, xyz_2, t):
     return np.round((1 - t) * xyz_1 + t * xyz_2)
 
