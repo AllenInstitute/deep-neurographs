@@ -276,10 +276,6 @@ def check_img_path(target_labels, xyz_1, xyz_2):
     return True if ratio > 1 / 3 else False
 
 
-def line(xyz_1, xyz_2, t):
-    return np.round((1 - t) * xyz_1 + t * xyz_2)
-
-
 def to_world(xyz, anisotropy, shift=[0, 0, 0]):
     return tuple([int((xyz[i] - shift[i]) * anisotropy[i]) for i in range(3)])
 

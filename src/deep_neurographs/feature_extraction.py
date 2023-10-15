@@ -76,10 +76,11 @@ def generate_mutable_skel_features(neurograph):
     for edge in neurograph.mutable_edges:
         length = compute_length(neurograph, edge)
         radius_i, radius_j = get_radii(neurograph, edge)
-
         dot1, dot2, dot3 = get_directionals(neurograph, edge, 5)
-        ddot1, ddot2, ddot3 = get_directionals(neurograph, edge, 5)
-        features[edge] = np.concatenate((length, radius_i, radius_j, dot1, dot2, dot3), axis=None)
+        ddot1, ddot2, ddot3 = get_directionals(neurograph, edge, 10)
+        features[edge] = np.concatenate(
+            (length, radius_i, radius_j, dot1, dot2, dot3, ddot1, ddot2, ddot3), axis=None
+        )
     return features
 
 

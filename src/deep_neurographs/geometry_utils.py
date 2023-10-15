@@ -89,31 +89,32 @@ def compute_tangent(xyz):
 
 # Smoothing
 def smooth_branch(xyz):
-    t = np.arange(len(xyz[:, 0]) + 12)
-    s = len(t) / 10
-    cs_x = UnivariateSpline(t, extend_boundary(xyz[:, 0]), s=s, k=3)
-    cs_y = UnivariateSpline(t, extend_boundary(xyz[:, 1]), s=s, k=3)
-    cs_z = UnivariateSpline(t, extend_boundary(xyz[:, 2]), s=s, k=3)
-    smoothed_x = trim_boundary(cs_x(t))
-    smoothed_y = trim_boundary(cs_y(t))
-    smoothed_z = trim_boundary(cs_z(t))
-    smoothed = np.column_stack((smoothed_x, smoothed_y, smoothed_z))
-    return smoothed
+    if xyz.shape[0] > 5:
+        spl_x, spl_y, spl_z = fit_spline(xyz)
+        t = np.arange(xyz.shape[0])
+        xyz = np.column_stack((spl_x(t), spl_y(t), spl_z(t)))
+    return xyz
 
 
-def extend_boundary(x, num_boundary_points=6):
-    extended_x = np.concatenate(
-        (
-            np.linspace(x[0], x[1], num_boundary_points, endpoint=False),
-            x,
-            np.linspace(x[-2], x[-1], num_boundary_points, endpoint=False),
-        )
-    )
-    return extended_x
+def fit_spline(xyz):
+    s = xyz.shape[0] / 10
+    t = np.arange(xyz.shape[0])
+    cs_x = UnivariateSpline(t, xyz[:, 0], s=s, k=3)
+    cs_y = UnivariateSpline(t, xyz[:, 1], s=s, k=3)
+    cs_z = UnivariateSpline(t, xyz[:, 2], s=s, k=3)
+    return cs_x, cs_y, cs_z
 
 
-def trim_boundary(x, num_boundary_points=6):
-    return x[num_boundary_points:-num_boundary_points]
+def smooth_end(branch_xyz, radii, ref_xyz, num_pts=8):
+    smooth_bool = branch_xyz.shape[0] > 10
+    if all(branch_xyz[0] == ref_xyz) and smooth_bool:
+        return branch_xyz[num_pts:-1, :], radii[num_pts:-1], 0
+    elif all(branch_xyz[-1] == ref_xyz) and smooth_bool:
+        branch_xyz = branch_xyz[:-num_pts]
+        radii = radii[:-num_pts]
+        return branch_xyz, radii, -1
+    else:
+        return branch_xyz, radii, None
 
 
 # Miscellaneous
@@ -139,3 +140,7 @@ def dist(x, y, metric="l2"):
         return np.linalg.norm(np.subtract(x, y), ord=1)
     else:
         return np.linalg.norm(np.subtract(x, y), ord=2)
+
+def make_line(xyz_1, xyz_2, num_steps):
+    t_steps = np.linspace(0, 1, num_steps)
+    return [(1 - t) * xyz_1 + t * xyz_2 for t in t_steps]
