@@ -99,7 +99,7 @@ def init_immutables_from_local(
     anisotropy=[1.0, 1.0, 1.0],
     prune=True,
     prune_depth=16,
-    smooth=False,
+    smooth=True,
 ):
     """
     To do...

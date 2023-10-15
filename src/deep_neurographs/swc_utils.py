@@ -211,25 +211,19 @@ def make_entry(graph, i, parent, r, reindex):
 
 
 # -- Conversions --
-def file_to_graph(swc_dict, graph_id=None, set_attrs=False):
+def file_to_graph(swc_dict, graph_id=None, set_attrs=False, return_dict=False):
     graph = nx.Graph(graph_id=graph_id)
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
+    xyz_to_node = dict()
     if set_attrs:
         for i in graph.nodes:
             graph.nodes[i]["xyz"] = swc_dict["xyz"][i]
             graph.nodes[i]["radius"] = swc_dict["radius"][i]
-    return graph
-
-
-def dir_to_graphs(swc_dir, anisotropy=[1.0, 1.0, 1.0]):
-    list_of_graphs = []
-    for f in utils.listdir(swc_dir, ext=".swc"):
-        swc_dict = parse(
-            read_swc(os.path.join(swc_dir, f)), anisotropy=anisotropy
-        )
-        graph = file_to_graph(swc_dict, graph_id=f, set_attrs=True)
-        list_of_graphs.append(graph)
-    return list_of_graphs
+            xyz_to_node[swc_dict["xyz"][i]] = i
+    if return_dict:
+        return graph, xyz_to_node
+    else:
+        return graph
 
 
 def file_to_volume(swc_dict, sparse=False, vid=None, radius_plus=0):

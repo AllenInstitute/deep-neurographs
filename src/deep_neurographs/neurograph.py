@@ -8,6 +8,7 @@ Implementation of subclass of Networkx.Graph called "NeuroGraph".
 
 """
 
+import copy
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -101,17 +102,22 @@ class NeuroGraph(nx.Graph):
 
         # Add edges
         for i, j in edges.keys():
+            # Get edge
             edge = (node_id[i], node_id[j])
+            xyz = np.array(edges[(i, j)]["xyz"])
+            radii = np.array(edges[(i, j)]["radius"])
+
+            # Add edge
             self.immutable_edges.add(frozenset(edge))
             self.add_edge(
                 node_id[i],
                 node_id[j],
-                xyz=np.array(edges[(i, j)]["xyz"]),
-                radius=np.array(edges[(i, j)]["radius"]),
+                xyz=xyz,
+                radius=radii,
                 swc_id=swc_id,
             )
             xyz_to_edge = dict(
-                (tuple(xyz), edge) for xyz in edges[(i, j)]["xyz"]
+                (tuple(xyz), edge) for xyz in xyz
             )
             check_xyz = set(xyz_to_edge.keys())
             collisions = check_xyz.intersection(set(self.xyz_to_edge.keys()))
@@ -126,7 +132,13 @@ class NeuroGraph(nx.Graph):
 
         for j in junctions:
             self.junctions.add(node_id[j])
-
+    
+    def init_immutable_graph(self):
+        immutable_graph = nx.Graph()
+        immutable_graph.add_nodes_from(self)
+        immutable_graph.add_edges_from(self.immutable_edges)
+        return immutable_graph
+    
     def generate_mutables(self, max_degree=5, max_dist=50.0):
         """
         Generates edges for the graph.
@@ -135,7 +147,7 @@ class NeuroGraph(nx.Graph):
         -------
         None
 
-        """
+        """        
         # Search for mutable connections
         self.mutable_edges = set()
         self._init_kdtree()
@@ -165,7 +177,9 @@ class NeuroGraph(nx.Graph):
                 # Add edge
                 self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
                 self.mutable_edges.add(frozenset((leaf, node)))
-        print("# mutable edges:", len(self.mutable_edges))
+
+        if len(self.mutable_edges) > 0:
+            print("# proposed edges:", len(self.mutable_edges))
 
     def _get_mutables(self, query_id, query_xyz, max_degree, max_dist):
         """
@@ -286,56 +300,125 @@ class NeuroGraph(nx.Graph):
         idxs = self.kdtree.query_ball_point(query, dist, return_sorted=True)
         return self.kdtree.data[idxs]
     
-    def init_targets_via_path(self, target_neurograph, target_densegraph):
+    def init_targets(self, target_neurograph, target_densegraph):
+        self.groundtruth_graph = self.init_immutable_graph()
+        predicted_graph = self.init_immutable_graph()
+        complex_mutables = []
         site_to_site = dict()
         pair_to_edge = dict()
         for edge in self.mutable_edges:
             # Get projection
             i, j = tuple(edge)
-            xyz_i, d_i = target_neurograph.get_projection(self.nodes[i]["xyz"])
-            xyz_j, d_j = target_neurograph.get_projection(self.nodes[j]["xyz"])
-            if d_i > 8 or d_j > 8:
+            xyz_i = self.nodes[i]["xyz"]
+            xyz_j = self.nodes[j]["xyz"]
+            proj_xyz_i, d_i = target_neurograph.get_projection(xyz_i)
+            proj_xyz_j, d_j = target_neurograph.get_projection(xyz_j)
+            if d_i > 15 or d_j > 15:
+                continue
+
+            # Get corresponding edges on target
+            edge_i = target_neurograph.xyz_to_edge[proj_xyz_i]
+            edge_j = target_neurograph.xyz_to_edge[proj_xyz_j]
+            
+            
+            # Check whether complex
+            if edge_i != edge_j:                
+                if target_neurograph.is_adjacent(edge_i, edge_j):
+                    complex_mutables.append(edge)
+            else:
+                # Simple criteria
+                inclusion_i = proj_xyz_i in site_to_site.keys()
+                inclusion_j = proj_xyz_j in site_to_site.keys()
+                leaf_i = gutils.is_leaf(predicted_graph, i)
+                leaf_j = gutils.is_leaf(predicted_graph, j)
+                if not leaf_i or not leaf_j:
+                    continue
+                elif not inclusion_i and not inclusion_j:
+                    site_to_site, pair_to_edge = self.add_site(
+                        site_to_site,
+                        pair_to_edge,
+                        proj_xyz_i,
+                        proj_xyz_j,
+                        edge,
+                    )
+                else:
+                    # Get projected points
+                    if inclusion_j:
+                        proj_xyz_i = proj_xyz_j
+                        proj_xyz_k = site_to_site[proj_xyz_j]
+                    else:
+                        proj_xyz_k = site_to_site[proj_xyz_i]
+
+                    # Compare edge
+                    if geometry_utils.compare_edges(proj_xyz_i, proj_xyz_j, proj_xyz_k):
+                        site_to_site, pair_to_edge = self.remove_site(
+                            site_to_site,
+                            pair_to_edge,
+                            proj_xyz_i,
+                            proj_xyz_k,
+                        )
+                        site_to_site, pair_to_edge = self.add_site(
+                            site_to_site,
+                            pair_to_edge,
+                            proj_xyz_i,
+                            proj_xyz_j,
+                            edge,
+                        )
+
+        # Filter
+        print("# complex proposed edges", len(complex_mutables))
+        filtered_proposals = []
+        for edge in complex_mutables:
+            # Check whether edge creates a cycle
+            if self.check_cycle(tuple(edge)):
+                continue
+
+            # Check whether edge is aligned with target
+            i, j = tuple(edge)
+            aligned_bool = target_densegraph.check_aligned(
+                self.nodes[i]["xyz"], self.nodes[j]["xyz"]
+            )
+            if not aligned_bool:
+                continue
+
+            # Add edge
+            filtered_proposals.append(edge)
+
+        # Parse filtered proposals
+        print("# filtered proposed edges", len(filtered_proposals))
+        dists = [self.compute_length(edge) for edge in filtered_proposals]
+        for idx in np.argsort(dists):
+            edge = filtered_proposals[idx]
+            if self.check_cycle(tuple(edge)):
                 continue
             
-            # Check criteria
-            edge_i = target_neurograph.xyz_to_edge[xyz_i]
-            edge_j = target_neurograph.xyz_to_edge[xyz_j]
-            inclusion_i = xyz_i in site_to_site.keys()
-            inclusion_j = xyz_j in site_to_site.keys()
-            if edge_i != edge_j:
-                True
-            elif not inclusion_i and not inclusion_j:
+            add_bool = True
+            if add_bool:
                 site_to_site, pair_to_edge = self.add_site(
-                    site_to_site, pair_to_edge, xyz_i, xyz_j, edge
-                )
-            else:
-                xyz_i = xyz_i if inclusion_i else xyz_j
-                xyz_k = site_to_site[xyz_i] if inclusion_i else site_to_site[xyz_j]
-                if geometry_utils.compare_edges(xyz_i, xyz_j, xyz_k):
-                    site_to_site, pair_to_edge = self.remove_site(
-                        site_to_site, pair_to_edge, xyz_i, xyz_k
-                    )
-                    site_to_site, pair_to_edge = self.add_site(
-                        site_to_site, pair_to_edge, xyz_i, xyz_j, edge
-                    )
+                site_to_site, pair_to_edge, proj_xyz_i, proj_xyz_j, edge
+            )
 
+        # Print results
+        target_ratio = len(self.target_edges) / len(self.mutable_edges)
         print("# target edges:", len(self.target_edges))
-        print(
-            "% target edges in mutable:",
-            len(self.target_edges) / len(self.mutable_edges),
-        )
+        print("% target edges in mutable:", target_ratio)
+
+    def add_site(self, site_to_site, pair_to_edge, xyz_i, xyz_j, edge):
+        # Check whether cycle is created
+        if self.check_cycle(tuple(edge)):
+            return site_to_site, pair_to_edge
+
+        # Add sited
+        self.target_edges.add(edge)
+        site_to_site[xyz_i] = xyz_j
+        site_to_site[xyz_j] = xyz_i
+        pair_to_edge = self._add_pair_edge(pair_to_edge, xyz_i, xyz_j, edge)
+        return site_to_site, pair_to_edge
 
     def remove_site(self, site_to_site, pair_to_edge, xyz_i, xyz_j):
         del site_to_site[xyz_i]
         del site_to_site[xyz_j]
         pair_to_edge = self._remove_pair_edge(pair_to_edge, xyz_i, xyz_j)
-        return site_to_site, pair_to_edge
-
-    def add_site(self, site_to_site, pair_to_edge, xyz_i, xyz_j, edge):
-        self.target_edges.add(edge)
-        site_to_site[xyz_i] = xyz_j
-        site_to_site[xyz_j] = xyz_i
-        pair_to_edge = self._add_pair_edge(pair_to_edge, xyz_i, xyz_j, edge)
         return site_to_site, pair_to_edge
 
     def _add_pair_edge(self, pair_to_edge, xyz_i, xyz_j, edge):
@@ -510,12 +593,25 @@ class NeuroGraph(nx.Graph):
         for edge in self.immutable_edges:
             length += self.compute_length(edge, metric=metric)
         return length
-    
+
     def get_projection(self, xyz):
         _, idx = self.kdtree.query(xyz, k=1)
         proj_xyz = tuple(self.kdtree.data[idx])
         proj_dist = geometry_utils.dist(proj_xyz, xyz)
         return proj_xyz, proj_dist
+
+    def is_adjacent(self, edge_i, edge_j):
+        i, j = tuple(edge_i)
+        k, l = tuple(edge_j)
+        nb_bool_i = self.is_nb(i, k) or self.is_nb(i, l)
+        nb_bool_j = self.is_nb(j, k) or self.is_nb(j, l)
+        if nb_bool_i or nb_bool_j:
+            return True
+        else:
+            return False
+        
+    def is_nb(self, i, j):
+        return True if i in self.neighbors(j) else False
 
     def is_contained(self, xyz):
         if type(self.bbox) is dict:
@@ -525,7 +621,19 @@ class NeuroGraph(nx.Graph):
                 if lower_bool or upper_bool:
                     return False
         return True
-                
+    
+    def is_leaf(self, i):
+        return True if len(self.neighbors(i)) == 1 else False
+    
+    def check_cycle(self, edge):
+        self.groundtruth_graph.add_edges_from([edge])
+        try:
+            nx.find_cycle(self.groundtruth_graph)
+        except:
+            return False
+        self.groundtruth_graph.remove_edges_from([edge])
+        return True
+
     def get_edge_attr(self, key, i, j):
         attr_1 = self.nodes[i][key]
         attr_2 = self.nodes[j][key]
@@ -550,92 +658,20 @@ class NeuroGraph(nx.Graph):
         graph.add_edges_from(self.edges)
         return nx.line_graph(graph)
         
-        
+
+# Check whether to trim end of branch
 """
+if node_id[i] in leafs:
+    ref_xyz = copy.deepcopy(self.nodes[node_id[i]]["xyz"])
+    xyz, radii, idx = geometry_utils.smooth_end(xyz, radii, ref_xyz, num_pts=3)
+    if idx is not None:
+    nx.set_node_attributes(self, {node_id[i]: xyz[idx, :]}, 'xyz')
+    nx.set_node_attributes(self, {node_id[i]: radii[idx]}, 'radius')
 
-    def init_targets(
-        self,
-        target_labels,
-        log_path,
-        anisotropy=[1.0, 1.0, 1.0],
-        shift=[0, 0, 0],
-    ):
-        labels_to_edge = dict()
-        mistakes_xyz = utils.read_mistake_coords(
-            log_path, anisotropy=anisotropy, shift=shift
-        )
-        mistakes_kdtree = KDTree(mistakes_xyz)
-        for edge in self.mutable_edges:
-            # Get edge
-            i, j = tuple(edge)
-            xyz_1 = utils.to_img(self.nodes[i]["xyz"], anisotropy, shift=shift)
-            xyz_2 = utils.to_img(self.nodes[j]["xyz"], anisotropy, shift=shift)
-
-            # Check coords in bounds
-            bounds_1 = [xyz_1[i] >= target_labels.shape[i] for i in range(3)]
-            bounds_2 = [xyz_2[i] >= target_labels.shape[i] for i in range(3)]
-            if any(bounds_1) or any(bounds_2):
-                continue
-
-            # Check img
-            cond_1 = utils.check_img_path(target_labels, xyz_1, xyz_2)
-
-            # Check mistake log
-            d_1, _ = mistakes_kdtree.query(xyz_1, k=1)
-            d_2, _ = mistakes_kdtree.query(xyz_2, k=1)
-            cond_2 = d_1 < 10 and d_2 < 10
-            if cond_1 and cond_2:
-                key = frozenset(
-                    [self.nodes[i]["swc_id"], self.nodes[j]["swc_id"]]
-                )
-                if key in labels_to_edge.keys():
-                    # Check whether to update target edge
-                    cur_dist = self.compute_length(labels_to_edge[key])
-                    new_dist = self.compute_length(edge)
-                    if cur_dist < new_dist:
-                        continue
-                    else:
-                        self.target_edges.remove(labels_to_edge[key])
-
-                # Add new target edge
-                labels_to_edge[key] = edge
-                self.target_edges.add(edge)
-        print("# target edges:", len(self.target_edges))
-        print(
-            "% target edges in mutable:",
-            len(self.target_edges) / len(self.mutable_edges),
-        )
-
-    def init_targets_old(self, log_path, dist_threshold):
-        # Initializations
-        splits_log = utils.read_mistake_log(log_path)
-        split_edges = set(splits_log.keys())
-        target_edges = set()
-
-        # Parse mutables
-        for edge in self.mutable_edges:
-            i, j = tuple(edge)
-            key = frozenset(self.get_edge_attr("swc_id", i, j))
-            if key in split_edges:
-                k, l = list(edge)
-                mutable_xyz_1 = self.nodes[k]["xyz"]
-                mutable_xyz_2 = self.nodes[l]["xyz"]
-                log_xyz_1 = splits_log[key]["xyz"][0]
-                log_xyz_2 = splits_log[key]["xyz"][1]
-
-                pair_1 = [mutable_xyz_1, mutable_xyz_2]
-                pair_2 = [log_xyz_1, log_xyz_2]
-                d = utils.pair_dist(pair_1, pair_2)
-                if d < dist_threshold:
-                    target_edges.add(frozenset((i, j)))
-        self.target_edges = target_edges
-        print(
-            "% target edges in mistake log:",
-            len(target_edges) / len(split_edges),
-        )
-        print(
-            "% target edges in mutable:",
-            len(target_edges) / len(self.mutable_edges),
-        )
-
+if node_id[j] in leafs:
+    ref_xyz = copy.deepcopy(self.nodes[node_id[i]]["xyz"])
+    xyz, radii, idx = geometry_utils.smooth_end(xyz, radii, ref_xyz, num_pts=3)
+    if idx is not None:
+        self.nodes[node_id[j]]["xyz"] = xyz[idx]
+        self.nodes[node_id[j]]["radius"] = radii[idx]
 """

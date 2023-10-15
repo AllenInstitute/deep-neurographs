@@ -18,16 +18,6 @@ import numpy as np
 from deep_neurographs import swc_utils, utils
 
 
-def init_dense_graphs(swc_dir):
-    dense_graphs = dict()
-    for f in utils.listdir(swc_dir, ext=".swc"):
-        raw_txt = swc_utils.read_swc(os.path.join(swc_dir, f))
-        swc_dict = swc_utils.parse(raw_txt)
-        graph_id = f.replace(".0.swc", "")
-        graph = swc_utils.file_to_graph(swc_dict, graph_id=graph_id, set_attrs=True)
-        dense_graphs[graph_id] = graph
-    return dense_graphs
-
 def get_irreducibles(graph):
     leafs = []
     junctions = []
@@ -157,3 +147,8 @@ def _init_edge(swc_dict=None, node=None):
 def get_edge_attr(graph, edge, attr):
     edge_data = graph.get_edge_data(*edge)
     return edge_data[attr]
+
+def is_leaf(graph, i):
+    nbs = [j for j in graph.neighbors(i)]
+    return True if len(nbs) == 1 else False
+    
