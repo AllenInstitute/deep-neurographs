@@ -1,14 +1,15 @@
 import os
+
 import networkx as nx
 import numpy as np
-from deep_neurographs import swc_utils, utils
-from deep_neurographs.geometry_utils import dist, make_line
 from more_itertools import zip_broadcast
 from scipy.spatial import KDTree
 
+from deep_neurographs import swc_utils, utils
+from deep_neurographs.geometry_utils import dist, make_line
+
 
 class DenseGraph:
-
     def __init__(self, swc_dir):
         self.xyz_to_node = dict()
         self.xyz_to_swc = dict()
@@ -24,7 +25,7 @@ class DenseGraph:
             # Construct Graph
             swc_dict = swc_utils.parse(swc_utils.read_swc(path))
             graph, xyz_to_node = swc_utils.file_to_graph(
-                swc_dict, set_attrs=True, return_dict=True,
+                swc_dict, set_attrs=True, return_dict=True
             )
 
             # Store
@@ -41,7 +42,7 @@ class DenseGraph:
         proj_xyz = tuple(self.kdtree.data[idx])
         proj_dist = dist(proj_xyz, xyz)
         return proj_xyz, proj_dist
-    
+
     def connect_nodes(self, graph_id, xyz_i, xyz_j, return_dist=True):
         i = self.xyz_to_node[graph_id][xyz_i]
         j = self.xyz_to_node[graph_id][xyz_j]
@@ -56,7 +57,7 @@ class DenseGraph:
         d = 0
         for i in range(1, len(path)):
             xyz_1 = self.graphs[graph_id].nodes[i]["xyz"]
-            xyz_2 = self.graphs[graph_id].nodes[i-1]["xyz"]
+            xyz_2 = self.graphs[graph_id].nodes[i - 1]["xyz"]
             d += dist(xyz_1, xyz_2)
         return d
 
@@ -77,7 +78,7 @@ class DenseGraph:
         target_dist = max(target_dist, 1)
 
         ratio = min(pred_dist, target_dist) / max(pred_dist, target_dist)
-        if ratio < 0.7 and pred_dist > 25:
+        if ratio < 0.6 and pred_dist > 25:
             return False
         elif ratio < 0.25:
             return False
@@ -93,7 +94,7 @@ class DenseGraph:
 
         intersection = proj_nodes.intersection(set(target_path))
         overlap = len(intersection) / len(target_path)
-        if overlap < 0.4 and pred_dist > 25:
+        if overlap < 0.5 and pred_dist > 25:
             return False
         elif overlap < 0.2:
             return False

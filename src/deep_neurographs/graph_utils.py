@@ -9,11 +9,7 @@ Routines for working with graphs.
 
 """
 
-from copy import deepcopy as cp
-
-import os
 import networkx as nx
-import numpy as np
 
 from deep_neurographs import swc_utils, utils
 
@@ -32,7 +28,6 @@ def get_irreducibles(graph):
 def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16):
     graph = swc_utils.file_to_graph(swc_dict)
     leafs, junctions = get_irreducibles(graph)
-    irreducible_nodes = set(leafs + junctions)
     irreducible_edges, leafs = extract_irreducible_edges(
         graph, leafs, junctions, swc_dict, prune=prune, prune_depth=prune_depth
     )
@@ -148,7 +143,7 @@ def get_edge_attr(graph, edge, attr):
     edge_data = graph.get_edge_data(*edge)
     return edge_data[attr]
 
+
 def is_leaf(graph, i):
     nbs = [j for j in graph.neighbors(i)]
     return True if len(nbs) == 1 else False
-    

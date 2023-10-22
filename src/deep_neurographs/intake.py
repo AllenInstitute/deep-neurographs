@@ -10,12 +10,11 @@ Builds neurograph for postprocessing with GNN.
 
 import os
 
-import numpy as np
 import torch
 from torch_geometric.data import Data
 
 from deep_neurographs import neurograph as ng
-from deep_neurographs import geometry_utils, s3_utils, swc_utils, utils
+from deep_neurographs import s3_utils, swc_utils, utils
 
 
 # --- Build graph ---
@@ -59,8 +58,8 @@ def build_neurograph(
             prune_depth=prune_depth,
         )
     neurograph.generate_mutables(
-            max_degree=max_mutable_degree, max_dist=max_mutable_dist
-        )
+        max_degree=max_mutable_degree, max_dist=max_mutable_dist
+    )
     return neurograph
 
 
@@ -132,48 +131,14 @@ def init_data(
     x = torch.tensor(node_features, dtype=torch.float)
     edge_index = torch.tensor(list(supergraph.edges()), dtype=torch.long)
     edge_features = torch.tensor(edge_features, dtype=torch.float)
-    edge_label_index, mistake_log = get_target_edges(
-        supergraph,
-        edge_index.tolist(),
-        bucket,
-        file_key,
-        access_key_id=access_key_id,
-        secret_access_key=secret_access_key,
-    )
+    edge_label_index = None  # target labels
     data = Data(
         x=x,
         edge_index=edge_index.t().contiguous(),
         edge_label_index=edge_label_index,
         edge_attr=edge_features,
     )
-    return data, mistake_log
-
-
-def get_target_edges(
-    supergraph,
-    edges,
-    bucket,
-    file_key,
-    access_key_id=None,
-    secret_access_key=None,
-):
-    """
-    To do...
-    """
-    s3_client = s3_utils.init_session(
-        access_key_id=access_key_id, secret_access_key=secret_access_key
-    )
-    hash_table = read_mistake_log(bucket, file_key, s3_client)
-    target_edges = torch.zeros((len(edges)))
-    cnt = 0
-    for i, e in enumerate(edges):
-        e1, e2 = get_old_edge(supergraph, e)
-        if utils.check_key(hash_table, e1) or utils.check_key(hash_table, e2):
-            target_edges[i] = 1
-            cnt += 1
-    print("Number of mistakes:", len(hash_table))
-    print("Number of hits:", cnt)
-    return torch.tensor(target_edges), hash_table
+    return data
 
 
 def read_mistake_log(bucket, file_key, s3_client):

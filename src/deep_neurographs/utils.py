@@ -21,10 +21,8 @@ from plotly.subplots import make_subplots
 
 # --- dictionary utils ---
 def remove_item(my_set, item):
-    try:
+    if item in my_set:
         my_set.remove(item)
-    except:
-        pass
     return my_set
 
 
@@ -44,9 +42,9 @@ def check_key(my_dict, key):
     dict value or bool
 
     """
-    try:
+    if key in my_dict.keys():
         return my_dict[key]
-    except:
+    else:
         return False
 
 
@@ -96,21 +94,20 @@ def list_subdirs(path, keyword=None):
 
 
 # --- io utils ---
-def read_n5(path):
-    """
-    Reads n5 file at "path".
+def open_zarr(path):
+    n5store = zarr.N5FSStore(path, "r")
+    if "653980" in path:
+        return zarr.open(n5store).ch488.s0
+    elif "653158" in path:
+        return zarr.open(n5store).s0
 
-    Parameters
-    ----------
-    path : str
-        Path to n5.
 
-    Returns
-    -------
-    np.array
-        Image volume.
-    """
-    return zarr.open(zarr.N5FSStore(path), "r").volume
+def read_img_chunk(img, xyz, shape):
+    return img[
+        xyz[2] - shape[2] // 2 : xyz[2] + shape[2] // 2,
+        xyz[1] - shape[1] // 2 : xyz[1] + shape[1] // 2,
+        xyz[0] - shape[0] // 2 : xyz[0] + shape[0] // 2,
+    ]
 
 
 def read_json(path):
@@ -238,44 +235,6 @@ def subplot(data1, data2, title):
 
 
 # --- miscellaneous ---
-def pair_dist(pair_1, pair_2, metric="l2"):
-    pair_1.reverse()
-    d1 = _pair_dist(pair_1, pair_2)
-
-    pair_1.reverse()
-    d2 = _pair_dist(pair_1, pair_2)
-    return min(d1, d2)
-
-
-def _pair_dist(pair_1, pair_2, metric="l2"):
-    d1 = dist(pair_1[0], pair_2[0], metric=metric)
-    d2 = dist(pair_1[1], pair_2[1], metric=metric)
-    return max(d1, d2)
-
-
-def check_img_path(target_labels, xyz_1, xyz_2):
-    d = dist(xyz_1, xyz_2)
-    t_steps = np.arange(0, 1, 1 / d)
-    num_steps = len(t_steps)
-    labels = set()
-    collisions = set()
-    for t in t_steps:
-        xyz = tuple([int(line(xyz_1[i], xyz_2[i], t)) for i in range(3)])
-        if target_labels[xyz] != 0:
-            # Check for repeat collisions
-            if xyz in collisions:
-                num_steps -= 1
-            else:
-                collisions.add(xyz)
-
-            # Check for collision with multiple labels
-            labels.add(target_labels[xyz])
-            if len(labels) > 1:
-                return False
-    ratio = len(collisions) / len(t_steps)
-    return True if ratio > 1 / 3 else False
-
-
 def to_world(xyz, anisotropy, shift=[0, 0, 0]):
     return tuple([int((xyz[i] - shift[i]) * anisotropy[i]) for i in range(3)])
 

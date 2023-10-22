@@ -10,14 +10,15 @@ Routines for working with swc files.
 """
 
 import os
-import random
 from copy import deepcopy as cp
 
 import networkx as nx
 import numpy as np
 from more_itertools import zip_broadcast
 
-from deep_neurographs import geometry_utils, graph_utils as gutils, utils
+from deep_neurographs import geometry_utils
+from deep_neurographs import graph_utils as gutils
+from deep_neurographs import utils
 
 
 # -- io utils --
@@ -100,14 +101,14 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
 
 
 def write_swc(path, contents):
-    if type(content) is list:
+    if type(contents) is list:
         write_list(path, contents)
-    elif type(content) is dict:
+    elif type(contents) is dict:
         write_dict(path, contents)
-    elif type(content) is nx.Graph:
+    elif type(contents) is nx.Graph:
         write_graph(path, contents)
     else:
-        assert True, "Unable to write {} to swc".format(type(content))
+        assert True, "Unable to write {} to swc".format(type(contents))
 
 
 def write_list(path, entry_list, color=None):
@@ -116,9 +117,9 @@ def write_list(path, entry_list, color=None):
 
     Parameters
     ----------
-    path_to_swc : str
+    path : str
         Path that swc will be written to.
-    list_of_entries : list[list[int]]
+    entry_list : list[list[int]]
         List of entries that will be written to an swc file.
     color : str, optional
         Color of nodes. The default is None.
@@ -166,10 +167,10 @@ def write_graph(path, graph):
 
     Parameters
     ----------
+    path : str
+        Path that swc will be written to.
     graph : networkx.Graph
-        Graph that edges in "edge_list" belong to.
-    edge_list : list[tuple[int]]
-        List of edges to be written to an swc file.
+        Graph to be written to swc file.
 
     Returns
     -------
@@ -180,12 +181,11 @@ def write_graph(path, graph):
     # loop through connected components
 
     reindex = dict()
-    edges = graph.edges if edge_list is None else edge_list
-    for i, j in edges:
+    for i, j in graph.edges:
         if len(reindex) < 1:
-            entry, reindex = make_entry(graph, i, -1, reindex, anisotropy)
+            entry, reindex = make_entry(graph, i, -1, reindex)
             entry_list = [entry]
-        entry, reindex = make_entry(graph, j, reindex[i], reindex, anisotropy)
+        entry, reindex = make_entry(graph, j, reindex[i], reindex)
         entry_list.append(entry)
     return entry_list
 
@@ -202,6 +202,10 @@ def make_entry(graph, i, parent, r, reindex):
         Node that entry corresponds to.
     parent : int
          Parent of node "i".
+    r : float
+        Radius.
+    reindex : dict
+        Converts 'graph node id' to 'swc node id'.
 
     """
     reindex[i] = len(reindex) + 1

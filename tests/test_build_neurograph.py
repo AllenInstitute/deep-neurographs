@@ -8,20 +8,13 @@ Tests routines that build graph and generate features
 
 """
 
-import networkx as nx
-import torch
-import torch_geometric.transforms as T
-
-from deep_neurographs import feature_extraction as extracter
-from deep_neurographs import intake, net
-from deep_neurographs import neurograph as ng
-from deep_neurographs import train
+from deep_neurographs import intake
 
 if __name__ == "__main__":
 
     # Parameters
     max_mutable_degree = 5
-    max_mutable_dist = 100.0
+    max_mutable_dist = 50.0
     prune = True
     prune_depth = 16
 

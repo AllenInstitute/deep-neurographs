@@ -1,6 +1,7 @@
 import numpy as np
-from scipy.interpolate import CubicSpline, UnivariateSpline
+from scipy.interpolate import UnivariateSpline
 from scipy.linalg import svd
+
 from deep_neurographs import utils
 
 
@@ -87,6 +88,12 @@ def compute_tangent(xyz):
     return tangent / np.linalg.norm(tangent)
 
 
+def compute_normal(xyz):
+    U, S, VT = compute_svd(xyz)
+    normal = VT[-1]
+    return normal / np.linalg.norm(normal)
+
+
 # Smoothing
 def smooth_branch(xyz):
     if xyz.shape[0] > 5:
@@ -117,12 +124,30 @@ def smooth_end(branch_xyz, radii, ref_xyz, num_pts=8):
         return branch_xyz, radii, None
 
 
+# Image feature extraction
+def get_profile(
+    img, xyz_arr, anisotropy=[1.0, 1.0, 1.0], window_size=[4, 4, 4]
+):
+    xyz_arr = get_coords(xyz_arr, anisotropy=anisotropy)
+    profile = []
+    for xyz in xyz_arr:
+        img_chunk = utils.read_img_chunk(img, xyz, window_size)
+        profile.append(np.max(img_chunk))
+    return profile
+
+
+def get_coords(xyz_arr, anisotropy=[1.0, 1.0, 1.0]):
+    for i in range(3):
+        xyz_arr[:, i] = xyz_arr[:, i] / anisotropy[i]
+    return xyz_arr.astype(int)
+
+
 # Miscellaneous
 def compare_edges(xyx_i, xyz_j, xyz_k):
     dist_ij = dist(xyx_i, xyz_j)
     dist_ik = dist(xyx_i, xyz_k)
     return dist_ij < dist_ik
-    
+
 
 def dist(x, y, metric="l2"):
     """
@@ -141,6 +166,7 @@ def dist(x, y, metric="l2"):
     else:
         return np.linalg.norm(np.subtract(x, y), ord=2)
 
+
 def make_line(xyz_1, xyz_2, num_steps):
     t_steps = np.linspace(0, 1, num_steps)
-    return [(1 - t) * xyz_1 + t * xyz_2 for t in t_steps]
+    return np.array([(1 - t) * xyz_1 + t * xyz_2 for t in t_steps])

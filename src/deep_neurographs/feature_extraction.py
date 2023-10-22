@@ -12,74 +12,87 @@ from copy import deepcopy
 from random import sample
 
 import numpy as np
-from scipy.linalg import svd
 
 from deep_neurographs import geometry_utils, utils
 
-NUM_IMG_FEATURES = 0
-NUM_SKEL_FEATURES = 9
-NUM_PC_FEATURES = 0
+NUM_POINTS = 10
+WINDOW_SIZE = [6, 6, 6]
+
+NUM_IMG_FEATURES = NUM_POINTS
+NUM_SKEL_FEATURES = 11
 
 
 # -- Wrappers --
 def generate_mutable_features(
-    neurograph, img=True, pointcloud=True, skel=True
+    neurograph, anisotropy=[1.0, 1.0, 1.0], img_path=None
 ):
-    features = dict()
-    if img:
-        features["img"] = generate_img_features(neurograph)
-    if skel:
-        features["skel"] = generate_mutable_skel_features(neurograph)
-    features = combine_feature_vecs(features)
-    return features
+    """
+    Generates feature vectors for every mutable edge in a neurograph.
 
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        NeuroGraph generated from a directory of swcs generated from a
+        predicted segmentation.
+    anisotropy : list[float]
+        Real-world to image coordinates scaling factor for (x, y, z).
+    img_path : str, optional
+        Path to image volume.
 
-# -- Node feature extraction --
-def generate_img_features(neurograph):
-    img_features = np.zeros((neurograph.num_nodes(), NUM_IMG_FEATURES))
-    for node in neurograph.nodes:
-        img_features[node] = _generate_node_img_features()
-    return img_features
+    Returns
+    -------
+    Dictionary where each key-value pair corresponds to a type of feature
+    vector and the numerical vector.
 
-
-def _generate_node_img_features():
-    pass
-
-
-def generate_skel_features(neurograph):
-    skel_features = np.zeros((neurograph.num_nodes(), NUM_SKEL_FEATURES))
-    for node in neurograph.nodes:
-        skel_features[node] = _generate_node_skel_features(neurograph, node)
-    return skel_features
-
-
-def _generate_node_skel_features(neurograph, node):
-    radius = neurograph.nodes[node]["radius"]
-    xyz = neurograph.nodes[node]["xyz"]
-    return np.append(xyz, radius)
-
-
-def generate_pointcloud_features(neurograph):
-    pc_features = np.zeros((neurograph.num_nodes(), NUM_PC_FEATURES))
-    for node in neurograph.nodes:
-        pc_features[node] = _generate_pointcloud_node_features()
-    return pc_features
-
-
-def _generate_pointcloud_node_features():
-    pass
+    """
+    features = {"skel": generate_mutable_skel_features(neurograph)}
+    if img_path is not None:
+        features["img"] = generate_mutable_img_features(
+            neurograph, img_path, anisotropy=anisotropy
+        )
+    return combine_feature_vecs(features)
 
 
 # -- Edge feature extraction --
+def generate_mutable_img_features(
+    neurograph, path, anisotropy=[1.0, 1.0, 1.0]
+):
+    img = utils.open_zarr(path)
+    features = dict()
+    for edge in neurograph.mutable_edges:
+        xyz = neurograph.edges[edge]["xyz"]
+        line = geometry_utils.make_line(xyz[0], xyz[1], NUM_POINTS)
+        features[edge] = geometry_utils.get_profile(
+            img, line, anisotropy=anisotropy, window_size=WINDOW_SIZE
+        )
+    return features
+
+
 def generate_mutable_skel_features(neurograph):
     features = dict()
     for edge in neurograph.mutable_edges:
+        i, j = tuple(edge)
+        deg_i = len(list(neurograph.neighbors(i)))
+        deg_j = len(list(neurograph.neighbors(j)))
         length = compute_length(neurograph, edge)
         radius_i, radius_j = get_radii(neurograph, edge)
         dot1, dot2, dot3 = get_directionals(neurograph, edge, 5)
         ddot1, ddot2, ddot3 = get_directionals(neurograph, edge, 10)
         features[edge] = np.concatenate(
-            (length, radius_i, radius_j, dot1, dot2, dot3, ddot1, ddot2, ddot3), axis=None
+            (
+                length,
+                deg_i,
+                deg_j,
+                radius_i,
+                radius_j,
+                dot1,
+                dot2,
+                dot3,
+                ddot1,
+                ddot2,
+                ddot3,
+            ),
+            axis=None,
         )
     return features
 
@@ -221,4 +234,11 @@ def generate_immutable_skel_features(neurograph):
 def _generate_immutable_skel_features(neurograph, edge):
     mean_radius = np.mean(neurograph.edges[edge]["radius"], axis=0)
     return np.concatenate((mean_radius), axis=None)
+
+def generate_skel_features(neurograph):
+    skel_features = np.zeros((neurograph.num_nodes(), NUM_SKEL_FEATURES))
+    for node in neurograph.nodes:
+        skel_features[node] = _generate_node_skel_features(neurograph, node)
+    return skel_features
+
 """
