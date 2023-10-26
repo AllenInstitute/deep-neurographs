@@ -15,8 +15,8 @@ import numpy as np
 
 from deep_neurographs import geometry_utils, utils
 
-NUM_POINTS = 10
-WINDOW_SIZE = [6, 6, 6]
+NUM_POINTS = 5
+WINDOW_SIZE = [5, 5, 5]
 
 NUM_IMG_FEATURES = NUM_POINTS
 NUM_SKEL_FEATURES = 11
@@ -178,21 +178,17 @@ def build_feature_submatrix(neurograph, feat_dict, shift):
 
 
 # -- Utils --
-def compute_num_features(features):
-    num_features = 0
-    for key in features.keys():
-        num_features += features[key][0]
-    return num_features
+def compute_num_features():
+    return NUM_SKEL_FEATURES  # NUM_IMG_FEATURES +
 
 
 def combine_feature_vecs(features):
-    vec = None
-    for key in features.keys():
-        if vec is None:
-            vec = features[key]
-        else:
-            vec = np.concatenate((vec, features[key]), axis=1)
-    return vec
+    for edge in features["skel"].keys():
+        for feat_key in [key for key in features.keys() if key != "skel"]:
+            features["skel"][edge] = np.concatenate(
+                (features["skel"][edge], features[feat_key][edge])
+            )
+    return features["skel"]
 
 
 """

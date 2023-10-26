@@ -133,7 +133,7 @@ def get_profile(
     for xyz in xyz_arr:
         img_chunk = utils.read_img_chunk(img, xyz, window_size)
         profile.append(np.max(img_chunk))
-    return profile
+    return np.array(profile)
 
 
 def get_coords(xyz_arr, anisotropy=[1.0, 1.0, 1.0]):

@@ -301,7 +301,7 @@ class NeuroGraph(nx.Graph):
             xyz_j = self.nodes[j]["xyz"]
             proj_xyz_i, d_i = target_neurograph.get_projection(xyz_i)
             proj_xyz_j, d_j = target_neurograph.get_projection(xyz_j)
-            if d_i > 15 or d_j > 15:
+            if d_i > 10 or d_j > 10:
                 continue
 
             # Get corresponding edges on target

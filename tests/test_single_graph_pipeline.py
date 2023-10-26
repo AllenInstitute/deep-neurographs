@@ -8,7 +8,6 @@ Tests routines that build graph and generate features
 
 """
 
-import networkx as nx
 import torch
 import torch_geometric.transforms as T
 
