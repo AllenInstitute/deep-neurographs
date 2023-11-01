@@ -1,43 +1,70 @@
+import torch
 from torch import nn
 
 
 class FeedFowardNet(nn.Module):
-    def __init__(self, num_features, depth=3):
+    def __init__(self, num_features):
         nn.Module.__init__(self)
+        self.fc1 = self._init_fc_layer(num_features, num_features)
+        self.fc2 = self._init_fc_layer(num_features, num_features // 2)
+        self.output = nn.Sequential(nn.Linear(num_features // 2, 1))
 
-        # Parameters
-        assert depth < num_features
-        self.depth = depth
-        self.num_features = num_features
-
-        # Layers
-        print("Network Architecture...")
-        self.activation = nn.ELU()
-        self.dropout = nn.Dropout(p=0.2)
-        for d in range(self.depth):
-            D_in = num_features // max(d, 1)
-            D_out = num_features // (d + 1)
-            self.add_fc_layer(d, D_in, D_out)
-        self.last_fc = nn.Linear(D_out, 1)
-        self.sigmoid = nn.Sigmoid()
+    def _init_fc_layer(self, D_in, D_out):
+        fc_layer = nn.Sequential(
+            nn.Linear(D_in, D_out), nn.LeakyReLU(), nn.Dropout(p=0.25)
+        )
+        return fc_layer
 
     def forward(self, x):
-        for d in range(self.depth):
-            fc_d = getattr(self, "fc{}".format(d))
-            x = self.activation(self.dropout(fc_d(x)))
-        x = self.last_fc(x)
-        return self.sigmoid(x)
-
-    def add_fc_layer(self, d, D_in, D_out):
-        setattr(self, "fc{}".format(d), nn.Linear(D_in, D_out))
-        print("   {} --> {}".format(D_in, D_out))
+        x = self.fc1(x)
+        x = self.fc2(x)
+        x = self.output(x)
+        return x
 
 
 class ConvNet(nn.Module):
-    def __init__(self, input_dims, depth=3):
-        pass
+    def __init__(self):
+        nn.Module.__init__(self)
+        self.conv1 = self._init_conv_layer(1, 4)
+        self.conv2 = self._init_conv_layer(4, 8)
+        self.output = nn.Sequential(
+            nn.Linear(8*6*6*6, 64),
+            nn.LeakyReLU(),
+            nn.Linear(64, 1)
+        )
+
+    def _init_conv_layer(self, in_channels, out_channels):
+        conv_layer = nn.Sequential(
+            nn.Conv3d(
+                in_channels,
+                out_channels,
+                kernel_size=(3, 3, 3),
+                stride=1,
+                padding=0,
+            ),
+            nn.BatchNorm3d(out_channels),
+            nn.LeakyReLU(),
+            nn.Dropout(p=0.25),
+            nn.MaxPool3d(kernel_size=(2, 2, 2), stride=2),
+        )
+        return conv_layer
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = x.view(x.size(0), -1)
+        x = self.output(x)
+        return x
 
 
 class MultiModalNet(nn.Module):
     def __init__(self, feature_vec_shape, img_patch_shape):
         pass
+
+
+def weights_init(net):
+    for module in net.modules():
+        if isinstance(module, nn.Conv3d):
+            torch.nn.init.xavier_normal_(module.weight)
+        elif isinstance(module, nn.Linear):
+            torch.nn.init.xavier_normal_(module.weight)

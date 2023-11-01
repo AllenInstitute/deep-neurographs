@@ -15,6 +15,7 @@ import numpy as np
 
 from deep_neurographs import geometry_utils, utils
 
+CHUNK_SIZE = [32, 32, 32]
 NUM_POINTS = 5
 WINDOW_SIZE = [5, 5, 5]
 
@@ -24,7 +25,7 @@ NUM_SKEL_FEATURES = 11
 
 # -- Wrappers --
 def generate_mutable_features(
-    neurograph, anisotropy=[1.0, 1.0, 1.0], img_path=None
+    neurograph, anisotropy=[1.0, 1.0, 1.0], img_path=None, img_profile=True
 ):
     """
     Generates feature vectors for every mutable edge in a neurograph.
@@ -46,15 +47,32 @@ def generate_mutable_features(
 
     """
     features = {"skel": generate_mutable_skel_features(neurograph)}
-    if img_path is not None:
-        features["img"] = generate_mutable_img_features(
+    if img_path and img_profile:
+        features["img"] = generate_mutable_img_profile_features(
             neurograph, img_path, anisotropy=anisotropy
         )
-    return combine_feature_vecs(features)
+    elif img_path and not img_profile:
+        features["img"] = generate_mutable_img_chunk_features(
+            neurograph, img_path, anisotropy=anisotropy
+        )
+    return features
 
 
 # -- Edge feature extraction --
-def generate_mutable_img_features(
+def generate_mutable_img_chunk_features(
+    neurograph, path, anisotropy=[1.0, 1.0, 1.0]
+):
+    img = utils.open_zarr(path)
+    features = dict()
+    for edge in neurograph.mutable_edges:
+        xyz_edge = neurograph.edges[edge]["xyz"]
+        xyz = geometry_utils.compute_midpoint(xyz_edge[0], xyz_edge[1])
+        xyz = geometry_utils.get_coord(xyz, anisotropy=anisotropy)
+        features[edge] = utils.read_img_chunk(img, xyz, CHUNK_SIZE)
+    return features
+
+
+def generate_mutable_img_profile_features(
     neurograph, path, anisotropy=[1.0, 1.0, 1.0]
 ):
     img = utils.open_zarr(path)
@@ -131,9 +149,10 @@ def get_radii(neurograph, edge):
 
 
 # -- Combine feature vectors
-def build_feature_matrix(neurographs, features, blocks):
+def build_feature_matrix(neurographs, features, blocks, img_chunks=False):
     # Initialize
     X = None
+    y = None
     block_to_idxs = dict()
     idx_to_edge = dict()
 
@@ -141,9 +160,14 @@ def build_feature_matrix(neurographs, features, blocks):
     for block_id in blocks:
         # Get features
         idx_shift = 0 if X is None else X.shape[0]
-        X_i, y_i, idx_to_edge_i = build_feature_submatrix(
-            neurographs[block_id], features[block_id], idx_shift
-        )
+        if img_chunks:
+            X_i, y_i, idx_to_edge_i = build_img_chunk_submatrix(
+                neurographs[block_id], features[block_id], idx_shift
+            )
+        else:
+            X_i, y_i, idx_to_edge_i = build_feature_submatrix(
+                neurographs[block_id], features[block_id], idx_shift
+            )
 
         # Concatenate
         if X is None:
@@ -160,33 +184,53 @@ def build_feature_matrix(neurographs, features, blocks):
     return X, y, block_to_idxs, idx_to_edge
 
 
-def build_feature_submatrix(neurograph, feat_dict, shift):
+def build_feature_submatrix(neurograph, features, shift):
     # Extract info
-    key = sample(list(feat_dict.keys()), 1)[0]
+    features = combine_features(features)
+    key = sample(list(features.keys()), 1)[0]
     num_edges = neurograph.num_mutables()
-    num_features = len(feat_dict[key])
+    num_features = len(features[key])
 
     # Build
     idx_to_edge = dict()
     X = np.zeros((num_edges, num_features))
     y = np.zeros((num_edges))
-    for i, edge in enumerate(feat_dict.keys()):
+    for i, edge in enumerate(features.keys()):
         idx_to_edge[i + shift] = edge
-        X[i, :] = feat_dict[edge]
+        X[i, :] = features[edge]
+        y[i] = 1 if edge in neurograph.target_edges else 0
+    return X, y, idx_to_edge
+
+
+def build_img_chunk_submatrix(neurograph, features, shift):
+    # Extract info
+    key = sample(list(features.keys()), 1)[0]
+    num_edges = neurograph.num_mutables()
+    num_features = len(features[key])
+
+    # Build
+    idx_to_edge = dict()
+    X = np.zeros(((num_edges,) + tuple(CHUNK_SIZE)))
+    y = np.zeros((num_edges))
+    for i, edge in enumerate(features["img"].keys()):
+        idx_to_edge[i + shift] = edge
+        X[i, :] = features["img"][edge]
         y[i] = 1 if edge in neurograph.target_edges else 0
     return X, y, idx_to_edge
 
 
 # -- Utils --
-def compute_num_features():
-    return NUM_SKEL_FEATURES  # NUM_IMG_FEATURES +
+def compute_num_features(skel_features=True, img_features=True):
+    num_features = NUM_SKEL_FEATURES if skel_features else 0
+    num_features += NUM_IMG_FEATURES if img_features else 0
+    return num_features
 
 
-def combine_feature_vecs(features):
+def combine_features(features):
     for edge in features["skel"].keys():
-        for feat_key in [key for key in features.keys() if key != "skel"]:
+        for key in [key for key in features.keys() if key != "skel"]:
             features["skel"][edge] = np.concatenate(
-                (features["skel"][edge], features[feat_key][edge])
+                (features["skel"][edge], features[key][edge])
             )
     return features["skel"]
 

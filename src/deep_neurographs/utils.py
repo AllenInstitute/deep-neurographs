@@ -235,6 +235,12 @@ def subplot(data1, data2, title):
 
 
 # --- miscellaneous ---
+def normalize(img):
+    img -= np.min(img)
+    img = img / np.max(img)
+    return img
+
+
 def to_world(xyz, anisotropy, shift=[0, 0, 0]):
     return tuple([int((xyz[i] - shift[i]) * anisotropy[i]) for i in range(3)])
 

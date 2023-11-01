@@ -94,6 +94,10 @@ def compute_normal(xyz):
     return normal / np.linalg.norm(normal)
 
 
+def compute_midpoint(xyz1, xyz2):
+    return np.mean([xyz1, xyz2], axis=0)
+
+
 # Smoothing
 def smooth_branch(xyz):
     if xyz.shape[0] > 5:
@@ -104,7 +108,7 @@ def smooth_branch(xyz):
 
 
 def fit_spline(xyz):
-    s = xyz.shape[0] / 10
+    s = xyz.shape[0] / 5
     t = np.arange(xyz.shape[0])
     cs_x = UnivariateSpline(t, xyz[:, 0], s=s, k=3)
     cs_y = UnivariateSpline(t, xyz[:, 1], s=s, k=3)
@@ -140,6 +144,10 @@ def get_coords(xyz_arr, anisotropy=[1.0, 1.0, 1.0]):
     for i in range(3):
         xyz_arr[:, i] = xyz_arr[:, i] / anisotropy[i]
     return xyz_arr.astype(int)
+
+
+def get_coord(xyz, anisotropy=[1.0, 1.0, 1.0]):
+    return [int(xyz[i] / anisotropy[i]) for i in range(3)]
 
 
 # Miscellaneous
