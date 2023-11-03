@@ -15,6 +15,7 @@ import shutil
 
 import numpy as np
 import plotly.graph_objects as go
+import tensorstore as ts
 import zarr
 from plotly.subplots import make_subplots
 
@@ -102,12 +103,53 @@ def open_zarr(path):
         return zarr.open(n5store).s0
 
 
+def open_tensorstore(path):
+    """
+    Uploads segmentation mask stored as a directory of shard files.
+
+    Parameters
+    ----------
+    path : str
+        Path to directory containing shard files.
+
+    Returns
+    -------
+    sparse_volume : dict
+        Sparse image volume.
+
+    """
+    ts_arr = ts.open(
+        {
+            "driver": "neuroglancer_precomputed",
+            "kvstore": {
+                "driver": "gcs",
+                "bucket": "allen-nd-goog",
+                "path": path,
+            },
+        }
+    ).result()
+    return ts_arr[ts.d["channel"][0]]
+
+
 def read_img_chunk(img, xyz, shape):
     return img[
         xyz[2] - shape[2] // 2 : xyz[2] + shape[2] // 2,
         xyz[1] - shape[1] // 2 : xyz[1] + shape[1] // 2,
         xyz[0] - shape[0] // 2 : xyz[0] + shape[0] // 2,
-    ]
+    ].transpose(2, 1, 0)
+
+
+def read_tensorstore(ts_arr, xyz, shape):
+    arr = (
+        ts_arr[
+            xyz[0] - shape[0] // 2 : xyz[0] + shape[0] // 2,
+            xyz[1] - shape[1] // 2 : xyz[1] + shape[1] // 2,
+            xyz[2] - shape[2] // 2 : xyz[2] + shape[2] // 2,
+        ]
+        .read()
+        .result()
+    )
+    return arr
 
 
 def read_json(path):
@@ -235,7 +277,7 @@ def subplot(data1, data2, title):
 
 
 # --- miscellaneous ---
-def normalize(img):
+def normalize_img(img):
     img -= np.min(img)
     img = img / np.max(img)
     return img
@@ -246,7 +288,15 @@ def to_world(xyz, anisotropy, shift=[0, 0, 0]):
 
 
 def to_img(xyz, anisotropy, shift=[0, 0, 0]):
-    return tuple([int((xyz[i] - shift[i]) / anisotropy[i]) for i in range(3)])
+    xyz = apply_anisotropy(xyz - shift, return_int=True)
+    return tuple(xyz)
+
+
+def apply_anisotropy(xyz, anisotropy, return_int=False):
+    if return_int:
+        return [int(xyz[i] / anisotropy[i]) for i in range(3)]
+    else:
+        return [xyz[i] / anisotropy[i] for i in range(3)]
 
 
 def time_writer(t, unit="seconds"):

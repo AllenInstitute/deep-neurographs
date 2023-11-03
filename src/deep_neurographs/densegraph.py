@@ -80,8 +80,8 @@ class DenseGraph:
         ratio = min(pred_dist, target_dist) / max(pred_dist, target_dist)
         if ratio < 0.5 and pred_dist > 15:
             return False
-        elif ratio < 0.2:
-            return False
+        # elif ratio < 0.2:
+        #    return False
 
         # Compare projected predicted path
         proj_dists = []
@@ -92,10 +92,4 @@ class DenseGraph:
             proj_nodes.add(self.xyz_to_node[swc][tuple(proj_xyz)])
             proj_dists.append(proj_d)
 
-        intersection = proj_nodes.intersection(set(target_path))
-        overlap = len(intersection) / len(target_path)
-        if overlap < 0.5 and pred_dist > 15:
-            return False
-        elif overlap < 0.2:
-            return False
         return True

@@ -15,17 +15,22 @@ import numpy as np
 
 from deep_neurographs import geometry_utils, utils
 
-CHUNK_SIZE = [32, 32, 32]
-NUM_POINTS = 5
+CHUNK_SIZE = [64, 64, 64]
+HALF_CHUNK_SIZE = [CHUNK_SIZE[i] // 2 for i in range(3)]
 WINDOW_SIZE = [5, 5, 5]
 
+NUM_POINTS = 10
 NUM_IMG_FEATURES = NUM_POINTS
 NUM_SKEL_FEATURES = 11
 
 
 # -- Wrappers --
 def generate_mutable_features(
-    neurograph, anisotropy=[1.0, 1.0, 1.0], img_path=None, img_profile=True
+    neurograph,
+    anisotropy=[1.0, 1.0, 1.0],
+    img_path=None,
+    labels_path=None,
+    img_profile=True,
 ):
     """
     Generates feature vectors for every mutable edge in a neurograph.
@@ -53,22 +58,47 @@ def generate_mutable_features(
         )
     elif img_path and not img_profile:
         features["img"] = generate_mutable_img_chunk_features(
-            neurograph, img_path, anisotropy=anisotropy
+            neurograph, img_path, labels_path, anisotropy=anisotropy
         )
     return features
 
 
 # -- Edge feature extraction --
 def generate_mutable_img_chunk_features(
-    neurograph, path, anisotropy=[1.0, 1.0, 1.0]
+    neurograph, img_path, labels_path, anisotropy=[1.0, 1.0, 1.0]
 ):
-    img = utils.open_zarr(path)
+    img = utils.open_zarr(img_path)
+    pred_labels = utils.open_tensorstore(labels_path)
     features = dict()
     for edge in neurograph.mutable_edges:
-        xyz_edge = neurograph.edges[edge]["xyz"]
-        xyz = geometry_utils.compute_midpoint(xyz_edge[0], xyz_edge[1])
-        xyz = geometry_utils.get_coord(xyz, anisotropy=anisotropy)
-        features[edge] = utils.read_img_chunk(img, xyz, CHUNK_SIZE)
+        # Extract coordinates
+        edge_xyz = neurograph.edges[edge]["xyz"]
+        edge_xyz[0] = utils.apply_anisotropy(
+            edge_xyz[0], anisotropy=anisotropy
+        )
+        edge_xyz[1] = utils.apply_anisotropy(
+            edge_xyz[1], anisotropy=anisotropy
+        )
+
+        # Read chunks
+        midpoint = geometry_utils.compute_midpoint(edge_xyz[0], edge_xyz[1])
+        origin = tuple(np.round(midpoint).astype(int))
+        img_chunk = utils.read_img_chunk(img, origin, CHUNK_SIZE)
+        labels_chunk = utils.read_tensorstore(pred_labels, origin, CHUNK_SIZE)
+
+        # Add path
+        d = geometry_utils.dist(edge_xyz[0], edge_xyz[1])
+        img_coords_1 = np.round(
+            (edge_xyz[0] - midpoint + HALF_CHUNK_SIZE)
+        ).astype(int)
+        img_coords_2 = np.round(
+            edge_xyz[1] - midpoint + HALF_CHUNK_SIZE
+        ).astype(int)
+        path = geometry_utils.make_line(img_coords_1, img_coords_2, int(d + 5))
+
+        labels_chunk[labels_chunk > 0] = 1
+        labels_chunk = geometry_utils.fill_path(labels_chunk, path, val=-1)
+        features[edge] = np.stack([img_chunk, labels_chunk], axis=0)
     return features
 
 
@@ -210,7 +240,7 @@ def build_img_chunk_submatrix(neurograph, features, shift):
 
     # Build
     idx_to_edge = dict()
-    X = np.zeros(((num_edges,) + tuple(CHUNK_SIZE)))
+    X = np.zeros(((num_edges, 2) + tuple(CHUNK_SIZE)))
     y = np.zeros((num_edges))
     for i, edge in enumerate(features["img"].keys()):
         idx_to_edge[i + shift] = edge

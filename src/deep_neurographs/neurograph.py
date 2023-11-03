@@ -150,10 +150,10 @@ class NeuroGraph(nx.Graph):
                 attrs = self.get_edge_data(i, j)
 
                 # Get connecting node
-                if geometry_utils.dist(xyz, attrs["xyz"][0]) < 5:
+                if geometry_utils.dist(xyz, attrs["xyz"][0]) < 10:
                     node = i
                     xyz = self.nodes[node]["xyz"]
-                elif geometry_utils.dist(xyz, attrs["xyz"][-1]) < 5:
+                elif geometry_utils.dist(xyz, attrs["xyz"][-1]) < 10:
                     node = j
                     xyz = self.nodes[node]["xyz"]
                 else:
@@ -288,7 +288,6 @@ class NeuroGraph(nx.Graph):
         self.groundtruth_graph = self.init_immutable_graph()
 
         predicted_graph = self.init_immutable_graph()
-        complex_mutables = []
         site_to_site = dict()
         pair_to_edge = dict()
 
@@ -301,17 +300,22 @@ class NeuroGraph(nx.Graph):
             xyz_j = self.nodes[j]["xyz"]
             proj_xyz_i, d_i = target_neurograph.get_projection(xyz_i)
             proj_xyz_j, d_j = target_neurograph.get_projection(xyz_j)
-            if d_i > 7 or d_j > 7:
+
+            # Check criteria
+            if d_i > 9 or d_j > 9:
+                continue
+            elif self.check_cycle((i, j)):
                 continue
 
-            # Get corresponding edges on target
+            # Check cases
             edge_i = target_neurograph.xyz_to_edge[proj_xyz_i]
             edge_j = target_neurograph.xyz_to_edge[proj_xyz_j]
-
-            # Check whether complex
             if edge_i != edge_j:
-                if target_neurograph.is_adjacent(edge_i, edge_j):
-                    complex_mutables.append(mutable_edges[idx])
+                # Complex criteria
+                if not target_neurograph.is_adjacent(edge_i, edge_j):
+                    continue
+                if not target_densegraph.check_aligned(xyz_i, xyz_j):
+                    continue
             else:
                 # Simple criteria
                 inclusion_i = proj_xyz_i in site_to_site.keys()
@@ -319,17 +323,9 @@ class NeuroGraph(nx.Graph):
                 leaf_i = gutils.is_leaf(predicted_graph, i)
                 leaf_j = gutils.is_leaf(predicted_graph, j)
                 if not leaf_i or not leaf_j:
-                    continue
-                elif not inclusion_i and not inclusion_j:
-                    site_to_site, pair_to_edge = self.add_site(
-                        site_to_site,
-                        pair_to_edge,
-                        proj_xyz_i,
-                        proj_xyz_j,
-                        mutable_edges[idx],
-                    )
-                else:
-                    # Get projected points
+                    None
+                    # continue
+                elif inclusion_i or inclusion_j:
                     if inclusion_j:
                         proj_xyz_i = proj_xyz_j
                         proj_xyz_k = site_to_site[proj_xyz_j]
@@ -337,52 +333,22 @@ class NeuroGraph(nx.Graph):
                         proj_xyz_k = site_to_site[proj_xyz_i]
 
                     # Compare edge
-                    if geometry_utils.compare_edges(
+                    exists = geometry_utils.compare_edges(
                         proj_xyz_i, proj_xyz_j, proj_xyz_k
-                    ):
+                    )
+                    if exists:
                         site_to_site, pair_to_edge = self.remove_site(
                             site_to_site, pair_to_edge, proj_xyz_i, proj_xyz_k
                         )
-                        site_to_site, pair_to_edge = self.add_site(
-                            site_to_site,
-                            pair_to_edge,
-                            proj_xyz_i,
-                            proj_xyz_j,
-                            mutable_edges[idx],
-                        )
 
-        # Filter
-        # print("# complex proposed edges", len(complex_mutables))
-        filtered_proposals = []
-        for edge in complex_mutables:
-            # Check whether edge creates a cycle
-            if self.check_cycle(tuple(edge)):
-                continue
-
-            # Check whether edge is aligned with target
-            i, j = tuple(edge)
-            aligned_bool = target_densegraph.check_aligned(
-                self.nodes[i]["xyz"], self.nodes[j]["xyz"]
+            # Add site
+            site_to_site, pair_to_edge = self.add_site(
+                site_to_site,
+                pair_to_edge,
+                proj_xyz_i,
+                proj_xyz_j,
+                mutable_edges[idx],
             )
-            if not aligned_bool:
-                continue
-
-            # Add edge
-            filtered_proposals.append(edge)
-
-        # Parse filtered proposals
-        # print("# filtered proposed edges", len(filtered_proposals))
-        dists = [self.compute_length(edge) for edge in filtered_proposals]
-        for idx in np.argsort(dists):
-            edge = filtered_proposals[idx]
-            if self.check_cycle(tuple(edge)):
-                continue
-
-            add_bool = True
-            if add_bool:
-                site_to_site, pair_to_edge = self.add_site(
-                    site_to_site, pair_to_edge, proj_xyz_i, proj_xyz_j, edge
-                )
 
         # Print results
         # target_ratio = len(self.target_edges) / len(self.mutable_edges)
@@ -390,11 +356,6 @@ class NeuroGraph(nx.Graph):
         # print("% target edges in mutable:", target_ratio)
 
     def add_site(self, site_to_site, pair_to_edge, xyz_i, xyz_j, edge):
-        # Check whether cycle is created
-        if self.check_cycle(tuple(edge)):
-            return site_to_site, pair_to_edge
-
-        # Add sited
         self.target_edges.add(edge)
         site_to_site[xyz_i] = xyz_j
         site_to_site[xyz_j] = xyz_i
@@ -500,6 +461,7 @@ class NeuroGraph(nx.Graph):
                 z=self.edges[(i, j)]["xyz"][:, 2],
                 mode="lines",
                 line=line,
+                name="({},{})".format(i, j),
             )
             traces.append(trace)
         return traces
@@ -568,6 +530,13 @@ class NeuroGraph(nx.Graph):
 
         """
         return len(self.mutable_edges)
+
+    def immutable_degree(self, i):
+        degree = 0
+        for j in self.neighbors(i):
+            if frozenset((i, j)) in self.immutable_edges:
+                degree += 1
+        return degree
 
     def compute_length(self, edge, metric="l2"):
         i, j = tuple(edge)

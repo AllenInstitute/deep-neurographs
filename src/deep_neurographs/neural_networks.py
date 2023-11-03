@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 
-class FeedFowardNet(nn.Module):
+class FeedForwardNet(nn.Module):
     def __init__(self, num_features):
         nn.Module.__init__(self)
         self.fc1 = self._init_fc_layer(num_features, num_features)
@@ -25,12 +25,10 @@ class FeedFowardNet(nn.Module):
 class ConvNet(nn.Module):
     def __init__(self):
         nn.Module.__init__(self)
-        self.conv1 = self._init_conv_layer(1, 4)
-        self.conv2 = self._init_conv_layer(4, 8)
+        self.conv1 = self._init_conv_layer(2, 4)
+        self.conv2 = self._init_conv_layer(4, 4)
         self.output = nn.Sequential(
-            nn.Linear(8*6*6*6, 64),
-            nn.LeakyReLU(),
-            nn.Linear(64, 1)
+            nn.Linear(10976, 64), nn.LeakyReLU(), nn.Linear(64, 1)
         )
 
     def _init_conv_layer(self, in_channels, out_channels):
@@ -59,10 +57,19 @@ class ConvNet(nn.Module):
 
 class MultiModalNet(nn.Module):
     def __init__(self, feature_vec_shape, img_patch_shape):
-        pass
+        self.fnn_arm = FeedForwardNet()
+        self.cnn_arm = ConvNet()
+        self.output = FeedForwardNet()
+
+    def forward(self, feature_vec, img_chunk):
+        x = torch.cat(
+            (self.fnn_arm(feature_vec), self.cnn_arm(img_chunk)), axis=0
+        )
+        x = self.output(x)
+        return x
 
 
-def weights_init(net):
+def init_weights(net):
     for module in net.modules():
         if isinstance(module, nn.Conv3d):
             torch.nn.init.xavier_normal_(module.weight)

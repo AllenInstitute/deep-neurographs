@@ -140,6 +140,13 @@ def get_profile(
     return np.array(profile)
 
 
+def fill_path(img, path, val=-1):
+    for xyz in path:
+        x, y, z = tuple(np.round(xyz).astype(int))
+        img[x - 1 : x + 1, y - 1 : y + 1, z - 1 : z + 1] = val
+    return img
+
+
 def get_coords(xyz_arr, anisotropy=[1.0, 1.0, 1.0]):
     for i in range(3):
         xyz_arr[:, i] = xyz_arr[:, i] / anisotropy[i]
@@ -149,6 +156,8 @@ def get_coords(xyz_arr, anisotropy=[1.0, 1.0, 1.0]):
 def get_coord(xyz, anisotropy=[1.0, 1.0, 1.0]):
     return [int(xyz[i] / anisotropy[i]) for i in range(3)]
 
+
+# Rotate image
 
 # Miscellaneous
 def compare_edges(xyx_i, xyz_j, xyz_k):
@@ -178,3 +187,8 @@ def dist(x, y, metric="l2"):
 def make_line(xyz_1, xyz_2, num_steps):
     t_steps = np.linspace(0, 1, num_steps)
     return np.array([(1 - t) * xyz_1 + t * xyz_2 for t in t_steps])
+
+
+def normalize(x, norm="l2"):
+    zero_vec = np.zeros((3))
+    return x / abs(dist(zero_vec, x, metric=norm))

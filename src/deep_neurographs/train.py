@@ -1,22 +1,22 @@
 from random import sample
-from deep_neurographs import utils
+from deep_neurographs import neural_networks as nets
 import lightning.pytorch as pl
-from lightning.pytorch.callbacks import ModelCheckpoint
 import numpy as np
-from sklearn.metrics import roc_auc_score
-import torchio as tio
-
 import torch
 import torch.nn.functional as F
 import torch.utils.data as torch_data
-from torch.utils.data import Dataset, DataLoader
-from torch_geometric.utils import negative_sampling
+import torchio as tio
+from lightning.pytorch.callbacks import ModelCheckpoint
+from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
+from torch.utils.data import DataLoader, Dataset
 from torcheval.metrics.functional import (
     binary_accuracy,
     binary_f1_score,
     binary_precision,
     binary_recall,
 )
+
+from deep_neurographs import utils
 
 BATCH_SIZE = 32
 NUM_WORKERS = 0
@@ -38,7 +38,26 @@ def get_kfolds(train_data, k):
     return folds
 
 
-def train_network(dataset, net, max_epochs=100):
+def get_clf(key, data=None, num_features=None):
+    assert key in ["AdaBoost", "RandomForest", "FeedForward", "ConvNet"]
+    if key == "AdaBoost":
+        return AdaBoostClassifier()
+    elif key == "RandomForest":
+        return RandomForestClassifier()
+    elif key == "FeedForward":
+        net = nets.FeedFowardNet(num_features)
+        train_data = ProposalDataset(data["inputs"], data["labels"])
+        return net, train_data
+    elif key == "ConvNet":
+        net = nets.ConvNet()
+        nets.init_weights(net)
+        train_data = ImgProposalDataset(
+            data["inputs"], data["labels"], transform=True
+        )
+        return net, train_data
+
+
+def train_network(net, dataset, max_epochs=100):
     # Load data
     train_set, valid_set = random_split(dataset)
     train_loader = DataLoader(
@@ -94,7 +113,7 @@ class ProposalDataset(Dataset):
 
 class ImgProposalDataset(Dataset):
     def __init__(self, inputs, labels, transform=True):
-        self.inputs = self.reformat(inputs)
+        self.inputs = inputs.astype(np.float32)
         self.labels = self.reformat(labels)
         if transform:
             self.transform = Augmentator()
@@ -105,7 +124,7 @@ class ImgProposalDataset(Dataset):
 
     def __getitem__(self, idx):
         if self.transform_bool:
-            inputs = utils.normalize(self.inputs[idx])
+            inputs = utils.normalize_img(self.inputs[idx])
             inputs = self.transform.run(inputs)
         else:
             inputs = self.inputs[idx]
@@ -117,18 +136,20 @@ class ImgProposalDataset(Dataset):
 
 class Augmentator:
     def __init__(self):
-        self.blur = tio.RandomBlur(std=(0, 0.5)) # 1
+        self.blur = tio.RandomBlur(std=(0, 0.4))
         self.noise = tio.RandomNoise(std=(0, 0.03))
-        self.elastic = tio.RandomElasticDeformation(max_displacement=10)
-        self.apply_geometric = tio.Compose({
-            #tio.RandomFlip(axes=(0, 1, 2)),
-            tio.RandomAffine(degrees=30, scales=(0.8, 1)),
-        })
+        self.apply_geometric = tio.Compose(
+            {
+                # tio.RandomFlip(axes=(0, 1, 2)),
+                tio.RandomAffine(
+                    degrees=20, scales=(0.8, 1), image_interpolation="nearest"
+                )
+            }
+        )
 
     def run(self, arr):
         arr = self.blur(arr)
         arr = self.noise(arr)
-        #arr = self.elastic(arr)
         arr = self.apply_geometric(arr)
         return arr
 
@@ -144,7 +165,9 @@ class LitNeuralNet(pl.LightningModule):
         return self.net(x)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3, weight_decay=1e-5)
+        optimizer = torch.optim.Adam(
+            self.parameters(), lr=1e-3
+        )  # , weight_decay=1e-7)
         return optimizer
 
     def training_step(self, batch, batch_idx):
