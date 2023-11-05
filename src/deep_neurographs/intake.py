@@ -4,7 +4,7 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Builds neurograph for postprocessing with GNN.
+Builds neurograph for neuron reconstruction.
 
 """
 
@@ -13,7 +13,7 @@ import os
 import torch
 from torch_geometric.data import Data
 
-from deep_neurographs import neurograph as ng
+from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs import s3_utils, swc_utils, utils
 
 
@@ -37,12 +37,11 @@ def build_neurograph(
     other.
 
     """
-    neurograph = ng.NeuroGraph(origin=origin, shape=shape)
+    neurograph = NeuroGraph(swc_dir, origin=origin, shape=shape)
     if bucket is not None:
         neurograph = init_immutables_from_s3(
             neurograph,
             bucket,
-            swc_dir,
             anisotropy=anisotropy,
             access_key_id=access_key_id,
             secret_access_key=secret_access_key,
@@ -52,7 +51,6 @@ def build_neurograph(
     else:
         neurograph = init_immutables_from_local(
             neurograph,
-            swc_dir,
             anisotropy=anisotropy,
             prune=prune,
             prune_depth=prune_depth,
@@ -66,7 +64,6 @@ def build_neurograph(
 def init_immutables_from_s3(
     neurograph,
     bucket,
-    swc_dir,
     anisotropy=[1.0, 1.0, 1.0],
     access_key_id=None,
     secret_access_key=None,
@@ -80,7 +77,8 @@ def init_immutables_from_s3(
     s3_client = s3_utils.init_session(
         access_key_id=access_key_id, secret_access_key=secret_access_key
     )
-    for file_key in s3_utils.listdir(bucket, swc_dir, s3_client, ext=".swc"):
+    swc_files = s3_utils.listdir(bucket, neurograph.path, s3_client, ext=".swc")
+    for file_key in swc_files:
         swc_id = file_key.split("/")[-1].replace(".swc", "")
         raw_swc = s3_utils.read_from_s3(bucket, file_key, s3_client)
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
@@ -94,7 +92,6 @@ def init_immutables_from_s3(
 
 def init_immutables_from_local(
     neurograph,
-    swc_dir,
     anisotropy=[1.0, 1.0, 1.0],
     prune=True,
     prune_depth=16,
@@ -103,8 +100,8 @@ def init_immutables_from_local(
     """
     To do...
     """
-    for swc_id in utils.listdir(swc_dir, ext=".swc"):
-        raw_swc = swc_utils.read_swc(os.path.join(swc_dir, swc_id))
+    for swc_id in utils.listdir(neurograph.path, ext=".swc"):
+        raw_swc = swc_utils.read_swc(os.path.join(neurograph.path, swc_id))
         swc_id = swc_id.replace(".0.swc", "")
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
         if smooth:
@@ -113,47 +110,3 @@ def init_immutables_from_local(
             swc_id, swc_dict, prune=prune, prune_depth=prune_depth
         )
     return neurograph
-
-
-# --- Generate training data ---
-def init_data(
-    supergraph,
-    node_features,
-    edge_features,
-    bucket,
-    file_key,
-    access_key_id=None,
-    secret_access_key=None,
-):
-    """
-    To do...
-    """
-    x = torch.tensor(node_features, dtype=torch.float)
-    edge_index = torch.tensor(list(supergraph.edges()), dtype=torch.long)
-    edge_features = torch.tensor(edge_features, dtype=torch.float)
-    edge_label_index = None  # target labels
-    data = Data(
-        x=x,
-        edge_index=edge_index.t().contiguous(),
-        edge_label_index=edge_label_index,
-        edge_attr=edge_features,
-    )
-    return data
-
-
-def read_mistake_log(bucket, file_key, s3_client):
-    """
-    To do...
-    """
-    hash_table = dict()
-    mistake_log = s3_utils.read_from_s3(bucket, file_key, s3_client)
-    for entry in mistake_log:
-        entry = entry.replace("[", "")
-        entry = entry.replace("]", "")
-        entry = entry.split(",")
-        entry = list(map(float, entry))
-
-        edge = (int(entry[0]), int(entry[1]))
-        xyz_coords = (entry[2:5], entry[5:])
-        hash_table[edge] = xyz_coords
-    return hash_table

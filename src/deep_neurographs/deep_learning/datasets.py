@@ -1,0 +1,109 @@
+"""
+Created on Sat November 04 15:30:00 2023
+
+@author: Anna Grim
+@email: anna.grim@alleninstitute.org
+
+Custom datasets for deep learning models.
+
+"""
+
+import numpy as np
+import torchio as tio
+from torch.utils.data import Dataset
+from deep_neurographs import utils
+
+
+# Custom datasets
+class ProposalDataset(Dataset):
+    """
+    Custom dataset that contains feature vectors that correspond to edge
+    proposals.
+
+    """
+    def __init__(self, inputs, labels):
+        self.inputs = inputs.astype(np.float32)
+        self.labels = reformat(labels)
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        return {"inputs": self.inputs[idx], "labels": self.labels[idx]}
+
+
+class ImgProposalDataset(Dataset):
+    """
+    Custom dataset that contains image chunks that correspond to edge
+    proposals.
+
+    """
+    def __init__(self, inputs, labels, transform=True):
+        self.inputs = inputs.astype(np.float32)
+        self.labels = reformat(labels)
+        self.transform = Augmentator() if transform else None
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        if self.transform:
+            inputs = utils.normalize_img(self.inputs[idx])
+            inputs = self.transform.run(inputs)
+        else:
+            inputs = self.inputs[idx]
+        return {"inputs": inputs, "labels": self.labels[idx]}
+
+
+class MultiModalDataset(Dataset):
+    """
+    Custom multimodal dataset that contains both feature vectors and image
+    chunks that correspond to edge proposals.
+
+    """
+    def __init__(self, inputs, labels, transform=True):
+        self.img_inputs = inputs["imgs"].astype(np.float32)
+        self.feature_inputs = inputs["features"].astype(np.float32)
+        self.labels = reformat(labels)
+        self.transform = Augmentator() if transform else None
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        if self.transform:
+            img_inputs = utils.normalize_img(self.img_inputs[idx])
+            img_inputs = self.transform.run(img_inputs)
+        else:
+            img_inputs = self.img_inputs[idx]
+        inputs = [self.feature_inputs[idx], img_inputs]
+        return {"inputs": inputs, "labels": self.labels[idx]}
+
+
+# Miscellaneous
+class Augmentator:
+    """
+    Applies augmentation to an image chunk.
+
+    """
+    def __init__(self):
+        self.blur = tio.RandomBlur(std=(0, 0.4))
+        self.noise = tio.RandomNoise(std=(0, 0.03))
+        self.apply_geometric = tio.Compose(
+            {
+                #tio.RandomFlip(axes=(0, 1, 2)),
+                tio.RandomAffine(
+                    degrees=20, scales=(0.8, 1), image_interpolation="nearest"
+                )
+            }
+        )
+
+    def run(self, arr):
+        arr = self.blur(arr)
+        arr = self.noise(arr)
+        arr = self.apply_geometric(arr)
+        return arr
+
+
+def reformat(x):
+    return np.expand_dims(x, axis=1).astype(np.float32)

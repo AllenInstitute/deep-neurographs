@@ -17,6 +17,7 @@ from scipy.spatial import KDTree
 from deep_neurographs import geometry_utils
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
+from deep_neurographs.densegraph import DenseGraph
 
 SUPPORTED_LABEL_MASK_TYPES = [dict, np.array, ts.TensorStore]
 
@@ -29,7 +30,7 @@ class NeuroGraph(nx.Graph):
 
     """
 
-    def __init__(self, label_mask=None, origin=None, shape=None):
+    def __init__(self, swc_path, label_mask=None, origin=None, shape=None):
         """
         Parameters
         ----------
@@ -41,9 +42,11 @@ class NeuroGraph(nx.Graph):
 
         """
         super(NeuroGraph, self).__init__()
+        self.path = swc_path
         self.label_mask = label_mask
         self.leafs = set()
         self.junctions = set()
+
         self.immutable_edges = set()
         self.mutable_edges = set()
         self.target_edges = set()
@@ -125,7 +128,7 @@ class NeuroGraph(nx.Graph):
         immutable_graph.add_edges_from(self.immutable_edges)
         return immutable_graph
 
-    def generate_mutables(self, max_degree=5, max_dist=50.0):
+    def generate_mutables(self, max_degree=3, max_dist=25.0):
         """
         Generates edges for the graph.
 
@@ -283,9 +286,10 @@ class NeuroGraph(nx.Graph):
         idxs = self.kdtree.query_ball_point(query, dist, return_sorted=True)
         return self.kdtree.data[idxs]
 
-    def init_targets(self, target_neurograph, target_densegraph):
+    def init_targets(self, target_neurograph):
         self.target_edges = set()
         self.groundtruth_graph = self.init_immutable_graph()
+        target_densegraph = DenseGraph(target_neurograph.path)
 
         predicted_graph = self.init_immutable_graph()
         site_to_site = dict()

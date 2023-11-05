@@ -28,9 +28,9 @@ NUM_SKEL_FEATURES = 11
 def generate_mutable_features(
     neurograph,
     anisotropy=[1.0, 1.0, 1.0],
+    img_profile=True,
     img_path=None,
     labels_path=None,
-    img_profile=True,
 ):
     """
     Generates feature vectors for every mutable edge in a neurograph.
@@ -178,8 +178,8 @@ def get_radii(neurograph, edge):
     return radius_i, radius_j
 
 
-# -- Combine feature vectors
-def build_feature_matrix(neurographs, features, blocks, img_chunks=False):
+# -- Build feature matrix
+def build_feature_matrix(neurographs, features, blocks, img_chunks=False, multimodal=False):
     # Initialize
     X = None
     y = None
@@ -190,7 +190,11 @@ def build_feature_matrix(neurographs, features, blocks, img_chunks=False):
     for block_id in blocks:
         # Get features
         idx_shift = 0 if X is None else X.shape[0]
-        if img_chunks:
+        if multimodal:
+            X_i, x_i, y_i, idx_to_edge_i = build_multimodal_submatrix(
+                neurographs[block_id], features[block_id], idx_shift
+            )
+        elif img_chunks:
             X_i, y_i, idx_to_edge_i = build_img_chunk_submatrix(
                 neurographs[block_id], features[block_id], idx_shift
             )
@@ -203,14 +207,22 @@ def build_feature_matrix(neurographs, features, blocks, img_chunks=False):
         if X is None:
             X = deepcopy(X_i)
             y = deepcopy(y_i)
+            if multimodal:
+                x = deepcopy(x_i)
         else:
             X = np.concatenate((X, X_i), axis=0)
             y = np.concatenate((y, y_i), axis=0)
+            if multimodal:
+                x = np.concatenate((x, x_i), axis=0)
 
         # Update dicts
         idxs = set(np.arange(idx_shift, idx_shift + len(idx_to_edge_i)))
         block_to_idxs[block_id] = idxs
         idx_to_edge.update(idx_to_edge_i)
+
+    if multimodal:
+        X = {"imgs": X, "features": x}
+
     return X, y, block_to_idxs, idx_to_edge
 
 
@@ -232,14 +244,23 @@ def build_feature_submatrix(neurograph, features, shift):
     return X, y, idx_to_edge
 
 
-def build_img_chunk_submatrix(neurograph, features, shift):
-    # Extract info
-    key = sample(list(features.keys()), 1)[0]
-    num_edges = neurograph.num_mutables()
-    num_features = len(features[key])
-
-    # Build
+def build_multimodal_submatrix(neurograph, features, shift):
     idx_to_edge = dict()
+    num_edges = neurograph.num_mutables()
+    X = np.zeros(((num_edges, 2) + tuple(CHUNK_SIZE)))
+    x = np.zeros((num_edges, NUM_SKEL_FEATURES))
+    y = np.zeros((num_edges))
+    for i, edge in enumerate(features["img"].keys()):
+        idx_to_edge[i + shift] = edge
+        X[i, :] = features["img"][edge]
+        x[i, :] = features["skel"][edge]
+        y[i] = 1 if edge in neurograph.target_edges else 0
+    return X, x, y, idx_to_edge
+
+
+def build_img_chunk_submatrix(neurograph, features, shift):
+    idx_to_edge = dict()
+    num_edges = neurograph.num_mutables()
     X = np.zeros(((num_edges, 2) + tuple(CHUNK_SIZE)))
     y = np.zeros((num_edges))
     for i, edge in enumerate(features["img"].keys()):
@@ -257,58 +278,14 @@ def compute_num_features(skel_features=True, img_features=True):
 
 
 def combine_features(features):
+    combined = dict()
     for edge in features["skel"].keys():
-        for key in [key for key in features.keys() if key != "skel"]:
-            features["skel"][edge] = np.concatenate(
-                (features["skel"][edge], features[key][edge])
-            )
-    return features["skel"]
-
-
-"""
-
-def generate_node_features(neurograph, img=True, pointcloud=True, skel=True):
-    features = dict()
-    if img:
-        features["img"] = generate_img_features(neurograph)
-
-    if skel:
-        features["skel"] = generate_skel_features(neurograph)
-
-    if pointcloud:
-        features["pointcloud"] = generate_pointcloud_features(neurograph)
-    return extract_feature_vec(features)
-
-
-def generate_immutable_features(
-    neurograph, img=True, pointcloud=True, skel=True
-):
-    features = dict()
-    if img:
-        features["img"] = generate_img_features(neurograph)
-
-    if skel:
-        features["skel"] = generate_immutable_skel_features(neurograph)
-
-    if pointcloud:
-        features["pointcloud"] = generate_pointcloud_features(neurograph)
-    return extract_feature_vec(features)
-
-def generate_immutable_skel_features(neurograph):
-    features = dict()
-    for edge in neurograph.immutable_edges:
-        features[edge] = _generate_immutable_skel_features(neurograph, edge)
-    return features
-
-
-def _generate_immutable_skel_features(neurograph, edge):
-    mean_radius = np.mean(neurograph.edges[edge]["radius"], axis=0)
-    return np.concatenate((mean_radius), axis=None)
-
-def generate_skel_features(neurograph):
-    skel_features = np.zeros((neurograph.num_nodes(), NUM_SKEL_FEATURES))
-    for node in neurograph.nodes:
-        skel_features[node] = _generate_node_skel_features(neurograph, node)
-    return skel_features
-
-"""
+        combined[edge] = None
+        for key in features.keys():
+            if combined[edge] is None:
+                combined[edge] = deepcopy(features[key][edge])
+            else:
+                combined[edge] = np.concatenate(
+                    (combined[edge], features[key][edge])
+                )
+    return combined

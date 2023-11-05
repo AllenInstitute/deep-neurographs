@@ -9,7 +9,7 @@ Created on Mon March 6 19:00:00 2023
 import networkx as nx
 
 
-def prune_spurious_paths(graph, min_branch_length=10):
+def prune_spurious_paths(graph, min_branch_length=16):
     """
     Prunes short branches.
 

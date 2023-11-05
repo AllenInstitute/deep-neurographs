@@ -1,0 +1,163 @@
+"""
+Created on Sat November 04 15:30:00 2023
+
+@author: Anna Grim
+@email: anna.grim@alleninstitute.org
+
+Routines for training models that classify edge proposals.
+
+"""
+
+import logging
+import lightning.pytorch as pl
+import numpy as np
+import torch
+import torch.nn.functional as F
+import torch.utils.data as torch_data
+
+from deep_neurographs import utils
+from deep_neurographs.deep_learning import models, datasets as ds
+from lightning.pytorch.callbacks import ModelCheckpoint
+from random import sample
+from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
+from torch.utils.data import DataLoader
+from torcheval.metrics.functional import (
+    binary_accuracy,
+    binary_f1_score,
+    binary_precision,
+    binary_recall,
+)
+
+logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
+
+
+BATCH_SIZE = 32
+NUM_WORKERS = 1
+SHUFFLE = True
+SUPPORTED_CLFS = ["AdaBoost", "RandomForest", "FeedForwardNet", "ConvNet", "MultiModalNet"]
+
+
+# Training
+def get_kfolds(train_data, k):
+    folds = []
+    samples = set(train_data)
+    num_samples = int(np.floor(len(train_data) / k))
+    assert num_samples > 0, "Sample size is too small for {}-folds".format(k)
+    for i in range(k):
+        samples_i = sample(samples, num_samples)
+        samples = samples.difference(samples_i)
+        folds.append(samples_i)
+        if num_samples > len(samples):
+            break
+    return folds
+
+
+def get_clf(key, data=None, num_features=None):
+    assert key in SUPPORTED_CLFS
+    if key == "AdaBoost":
+        return AdaBoostClassifier()
+    elif key == "RandomForest":
+        return RandomForestClassifier()
+    elif key == "FeedForwardNet":
+        net = models.FeedForwardNet(num_features)
+        train_data = ds.ProposalDataset(data["inputs"], data["labels"])
+    elif key == "ConvNet":
+        net = models.ConvNet()
+        models.init_weights(net)
+        train_data = ds.ImgProposalDataset(
+            data["inputs"], data["labels"], transform=True
+        )
+    elif key == "MultiModalNet":
+        net = models.MultiModalNet(num_features)
+        models.init_weights(net)
+        train_data = ds.MultiModalDataset(
+            data["inputs"], data["labels"], transform=True
+        )
+    return net, train_data
+
+
+def train_network(net, dataset, logger=True, max_epochs=100, model_summary=True, progress_bar=True):
+    # Load data
+    train_set, valid_set = random_split(dataset)
+    train_loader = DataLoader(
+        train_set,
+        num_workers=NUM_WORKERS,
+        batch_size=BATCH_SIZE,
+        shuffle=SHUFFLE,
+    )
+    valid_loader = DataLoader(
+        valid_set, num_workers=NUM_WORKERS, batch_size=BATCH_SIZE
+    )
+
+    # Fit model
+    model = LitNeuralNet(net)
+    checkpoint_callback = ModelCheckpoint(
+        save_top_k=1, monitor="val_f1", mode="max"
+    )
+    trainer = pl.Trainer(
+        accelerator="gpu",
+        callbacks=[checkpoint_callback],
+        devices=1,
+        enable_model_summary=model_summary,
+        enable_progress_bar=progress_bar,
+        logger=logger,
+        max_epochs=max_epochs,
+    )
+    trainer.fit(model, train_loader, valid_loader)
+    return model
+
+
+def random_split(train_set, train_ratio=0.8):
+    train_set_size = int(len(train_set) * train_ratio)
+    valid_set_size = len(train_set) - train_set_size
+    return torch_data.random_split(train_set, [train_set_size, valid_set_size])
+
+
+def eval_network(X, model, threshold=0.5):
+    model.eval()
+    X = torch.tensor(X, dtype=torch.float32)
+    y_pred = model.net(X)
+    return np.array(y_pred > threshold, dtype=int)
+
+
+# Lightning Module
+class LitNeuralNet(pl.LightningModule):
+    def __init__(self, net):
+        super().__init__()
+        self.net = net
+
+    def forward(self, batch):
+        x = self.get_example(batch, "inputs")
+        return self.net(x)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(
+            self.parameters(), lr=1e-3
+        )
+        return optimizer
+
+    def training_step(self, batch, batch_idx):
+        X = self.get_example(batch, "inputs")
+        y = self.get_example(batch, "labels")
+        y_hat = self.net(X)
+        loss = F.binary_cross_entropy_with_logits(y_hat, y)
+        self.log("train_loss", loss)
+        self.compute_stats(y_hat, y, prefix="train_")
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        X = self.get_example(batch, "inputs")
+        y = self.get_example(batch, "labels")
+        y_hat = self.net(X)
+        self.compute_stats(y_hat, y, prefix="val_")
+
+    def compute_stats(self, y_hat, y, prefix=""):
+        y_hat = torch.flatten(y_hat)
+        y = torch.flatten(y).to(torch.int)
+        self.log(prefix + "accuracy", binary_accuracy(y_hat, y))
+        self.log(prefix + "precision", binary_precision(y_hat, y))
+        self.log(prefix + "recall", binary_recall(y_hat, y))
+        self.log(prefix + "f1", binary_f1_score(y_hat, y))
+
+    def get_example(self, batch, key):
+        return batch[key]
