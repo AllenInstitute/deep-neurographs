@@ -9,16 +9,14 @@ Routines for training models that classify edge proposals.
 """
 
 import logging
+from random import sample
+
 import lightning.pytorch as pl
 import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.utils.data as torch_data
-
-from deep_neurographs import utils
-from deep_neurographs.deep_learning import models, datasets as ds
 from lightning.pytorch.callbacks import ModelCheckpoint
-from random import sample
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from torch.utils.data import DataLoader
 from torcheval.metrics.functional import (
@@ -28,13 +26,23 @@ from torcheval.metrics.functional import (
     binary_recall,
 )
 
+from deep_neurographs import utils
+from deep_neurographs.deep_learning import datasets as ds
+from deep_neurographs.deep_learning import models
+
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
 
 BATCH_SIZE = 32
 NUM_WORKERS = 1
 SHUFFLE = True
-SUPPORTED_CLFS = ["AdaBoost", "RandomForest", "FeedForwardNet", "ConvNet", "MultiModalNet"]
+SUPPORTED_CLFS = [
+    "AdaBoost",
+    "RandomForest",
+    "FeedForwardNet",
+    "ConvNet",
+    "MultiModalNet",
+]
 
 
 # Training
@@ -76,7 +84,14 @@ def get_clf(key, data=None, num_features=None):
     return net, train_data
 
 
-def train_network(net, dataset, logger=True, max_epochs=100, model_summary=True, progress_bar=True):
+def train_network(
+    net,
+    dataset,
+    logger=True,
+    max_epochs=100,
+    model_summary=True,
+    progress_bar=True,
+):
     # Load data
     train_set, valid_set = random_split(dataset)
     train_loader = DataLoader(
@@ -113,7 +128,7 @@ def random_split(train_set, train_ratio=0.8):
     return torch_data.random_split(train_set, [train_set_size, valid_set_size])
 
 
-def eval_network(X, model, threshold=0.5):
+def eval_network(X, model, threshold=0):
     model.eval()
     X = torch.tensor(X, dtype=torch.float32)
     y_pred = model.net(X)
@@ -131,9 +146,7 @@ class LitNeuralNet(pl.LightningModule):
         return self.net(x)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            self.parameters(), lr=1e-3
-        )
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         return optimizer
 
     def training_step(self, batch, batch_idx):

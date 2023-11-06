@@ -128,7 +128,7 @@ class NeuroGraph(nx.Graph):
         immutable_graph.add_edges_from(self.immutable_edges)
         return immutable_graph
 
-    def generate_mutables(self, max_degree=3, max_dist=25.0):
+    def generate_mutables(self, max_degree=3, search_radius=25.0):
         """
         Generates edges for the graph.
 
@@ -144,7 +144,9 @@ class NeuroGraph(nx.Graph):
             xyz_leaf = self.nodes[leaf]["xyz"]
             if not self.is_contained(xyz_leaf):
                 continue
-            mutables = self._get_mutables(leaf, xyz_leaf, max_degree, max_dist)
+            mutables = self._get_mutables(
+                leaf, xyz_leaf, max_degree, search_radius
+            )
             for xyz in mutables:
                 if not self.is_contained(xyz):
                     continue
@@ -167,7 +169,7 @@ class NeuroGraph(nx.Graph):
                 self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
                 self.mutable_edges.add(frozenset((leaf, node)))
 
-    def _get_mutables(self, query_id, query_xyz, max_degree, max_dist):
+    def _get_mutables(self, query_id, query_xyz, max_degree, search_radius):
         """
         Parameters
         ----------
@@ -184,7 +186,7 @@ class NeuroGraph(nx.Graph):
         best_xyz = dict()
         best_dist = dict()
         query_swc_id = self.nodes[query_id]["swc_id"]
-        for xyz in self._query_kdtree(query_xyz, max_dist):
+        for xyz in self._query_kdtree(query_xyz, search_radius):
             xyz = tuple(xyz)
             edge = self.xyz_to_edge[xyz]
             swc_id = gutils.get_edge_attr(self, edge, "swc_id")

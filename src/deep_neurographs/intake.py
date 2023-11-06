@@ -13,8 +13,8 @@ import os
 import torch
 from torch_geometric.data import Data
 
-from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs import s3_utils, swc_utils, utils
+from deep_neurographs.neurograph import NeuroGraph
 
 
 # --- Build graph ---
@@ -24,8 +24,8 @@ def build_neurograph(
     bucket=None,
     access_key_id=None,
     secret_access_key=None,
-    max_mutable_degree=5,
-    max_mutable_dist=50.0,
+    max_mutable_degree=3,
+    search_radius=25.0,
     prune=True,
     prune_depth=16,
     origin=None,
@@ -56,7 +56,7 @@ def build_neurograph(
             prune_depth=prune_depth,
         )
     neurograph.generate_mutables(
-        max_degree=max_mutable_degree, max_dist=max_mutable_dist
+        max_degree=max_mutable_degree, search_radius=search_radius
     )
     return neurograph
 
@@ -77,7 +77,9 @@ def init_immutables_from_s3(
     s3_client = s3_utils.init_session(
         access_key_id=access_key_id, secret_access_key=secret_access_key
     )
-    swc_files = s3_utils.listdir(bucket, neurograph.path, s3_client, ext=".swc")
+    swc_files = s3_utils.listdir(
+        bucket, neurograph.path, s3_client, ext=".swc"
+    )
     for file_key in swc_files:
         swc_id = file_key.split("/")[-1].replace(".swc", "")
         raw_swc = s3_utils.read_from_s3(bucket, file_key, s3_client)

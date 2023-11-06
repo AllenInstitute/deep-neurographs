@@ -56,7 +56,7 @@ def init_data(
     )
     return data
 
-    
+
 """
 def train(model, optimizer, criterion, train_data):
     model.train()

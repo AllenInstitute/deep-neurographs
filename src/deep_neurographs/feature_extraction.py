@@ -179,7 +179,9 @@ def get_radii(neurograph, edge):
 
 
 # -- Build feature matrix
-def build_feature_matrix(neurographs, features, blocks, img_chunks=False, multimodal=False):
+def build_feature_matrix(
+    neurographs, features, blocks, img_chunks=False, multimodal=False
+):
     # Initialize
     X = None
     y = None
