@@ -133,18 +133,18 @@ def open_tensorstore(path):
 
 def read_img_chunk(img, xyz, shape):
     return img[
-        xyz[2] - shape[2] // 2 : xyz[2] + shape[2] // 2,
-        xyz[1] - shape[1] // 2 : xyz[1] + shape[1] // 2,
-        xyz[0] - shape[0] // 2 : xyz[0] + shape[0] // 2,
+        (xyz[2] - shape[2] // 2) : xyz[2] + shape[2] // 2,
+        (xyz[1] - shape[1] // 2) : xyz[1] + shape[1] // 2,
+        (xyz[0] - shape[0] // 2) : xyz[0] + shape[0] // 2,
     ].transpose(2, 1, 0)
 
 
 def read_tensorstore(ts_arr, xyz, shape):
     arr = (
         ts_arr[
-            xyz[0] - shape[0] // 2 : xyz[0] + shape[0] // 2,
-            xyz[1] - shape[1] // 2 : xyz[1] + shape[1] // 2,
-            xyz[2] - shape[2] // 2 : xyz[2] + shape[2] // 2,
+            (xyz[0] - shape[0] // 2) : xyz[0] + shape[0] // 2,
+            (xyz[1] - shape[1] // 2) : xyz[1] + shape[1] // 2,
+            (xyz[2] - shape[2] // 2) : xyz[2] + shape[2] // 2,
         ]
         .read()
         .result()

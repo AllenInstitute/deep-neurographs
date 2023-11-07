@@ -143,7 +143,7 @@ def get_profile(
 def fill_path(img, path, val=-1):
     for xyz in path:
         x, y, z = tuple(np.round(xyz).astype(int))
-        img[x - 1 : x + 1, y - 1 : y + 1, z - 1 : z + 1] = val
+        img[(x - 1) : x + 1, (y - 1) : y + 1, (z - 1) : z + 1] = val
     return img
 
 

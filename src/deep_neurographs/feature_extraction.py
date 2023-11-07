@@ -52,13 +52,13 @@ def generate_mutable_features(
 
     """
     features = {"skel": generate_mutable_skel_features(neurograph)}
-    if img_path and img_profile:
-        features["img"] = generate_mutable_img_profile_features(
-            neurograph, img_path, anisotropy=anisotropy
-        )
-    elif img_path and not img_profile:
+    if img_path and labels_path:
         features["img"] = generate_mutable_img_chunk_features(
             neurograph, img_path, labels_path, anisotropy=anisotropy
+        )
+    elif img_path and img_profile:
+        features["img"] = generate_mutable_img_profile_features(
+            neurograph, img_path, anisotropy=anisotropy
         )
     return features
 

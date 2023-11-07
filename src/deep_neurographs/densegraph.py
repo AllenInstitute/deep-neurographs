@@ -1,3 +1,13 @@
+"""
+Created on Sat November 04 15:30:00 2023
+
+@author: Anna Grim
+@email: anna.grim@alleninstitute.org
+
+Class of graphs that are built from swc files.
+
+"""
+
 import os
 
 import networkx as nx
@@ -6,7 +16,7 @@ from more_itertools import zip_broadcast
 from scipy.spatial import KDTree
 
 from deep_neurographs import swc_utils, utils
-from deep_neurographs.geometry_utils import dist, make_line
+from deep_neurographs.geometry_utils import dist
 
 
 class DenseGraph:
@@ -69,7 +79,7 @@ class DenseGraph:
         if self.xyz_to_swc[xyz_i] != self.xyz_to_swc[xyz_j]:
             return False
 
-        # Compare pred and target distances
+        # Compute distances
         pred_xyz_i = np.array(pred_xyz_i)
         pred_xyz_j = np.array(pred_xyz_j)
         pred_dist = dist(pred_xyz_i, pred_xyz_j)
@@ -77,19 +87,9 @@ class DenseGraph:
         target_path, target_dist = self.connect_nodes(graph_id, xyz_i, xyz_j)
         target_dist = max(target_dist, 1)
 
+        # Check criteria
         ratio = min(pred_dist, target_dist) / max(pred_dist, target_dist)
         if ratio < 0.5 and pred_dist > 15:
             return False
-        # elif ratio < 0.2:
-        #    return False
-
-        # Compare projected predicted path
-        proj_dists = []
-        proj_nodes = set()
-        for xyz in make_line(pred_xyz_i, pred_xyz_j, len(target_path)):
-            proj_xyz, proj_d = self.get_projection(xyz)
-            swc = self.xyz_to_swc[tuple(proj_xyz)]
-            proj_nodes.add(self.xyz_to_node[swc][tuple(proj_xyz)])
-            proj_dists.append(proj_d)
-
-        return True
+        else:
+            return True

@@ -245,15 +245,15 @@ class Augmentator:
         None
 
         """
-        self.blur = tio.RandomBlur(std=(0, 0.4))
-        self.noise = tio.RandomNoise(std=(0, 0.03))
-        self.apply_geometric = tio.Compose(
-            {
-                # tio.RandomFlip(axes=(0, 1, 2)),
-                tio.RandomAffine(
-                    degrees=20, scales=(0.8, 1), image_interpolation="nearest"
-                )
-            }
+        self.transform = tio.Compose(
+            [
+                tio.RandomBlur(std=(0, 0.4)),
+                tio.RandomNoise(std=(0, 0.03)),
+                tio.RandomFlip(axes=(0, 1, 2)),
+                # tio.RandomAffine(
+                # degrees=20, scales=(0.8, 1), image_interpolation="nearest"
+                # )
+            ]
         )
 
     def run(self, arr):
@@ -271,10 +271,7 @@ class Augmentator:
             Transformed array after being run through augmentation pipeline.
 
         """
-        arr = self.blur(arr)
-        arr = self.noise(arr)
-        arr = self.apply_geometric(arr)
-        return arr
+        return self.transform(arr)
 
 
 def reformat(arr):

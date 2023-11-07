@@ -17,6 +17,7 @@ import torch
 import torch.nn.functional as F
 import torch.utils.data as torch_data
 from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.profilers import PyTorchProfiler
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from torch.utils.data import DataLoader
 from torcheval.metrics.functional import (
@@ -26,7 +27,6 @@ from torcheval.metrics.functional import (
     binary_recall,
 )
 
-from deep_neurographs import utils
 from deep_neurographs.deep_learning import datasets as ds
 from deep_neurographs.deep_learning import models
 
@@ -34,7 +34,7 @@ logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
 
 BATCH_SIZE = 32
-NUM_WORKERS = 1
+NUM_WORKERS = 0
 SHUFFLE = True
 SUPPORTED_CLFS = [
     "AdaBoost",
@@ -90,6 +90,7 @@ def train_network(
     logger=True,
     max_epochs=100,
     model_summary=True,
+    profile=False,
     progress_bar=True,
 ):
     # Load data
@@ -101,14 +102,20 @@ def train_network(
         shuffle=SHUFFLE,
     )
     valid_loader = DataLoader(
-        valid_set, num_workers=NUM_WORKERS, batch_size=BATCH_SIZE
+        valid_set,
+        batch_size=BATCH_SIZE,
+        num_workers=NUM_WORKERS,
+        pin_memory=True,
     )
 
-    # Fit model
+    # Configure trainer
     model = LitNeuralNet(net)
     checkpoint_callback = ModelCheckpoint(
         save_top_k=1, monitor="val_f1", mode="max"
     )
+    profiler = PyTorchProfiler() if profile else None
+
+    # Fit model
     trainer = pl.Trainer(
         accelerator="gpu",
         callbacks=[checkpoint_callback],
@@ -117,6 +124,7 @@ def train_network(
         enable_progress_bar=progress_bar,
         logger=logger,
         max_epochs=max_epochs,
+        profiler=profiler,
     )
     trainer.fit(model, train_loader, valid_loader)
     return model

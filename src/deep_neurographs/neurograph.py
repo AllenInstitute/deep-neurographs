@@ -308,7 +308,7 @@ class NeuroGraph(nx.Graph):
             proj_xyz_j, d_j = target_neurograph.get_projection(xyz_j)
 
             # Check criteria
-            if d_i > 9 or d_j > 9:
+            if d_i > 8 or d_j > 8:
                 continue
             elif self.check_cycle((i, j)):
                 continue

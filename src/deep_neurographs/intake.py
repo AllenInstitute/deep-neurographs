@@ -10,9 +10,6 @@ Builds neurograph for neuron reconstruction.
 
 import os
 
-import torch
-from torch_geometric.data import Data
-
 from deep_neurographs import s3_utils, swc_utils, utils
 from deep_neurographs.neurograph import NeuroGraph
 
