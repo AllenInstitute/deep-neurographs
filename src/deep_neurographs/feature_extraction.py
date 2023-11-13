@@ -4,7 +4,7 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Builds graph for postprocessing with GNN.
+Generates features.
 
 """
 
@@ -16,6 +16,7 @@ import numpy as np
 from deep_neurographs import geometry_utils, utils
 
 CHUNK_SIZE = [64, 64, 64]
+BUFFER = 256
 HALF_CHUNK_SIZE = [CHUNK_SIZE[i] // 2 for i in range(3)]
 WINDOW_SIZE = [5, 5, 5]
 
@@ -67,51 +68,86 @@ def generate_mutable_features(
 def generate_mutable_img_chunk_features(
     neurograph, img_path, labels_path, anisotropy=[1.0, 1.0, 1.0]
 ):
-    img = utils.open_zarr(img_path)
-    pred_labels = utils.open_tensorstore(labels_path)
     features = dict()
+    shape = neurograph.shape
+    origin = neurograph.bbox["min"]  # world coordinates
+    origin = utils.apply_anisotropy(
+        origin, anisotropy, return_int=True
+    )  # global image coordinates
+    img, labels = utils.get_superchunks(
+        img_path, labels_path, origin, shape, from_center=False
+    )
     for edge in neurograph.mutable_edges:
-        # Extract coordinates
-        edge_xyz = neurograph.edges[edge]["xyz"]
-        edge_xyz[0] = utils.apply_anisotropy(
-            edge_xyz[0], anisotropy=anisotropy
-        )
-        edge_xyz[1] = utils.apply_anisotropy(
-            edge_xyz[1], anisotropy=anisotropy
-        )
+        # Compute image coordinates
+        edge_xyz = deepcopy(neurograph.edges[edge]["xyz"])
+        edge_xyz = [
+            utils.apply_anisotropy(
+                edge_xyz[0] - origin, anisotropy=anisotropy
+            ),
+            utils.apply_anisotropy(
+                edge_xyz[1] - origin, anisotropy=anisotropy
+            ),
+        ]
 
-        # Read chunks
-        midpoint = geometry_utils.compute_midpoint(edge_xyz[0], edge_xyz[1])
-        origin = tuple(np.round(midpoint).astype(int))
-        img_chunk = utils.read_img_chunk(img, origin, CHUNK_SIZE)
-        labels_chunk = utils.read_tensorstore(pred_labels, origin, CHUNK_SIZE)
+        # Extract chunks
+        midpoint = geometry_utils.compute_midpoint(
+            edge_xyz[0], edge_xyz[1]
+        ).astype(int)
+        img_chunk = utils.get_chunk(img, midpoint, CHUNK_SIZE)
+        labels_chunk = utils.get_chunk(labels, midpoint, CHUNK_SIZE)
 
-        # Add path
-        d = geometry_utils.dist(edge_xyz[0], edge_xyz[1])
+        # Compute path
+        d = int(geometry_utils.dist(edge_xyz[0], edge_xyz[1]) + 5)
         img_coords_1 = np.round(
-            (edge_xyz[0] - midpoint + HALF_CHUNK_SIZE)
+            edge_xyz[0] - midpoint + HALF_CHUNK_SIZE
         ).astype(int)
         img_coords_2 = np.round(
             edge_xyz[1] - midpoint + HALF_CHUNK_SIZE
         ).astype(int)
-        path = geometry_utils.make_line(img_coords_1, img_coords_2, int(d + 5))
+        path = geometry_utils.make_line(img_coords_1, img_coords_2, d)
 
+        # Fill path
         labels_chunk[labels_chunk > 0] = 1
         labels_chunk = geometry_utils.fill_path(labels_chunk, path, val=-1)
         features[edge] = np.stack([img_chunk, labels_chunk], axis=0)
+
     return features
+
+
+def get_chunk(superchunk, xyz):
+    return deepcopy(
+        superchunk[
+            (xyz[0] - CHUNK_SIZE[0] // 2) : xyz[0] + CHUNK_SIZE[0] // 2,
+            (xyz[1] - CHUNK_SIZE[1] // 2) : xyz[1] + CHUNK_SIZE[1] // 2,
+            (xyz[2] - CHUNK_SIZE[2] // 2) : xyz[2] + CHUNK_SIZE[2] // 2,
+        ]
+    )
 
 
 def generate_mutable_img_profile_features(
     neurograph, path, anisotropy=[1.0, 1.0, 1.0]
 ):
-    img = utils.open_zarr(path)
     features = dict()
+    origin = utils.apply_anisotropy(
+        neurograph.bbox["min"], anisotropy, return_int=True
+    )
+    shape = [neurograph.shape[i] + BUFFER for i in range(3)]
+    superchunk = utils.get_superchunk(
+        path, "zarr", origin, shape, from_center=False
+    )
     for edge in neurograph.mutable_edges:
-        xyz = neurograph.edges[edge]["xyz"]
-        line = geometry_utils.make_line(xyz[0], xyz[1], NUM_POINTS)
+        edge_xyz = deepcopy(neurograph.edges[edge]["xyz"])
+        edge_xyz = [
+            utils.apply_anisotropy(
+                edge_xyz[0] - neurograph.origin, anisotropy=anisotropy
+            ),
+            utils.apply_anisotropy(
+                edge_xyz[1] - neurograph.origin, anisotropy=anisotropy
+            ),
+        ]
+        line = geometry_utils.make_line(edge_xyz[0], edge_xyz[1], NUM_POINTS)
         features[edge] = geometry_utils.get_profile(
-            img, line, anisotropy=anisotropy, window_size=WINDOW_SIZE
+            superchunk, line, window_size=WINDOW_SIZE
         )
     return features
 

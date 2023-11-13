@@ -248,7 +248,7 @@ class Augmentator:
         self.transform = tio.Compose(
             [
                 tio.RandomBlur(std=(0, 0.4)),
-                tio.RandomNoise(std=(0, 0.03)),
+                tio.RandomNoise(std=(0, 0.0125)),
                 tio.RandomFlip(axes=(0, 1, 2)),
                 # tio.RandomAffine(
                 # degrees=20, scales=(0.8, 1), image_interpolation="nearest"

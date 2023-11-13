@@ -99,6 +99,7 @@ def train_network(
         train_set,
         num_workers=NUM_WORKERS,
         batch_size=BATCH_SIZE,
+        pin_memory=True,
         shuffle=SHUFFLE,
     )
     valid_loader = DataLoader(

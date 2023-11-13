@@ -8,7 +8,7 @@ General routines for various tasks.
 
 """
 
-
+import concurrent.futures
 import json
 import os
 import shutil
@@ -18,6 +18,8 @@ import plotly.graph_objects as go
 import tensorstore as ts
 import zarr
 from plotly.subplots import make_subplots
+
+SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "zarr"]
 
 
 # --- dictionary utils ---
@@ -103,7 +105,7 @@ def open_zarr(path):
         return zarr.open(n5store).s0
 
 
-def open_tensorstore(path):
+def open_tensorstore(path, driver):
     """
     Uploads segmentation mask stored as a directory of shard files.
 
@@ -111,6 +113,8 @@ def open_tensorstore(path):
     ----------
     path : str
         Path to directory containing shard files.
+    driver : str
+        Storage driver needed to read data at "path".
 
     Returns
     -------
@@ -118,9 +122,10 @@ def open_tensorstore(path):
         Sparse image volume.
 
     """
+    assert driver in SUPPORTED_DRIVERS, "Error! Driver is not supported!"
     ts_arr = ts.open(
         {
-            "driver": "neuroglancer_precomputed",
+            "driver": driver,
             "kvstore": {
                 "driver": "gcs",
                 "bucket": "allen-nd-goog",
@@ -128,7 +133,13 @@ def open_tensorstore(path):
             },
         }
     ).result()
-    return ts_arr[ts.d["channel"][0]]
+    if driver == "neuroglancer_precomputed":
+        return ts_arr[ts.d["channel"][0]]
+    elif driver == "zarr":
+        ts_arr = ts_arr[0, 0, :, :, :]
+        ts_arr = ts_arr[ts.d[0].transpose[2]]
+        ts_arr = ts_arr[ts.d[0].transpose[1]]
+        return ts_arr
 
 
 def read_img_chunk(img, xyz, shape):
@@ -139,8 +150,14 @@ def read_img_chunk(img, xyz, shape):
     ].transpose(2, 1, 0)
 
 
+def get_chunk(arr, xyz, shape):
+    xyz_1 = [max(xyz[i] - shape[i] // 2, 0) for i in range(3)]
+    xyz_2 = [min(xyz[i] + shape[i] // 2, arr.shape[i] - 1) for i in range(3)]
+    return arr[xyz_1[0] : xyz_2[0], xyz_1[1] : xyz_2[1], xyz_1[2] : xyz_2[2]]
+
+
 def read_tensorstore(ts_arr, xyz, shape):
-    arr = (
+    return (
         ts_arr[
             (xyz[0] - shape[0] // 2) : xyz[0] + shape[0] // 2,
             (xyz[1] - shape[1] // 2) : xyz[1] + shape[1] // 2,
@@ -149,7 +166,24 @@ def read_tensorstore(ts_arr, xyz, shape):
         .read()
         .result()
     )
-    return arr
+
+
+def get_superchunks(img_path, label_path, xyz, shape):
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        img_job = executor.submit(get_superchunk, img_path, "zarr", xyz, shape)
+        label_job = executor.submit(
+            get_superchunk, label_path, "neuroglancer_precomputed", xyz, shape
+        )
+    return img_job.result(), label_job.result()
+
+
+def get_superchunk(path, driver, xyz, shape, from_center=True):
+    ts_arr = open_tensorstore(path, driver)
+    if from_center:
+        return read_tensorstore(ts_arr, xyz, shape)
+    else:
+        xyz = [xyz[i] + shape[i] // 2 for i in range(3)]
+        return read_tensorstore(ts_arr, xyz, shape)
 
 
 def read_json(path):
@@ -288,7 +322,7 @@ def to_world(xyz, anisotropy, shift=[0, 0, 0]):
 
 
 def to_img(xyz, anisotropy, shift=[0, 0, 0]):
-    xyz = apply_anisotropy(xyz - shift, return_int=True)
+    xyz = apply_anisotropy(xyz - shift, anisotropy, return_int=True)
     return tuple(xyz)
 
 

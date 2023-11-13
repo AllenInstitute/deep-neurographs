@@ -17,6 +17,18 @@ readme = "README.md"
 dynamic = ["version"]
 
 dependencies = [
+    'boto3',
+    'lightning',
+    'more_itertools',
+    'networkx',
+    'plotly',
+    'scikit-learn',
+    'scipy',
+    'tensorstore',
+    'torch',
+    'torcheval',
+    'torchio',
+    'zarr',
 ]
 
 [project.optional-dependencies]

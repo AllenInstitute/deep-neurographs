@@ -52,9 +52,10 @@ def build_neurograph(
             prune=prune,
             prune_depth=prune_depth,
         )
-    neurograph.generate_mutables(
-        max_degree=max_mutable_degree, search_radius=search_radius
-    )
+    if search_radius > 0:
+        neurograph.generate_mutables(
+            max_degree=max_mutable_degree, search_radius=search_radius
+        )
     return neurograph
 
 

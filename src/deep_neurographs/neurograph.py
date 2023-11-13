@@ -51,17 +51,18 @@ class NeuroGraph(nx.Graph):
         self.mutable_edges = set()
         self.target_edges = set()
         self.xyz_to_edge = dict()
-        if origin is not None and shape is not None:
-            self.init_bbox(origin, shape)
+
+        if origin and shape:
+            self.bbox = {
+                "min": list(origin),
+                "max": [origin[i] + shape[i] for i in range(3)],
+            }
+            self.origin = origin
+            self.shape = shape
         else:
             self.bbox = None
 
     # --- Add nodes or edges ---
-    def init_bbox(self, origin, shape):
-        self.bbox = dict()
-        self.bbox["min"] = list(origin)
-        self.bbox["max"] = [self.bbox["min"][i] + shape[i] for i in range(3)]
-
     def generate_immutables(
         self, swc_id, swc_dict, prune=True, prune_depth=16
     ):
@@ -122,6 +123,9 @@ class NeuroGraph(nx.Graph):
         for j in junctions:
             self.junctions.add(node_id[j])
 
+        # Build kdtree
+        self._init_kdtree()
+
     def init_immutable_graph(self):
         immutable_graph = nx.Graph()
         immutable_graph.add_nodes_from(self)
@@ -137,28 +141,32 @@ class NeuroGraph(nx.Graph):
         None
 
         """
-        # Search for mutable connections
         self.mutable_edges = set()
-        self._init_kdtree()
         for leaf in self.leafs:
-            xyz_leaf = self.nodes[leaf]["xyz"]
-            if not self.is_contained(xyz_leaf):
+            if not self.is_contained(self.nodes[leaf]["xyz"]):
                 continue
+            xyz_leaf = self.nodes[leaf]["xyz"]
             mutables = self._get_mutables(
                 leaf, xyz_leaf, max_degree, search_radius
             )
             for xyz in mutables:
-                if not self.is_contained(xyz):
-                    continue
                 # Extract info on mutable connection
                 (i, j) = self.xyz_to_edge[xyz]
                 attrs = self.get_edge_data(i, j)
 
                 # Get connecting node
-                if geometry_utils.dist(xyz, attrs["xyz"][0]) < 10:
+                contained_i = self.is_contained(self.nodes[i]["xyz"])
+                contained_j = self.is_contained(self.nodes[j]["xyz"])
+                if (
+                    geometry_utils.dist(xyz, attrs["xyz"][0]) < 10
+                    and contained_i
+                ):
                     node = i
                     xyz = self.nodes[node]["xyz"]
-                elif geometry_utils.dist(xyz, attrs["xyz"][-1]) < 10:
+                elif (
+                    geometry_utils.dist(xyz, attrs["xyz"][-1]) < 10
+                    and contained_j
+                ):
                     node = j
                     xyz = self.nodes[node]["xyz"]
                 else:
@@ -187,6 +195,8 @@ class NeuroGraph(nx.Graph):
         best_dist = dict()
         query_swc_id = self.nodes[query_id]["swc_id"]
         for xyz in self._query_kdtree(query_xyz, search_radius):
+            if not self.is_contained(xyz):
+                continue
             xyz = tuple(xyz)
             edge = self.xyz_to_edge[xyz]
             swc_id = gutils.get_edge_attr(self, edge, "swc_id")
@@ -289,6 +299,8 @@ class NeuroGraph(nx.Graph):
         return self.kdtree.data[idxs]
 
     def init_targets(self, target_neurograph):
+        self.num_simple_edges = 0
+        self.num_complex_edges = 0
         self.target_edges = set()
         self.groundtruth_graph = self.init_immutable_graph()
         target_densegraph = DenseGraph(target_neurograph.path)
@@ -308,7 +320,7 @@ class NeuroGraph(nx.Graph):
             proj_xyz_j, d_j = target_neurograph.get_projection(xyz_j)
 
             # Check criteria
-            if d_i > 8 or d_j > 8:
+            if d_i > 7.5 or d_j > 7.5:
                 continue
             elif self.check_cycle((i, j)):
                 continue
@@ -322,6 +334,7 @@ class NeuroGraph(nx.Graph):
                     continue
                 if not target_densegraph.check_aligned(xyz_i, xyz_j):
                     continue
+                self.num_complex_edges += 1
             else:
                 # Simple criteria
                 inclusion_i = proj_xyz_i in site_to_site.keys()
@@ -346,6 +359,8 @@ class NeuroGraph(nx.Graph):
                         site_to_site, pair_to_edge = self.remove_site(
                             site_to_site, pair_to_edge, proj_xyz_i, proj_xyz_k
                         )
+                    else:
+                        self.num_simple_edges += 1
 
             # Add site
             site_to_site, pair_to_edge = self.add_site(
@@ -575,12 +590,11 @@ class NeuroGraph(nx.Graph):
         return True if i in self.neighbors(j) else False
 
     def is_contained(self, xyz):
-        if type(self.bbox) is dict:
-            for i in range(3):
-                lower_bool = xyz[i] < self.bbox["min"][i]
-                upper_bool = xyz[i] > self.bbox["max"][i]
-                if lower_bool or upper_bool:
-                    return False
+        for i in range(3):
+            lower_bool = xyz[i] < self.bbox["min"][i]
+            upper_bool = xyz[i] >= self.bbox["max"][i]
+            if lower_bool or upper_bool:
+                return False
         return True
 
     def is_leaf(self, i):
@@ -599,6 +613,11 @@ class NeuroGraph(nx.Graph):
         attr_1 = self.nodes[i][key]
         attr_2 = self.nodes[j][key]
         return attr_1, attr_2
+
+    def get_center(self):
+        return geometry_utils.compute_midpoint(
+            self.bbox["min"], self.bbox["max"]
+        )
 
     def to_line_graph(self):
         """

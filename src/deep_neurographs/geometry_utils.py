@@ -129,21 +129,37 @@ def smooth_end(branch_xyz, radii, ref_xyz, num_pts=8):
 
 
 # Image feature extraction
-def get_profile(
-    img, xyz_arr, anisotropy=[1.0, 1.0, 1.0], window_size=[4, 4, 4]
+def get_profile(img, xyz_arr, window_size=[5, 5, 5]):
+    return [np.max(utils.get_chunk(img, xyz, window_size)) for xyz in xyz_arr]
+
+
+"""
+def get_profile_old(
+    img, xyz_arr, anisotropy=[1.0, 1.0, 1.0], window_size=[5, 5, 5]
 ):
+    #xyz_arr = get_coords(xyz_arr, anisotropy=anisotropy)
+    profile = []
+    for xyz in xyz_arr:
+        xyz = xyz.astype(int)
+        img_chunk = utils.get_chunk(img, xyz, window_size)
+        profile.append(np.max(img_chunk))
+    return np.array(profile)
+
+
     xyz_arr = get_coords(xyz_arr, anisotropy=anisotropy)
     profile = []
     for xyz in xyz_arr:
         img_chunk = utils.read_img_chunk(img, xyz, window_size)
         profile.append(np.max(img_chunk))
     return np.array(profile)
+"""
 
 
 def fill_path(img, path, val=-1):
     for xyz in path:
         x, y, z = tuple(np.round(xyz).astype(int))
-        img[(x - 1) : x + 1, (y - 1) : y + 1, (z - 1) : z + 1] = val
+        img[x, y, z] = val
+        # img[(x - 1) : x + 1, (y - 1) : y + 1, (z - 1) : z + 1] = val
     return img
 
 
@@ -185,8 +201,10 @@ def dist(x, y, metric="l2"):
 
 
 def make_line(xyz_1, xyz_2, num_steps):
+    xyz_1 = np.array(xyz_1)
+    xyz_2 = np.array(xyz_2)
     t_steps = np.linspace(0, 1, num_steps)
-    return np.array([(1 - t) * xyz_1 + t * xyz_2 for t in t_steps])
+    return np.array([(1 - t) * xyz_1 + t * xyz_2 for t in t_steps], dtype=int)
 
 
 def normalize(x, norm="l2"):
