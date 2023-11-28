@@ -299,8 +299,6 @@ class NeuroGraph(nx.Graph):
         return self.kdtree.data[idxs]
 
     def init_targets(self, target_neurograph):
-        self.num_simple_edges = 0
-        self.num_complex_edges = 0
         self.target_edges = set()
         self.groundtruth_graph = self.init_immutable_graph()
         target_densegraph = DenseGraph(target_neurograph.path)
@@ -334,7 +332,6 @@ class NeuroGraph(nx.Graph):
                     continue
                 if not target_densegraph.check_aligned(xyz_i, xyz_j):
                     continue
-                self.num_complex_edges += 1
             else:
                 # Simple criteria
                 inclusion_i = proj_xyz_i in site_to_site.keys()
@@ -359,8 +356,6 @@ class NeuroGraph(nx.Graph):
                         site_to_site, pair_to_edge = self.remove_site(
                             site_to_site, pair_to_edge, proj_xyz_i, proj_xyz_k
                         )
-                    else:
-                        self.num_simple_edges += 1
 
             # Add site
             site_to_site, pair_to_edge = self.add_site(
@@ -590,9 +585,11 @@ class NeuroGraph(nx.Graph):
         return True if i in self.neighbors(j) else False
 
     def is_contained(self, xyz):
+        xyz = utils.apply_anisotropy(xyz - np.array(self.bbox["min"]))
+        img_shape = np.array(self.shape)
         for i in range(3):
-            lower_bool = xyz[i] < self.bbox["min"][i]
-            upper_bool = xyz[i] >= self.bbox["max"][i]
+            lower_bool = xyz[i] < 32
+            upper_bool = xyz[i] > img_shape[i] - 32
             if lower_bool or upper_bool:
                 return False
         return True
@@ -618,6 +615,14 @@ class NeuroGraph(nx.Graph):
         return geometry_utils.compute_midpoint(
             self.bbox["min"], self.bbox["max"]
         )
+
+    def get_simple_proposals(self):
+        simple_proposals = set()
+        for edge in self.mutable_edges:
+            i, j = tuple(edge)
+            if self.immutable_degree(i) == 1 and self.immutable_degree(j) == 1:
+                simple_proposals.add(edge)
+        return simple_proposals
 
     def to_line_graph(self):
         """

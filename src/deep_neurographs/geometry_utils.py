@@ -2,7 +2,7 @@ import numpy as np
 from scipy.interpolate import UnivariateSpline
 from scipy.linalg import svd
 
-from deep_neurographs import utils
+from deep_neurographs import utils, feature_extraction as extracter
 
 
 # Context Tangent Vectors
@@ -116,6 +116,7 @@ def fit_spline(xyz):
     return cs_x, cs_y, cs_z
 
 
+"""
 def smooth_end(branch_xyz, radii, ref_xyz, num_pts=8):
     smooth_bool = branch_xyz.shape[0] > 10
     if all(branch_xyz[0] == ref_xyz) and smooth_bool:
@@ -126,54 +127,20 @@ def smooth_end(branch_xyz, radii, ref_xyz, num_pts=8):
         return branch_xyz, radii, -1
     else:
         return branch_xyz, radii, None
-
+"""
 
 # Image feature extraction
 def get_profile(img, xyz_arr, window_size=[5, 5, 5]):
     return [np.max(utils.get_chunk(img, xyz, window_size)) for xyz in xyz_arr]
 
 
-"""
-def get_profile_old(
-    img, xyz_arr, anisotropy=[1.0, 1.0, 1.0], window_size=[5, 5, 5]
-):
-    #xyz_arr = get_coords(xyz_arr, anisotropy=anisotropy)
-    profile = []
-    for xyz in xyz_arr:
-        xyz = xyz.astype(int)
-        img_chunk = utils.get_chunk(img, xyz, window_size)
-        profile.append(np.max(img_chunk))
-    return np.array(profile)
-
-
-    xyz_arr = get_coords(xyz_arr, anisotropy=anisotropy)
-    profile = []
-    for xyz in xyz_arr:
-        img_chunk = utils.read_img_chunk(img, xyz, window_size)
-        profile.append(np.max(img_chunk))
-    return np.array(profile)
-"""
-
-
 def fill_path(img, path, val=-1):
     for xyz in path:
-        x, y, z = tuple(np.round(xyz).astype(int))
-        img[x, y, z] = val
-        # img[(x - 1) : x + 1, (y - 1) : y + 1, (z - 1) : z + 1] = val
+        x, y, z = tuple(np.floor(xyz).astype(int))
+        img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
+        # img[x,y,z] = val
     return img
 
-
-def get_coords(xyz_arr, anisotropy=[1.0, 1.0, 1.0]):
-    for i in range(3):
-        xyz_arr[:, i] = xyz_arr[:, i] / anisotropy[i]
-    return xyz_arr.astype(int)
-
-
-def get_coord(xyz, anisotropy=[1.0, 1.0, 1.0]):
-    return [int(xyz[i] / anisotropy[i]) for i in range(3)]
-
-
-# Rotate image
 
 # Miscellaneous
 def compare_edges(xyx_i, xyz_j, xyz_k):

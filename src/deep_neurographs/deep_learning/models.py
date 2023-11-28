@@ -36,9 +36,7 @@ class FeedForwardNet(nn.Module):
         nn.Module.__init__(self)
         self.fc1 = self._init_fc_layer(num_features, num_features // 2)
         self.fc2 = self._init_fc_layer(num_features // 2, num_features // 2)
-        self.output = nn.Sequential(
-            nn.Linear(num_features // 2, 1), nn.Sigmoid()
-        )
+        self.output = nn.Linear(num_features // 2, 1)
 
     def _init_fc_layer(self, D_in, D_out):
         """

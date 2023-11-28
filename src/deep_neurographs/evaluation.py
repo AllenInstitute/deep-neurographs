@@ -7,16 +7,25 @@ Created on Sat July 15 9:00:00 2023
 Evaluates performance of edge classifier.
 
 """
-from copy import deepcopy
-
 import numpy as np
+
+STATS_LIST = [
+    "precision",
+    "recall",
+    "f1",
+    "# splits fixed",
+    "# merges created",
+]
 
 
 def run_evaluation(
     target_graphs, pred_graphs, y_pred, block_to_idxs, idx_to_edge, blocks
 ):
-    stats = init_counters()
-    stats_by_type = {"simple": init_counters(), "complex": init_counters()}
+    stats = dict([(s, []) for s in STATS_LIST])
+    stats_by_type = {
+        "simple": dict([(s, []) for s in STATS_LIST]),
+        "complex": dict([(s, []) for s in STATS_LIST]),
+    }
     for block_id in blocks:
         # Get predicted edges
         pred_edges = get_predictions(
@@ -34,14 +43,10 @@ def run_evaluation(
         simple_stats, complex_stats = __reconstruction_type_stats(
             target_graphs[block_id], pred_graphs[block_id], pred_edges
         )
-        for key in stats.keys():
+        for key in STATS_LIST:
             stats_by_type["simple"][key].append(simple_stats[key])
             stats_by_type["complex"][key].append(complex_stats[key])
     return stats, stats_by_type
-
-
-def init_counters(val=[]):
-    return {"# splits fixed": deepcopy(val), "# merges created": deepcopy(val)}
 
 
 def get_predictions(idxs, idx_to_edge, y_pred):
@@ -61,8 +66,8 @@ def __reconstruction_stats(target_graph, pred_graph, pred_edges):
 
 
 def __reconstruction_type_stats(target_graph, pred_graph, pred_edges):
-    simple_stats = init_counters(val=0)
-    complex_stats = init_counters(val=0)
+    simple_stats = dict([(s, 0) for s in STATS_LIST])
+    complex_stats = dict([(s, 0) for s in STATS_LIST])
     for edge in pred_edges:
         i, j = tuple(edge)
         deg_i = pred_graph.immutable_degree(i)
@@ -77,13 +82,32 @@ def __reconstruction_type_stats(target_graph, pred_graph, pred_edges):
                 simple_stats["# merges created"] += 1
             else:
                 complex_stats["# merges created"] += 1
+
+    num_simple, num_complex = compute_edge_type(pred_graph)
+    simple_stats = compute_accuracy(simple_stats, num_simple)
+    complex_stats = compute_accuracy(complex_stats, num_complex)
     return simple_stats, complex_stats
 
 
-def compute_accuracy(stats, type_key, num_edges):
-    tp = deepcopy(stats[type_key]["# splits fixed"])
-    fp = deepcopy(stats[type_key]["# merges created"])
+def compute_edge_type(graph):
+    num_simple = 0
+    num_complex = 0
+    for edge in graph.target_edges:
+        i, j = tuple(edge)
+        deg_i = graph.immutable_degree(i)
+        deg_j = graph.immutable_degree(j)
+        if deg_i == 1 and deg_j == 1:
+            num_simple += 1
+        else:
+            num_complex += 1
+    return num_simple, num_complex
 
-    recall = tp / num_edges
-    precision = tp / (tp + fp)
-    f1 = (2 * recall * precision) / (recall + precision)
+
+def compute_accuracy(stats, num_edges):
+    d = stats["# merges created"] + stats["# splits fixed"]
+    r = 1 if num_edges == 0 else stats["# splits fixed"] / num_edges
+    p = 1 if d == 0 else stats["# splits fixed"] / d
+    stats["f1"] = 0 if r + p == 0 else (2 * r * p) / (r + p)
+    stats["precision"] = p
+    stats["recall"] = r
+    return stats

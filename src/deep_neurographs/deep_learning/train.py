@@ -20,6 +20,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.profilers import PyTorchProfiler
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from torch.utils.data import DataLoader
+from torch.nn.functional import sigmoid
 from torcheval.metrics.functional import (
     binary_accuracy,
     binary_f1_score,
@@ -131,16 +132,16 @@ def train_network(
     return model
 
 
-def random_split(train_set, train_ratio=0.8):
+def random_split(train_set, train_ratio=0.85):
     train_set_size = int(len(train_set) * train_ratio)
     valid_set_size = len(train_set) - train_set_size
     return torch_data.random_split(train_set, [train_set_size, valid_set_size])
 
 
-def eval_network(X, model, threshold=0):
+def eval_network(X, model, threshold=0.5):
     model.eval()
     X = torch.tensor(X, dtype=torch.float32)
-    y_pred = model.net(X)
+    y_pred = sigmoid(model.net(X))
     return np.array(y_pred > threshold, dtype=int)
 
 
@@ -174,9 +175,8 @@ class LitNeuralNet(pl.LightningModule):
         self.compute_stats(y_hat, y, prefix="val_")
 
     def compute_stats(self, y_hat, y, prefix=""):
-        y_hat = torch.flatten(y_hat)
+        y_hat = torch.flatten(sigmoid(y_hat))
         y = torch.flatten(y).to(torch.int)
-        self.log(prefix + "accuracy", binary_accuracy(y_hat, y))
         self.log(prefix + "precision", binary_precision(y_hat, y))
         self.log(prefix + "recall", binary_recall(y_hat, y))
         self.log(prefix + "f1", binary_f1_score(y_hat, y))

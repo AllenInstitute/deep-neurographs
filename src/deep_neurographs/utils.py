@@ -19,6 +19,7 @@ import tensorstore as ts
 import zarr
 from plotly.subplots import make_subplots
 
+ANISOTROPY = [0.748, 0.748, 1.0]
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "zarr"]
 
 
@@ -144,9 +145,9 @@ def open_tensorstore(path, driver):
 
 def read_img_chunk(img, xyz, shape):
     return img[
-        (xyz[2] - shape[2] // 2) : xyz[2] + shape[2] // 2,
-        (xyz[1] - shape[1] // 2) : xyz[1] + shape[1] // 2,
-        (xyz[0] - shape[0] // 2) : xyz[0] + shape[0] // 2,
+        xyz[2] - shape[2] // 2: xyz[2] + shape[2] // 2,
+        xyz[1] - shape[1] // 2: xyz[1] + shape[1] // 2,
+        xyz[0] - shape[0] // 2: xyz[0] + shape[0] // 2,
     ].transpose(2, 1, 0)
 
 
@@ -159,20 +160,32 @@ def get_chunk(arr, xyz, shape):
 def read_tensorstore(ts_arr, xyz, shape):
     return (
         ts_arr[
-            (xyz[0] - shape[0] // 2) : xyz[0] + shape[0] // 2,
-            (xyz[1] - shape[1] // 2) : xyz[1] + shape[1] // 2,
-            (xyz[2] - shape[2] // 2) : xyz[2] + shape[2] // 2,
+            xyz[0] - shape[0] // 2: xyz[0] + shape[0] // 2,
+            xyz[1] - shape[1] // 2: xyz[1] + shape[1] // 2,
+            xyz[2] - shape[2] // 2: xyz[2] + shape[2] // 2,
         ]
         .read()
         .result()
     )
 
 
-def get_superchunks(img_path, label_path, xyz, shape):
+def get_superchunks(img_path, label_path, xyz, shape, from_center=True):
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        img_job = executor.submit(get_superchunk, img_path, "zarr", xyz, shape)
+        img_job = executor.submit(
+            get_superchunk,
+            img_path,
+            "zarr",
+            xyz,
+            shape,
+            from_center=from_center,
+        )
         label_job = executor.submit(
-            get_superchunk, label_path, "neuroglancer_precomputed", xyz, shape
+            get_superchunk,
+            label_path,
+            "neuroglancer_precomputed",
+            xyz,
+            shape,
+            from_center=from_center,
         )
     return img_job.result(), label_job.result()
 
@@ -317,20 +330,20 @@ def normalize_img(img):
     return img
 
 
-def to_world(xyz, anisotropy, shift=[0, 0, 0]):
-    return tuple([int((xyz[i] - shift[i]) * anisotropy[i]) for i in range(3)])
+def to_world(xyz, shift=[0, 0, 0]):
+    return tuple([int((xyz[i] - shift[i]) * ANISOTROPY[i]) for i in range(3)])
 
 
-def to_img(xyz, anisotropy, shift=[0, 0, 0]):
-    xyz = apply_anisotropy(xyz - shift, anisotropy, return_int=True)
+def to_img(xyz, shift=[0, 0, 0]):
+    xyz = apply_anisotropy(xyz - shift, return_int=True)
     return tuple(xyz)
 
 
-def apply_anisotropy(xyz, anisotropy, return_int=False):
+def apply_anisotropy(xyz, return_int=False):
     if return_int:
-        return [int(xyz[i] / anisotropy[i]) for i in range(3)]
+        return [int(xyz[i] / ANISOTROPY[i]) for i in range(3)]
     else:
-        return [xyz[i] / anisotropy[i] for i in range(3)]
+        return [xyz[i] / ANISOTROPY[i] for i in range(3)]
 
 
 def time_writer(t, unit="seconds"):

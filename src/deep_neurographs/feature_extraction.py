@@ -16,7 +16,6 @@ import numpy as np
 from deep_neurographs import geometry_utils, utils
 
 CHUNK_SIZE = [64, 64, 64]
-BUFFER = 256
 HALF_CHUNK_SIZE = [CHUNK_SIZE[i] // 2 for i in range(3)]
 WINDOW_SIZE = [5, 5, 5]
 
@@ -69,44 +68,27 @@ def generate_mutable_img_chunk_features(
     neurograph, img_path, labels_path, anisotropy=[1.0, 1.0, 1.0]
 ):
     features = dict()
-    shape = neurograph.shape
-    origin = neurograph.bbox["min"]  # world coordinates
-    origin = utils.apply_anisotropy(
-        origin, anisotropy, return_int=True
-    )  # global image coordinates
+    origin = utils.apply_anisotropy(neurograph.origin, return_int=True)
     img, labels = utils.get_superchunks(
-        img_path, labels_path, origin, shape, from_center=False
+        img_path, labels_path, origin, neurograph.shape, from_center=False
     )
     for edge in neurograph.mutable_edges:
         # Compute image coordinates
-        edge_xyz = deepcopy(neurograph.edges[edge]["xyz"])
-        edge_xyz = [
-            utils.apply_anisotropy(
-                edge_xyz[0] - origin, anisotropy=anisotropy
-            ),
-            utils.apply_anisotropy(
-                edge_xyz[1] - origin, anisotropy=anisotropy
-            ),
-        ]
+        i, j = tuple(edge)
+        xyz_i = get_local_img_coords(neurograph, i)
+        xyz_j = get_local_img_coords(neurograph, j)
 
         # Extract chunks
-        midpoint = geometry_utils.compute_midpoint(
-            edge_xyz[0], edge_xyz[1]
-        ).astype(int)
+        midpoint = geometry_utils.compute_midpoint(xyz_i, xyz_j).astype(int)
         img_chunk = utils.get_chunk(img, midpoint, CHUNK_SIZE)
         labels_chunk = utils.get_chunk(labels, midpoint, CHUNK_SIZE)
 
-        # Compute path
-        d = int(geometry_utils.dist(edge_xyz[0], edge_xyz[1]) + 5)
-        img_coords_1 = np.round(
-            edge_xyz[0] - midpoint + HALF_CHUNK_SIZE
-        ).astype(int)
-        img_coords_2 = np.round(
-            edge_xyz[1] - midpoint + HALF_CHUNK_SIZE
-        ).astype(int)
-        path = geometry_utils.make_line(img_coords_1, img_coords_2, d)
+        # Mark path
+        d = int(geometry_utils.dist(xyz_i, xyz_j) + 5)
+        img_coords_i = np.round(xyz_i - midpoint + HALF_CHUNK_SIZE).astype(int)
+        img_coords_j = np.round(xyz_j - midpoint + HALF_CHUNK_SIZE).astype(int)
+        path = geometry_utils.make_line(img_coords_i, img_coords_j, d)
 
-        # Fill path
         labels_chunk[labels_chunk > 0] = 1
         labels_chunk = geometry_utils.fill_path(labels_chunk, path, val=-1)
         features[edge] = np.stack([img_chunk, labels_chunk], axis=0)
@@ -114,38 +96,27 @@ def generate_mutable_img_chunk_features(
     return features
 
 
-def get_chunk(superchunk, xyz):
-    return deepcopy(
-        superchunk[
-            (xyz[0] - CHUNK_SIZE[0] // 2) : xyz[0] + CHUNK_SIZE[0] // 2,
-            (xyz[1] - CHUNK_SIZE[1] // 2) : xyz[1] + CHUNK_SIZE[1] // 2,
-            (xyz[2] - CHUNK_SIZE[2] // 2) : xyz[2] + CHUNK_SIZE[2] // 2,
-        ]
+def get_local_img_coords(neurograph, i):
+    global_xyz = deepcopy(neurograph.nodes[i]["xyz"])
+    local_xyz = utils.apply_anisotropy(
+        global_xyz - np.array(neurograph.origin)
     )
+    return local_xyz
 
 
 def generate_mutable_img_profile_features(
     neurograph, path, anisotropy=[1.0, 1.0, 1.0]
 ):
     features = dict()
-    origin = utils.apply_anisotropy(
-        neurograph.bbox["min"], anisotropy, return_int=True
-    )
-    shape = [neurograph.shape[i] + BUFFER for i in range(3)]
+    origin = utils.apply_anisotropy(neurograph.origin, return_int=True)
     superchunk = utils.get_superchunk(
-        path, "zarr", origin, shape, from_center=False
+        path, "zarr", origin, neurograph.shape, from_center=False
     )
     for edge in neurograph.mutable_edges:
-        edge_xyz = deepcopy(neurograph.edges[edge]["xyz"])
-        edge_xyz = [
-            utils.apply_anisotropy(
-                edge_xyz[0] - neurograph.origin, anisotropy=anisotropy
-            ),
-            utils.apply_anisotropy(
-                edge_xyz[1] - neurograph.origin, anisotropy=anisotropy
-            ),
-        ]
-        line = geometry_utils.make_line(edge_xyz[0], edge_xyz[1], NUM_POINTS)
+        i, j = tuple(edge)
+        xyz_i = get_local_img_coords(neurograph, i)
+        xyz_j = get_local_img_coords(neurograph, j)
+        line = geometry_utils.make_line(xyz_i, xyz_j, NUM_POINTS)
         features[edge] = geometry_utils.get_profile(
             superchunk, line, window_size=WINDOW_SIZE
         )
@@ -156,17 +127,14 @@ def generate_mutable_skel_features(neurograph):
     features = dict()
     for edge in neurograph.mutable_edges:
         i, j = tuple(edge)
-        deg_i = len(list(neurograph.neighbors(i)))
-        deg_j = len(list(neurograph.neighbors(j)))
-        length = compute_length(neurograph, edge)
         radius_i, radius_j = get_radii(neurograph, edge)
         dot1, dot2, dot3 = get_directionals(neurograph, edge, 5)
         ddot1, ddot2, ddot3 = get_directionals(neurograph, edge, 10)
         features[edge] = np.concatenate(
             (
-                length,
-                deg_i,
-                deg_j,
+                compute_length(neurograph, edge),
+                neurograph.immutable_degree(i),
+                neurograph.immutable_degree(j),
                 radius_i,
                 radius_j,
                 dot1,
@@ -327,3 +295,15 @@ def combine_features(features):
                     (combined[edge], features[key][edge])
                 )
     return combined
+
+
+"""
+def get_chunk(superchunk, xyz):
+    return deepcopy(
+        superchunk[
+            (xyz[0] - CHUNK_SIZE[0] // 2) : xyz[0] + CHUNK_SIZE[0] // 2,
+            (xyz[1] - CHUNK_SIZE[1] // 2) : xyz[1] + CHUNK_SIZE[1] // 2,
+            (xyz[2] - CHUNK_SIZE[2] // 2) : xyz[2] + CHUNK_SIZE[2] // 2,
+        ]
+    )
+"""
