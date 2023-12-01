@@ -1,3 +1,5 @@
+import heapq
+import networkx as nx
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 from scipy.linalg import svd
@@ -110,9 +112,9 @@ def smooth_branch(xyz):
 def fit_spline(xyz):
     s = xyz.shape[0] / 5
     t = np.arange(xyz.shape[0])
-    cs_x = UnivariateSpline(t, xyz[:, 0], s=s, k=3)
-    cs_y = UnivariateSpline(t, xyz[:, 1], s=s, k=3)
-    cs_z = UnivariateSpline(t, xyz[:, 2], s=s, k=3)
+    cs_x = UnivariateSpline(t, xyz[:, 0], s=s, k=1)
+    cs_y = UnivariateSpline(t, xyz[:, 1], s=s, k=1)
+    cs_z = UnivariateSpline(t, xyz[:, 2], s=s, k=1)
     return cs_x, cs_y, cs_z
 
 
@@ -137,12 +139,67 @@ def get_profile(img, xyz_arr, window_size=[5, 5, 5]):
 def fill_path(img, path, val=-1):
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
-        img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
-        # img[x,y,z] = val
+        #img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
+        img[x,y,z] = val
     return img
 
 
 # Miscellaneous
+def shortest_path(img, start, end):
+    def is_valid_move(x, y, z):
+        return 0 <= x < shape[0] and 0 <= y < shape[1] and 0 <= z < shape[2] and not visited[x, y, z]
+
+    def get_nbs(x, y, z):
+        moves = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+        return [(x + dx, y + dy, z + dz) for dx, dy, dz in moves if is_valid_move(x + dx, y + dy, z + dz)]
+
+    img = img - np.min(img) + 1
+    start = tuple(start)
+    end = tuple(end)
+
+    shape = img.shape
+    visited = np.zeros(shape, dtype=bool)
+    distances = np.inf * np.ones(shape)
+    distances[start] = 0
+    previous_nodes = {}
+
+    heap = [(0, start)]
+    while heap:
+        current_distance, cur_node = heapq.heappop(heap)
+
+        if cur_node == end:
+            path = []
+            while cur_node != start:
+                path.append(cur_node)
+                cur_node = previous_nodes[cur_node]
+            path.append(start)
+            return path[::-1]
+
+        visited[cur_node] = True
+
+        for nb in get_nbs(*cur_node):
+            if not visited[nb]:
+                new_distance = distances[cur_node] + 1 / img[nb]
+                if new_distance < distances[nb]:
+                    distances[nb] = new_distance
+                    previous_nodes[nb] = cur_node
+                    heapq.heappush(heap, (new_distance, nb))
+    return None
+
+
+def transform_path(path, img_origin, patch_centroid, patch_dims):
+    img_origin = np.array(img_origin)
+    transformed_path = np.zeros((len(path), 3))
+    for i, xyz in enumerate(path):
+        hat_xyz = utils.patch_to_img(xyz, patch_centroid, patch_dims)
+        transformed_path[i, :] = utils.to_world(hat_xyz, shift=-img_origin)
+    return smooth_branch(transformed_path)
+
+
+def get_optimal_patch(xyz_1, xyz_2, buffer=8):
+    return [int(abs(xyz_1[i] - xyz_2[i])) + buffer for i in range(3)]
+
+
 def compare_edges(xyx_i, xyz_j, xyz_k):
     dist_ij = dist(xyx_i, xyz_j)
     dist_ik = dist(xyx_i, xyz_k)

@@ -143,8 +143,7 @@ class ImgProposalDataset(Dataset):
 
         """
         if self.transform:
-            inputs = utils.normalize_img(self.inputs[idx])
-            inputs = self.transform.run(inputs)
+            inputs = self.transform.run(self.inputs[idx])
         else:
             inputs = self.inputs[idx]
         return {"inputs": inputs, "labels": self.labels[idx]}
@@ -217,8 +216,7 @@ class MultiModalDataset(Dataset):
 
         """
         if self.transform:
-            img_inputs = utils.normalize_img(self.img_inputs[idx])
-            img_inputs = self.transform.run(img_inputs)
+            img_inputs = self.transform.run(self.img_inputs[idx])
         else:
             img_inputs = self.img_inputs[idx]
         inputs = [self.feature_inputs[idx], img_inputs]
@@ -250,9 +248,9 @@ class Augmentator:
                 tio.RandomBlur(std=(0, 0.4)),
                 tio.RandomNoise(std=(0, 0.0125)),
                 tio.RandomFlip(axes=(0, 1, 2)),
-                # tio.RandomAffine(
-                #    degrees=20, scales=(0.8, 1), image_interpolation="nearest"
-                # )
+                tio.RandomAffine(
+                    degrees=20, scales=(0.8, 1), image_interpolation="nearest"
+                )
             ]
         )
 

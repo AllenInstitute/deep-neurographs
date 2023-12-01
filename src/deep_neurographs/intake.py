@@ -18,15 +18,15 @@ from deep_neurographs.neurograph import NeuroGraph
 def build_neurograph(
     swc_dir,
     anisotropy=[1.0, 1.0, 1.0],
-    bucket=None,
-    access_key_id=None,
-    secret_access_key=None,
-    max_mutable_degree=3,
+    img_path=None,
+    num_proposals=3,
     search_radius=25.0,
     prune=True,
     prune_depth=16,
+    optimize_proposals=False,
     origin=None,
     shape=None,
+    smooth=True,
 ):
     """
     Builds a neurograph from a directory of swc files, where each swc
@@ -34,63 +34,28 @@ def build_neurograph(
     other.
 
     """
-    neurograph = NeuroGraph(swc_dir, origin=origin, shape=shape)
-    if bucket is not None:
-        neurograph = init_immutables_from_s3(
-            neurograph,
-            bucket,
-            anisotropy=anisotropy,
-            access_key_id=access_key_id,
-            secret_access_key=secret_access_key,
-            prune=prune,
-            prune_depth=prune_depth,
-        )
-    else:
-        neurograph = init_immutables_from_local(
-            neurograph,
-            anisotropy=anisotropy,
-            prune=prune,
-            prune_depth=prune_depth,
-        )
+    neurograph = NeuroGraph(
+        swc_dir,
+        img_path=img_path,
+        optimize_proposals=optimize_proposals,
+        origin=origin,
+        shape=shape,
+    )
+    neurograph = init_immutables(
+        neurograph,
+        anisotropy=anisotropy,
+        prune=prune,
+        prune_depth=prune_depth,
+        smooth=smooth
+    )
     if search_radius > 0:
-        neurograph.generate_mutables(
-            max_degree=max_mutable_degree, search_radius=search_radius
+        neurograph.generate_proposals(
+            num_proposals=num_proposals, search_radius=search_radius
         )
     return neurograph
 
 
-def init_immutables_from_s3(
-    neurograph,
-    bucket,
-    anisotropy=[1.0, 1.0, 1.0],
-    access_key_id=None,
-    secret_access_key=None,
-    prune=True,
-    prune_depth=16,
-    smooth=False,
-):
-    """
-    To do...
-    """
-    s3_client = s3_utils.init_session(
-        access_key_id=access_key_id, secret_access_key=secret_access_key
-    )
-    swc_files = s3_utils.listdir(
-        bucket, neurograph.path, s3_client, ext=".swc"
-    )
-    for file_key in swc_files:
-        swc_id = file_key.split("/")[-1].replace(".swc", "")
-        raw_swc = s3_utils.read_from_s3(bucket, file_key, s3_client)
-        swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
-        if smooth:
-            swc_dict = swc_utils.smooth(swc_dict)
-        neurograph.generate_immutables(
-            swc_id, swc_dict, prune=prune, prune_depth=prune_depth
-        )
-    return neurograph
-
-
-def init_immutables_from_local(
+def init_immutables(
     neurograph,
     anisotropy=[1.0, 1.0, 1.0],
     prune=True,

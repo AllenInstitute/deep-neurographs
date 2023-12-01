@@ -89,6 +89,7 @@ def train_network(
     net,
     dataset,
     logger=True,
+    lr=10e-3,
     max_epochs=100,
     model_summary=True,
     profile=False,
@@ -111,8 +112,8 @@ def train_network(
     )
 
     # Configure trainer
-    model = LitNeuralNet(net)
-    checkpoint_callback = ModelCheckpoint(
+    model = LitNeuralNet(net=net, lr=lr)
+    ckpt_callback = ModelCheckpoint(
         save_top_k=1, monitor="val_f1", mode="max"
     )
     profiler = PyTorchProfiler() if profile else None
@@ -120,15 +121,20 @@ def train_network(
     # Fit model
     trainer = pl.Trainer(
         accelerator="gpu",
-        callbacks=[checkpoint_callback],
+        callbacks=[ckpt_callback],
         devices=1,
         enable_model_summary=model_summary,
         enable_progress_bar=progress_bar,
         logger=logger,
+        log_every_n_steps=1,
         max_epochs=max_epochs,
         profiler=profiler,
     )
     trainer.fit(model, train_loader, valid_loader)
+    
+    # Return best model
+    ckpt = torch.load(ckpt_callback.best_model_path)
+    model.net.load_state_dict(ckpt["state_dict"])
     return model
 
 
@@ -141,22 +147,24 @@ def random_split(train_set, train_ratio=0.85):
 def eval_network(X, model, threshold=0.5):
     model.eval()
     X = torch.tensor(X, dtype=torch.float32)
-    y_pred = sigmoid(model.net(X))
+    with torch.no_grad():
+        y_pred = sigmoid(model.net(X))
     return np.array(y_pred > threshold, dtype=int)
 
 
 # Lightning Module
 class LitNeuralNet(pl.LightningModule):
-    def __init__(self, net):
+    def __init__(self, net=None, lr=10e-3):
         super().__init__()
         self.net = net
-
+        self.lr = lr
+        
     def forward(self, batch):
         x = self.get_example(batch, "inputs")
         return self.net(x)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
 
     def training_step(self, batch, batch_idx):
@@ -183,3 +191,6 @@ class LitNeuralNet(pl.LightningModule):
 
     def get_example(self, batch, key):
         return batch[key]
+
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        return self.net.state_dict(destination, prefix + '', keep_vars)

@@ -72,6 +72,8 @@ def generate_mutable_img_chunk_features(
     img, labels = utils.get_superchunks(
         img_path, labels_path, origin, neurograph.shape, from_center=False
     )
+
+    #img = utils.normalize_img(img)
     for edge in neurograph.mutable_edges:
         # Compute image coordinates
         i, j = tuple(edge)
@@ -86,18 +88,22 @@ def generate_mutable_img_chunk_features(
         # Mark path
         d = int(geometry_utils.dist(xyz_i, xyz_j) + 5)
         img_coords_i = np.round(xyz_i - midpoint + HALF_CHUNK_SIZE).astype(int)
-        img_coords_j = np.round(xyz_j - midpoint + HALF_CHUNK_SIZE).astype(int)
+        img_coords_j = np.round(xyz_j - midpoint + HALF_CHUNK_SIZE).astype(int)            
         path = geometry_utils.make_line(img_coords_i, img_coords_j, d)
 
+        img_chunk = utils.normalize_img(img_chunk)
         labels_chunk[labels_chunk > 0] = 1
-        labels_chunk = geometry_utils.fill_path(labels_chunk, path, val=-1)
+        labels_chunk = geometry_utils.fill_path(labels_chunk, path)
         features[edge] = np.stack([img_chunk, labels_chunk], axis=0)
 
     return features
 
 
-def get_local_img_coords(neurograph, i):
-    global_xyz = deepcopy(neurograph.nodes[i]["xyz"])
+def get_local_img_coords(neurograph, node_or_xyz):
+    if type(node_or_xyz) == int:
+        global_xyz = deepcopy(neurograph.nodes[node_or_xyz]["xyz"])
+    else:
+        global_xyz = node_or_xyz
     local_xyz = utils.apply_anisotropy(
         global_xyz - np.array(neurograph.origin)
     )
@@ -109,16 +115,17 @@ def generate_mutable_img_profile_features(
 ):
     features = dict()
     origin = utils.apply_anisotropy(neurograph.origin, return_int=True)
-    superchunk = utils.get_superchunk(
+    img = utils.get_superchunk(
         path, "zarr", origin, neurograph.shape, from_center=False
     )
+    img = utils.normalize_img(img)
     for edge in neurograph.mutable_edges:
         i, j = tuple(edge)
         xyz_i = get_local_img_coords(neurograph, i)
         xyz_j = get_local_img_coords(neurograph, j)
         line = geometry_utils.make_line(xyz_i, xyz_j, NUM_POINTS)
         features[edge] = geometry_utils.get_profile(
-            superchunk, line, window_size=WINDOW_SIZE
+            img, line, window_size=WINDOW_SIZE
         )
     return features
 
@@ -132,7 +139,7 @@ def generate_mutable_skel_features(neurograph):
         ddot1, ddot2, ddot3 = get_directionals(neurograph, edge, 10)
         features[edge] = np.concatenate(
             (
-                compute_length(neurograph, edge),
+                neurograph.compute_length(edge),
                 neurograph.immutable_degree(i),
                 neurograph.immutable_degree(j),
                 radius_i,
@@ -295,15 +302,3 @@ def combine_features(features):
                     (combined[edge], features[key][edge])
                 )
     return combined
-
-
-"""
-def get_chunk(superchunk, xyz):
-    return deepcopy(
-        superchunk[
-            (xyz[0] - CHUNK_SIZE[0] // 2) : xyz[0] + CHUNK_SIZE[0] // 2,
-            (xyz[1] - CHUNK_SIZE[1] // 2) : xyz[1] + CHUNK_SIZE[1] // 2,
-            (xyz[2] - CHUNK_SIZE[2] // 2) : xyz[2] + CHUNK_SIZE[2] // 2,
-        ]
-    )
-"""

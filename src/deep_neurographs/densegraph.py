@@ -84,12 +84,10 @@ class DenseGraph:
         pred_xyz_j = np.array(pred_xyz_j)
         pred_dist = dist(pred_xyz_i, pred_xyz_j)
 
-        target_path, target_dist = self.connect_nodes(graph_id, xyz_i, xyz_j)
-        target_dist = max(target_dist, 1)
-
         # Check criteria
+        target_path, target_dist = self.connect_nodes(graph_id, xyz_i, xyz_j)
         ratio = min(pred_dist, target_dist) / max(pred_dist, target_dist)
-        if ratio < 0.5 and pred_dist > 15:
+        if ratio < 0.5 and pred_dist > 10:
             return False
         else:
             return True

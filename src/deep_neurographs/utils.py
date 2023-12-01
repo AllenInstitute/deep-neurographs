@@ -187,7 +187,9 @@ def get_superchunks(img_path, label_path, xyz, shape, from_center=True):
             shape,
             from_center=from_center,
         )
-    return img_job.result(), label_job.result()
+    img = img_job.result().astype(np.int16)
+    label = label_job.result().astype(np.int64)
+    return img, label
 
 
 def get_superchunk(path, driver, xyz, shape, from_center=True):
@@ -323,15 +325,25 @@ def subplot(data1, data2, title):
     fig.show()
 
 
-# --- miscellaneous ---
-def normalize_img(img):
-    img -= np.min(img)
-    img = img / np.max(img)
-    return img
+# --- coordinate conversions ---
+def world_to_img(neurograph, node_or_xyz):
+    if type(node_or_xyz) == int:
+        node_or_xyz = deepcopy(neurograph.nodes[node_or_xyz]["xyz"])
+    return to_img(node_or_xyz, shift=neurograph.origin)
+
+
+def patch_to_img(xyz, patch_centroid, patch_dims):
+    half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
+    return np.round(xyz + patch_centroid - half_patch_dims).astype(int)
+
+
+def img_to_patch(xyz, patch_centroid, patch_dims):
+    half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
+    return np.round(xyz - patch_centroid + half_patch_dims).astype(int)
 
 
 def to_world(xyz, shift=[0, 0, 0]):
-    return tuple([int((xyz[i] - shift[i]) * ANISOTROPY[i]) for i in range(3)])
+    return tuple([(xyz[i] - shift[i]) * ANISOTROPY[i] for i in range(3)])
 
 
 def to_img(xyz, shift=[0, 0, 0]):
@@ -341,9 +353,20 @@ def to_img(xyz, shift=[0, 0, 0]):
 
 def apply_anisotropy(xyz, return_int=False):
     if return_int:
-        return [int(xyz[i] / ANISOTROPY[i]) for i in range(3)]
+        return [round(xyz[i] / ANISOTROPY[i]) for i in range(3)]
     else:
         return [xyz[i] / ANISOTROPY[i] for i in range(3)]
+
+
+# --- miscellaneous ---
+def get_img_mip(img, axis=0):
+    return np.max(img, axis=axis)
+
+
+def normalize_img(img):
+    img -= np.min(img)
+    img = img / np.max(img)
+    return img
 
 
 def time_writer(t, unit="seconds"):

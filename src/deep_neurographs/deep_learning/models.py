@@ -135,7 +135,7 @@ class ConvNet(nn.Module):
             ),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(),
-            nn.Dropout(p=0.25),
+            nn.Dropout(p=0.2),
             nn.MaxPool3d(kernel_size=(2, 2, 2), stride=2),
         )
         return conv_layer
