@@ -12,6 +12,7 @@ import concurrent.futures
 import json
 import os
 import shutil
+from copy import deepcopy
 
 import numpy as np
 import plotly.graph_objects as go
@@ -154,7 +155,7 @@ def read_img_chunk(img, xyz, shape):
 def get_chunk(arr, xyz, shape):
     xyz_1 = [max(xyz[i] - shape[i] // 2, 0) for i in range(3)]
     xyz_2 = [min(xyz[i] + shape[i] // 2, arr.shape[i] - 1) for i in range(3)]
-    return arr[xyz_1[0] : xyz_2[0], xyz_1[1] : xyz_2[1], xyz_1[2] : xyz_2[2]]
+    return arr[xyz_1[0]: xyz_2[0], xyz_1[1]: xyz_2[1], xyz_1[2]: xyz_2[2]]
 
 
 def read_tensorstore(ts_arr, xyz, shape):

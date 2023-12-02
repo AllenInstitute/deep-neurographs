@@ -10,7 +10,7 @@ Builds neurograph for neuron reconstruction.
 
 import os
 
-from deep_neurographs import s3_utils, swc_utils, utils
+from deep_neurographs import swc_utils, utils
 from deep_neurographs.neurograph import NeuroGraph
 
 
@@ -46,7 +46,7 @@ def build_neurograph(
         anisotropy=anisotropy,
         prune=prune,
         prune_depth=prune_depth,
-        smooth=smooth
+        smooth=smooth,
     )
     if search_radius > 0:
         neurograph.generate_proposals(

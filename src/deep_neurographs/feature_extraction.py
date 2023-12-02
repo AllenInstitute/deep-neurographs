@@ -72,8 +72,7 @@ def generate_mutable_img_chunk_features(
     img, labels = utils.get_superchunks(
         img_path, labels_path, origin, neurograph.shape, from_center=False
     )
-
-    #img = utils.normalize_img(img)
+    img = utils.normalize_img(img)
     for edge in neurograph.mutable_edges:
         # Compute image coordinates
         i, j = tuple(edge)
@@ -88,7 +87,7 @@ def generate_mutable_img_chunk_features(
         # Mark path
         d = int(geometry_utils.dist(xyz_i, xyz_j) + 5)
         img_coords_i = np.round(xyz_i - midpoint + HALF_CHUNK_SIZE).astype(int)
-        img_coords_j = np.round(xyz_j - midpoint + HALF_CHUNK_SIZE).astype(int)            
+        img_coords_j = np.round(xyz_j - midpoint + HALF_CHUNK_SIZE).astype(int)
         path = geometry_utils.make_line(img_coords_i, img_coords_j, d)
 
         img_chunk = utils.normalize_img(img_chunk)

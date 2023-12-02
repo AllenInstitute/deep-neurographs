@@ -12,8 +12,6 @@ import numpy as np
 import torchio as tio
 from torch.utils.data import Dataset
 
-from deep_neurographs import utils
-
 
 # Custom datasets
 class ProposalDataset(Dataset):
@@ -250,7 +248,7 @@ class Augmentator:
                 tio.RandomFlip(axes=(0, 1, 2)),
                 tio.RandomAffine(
                     degrees=20, scales=(0.8, 1), image_interpolation="nearest"
-                )
+                ),
             ]
         )
 

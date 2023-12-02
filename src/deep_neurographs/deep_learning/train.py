@@ -19,10 +19,9 @@ import torch.utils.data as torch_data
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.profilers import PyTorchProfiler
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
-from torch.utils.data import DataLoader
 from torch.nn.functional import sigmoid
+from torch.utils.data import DataLoader
 from torcheval.metrics.functional import (
-    binary_accuracy,
     binary_f1_score,
     binary_precision,
     binary_recall,
@@ -113,9 +112,7 @@ def train_network(
 
     # Configure trainer
     model = LitNeuralNet(net=net, lr=lr)
-    ckpt_callback = ModelCheckpoint(
-        save_top_k=1, monitor="val_f1", mode="max"
-    )
+    ckpt_callback = ModelCheckpoint(save_top_k=1, monitor="val_f1", mode="max")
     profiler = PyTorchProfiler() if profile else None
 
     # Fit model
@@ -131,7 +128,7 @@ def train_network(
         profiler=profiler,
     )
     trainer.fit(model, train_loader, valid_loader)
-    
+
     # Return best model
     ckpt = torch.load(ckpt_callback.best_model_path)
     model.net.load_state_dict(ckpt["state_dict"])
@@ -158,7 +155,7 @@ class LitNeuralNet(pl.LightningModule):
         super().__init__()
         self.net = net
         self.lr = lr
-        
+
     def forward(self, batch):
         x = self.get_example(batch, "inputs")
         return self.net(x)
@@ -192,5 +189,5 @@ class LitNeuralNet(pl.LightningModule):
     def get_example(self, batch, key):
         return batch[key]
 
-    def state_dict(self, destination=None, prefix='', keep_vars=False):
-        return self.net.state_dict(destination, prefix + '', keep_vars)
+    def state_dict(self, destination=None, prefix="", keep_vars=False):
+        return self.net.state_dict(destination, prefix + "", keep_vars)

@@ -1,10 +1,10 @@
 import heapq
-import networkx as nx
+
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 from scipy.linalg import svd
 
-from deep_neurographs import utils, feature_extraction as extracter
+from deep_neurographs import utils
 
 
 # Context Tangent Vectors
@@ -118,19 +118,6 @@ def fit_spline(xyz):
     return cs_x, cs_y, cs_z
 
 
-"""
-def smooth_end(branch_xyz, radii, ref_xyz, num_pts=8):
-    smooth_bool = branch_xyz.shape[0] > 10
-    if all(branch_xyz[0] == ref_xyz) and smooth_bool:
-        return branch_xyz[num_pts:-1, :], radii[num_pts:-1], 0
-    elif all(branch_xyz[-1] == ref_xyz) and smooth_bool:
-        branch_xyz = branch_xyz[:-num_pts]
-        radii = radii[:-num_pts]
-        return branch_xyz, radii, -1
-    else:
-        return branch_xyz, radii, None
-"""
-
 # Image feature extraction
 def get_profile(img, xyz_arr, window_size=[5, 5, 5]):
     return [np.max(utils.get_chunk(img, xyz, window_size)) for xyz in xyz_arr]
@@ -139,19 +126,35 @@ def get_profile(img, xyz_arr, window_size=[5, 5, 5]):
 def fill_path(img, path, val=-1):
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
-        #img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
-        img[x,y,z] = val
+        # img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
+        img[x, y, z] = val
     return img
 
 
 # Miscellaneous
 def shortest_path(img, start, end):
     def is_valid_move(x, y, z):
-        return 0 <= x < shape[0] and 0 <= y < shape[1] and 0 <= z < shape[2] and not visited[x, y, z]
+        return (
+            0 <= x < shape[0]
+            and 0 <= y < shape[1]
+            and 0 <= z < shape[2]
+            and not visited[x, y, z]
+        )
 
     def get_nbs(x, y, z):
-        moves = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
-        return [(x + dx, y + dy, z + dz) for dx, dy, dz in moves if is_valid_move(x + dx, y + dy, z + dz)]
+        moves = [
+            (1, 0, 0),
+            (-1, 0, 0),
+            (0, 1, 0),
+            (0, -1, 0),
+            (0, 0, 1),
+            (0, 0, -1),
+        ]
+        return [
+            (x + dx, y + dy, z + dz)
+            for dx, dy, dz in moves
+            if is_valid_move(x + dx, y + dy, z + dz)
+        ]
 
     img = img - np.min(img) + 1
     start = tuple(start)
