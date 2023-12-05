@@ -23,7 +23,6 @@ from deep_neurographs import utils
 from deep_neurographs.densegraph import DenseGraph
 from deep_neurographs.geometry_utils import dist as get_dist
 
-BUFFER = 8
 SUPPORTED_LABEL_MASK_TYPES = [dict, np.array, ts.TensorStore]
 
 
@@ -40,7 +39,7 @@ class NeuroGraph(nx.Graph):
         swc_path,
         img_path=None,
         label_mask=None,
-        optimize_depth=5,
+        optimize_depth=10,
         optimize_proposals=False,
         origin=None,
         shape=None,
@@ -312,7 +311,6 @@ class NeuroGraph(nx.Graph):
 
     # --- Optimize Proposals ---
     def run_optimization(self):
-        t0 = time()
         origin = utils.apply_anisotropy(self.origin, return_int=True)
         img = utils.get_superchunk(
             self.img_path, "zarr", origin, self.shape, from_center=False
@@ -323,13 +321,7 @@ class NeuroGraph(nx.Graph):
             if edge in simple_edges:
                 self.optimize_simple_edge(img, edge)
             else:
-                self.optimize_complex_edge(img, edge)
-        print("")
-        print(
-            "edge_optimization(): {} seconds / edge".format(
-                (time() - t0) / len(self.get_simple_proposals())
-            )
-        )
+                self.optimize_simple_edge(img, edge)
 
     def optimize_simple_edge(self, img, edge):
         # Extract Branches
@@ -385,7 +377,7 @@ class NeuroGraph(nx.Graph):
             edge = proposals[idx]
             if self.is_simple(edge):
                 add_bool = self.is_target(
-                    target_neurograph, edge, dist=2.5, ratio=0.75, exclude=6
+                    target_neurograph, edge, dist=5, ratio=0.7, exclude=10
                 )
                 if add_bool:
                     self.target_edges.add(edge)
@@ -395,18 +387,18 @@ class NeuroGraph(nx.Graph):
         # Check remaining proposals
         dists = [self.compute_length(edge) for edge in remaining_proposals]
         for idx in np.argsort(dists):
-            edge = proposals[idx]
+            edge = remaining_proposals[idx]
             add_bool = self.is_target(
-                target_neurograph, edge, dist=5, ratio=0.5, exclude=10
+                target_neurograph, edge, dist=7.5, ratio=0.5, exclude=10
             )
             if add_bool:
                 self.target_edges.add(edge)
 
         # Print results
         target_ratio = len(self.target_edges) / len(self.mutable_edges)
-        print("")
         print("# target edges:", len(self.target_edges))
         print("% target edges in mutable:", target_ratio)
+        print("")
 
     def filter_infeasible(self, target_neurograph):
         proposals = list()
@@ -428,9 +420,9 @@ class NeuroGraph(nx.Graph):
         # Check if edges are adjacent
         i, j = tuple(edge_1)
         k, l = tuple(edge_2)
-        nb_bool_i = self.is_nb(i, k) or self.is_nb(i, l)
-        nb_bool_j = self.is_nb(j, k) or self.is_nb(j, l)
-        if nb_bool_i or nb_bool_j:
+        bool_i = self.is_nb(i, k) or self.is_nb(i, l)
+        bool_j = self.is_nb(j, k) or self.is_nb(j, l)
+        if bool_i or bool_j:
             return True
 
         # Not feasible
@@ -444,26 +436,19 @@ class NeuroGraph(nx.Graph):
         if self.check_cycle((i, j)):
             return False
 
-        # Get branch
-        if self.optimize_proposals and self.is_simple(edge):
-            xyz_i = self.edges[edge]["xyz"][self.optimize_depth]
-            xyz_j = self.edges[edge]["xyz"][-self.optimize_depth]
-        else:
-            xyz_i = self.edges[edge]["xyz"][0]
-            xyz_j = self.edges[edge]["xyz"][-1]
-
         # Check projection distance
-        proj_i, d_i = target_graph.get_projection(xyz_i)
-        proj_j, d_j = target_graph.get_projection(xyz_j)
+        xyz_i = self.edges[edge]["xyz"][0]
+        xyz_j = self.edges[edge]["xyz"][-1]
+        _, d_i = target_graph.get_projection(xyz_i)
+        _, d_j = target_graph.get_projection(xyz_j)
         if d_i > dist or d_j > dist:
             return False
 
         # Check alignment
         aligned = target_graph.densegraph.is_aligned(
-            tuple(xyz_i), xyz_j, ratio_threshold=ratio, exclude=exclude
+            xyz_i, xyz_j, ratio_threshold=ratio, exclude=exclude
         )
-        if aligned:
-            return True
+        return True if aligned else False
 
     # --- Visualization ---
     def visualize_immutables(self, title="Immutable Graph", return_data=False):

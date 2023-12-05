@@ -309,8 +309,8 @@ def subplot(data1, data2, title):
     fig.add_trace(data2, row=1, col=2)
     fig.update_layout(title_text=title, showlegend=True)
 
-    fig.update_xaxes(row=1, col=1, matches="y")
-    fig.update_yaxes(row=1, col=1, matches="x")
+    fig.update_xaxes(row=1, col=1, matches="y", showgrid=False)
+    fig.update_yaxes(row=1, col=1, matches="x", showgrid=False)
     fig.update_layout(
         scene_aspectmode="manual", scene_aspectratio=dict(x=1, y=1, z=1)
     )

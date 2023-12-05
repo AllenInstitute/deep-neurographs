@@ -177,9 +177,10 @@ class DenseGraph:
         """
         path_length = 0
         for i in range(1, len(path)):
-            xyz_1 = self.graphs[graph_id].nodes[i]["xyz"]
-            xyz_2 = self.graphs[graph_id].nodes[i - 1]["xyz"]
-            path_length += get_dist(xyz_1, xyz_2)
+            path_length += get_dist(
+                self.graphs[graph_id].nodes[i]["xyz"],
+                self.graphs[graph_id].nodes[i - 1]["xyz"],
+            )
         return path_length
 
     def is_aligned(self, xyz_1, xyz_2, ratio_threshold=0.5, exclude=10.0):
@@ -211,14 +212,18 @@ class DenseGraph:
             Indication of whether edge proposal is aligned to ground truth.
 
         """
+        ratio = 0
         hat_xyz_1 = self.query_kdtree(xyz_1)
         hat_xyz_2 = self.query_kdtree(xyz_2)
         if self.is_connected(hat_xyz_1, hat_xyz_2):
-            dist = get_dist(xyz_1, xyz_2)
+            dist = get_dist(hat_xyz_1, hat_xyz_2)
             _, path_length = self.connect_nodes(hat_xyz_1, hat_xyz_2)
+            dist = 1 if dist < 1 else dist
+            path_length = 1 if path_length < 1 else path_length
             ratio = min(dist, path_length) / max(dist, path_length)
-            if ratio > ratio_threshold and dist > exclude:
+            if dist <= exclude:
                 return True
-            elif dist <= exclude:
+            elif ratio > ratio_threshold:
                 return True
+            return True
         return False

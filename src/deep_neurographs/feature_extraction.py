@@ -122,9 +122,12 @@ def generate_mutable_img_profile_features(
         i, j = tuple(edge)
         xyz_i = get_local_img_coords(neurograph, i)
         xyz_j = get_local_img_coords(neurograph, j)
-        line = geometry_utils.make_line(xyz_i, xyz_j, NUM_POINTS)
+        if neurograph.optimize_proposals:
+            path = geometry_utils.make_line(xyz_i, xyz_j, NUM_POINTS)  # temp
+        else:
+            path = geometry_utils.make_line(xyz_i, xyz_j, NUM_POINTS)
         features[edge] = geometry_utils.get_profile(
-            img, line, window_size=WINDOW_SIZE
+            img, path, window_size=WINDOW_SIZE
         )
     return features
 
@@ -167,10 +170,10 @@ def get_directionals(neurograph, edge, window_size):
     mutable_xyz_i, mutable_xyz_j = neurograph.get_edge_attr("xyz", i, j)
     mutable_xyz = np.array([mutable_xyz_i, mutable_xyz_j])
     mutable_tangent = geometry_utils.compute_tangent(mutable_xyz)
-    context_tangent_i = geometry_utils.compute_context_vec(
+    context_tangent_i = geometry_utils.get_directional(
         neurograph, i, mutable_tangent, window_size=window_size
     )
-    context_tangent_j = geometry_utils.compute_context_vec(
+    context_tangent_j = geometry_utils.get_directional(
         neurograph, j, mutable_tangent, window_size=window_size
     )
 
