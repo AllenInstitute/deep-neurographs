@@ -26,6 +26,7 @@ def run_evaluation(
         "simple": dict([(s, []) for s in STATS_LIST]),
         "complex": dict([(s, []) for s in STATS_LIST]),
     }
+    print(blocks)
     for block_id in blocks:
         # Get predicted edges
         pred_edges = get_predictions(
@@ -43,6 +44,10 @@ def run_evaluation(
         simple_stats, complex_stats = __reconstruction_type_stats(
             target_graphs[block_id], pred_graphs[block_id], pred_edges
         )
+        if True:
+            print("simple stats:", simple_stats)
+            print("complex stats:", complex_stats)
+            print("")
         for key in STATS_LIST:
             stats_by_type["simple"][key].append(simple_stats[key])
             stats_by_type["complex"][key].append(complex_stats[key])
@@ -86,6 +91,13 @@ def __reconstruction_type_stats(target_graph, pred_graph, pred_edges):
     num_simple, num_complex = compute_edge_type(pred_graph)
     simple_stats = compute_accuracy(simple_stats, num_simple)
     complex_stats = compute_accuracy(complex_stats, num_complex)
+
+    if False:
+        print("# simple edges:", num_simple)
+        print("% simple edges:", num_simple / (num_complex + num_simple))
+        print("# complex edges:", num_complex)
+        print("% complex edges:", num_complex / (num_complex + num_simple))
+        print("")
     return simple_stats, complex_stats
 
 

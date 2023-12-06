@@ -39,7 +39,7 @@ class NeuroGraph(nx.Graph):
         swc_path,
         img_path=None,
         label_mask=None,
-        optimize_depth=10,
+        optimize_depth=5,
         optimize_proposals=False,
         origin=None,
         shape=None,
@@ -192,8 +192,6 @@ class NeuroGraph(nx.Graph):
                 self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
                 self.mutable_edges.add(frozenset((leaf, node)))
 
-        self.simple_proposals = self.get_simple_proposals()
-        self.complex_proposals = self.get_complex_proposals()
         if self.optimize_proposals:
             self.run_optimization()
 
@@ -321,7 +319,7 @@ class NeuroGraph(nx.Graph):
             if edge in simple_edges:
                 self.optimize_simple_edge(img, edge)
             else:
-                self.optimize_simple_edge(img, edge)
+                self.optimize_complex_edge(img, edge)
 
     def optimize_simple_edge(self, img, edge):
         # Extract Branches
@@ -389,16 +387,16 @@ class NeuroGraph(nx.Graph):
         for idx in np.argsort(dists):
             edge = remaining_proposals[idx]
             add_bool = self.is_target(
-                target_neurograph, edge, dist=7.5, ratio=0.5, exclude=10
+                target_neurograph, edge, dist=8, ratio=0.4, exclude=10
             )
             if add_bool:
                 self.target_edges.add(edge)
 
         # Print results
-        target_ratio = len(self.target_edges) / len(self.mutable_edges)
-        print("# target edges:", len(self.target_edges))
-        print("% target edges in mutable:", target_ratio)
-        print("")
+        # target_ratio = len(self.target_edges) / len(self.mutable_edges)
+        # print("# target edges:", len(self.target_edges))
+        # print("% target edges in mutable:", target_ratio)
+        # print("")
 
     def filter_infeasible(self, target_neurograph):
         proposals = list()
@@ -472,7 +470,7 @@ class NeuroGraph(nx.Graph):
         else:
             utils.plot(data, title)
 
-    def visualize_mutables(self, title="Mutable Graph", return_data=False):
+    def visualize_proposals(self, title="Mutable Graph", return_data=False):
         data = [self._plot_nodes()]
         data.extend(self._plot_edges(self.immutable_edges, color="black"))
         data.extend(self._plot_edges(self.mutable_edges))

@@ -19,6 +19,7 @@ def build_neurograph(
     swc_dir,
     anisotropy=[1.0, 1.0, 1.0],
     img_path=None,
+    size_threshold=40,
     num_proposals=3,
     search_radius=25.0,
     prune=True,
@@ -46,6 +47,7 @@ def build_neurograph(
         anisotropy=anisotropy,
         prune=prune,
         prune_depth=prune_depth,
+        size_threshold=size_threshold,
         smooth=smooth,
     )
     if search_radius > 0:
@@ -60,18 +62,37 @@ def init_immutables(
     anisotropy=[1.0, 1.0, 1.0],
     prune=True,
     prune_depth=16,
+    size_threshold=40,
     smooth=True,
 ):
     """
     To do...
     """
-    for swc_id in utils.listdir(neurograph.path, ext=".swc"):
-        raw_swc = swc_utils.read_swc(os.path.join(neurograph.path, swc_id))
-        swc_id = swc_id.replace(".0.swc", "")
+
+    for path in get_paths(neurograph.path):
+        swc_id = get_id(path)
+        raw_swc = swc_utils.read_swc(path)
         swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
+        if len(swc_dict["xyz"]) < size_threshold:
+            continue
         if smooth:
             swc_dict = swc_utils.smooth(swc_dict)
         neurograph.generate_immutables(
             swc_id, swc_dict, prune=prune, prune_depth=prune_depth
         )
     return neurograph
+
+
+def get_paths(path_or_list):
+    if type(path_or_list) == str:
+        paths = []
+        for f in utils.listdir(path_or_list, ext=".swc"):
+            paths.append(os.path.join(path_or_list, f))
+        return paths
+    elif type(path_or_list) == list:
+        return path_or_list
+
+
+def get_id(path):
+    filename = path.split("/")[-1]
+    return filename.replace(".0.swc", "")

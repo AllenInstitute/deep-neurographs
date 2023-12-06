@@ -333,14 +333,14 @@ def world_to_img(neurograph, node_or_xyz):
     return to_img(node_or_xyz, shift=neurograph.origin)
 
 
-def patch_to_img(xyz, patch_centroid, patch_dims):
-    half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
-    return np.round(xyz + patch_centroid - half_patch_dims).astype(int)
-
-
 def img_to_patch(xyz, patch_centroid, patch_dims):
     half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
     return np.round(xyz - patch_centroid + half_patch_dims).astype(int)
+
+
+def patch_to_img(xyz, patch_centroid, patch_dims):
+    half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
+    return np.round(xyz + patch_centroid - half_patch_dims).astype(int)
 
 
 def to_world(xyz, shift=[0, 0, 0]):
@@ -348,8 +348,7 @@ def to_world(xyz, shift=[0, 0, 0]):
 
 
 def to_img(xyz, shift=[0, 0, 0]):
-    xyz = apply_anisotropy(xyz - shift, return_int=True)
-    return tuple(xyz)
+    return apply_anisotropy(xyz - shift, return_int=True)
 
 
 def apply_anisotropy(xyz, return_int=False):

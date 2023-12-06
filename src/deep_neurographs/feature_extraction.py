@@ -53,18 +53,18 @@ def generate_mutable_features(
     """
     features = {"skel": generate_mutable_skel_features(neurograph)}
     if img_path and labels_path:
-        features["img"] = generate_mutable_img_chunk_features(
+        features["img"] = generate_img_chunk_features(
             neurograph, img_path, labels_path, anisotropy=anisotropy
         )
     elif img_path and img_profile:
-        features["img"] = generate_mutable_img_profile_features(
+        features["img"] = generate_img_profile_features(
             neurograph, img_path, anisotropy=anisotropy
         )
     return features
 
 
 # -- Edge feature extraction --
-def generate_mutable_img_chunk_features(
+def generate_img_chunk_features(
     neurograph, img_path, labels_path, anisotropy=[1.0, 1.0, 1.0]
 ):
     features = dict()
@@ -76,8 +76,8 @@ def generate_mutable_img_chunk_features(
     for edge in neurograph.mutable_edges:
         # Compute image coordinates
         i, j = tuple(edge)
-        xyz_i = get_local_img_coords(neurograph, i)
-        xyz_j = get_local_img_coords(neurograph, j)
+        xyz_i = utils.world_to_img(neurograph, i)
+        xyz_j = utils.world_to_img(neurograph, j)
 
         # Extract chunks
         midpoint = geometry_utils.compute_midpoint(xyz_i, xyz_j).astype(int)
@@ -85,10 +85,14 @@ def generate_mutable_img_chunk_features(
         labels_chunk = utils.get_chunk(labels, midpoint, CHUNK_SIZE)
 
         # Mark path
-        d = int(geometry_utils.dist(xyz_i, xyz_j) + 5)
-        img_coords_i = np.round(xyz_i - midpoint + HALF_CHUNK_SIZE).astype(int)
-        img_coords_j = np.round(xyz_j - midpoint + HALF_CHUNK_SIZE).astype(int)
-        path = geometry_utils.make_line(img_coords_i, img_coords_j, d)
+        if neurograph.optimize_proposals:
+            xyz_list = to_patch_coords(neurograph, edge, midpoint)
+            path = geometry_utils.sample_path(xyz_list, NUM_POINTS)
+        else:
+            d = int(geometry_utils.dist(xyz_i, xyz_j) + 5)
+            img_coords_i = utils.img_to_patch(xyz_i, midpoint, HALF_CHUNK_SIZE)
+            img_coords_j = utils.img_to_patch(xyz_j, midpoint, HALF_CHUNK_SIZE)
+            path = geometry_utils.make_line(img_coords_i, img_coords_j, d)
 
         img_chunk = utils.normalize_img(img_chunk)
         labels_chunk[labels_chunk > 0] = 1
@@ -98,18 +102,16 @@ def generate_mutable_img_chunk_features(
     return features
 
 
-def get_local_img_coords(neurograph, node_or_xyz):
-    if type(node_or_xyz) == int:
-        global_xyz = deepcopy(neurograph.nodes[node_or_xyz]["xyz"])
-    else:
-        global_xyz = node_or_xyz
-    local_xyz = utils.apply_anisotropy(
-        global_xyz - np.array(neurograph.origin)
-    )
-    return local_xyz
+def to_patch_coords(neurograph, edge, midpoint):
+    patch_coord_list = []
+    for xyz in neurograph.edges[edge]["xyz"]:
+        img_coord = utils.world_to_img(neurograph, xyz)
+        patch_coord = utils.img_to_patch(img_coord, midpoint, HALF_CHUNK_SIZE)
+        patch_coord_list.append(patch_coord)
+    return np.array(patch_coord_list[3:-3])
 
 
-def generate_mutable_img_profile_features(
+def generate_img_profile_features(
     neurograph, path, anisotropy=[1.0, 1.0, 1.0]
 ):
     features = dict()
@@ -118,18 +120,28 @@ def generate_mutable_img_profile_features(
         path, "zarr", origin, neurograph.shape, from_center=False
     )
     img = utils.normalize_img(img)
+    simple_edges = neurograph.get_simple_proposals()
     for edge in neurograph.mutable_edges:
-        i, j = tuple(edge)
-        xyz_i = get_local_img_coords(neurograph, i)
-        xyz_j = get_local_img_coords(neurograph, j)
-        if neurograph.optimize_proposals:
-            path = geometry_utils.make_line(xyz_i, xyz_j, NUM_POINTS)  # temp
+        if neurograph.optimize_proposals and edge in simple_edges:
+            xyz = to_img_coords(neurograph, edge)
+            path = geometry_utils.sample_path(xyz, NUM_POINTS)
         else:
+            i, j = tuple(edge)
+            xyz_i = utils.world_to_img(neurograph, i)
+            xyz_j = utils.world_to_img(neurograph, j)
             path = geometry_utils.make_line(xyz_i, xyz_j, NUM_POINTS)
         features[edge] = geometry_utils.get_profile(
             img, path, window_size=WINDOW_SIZE
         )
     return features
+
+
+def to_img_coords(neurograph, edge):
+    img_coords = []
+    for xyz in neurograph.edges[edge]["xyz"]:
+        img_coords.append(utils.world_to_img(neurograph, xyz))
+    img_coords = np.array(img_coords)
+    return img_coords[3:-3, :] if img_coords.shape[0] > 10 else img_coords
 
 
 def generate_mutable_skel_features(neurograph):
@@ -158,28 +170,20 @@ def generate_mutable_skel_features(neurograph):
     return features
 
 
-def compute_length(neurograph, edge, metric="l2"):
-    i, j = tuple(edge)
-    xyz_1, xyz_2 = neurograph.get_edge_attr("xyz", i, j)
-    return geometry_utils.dist(xyz_1, xyz_2, metric=metric)
-
-
-def get_directionals(neurograph, edge, window_size):
+def get_directionals(neurograph, edge, window):
     # Compute tangent vectors
     i, j = tuple(edge)
-    mutable_xyz_i, mutable_xyz_j = neurograph.get_edge_attr("xyz", i, j)
-    mutable_xyz = np.array([mutable_xyz_i, mutable_xyz_j])
-    mutable_tangent = geometry_utils.compute_tangent(mutable_xyz)
+    tangent = geometry_utils.compute_tangent(neurograph.edges[edge]["xyz"])
     context_tangent_i = geometry_utils.get_directional(
-        neurograph, i, mutable_tangent, window_size=window_size
+        neurograph, i, tangent, window=window
     )
     context_tangent_j = geometry_utils.get_directional(
-        neurograph, j, mutable_tangent, window_size=window_size
+        neurograph, j, tangent, window=window
     )
 
     # Compute features
-    inner_product_1 = abs(np.dot(mutable_tangent, context_tangent_i))
-    inner_product_2 = abs(np.dot(mutable_tangent, context_tangent_j))
+    inner_product_1 = abs(np.dot(tangent, context_tangent_i))
+    inner_product_2 = abs(np.dot(tangent, context_tangent_j))
     inner_product_3 = np.dot(context_tangent_i, context_tangent_j)
     return inner_product_1, inner_product_2, inner_product_3
 

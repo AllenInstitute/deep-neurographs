@@ -1,4 +1,5 @@
 import heapq
+from copy import deepcopy
 
 import numpy as np
 from scipy.interpolate import UnivariateSpline
@@ -7,26 +8,20 @@ from scipy.linalg import svd
 from deep_neurographs import utils
 
 
-# Context Tangent Vectors
-def get_directional(
-    neurograph,
-    i,
-    proposal_tangent,
-    window_size=5,
-    return_pts=False,
-    vec_type="tangent",
-):
+# Directional Vectors
+def get_directional(neurograph, i, proposal_tangent, window=5):
     # Compute principle axes
-    branches = get_branches(neurograph, i)
     directionals = []
-    xyz_list = []
-    ref_xyz = neurograph.nodes[i]["xyz"]
-    for branch in branches:
-        principle_axis, xyz = __get_directional(
-            branch, ref_xyz, window_size, vec_type
-        )
-        directionals.append(principle_axis)
-        xyz_list.append(xyz)
+    d = neurograph.optimize_depth
+    for branch in get_branches(neurograph, i):
+        if branch.shape[0] >= window + d:
+            xyz = deepcopy(branch[d:, :])
+        elif branch.shape[0] <= d:
+            xyz = deepcopy(branch)
+        else:
+            xyz = deepcopy(branch[d : window + d, :])
+        # print(xyz)
+        directionals.append(compute_tangent(xyz))
 
     # Determine best
     max_dot_prod = 0
@@ -37,42 +32,23 @@ def get_directional(
             max_dot_prod = dot_prod
             arg_max = k
 
-    # Compute normal
-    if return_pts:
-        return directionals, branches, xyz_list, arg_max
-    else:
-        return directionals[arg_max]
-
-
-def __get_directional(all_xyz, ref_xyz, window_size, vec_type):
-    from_start = orient_pts(all_xyz, ref_xyz)
-    xyz = get_pts(all_xyz, window_size, from_start)
-    if vec_type == "normal":
-        vec = compute_normal(xyz)
-    else:
-        vec = compute_tangent(xyz)
-    return vec, np.mean(xyz, axis=0).reshape(1, 3)
+    return directionals[arg_max]
 
 
 def get_branches(neurograph, i):
-    nbs = []
-    for j in list(neurograph.neighbors(i)):
+    branches = []
+    ref_xyz = deepcopy(neurograph.nodes[i]["xyz"])
+    for j in neurograph.neighbors(i):
         if frozenset((i, j)) in neurograph.immutable_edges:
-            nbs.append(j)
-    return [neurograph.edges[i, j]["xyz"] for j in nbs]
+            branches.append(orient(neurograph.edges[i, j]["xyz"], ref_xyz))
+    return branches
 
 
-def orient_pts(xyz, ref_xyz):
-    return True if all(xyz[0] == ref_xyz) else False
-
-
-def get_pts(xyz, window_size, from_start):
-    if len(xyz) > window_size and from_start:
-        return xyz[0:window_size]
-    elif len(xyz) > window_size and not from_start:
-        return xyz[-window_size:]
-    else:
+def orient(xyz, ref_xyz):
+    if (xyz[0, :] == ref_xyz).all():
         return xyz
+    else:
+        return np.flip(xyz, axis=0)
 
 
 def compute_svd(xyz):
@@ -84,7 +60,7 @@ def compute_tangent(xyz):
     if xyz.shape[0] == 2:
         tangent = (xyz[1] - xyz[0]) / dist(xyz[1], xyz[0])
     else:
-        xyz = smooth_branch(xyz)
+        xyz = smooth_branch(xyz, s=10)
         U, S, VT = compute_svd(xyz)
         tangent = VT[0]
     return tangent / np.linalg.norm(tangent)
@@ -101,21 +77,28 @@ def compute_midpoint(xyz1, xyz2):
 
 
 # Smoothing
-def smooth_branch(xyz):
+def smooth_branch(xyz, s=None):
     if xyz.shape[0] > 5:
-        spl_x, spl_y, spl_z = fit_spline(xyz)
         t = np.linspace(0, 1, xyz.shape[0])
-        xyz = np.column_stack((spl_x(t), spl_y(t), spl_z(t)))
+        spline_x, spline_y, spline_z = fit_spline(xyz, s=s)
+        xyz = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
     return xyz
 
 
-def fit_spline(xyz):
-    s = xyz.shape[0] / 5
-    t_steps = np.linspace(0, 1, xyz.shape[0])
-    spline_x = UnivariateSpline(t_steps, xyz[:, 0], s=s, k=1)
-    spline_y = UnivariateSpline(t_steps, xyz[:, 1], s=s, k=1)
-    spline_z = UnivariateSpline(t_steps, xyz[:, 2], s=s, k=1)
+def fit_spline(xyz, s=None):
+    s = xyz.shape[0] / 5 if not s else xyz.shape[0] / s
+    t = np.linspace(0, 1, xyz.shape[0])
+    spline_x = UnivariateSpline(t, xyz[:, 0], s=s, k=1)
+    spline_y = UnivariateSpline(t, xyz[:, 1], s=s, k=1)
+    spline_z = UnivariateSpline(t, xyz[:, 2], s=s, k=1)
     return spline_x, spline_y, spline_z
+
+
+def sample_path(path, num_points):
+    t = np.linspace(0, 1, num_points)
+    spline_x, spline_y, spline_z = fit_spline(path, s=10)
+    path = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
+    return path.astype(int)
 
 
 # Image feature extraction
@@ -126,7 +109,7 @@ def get_profile(img, xyz_arr, window_size=[5, 5, 5]):
 def fill_path(img, path, val=-1):
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
-        # img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
+        # img[x - 1: x + 2, y - 1: y + 2, z - 1: z + 2] = val
         img[x, y, z] = val
     return img
 
@@ -196,7 +179,7 @@ def transform_path(path, img_origin, patch_centroid, patch_dims):
     for i, xyz in enumerate(path):
         hat_xyz = utils.patch_to_img(xyz, patch_centroid, patch_dims)
         transformed_path[i, :] = utils.to_world(hat_xyz, shift=-img_origin)
-    return smooth_branch(transformed_path)
+    return smooth_branch(transformed_path, s=10)
 
 
 def get_optimal_patch(xyz_1, xyz_2, buffer=8):
