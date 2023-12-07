@@ -141,12 +141,12 @@ def random_split(train_set, train_ratio=0.85):
     return torch_data.random_split(train_set, [train_set_size, valid_set_size])
 
 
-def eval_network(X, model, threshold=0.5):
+def eval_network(X, model):
     model.eval()
     X = torch.tensor(X, dtype=torch.float32)
     with torch.no_grad():
         y_pred = sigmoid(model.net(X))
-    return np.array(y_pred > threshold, dtype=int)
+    return np.array(y_pred)
 
 
 # Lightning Module

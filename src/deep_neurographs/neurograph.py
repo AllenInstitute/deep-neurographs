@@ -39,7 +39,7 @@ class NeuroGraph(nx.Graph):
         swc_path,
         img_path=None,
         label_mask=None,
-        optimize_depth=5,
+        optimize_depth=10,
         optimize_proposals=False,
         origin=None,
         shape=None,
@@ -80,6 +80,18 @@ class NeuroGraph(nx.Graph):
             self.shape = shape
         else:
             self.bbox = None
+
+    def init_immutable_graph(self):
+        immutable_graph = nx.Graph()
+        immutable_graph.add_nodes_from(self)
+        immutable_graph.add_edges_from(self.immutable_edges)
+        return immutable_graph
+
+    def init_predicted_graph(self):
+        self.predicted_graph = self.init_immutable_graph()
+    
+    def init_densegraph(self):
+        self.densegraph = DenseGraph(self.path)
 
     # --- Add nodes or edges ---
     def generate_immutables(
@@ -144,12 +156,6 @@ class NeuroGraph(nx.Graph):
 
         # Build kdtree
         self._init_kdtree()
-
-    def init_immutable_graph(self):
-        immutable_graph = nx.Graph()
-        immutable_graph.add_nodes_from(self)
-        immutable_graph.add_edges_from(self.immutable_edges)
-        return immutable_graph
 
     # --- Proposal Generation ---
     def generate_proposals(self, num_proposals=3, search_radius=25.0):
@@ -313,7 +319,6 @@ class NeuroGraph(nx.Graph):
         img = utils.get_superchunk(
             self.img_path, "zarr", origin, self.shape, from_center=False
         )
-        img = utils.normalize_img(img)
         simple_edges = self.get_simple_proposals()
         for edge in self.mutable_edges:
             if edge in simple_edges:
@@ -332,9 +337,7 @@ class NeuroGraph(nx.Graph):
         hat_xyz_i = self.to_img(branch_i[depth])
         hat_xyz_j = self.to_img(branch_j[depth])
         patch_dims = geometry_utils.get_optimal_patch(hat_xyz_i, hat_xyz_j)
-        center = geometry_utils.compute_midpoint(hat_xyz_i, hat_xyz_j).astype(
-            int
-        )
+        center = geometry_utils.get_midpoint(hat_xyz_i, hat_xyz_j).astype(int)
         img_chunk = utils.get_chunk(img, center, patch_dims)
 
         # Optimize
@@ -349,6 +352,18 @@ class NeuroGraph(nx.Graph):
             [branch_i[depth], path, branch_j[depth]]
         )
 
+    def optimize_complex_edge(self, img, edge):
+        # Extract Branches
+        i, j = tuple(edge)
+        leaf = i if self.immutable_degree(i) == 1 else j
+        i = j if leaf == i else i
+        branches = self.get_branches(i)
+        depth = self.optimize_depth
+
+        # Search for best anchor
+        #if len(branches) == 2:
+            
+        
     def get_branch(self, xyz):
         edge = self.xyz_to_edge[tuple(xyz)]
         branch = self.edges[edge]["xyz"]
@@ -357,15 +372,25 @@ class NeuroGraph(nx.Graph):
         else:
             return branch
 
-    def optimize_complex_edge(self, img_superchunk, edge):
-        pass
+    def get_branches(self, i):
+        branches = []
+        for j in self.neighbors(i):
+            if frozenset((i, j)) in self.immutable_edges:
+                branches.append(self.orient_edge((i, j), i))
+        return branches
+
+    def orient_edge(self, edge, i):
+        if (self.edges[edge]["xyz"][0, :] == self.nodes[i]["xyz"]).all():
+            return self.edges[edge]["xyz"]
+        else:
+            return np.flip(self.edges[edge]["xyz"], axis=0)
 
     # --- Ground Truth Generation ---
     def init_targets(self, target_neurograph):
         # Initializations
         self.target_edges = set()
-        self.groundtruth_graph = self.init_immutable_graph()
-        target_neurograph.densegraph = DenseGraph(target_neurograph.path)
+        self.init_predicted_graph()
+        target_neurograph.init_densegraph()
 
         # Add best simple edges
         remaining_proposals = []
@@ -431,7 +456,7 @@ class NeuroGraph(nx.Graph):
     ):
         # Check for cycle
         i, j = tuple(edge)
-        if self.check_cycle((i, j)):
+        if self.creates_cycle((i, j)):
             return False
 
         # Check projection distance
@@ -644,13 +669,13 @@ class NeuroGraph(nx.Graph):
     def is_leaf(self, i):
         return True if self.immutable_degree(i) == 1 else False
 
-    def check_cycle(self, edge):
-        self.groundtruth_graph.add_edges_from([edge])
+    def creates_cycle(self, edge):
+        self.predicted_graph.add_edges_from([edge])
         try:
-            nx.find_cycle(self.groundtruth_graph)
+            nx.find_cycle(self.predicted_graph)
         except:
             return False
-        self.groundtruth_graph.remove_edges_from([edge])
+        self.predicted_graph.remove_edges_from([edge])
         return True
 
     def get_edge_attr(self, key, i, j):
@@ -659,9 +684,7 @@ class NeuroGraph(nx.Graph):
         return attr_1, attr_2
 
     def get_center(self):
-        return geometry_utils.compute_midpoint(
-            self.bbox["min"], self.bbox["max"]
-        )
+        return geometry_utils.get_midpoint(self.bbox["min"], self.bbox["max"])
 
     def get_complex_proposals(self):
         return set([e for e in self.mutable_edges if not self.is_simple(e)])

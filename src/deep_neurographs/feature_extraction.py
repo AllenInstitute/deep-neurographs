@@ -80,7 +80,7 @@ def generate_img_chunk_features(
         xyz_j = utils.world_to_img(neurograph, j)
 
         # Extract chunks
-        midpoint = geometry_utils.compute_midpoint(xyz_i, xyz_j).astype(int)
+        midpoint = geometry_utils.get_midpoint(xyz_i, xyz_j).astype(int)
         img_chunk = utils.get_chunk(img, midpoint, CHUNK_SIZE)
         labels_chunk = utils.get_chunk(labels, midpoint, CHUNK_SIZE)
 

@@ -13,7 +13,7 @@ def get_directional(neurograph, i, proposal_tangent, window=5):
     # Compute principle axes
     directionals = []
     d = neurograph.optimize_depth
-    for branch in get_branches(neurograph, i):
+    for branch in neurograph.get_branches(i):
         if branch.shape[0] >= window + d:
             xyz = deepcopy(branch[d:, :])
         elif branch.shape[0] <= d:
@@ -33,22 +33,6 @@ def get_directional(neurograph, i, proposal_tangent, window=5):
             arg_max = k
 
     return directionals[arg_max]
-
-
-def get_branches(neurograph, i):
-    branches = []
-    ref_xyz = deepcopy(neurograph.nodes[i]["xyz"])
-    for j in neurograph.neighbors(i):
-        if frozenset((i, j)) in neurograph.immutable_edges:
-            branches.append(orient(neurograph.edges[i, j]["xyz"], ref_xyz))
-    return branches
-
-
-def orient(xyz, ref_xyz):
-    if (xyz[0, :] == ref_xyz).all():
-        return xyz
-    else:
-        return np.flip(xyz, axis=0)
 
 
 def compute_svd(xyz):
@@ -72,7 +56,7 @@ def compute_normal(xyz):
     return normal / np.linalg.norm(normal)
 
 
-def compute_midpoint(xyz1, xyz2):
+def get_midpoint(xyz1, xyz2):
     return np.mean([xyz1, xyz2], axis=0)
 
 
