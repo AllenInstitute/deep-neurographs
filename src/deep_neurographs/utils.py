@@ -285,47 +285,6 @@ def write_json(path, contents):
         json.dump(contents, f)
 
 
-# --- plot utils ---
-def plot(data, title):
-    fig = go.Figure(data=data)
-    fig.update_layout(
-        plot_bgcolor="white",
-        title=title,
-        scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
-    )
-    fig.update_layout(
-        scene=dict(aspectmode="manual", aspectratio=dict(x=1, y=1, z=1)),
-        width=1200,
-        height=600,
-    )
-    fig.show()
-
-
-def subplot(data1, data2, title):
-    fig = make_subplots(
-        rows=1, cols=2, specs=[[{"type": "scene"}, {"type": "scene"}]]
-    )
-    fig.add_trace(data1, row=1, col=1)
-    fig.add_trace(data2, row=1, col=2)
-    fig.update_layout(title_text=title, showlegend=True)
-
-    fig.update_xaxes(row=1, col=1, matches="y", showgrid=False)
-    fig.update_yaxes(row=1, col=1, matches="x", showgrid=False)
-    fig.update_layout(
-        scene_aspectmode="manual", scene_aspectratio=dict(x=1, y=1, z=1)
-    )
-
-    # Update the size of the second subplot
-    fig.update_xaxes(row=1, col=2, matches="y")
-    fig.update_yaxes(row=1, col=2, matches="x")
-    fig.update_layout(
-        scene_aspectmode="manual", scene_aspectratio=dict(x=1, y=1, z=1)
-    )
-
-    fig.update_layout(width=1200, height=800)
-    fig.show()
-
-
 # --- coordinate conversions ---
 def world_to_img(neurograph, node_or_xyz):
     if type(node_or_xyz) == int:

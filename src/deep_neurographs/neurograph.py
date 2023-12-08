@@ -39,7 +39,7 @@ class NeuroGraph(nx.Graph):
         swc_path,
         img_path=None,
         label_mask=None,
-        optimize_depth=10,
+        optimize_depth=8,
         optimize_proposals=False,
         origin=None,
         shape=None,
@@ -81,10 +81,15 @@ class NeuroGraph(nx.Graph):
         else:
             self.bbox = None
 
-    def init_immutable_graph(self):
+    def init_immutable_graph(self, add_attrs=False):
         immutable_graph = nx.Graph()
-        immutable_graph.add_nodes_from(self)
-        immutable_graph.add_edges_from(self.immutable_edges)
+        immutable_graph.add_nodes_from(self.nodes(data=add_attrs))
+        if add_attrs:
+            for edge in self.immutable_edges:
+                i, j = tuple(edge)
+                immutable_graph.add_edge(i, j, **self.get_edge_data(i, j))
+        else:
+            immutable_graph.add_edges_from(self.immutable_edges)
         return immutable_graph
 
     def init_predicted_graph(self):
@@ -262,11 +267,11 @@ class NeuroGraph(nx.Graph):
             radius=attrs["radius"][idx],
             swc_id=attrs["swc_id"],
         )
-        self._add_edge((i, node_id), attrs, np.arange(0, idx + 1))
-        self._add_edge((node_id, j), attrs, np.arange(idx, len(attrs["xyz"])))
+        self.__add_edge((i, node_id), attrs, np.arange(0, idx + 1))
+        self.__add_edge((node_id, j), attrs, np.arange(idx, len(attrs["xyz"])))
         return node_id
 
-    def _add_edge(self, edge, attrs, idxs):
+    def __add_edge(self, edge, attrs, idxs):
         self.add_edge(
             edge[0],
             edge[1],
@@ -334,13 +339,17 @@ class NeuroGraph(nx.Graph):
         depth = self.optimize_depth
 
         # Get image patch
-        hat_xyz_i = self.to_img(branch_i[depth])
-        hat_xyz_j = self.to_img(branch_j[depth])
+        idx_i = min(depth, branch_i.shape[0] - 1)
+        idx_j = min(depth, branch_j.shape[0] - 1)
+        hat_xyz_i = self.to_img(branch_i[idx_i])
+        hat_xyz_j = self.to_img(branch_j[idx_j])
         patch_dims = geometry_utils.get_optimal_patch(hat_xyz_i, hat_xyz_j)
         center = geometry_utils.get_midpoint(hat_xyz_i, hat_xyz_j).astype(int)
         img_chunk = utils.get_chunk(img, center, patch_dims)
 
         # Optimize
+        if (np.array(hat_xyz_i) < 0).any() or (np.array(hat_xyz_j) < 0).any():
+            return False
         path = geometry_utils.shortest_path(
             img_chunk,
             utils.img_to_patch(hat_xyz_i, center, patch_dims),
@@ -349,7 +358,7 @@ class NeuroGraph(nx.Graph):
         origin = utils.apply_anisotropy(self.origin, return_int=True)
         path = geometry_utils.transform_path(path, origin, center, patch_dims)
         self.edges[edge]["xyz"] = np.vstack(
-            [branch_i[depth], path, branch_j[depth]]
+            [branch_i[idx_i], path, branch_j[idx_j]]
         )
 
     def optimize_complex_edge(self, img, edge):
@@ -364,13 +373,13 @@ class NeuroGraph(nx.Graph):
         #if len(branches) == 2:
             
         
-    def get_branch(self, xyz):
-        edge = self.xyz_to_edge[tuple(xyz)]
-        branch = self.edges[edge]["xyz"]
-        if not (branch[0] == xyz).all():
-            return np.flip(branch, axis=0)
+    def get_branch(self, xyz_or_node):
+        if type(xyz_or_node) is int:
+            nb = self.get_immutable_nbs(xyz_or_node)[0]
+            return self.orient_edge((xyz_or_node, nb), xyz_or_node)
         else:
-            return branch
+            edge = self.xyz_to_edge[tuple(xyz_or_node)]
+            return deepcopy(self.edges[edge]["xyz"])
 
     def get_branches(self, i):
         branches = []
@@ -473,93 +482,20 @@ class NeuroGraph(nx.Graph):
         )
         return True if aligned else False
 
-    # --- Visualization ---
-    def visualize_immutables(self, title="Immutable Graph", return_data=False):
-        """
-        Parameters
-        ----------
-        node_ids : list[int], optional
-            List of node ids to be plotted. The default is None.
-        edge_ids : list[tuple], optional
-            List of edge ids to be plotted. The default is None.
-
-        Returns
-        -------
-        None.
-
-        """
-        data = self._plot_edges(self.immutable_edges)
-        data.append(self._plot_nodes())
-        if return_data:
-            return data
-        else:
-            utils.plot(data, title)
-
-    def visualize_proposals(self, title="Mutable Graph", return_data=False):
-        data = [self._plot_nodes()]
-        data.extend(self._plot_edges(self.immutable_edges, color="black"))
-        data.extend(self._plot_edges(self.mutable_edges))
-        if return_data:
-            return data
-        else:
-            utils.plot(data, title)
-
-    def visualize_targets(
-        self, target_graph=None, title="Target Edges", return_data=False
-    ):
-        data = [self._plot_nodes()]
-        data.extend(self._plot_edges(self.immutable_edges, color="black"))
-        data.extend(self._plot_edges(self.target_edges))
-        if target_graph is not None:
-            data.extend(
-                target_graph._plot_edges(
-                    target_graph.immutable_edges, color="blue"
-                )
+    # --- Generate reconstructions post-inference
+    def get_reconstruction(self, proposals, upd_self=False):
+        reconstruction = self.init_immutable_graph(add_attrs=True)
+        for edge in proposals:
+            i, j = tuple(edge)
+            r_i = self.nodes[i]["radius"]
+            r_j = self.nodes[j]["radius"]
+            reconstruction.add_edge(
+                i,
+                j,
+                xyz=self.edges[i, j]["xyz"],
+                radius=[r_i, r_j],
             )
-        if return_data:
-            return data
-        else:
-            utils.plot(data, title)
-
-    def visualize_subset(self, edges, target_graph=None, title=""):
-        data = [self._plot_nodes()]
-        data.extend(self._plot_edges(self.immutable_edges, color="black"))
-        data.extend(self._plot_edges(edges))
-        if target_graph is not None:
-            data.extend(
-                target_graph._plot_edges(
-                    target_graph.immutable_edges, color="blue"
-                )
-            )
-        utils.plot(data, title)
-
-    def _plot_nodes(self):
-        xyz = nx.get_node_attributes(self, "xyz")
-        xyz = np.array(list(xyz.values()))
-        points = go.Scatter3d(
-            x=xyz[:, 0],
-            y=xyz[:, 1],
-            z=xyz[:, 2],
-            mode="markers",
-            name="Nodes",
-            marker=dict(size=3, color="red"),
-        )
-        return points
-
-    def _plot_edges(self, edges, color=None):
-        traces = []
-        line = dict(width=4) if color is None else dict(color=color, width=3)
-        for i, j in edges:
-            trace = go.Scatter3d(
-                x=self.edges[(i, j)]["xyz"][:, 0],
-                y=self.edges[(i, j)]["xyz"][:, 1],
-                z=self.edges[(i, j)]["xyz"][:, 2],
-                mode="lines",
-                line=line,
-                name="({},{})".format(i, j),
-            )
-            traces.append(trace)
-        return traces
+        return reconstruction
 
     # --- Utils ---
     def num_nodes(self):
@@ -632,6 +568,13 @@ class NeuroGraph(nx.Graph):
             if frozenset((i, j)) in self.immutable_edges:
                 degree += 1
         return degree
+
+    def get_immutable_nbs(self, i):
+        nbs = []
+        for j in self.neighbors(i):
+            if frozenset((i, j)) in self.immutable_edges:
+                nbs.append(j)
+        return nbs
 
     def compute_length(self, edge, metric="l2"):
         i, j = tuple(edge)
