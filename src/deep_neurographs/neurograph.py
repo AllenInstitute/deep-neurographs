@@ -9,11 +9,9 @@ Implementation of subclass of Networkx.Graph called "NeuroGraph".
 """
 
 from copy import deepcopy
-from time import time
 
 import networkx as nx
 import numpy as np
-import plotly.graph_objects as go
 import tensorstore as ts
 from scipy.spatial import KDTree
 
@@ -39,8 +37,9 @@ class NeuroGraph(nx.Graph):
         swc_path,
         img_path=None,
         label_mask=None,
-        optimize_depth=8,
-        optimize_proposals=False,
+        optimize_depth=10,
+        optimize_alignment=False,
+        optimize_path=False,
         origin=None,
         shape=None,
     ):
@@ -67,19 +66,19 @@ class NeuroGraph(nx.Graph):
 
         self.img_path = img_path
         self.optimize_depth = optimize_depth
-        self.optimize_proposals = optimize_proposals
+        self.optimize_alignment = optimize_alignment
+        self.optimize_path = optimize_path
         self.simple_proposals = set()
         self.complex_proposals = set()
 
+        self.bbox = None
+        self.shape = shape
         if origin and shape:
             self.bbox = {
                 "min": np.array(origin),
                 "max": np.array([origin[i] + shape[i] for i in range(3)]),
             }
             self.origin = np.array(origin)
-            self.shape = shape
-        else:
-            self.bbox = None
 
     def init_immutable_graph(self, add_attrs=False):
         immutable_graph = nx.Graph()
@@ -94,7 +93,7 @@ class NeuroGraph(nx.Graph):
 
     def init_predicted_graph(self):
         self.predicted_graph = self.init_immutable_graph()
-    
+
     def init_densegraph(self):
         self.densegraph = DenseGraph(self.path)
 
@@ -203,7 +202,7 @@ class NeuroGraph(nx.Graph):
                 self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
                 self.mutable_edges.add(frozenset((leaf, node)))
 
-        if self.optimize_proposals:
+        if self.optimize_alignment or self.optimize_path:
             self.run_optimization()
 
     def _get_proposals(
@@ -324,62 +323,28 @@ class NeuroGraph(nx.Graph):
         img = utils.get_superchunk(
             self.img_path, "zarr", origin, self.shape, from_center=False
         )
-        simple_edges = self.get_simple_proposals()
         for edge in self.mutable_edges:
-            if edge in simple_edges:
-                self.optimize_simple_edge(img, edge)
-            else:
-                self.optimize_complex_edge(img, edge)
+            xyz_1, xyz_2 = geometry_utils.optimize_alignment(self, img, edge)
+            proposal = [self.to_world(xyz_1)]
+            if self.optimize_path:
+                path = geometry_utils.optimize_path(
+                    img, self.origin, xyz_1, xyz_2
+                )
+                proposal.append(path)
+            proposal.append(self.to_world(xyz_2))
+            self.edges[edge]["xyz"] = np.vstack(proposal)
 
-    def optimize_simple_edge(self, img, edge):
-        # Extract Branches
-        i, j = tuple(edge)
-        branch_i = self.get_branch(self.nodes[i]["xyz"])
-        branch_j = self.get_branch(self.nodes[j]["xyz"])
-        depth = self.optimize_depth
-
-        # Get image patch
-        idx_i = min(depth, branch_i.shape[0] - 1)
-        idx_j = min(depth, branch_j.shape[0] - 1)
-        hat_xyz_i = self.to_img(branch_i[idx_i])
-        hat_xyz_j = self.to_img(branch_j[idx_j])
-        patch_dims = geometry_utils.get_optimal_patch(hat_xyz_i, hat_xyz_j)
-        center = geometry_utils.get_midpoint(hat_xyz_i, hat_xyz_j).astype(int)
-        img_chunk = utils.get_chunk(img, center, patch_dims)
-
-        # Optimize
-        if (np.array(hat_xyz_i) < 0).any() or (np.array(hat_xyz_j) < 0).any():
-            return False
-        path = geometry_utils.shortest_path(
-            img_chunk,
-            utils.img_to_patch(hat_xyz_i, center, patch_dims),
-            utils.img_to_patch(hat_xyz_j, center, patch_dims),
-        )
-        origin = utils.apply_anisotropy(self.origin, return_int=True)
-        path = geometry_utils.transform_path(path, origin, center, patch_dims)
-        self.edges[edge]["xyz"] = np.vstack(
-            [branch_i[idx_i], path, branch_j[idx_j]]
-        )
-
-    def optimize_complex_edge(self, img, edge):
-        # Extract Branches
-        i, j = tuple(edge)
-        leaf = i if self.immutable_degree(i) == 1 else j
-        i = j if leaf == i else i
-        branches = self.get_branches(i)
-        depth = self.optimize_depth
-
-        # Search for best anchor
-        #if len(branches) == 2:
-            
-        
     def get_branch(self, xyz_or_node):
-        if type(xyz_or_node) is int:
+        if type(xyz_or_node) == int:
             nb = self.get_immutable_nbs(xyz_or_node)[0]
             return self.orient_edge((xyz_or_node, nb), xyz_or_node)
         else:
             edge = self.xyz_to_edge[tuple(xyz_or_node)]
-            return deepcopy(self.edges[edge]["xyz"])
+            branch = deepcopy(self.edges[edge]["xyz"])
+            if not (branch[0] == xyz_or_node).all():
+                return np.flip(branch, axis=0)
+            else:
+                return branch
 
     def get_branches(self, i):
         branches = []
@@ -490,10 +455,7 @@ class NeuroGraph(nx.Graph):
             r_i = self.nodes[i]["radius"]
             r_j = self.nodes[j]["radius"]
             reconstruction.add_edge(
-                i,
-                j,
-                xyz=self.edges[i, j]["xyz"],
-                radius=[r_i, r_j],
+                i, j, xyz=self.edges[i, j]["xyz"], radius=[r_i, r_j]
             )
         return reconstruction
 
@@ -646,6 +608,11 @@ class NeuroGraph(nx.Graph):
         if type(node_or_xyz) == int:
             node_or_xyz = deepcopy(self.nodes[node_or_xyz]["xyz"])
         return utils.to_img(node_or_xyz, shift=self.origin)
+
+    def to_world(self, node_or_xyz, shift=[0, 0, 0]):
+        if type(node_or_xyz) == int:
+            node_or_xyz = deepcopy(self.nodes[node_or_xyz]["xyz"])
+        return utils.to_world(node_or_xyz, shift=-self.origin)
 
     def to_line_graph(self):
         """

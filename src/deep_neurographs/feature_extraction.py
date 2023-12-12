@@ -17,7 +17,7 @@ from deep_neurographs import geometry_utils, utils
 
 CHUNK_SIZE = [64, 64, 64]
 HALF_CHUNK_SIZE = [CHUNK_SIZE[i] // 2 for i in range(3)]
-WINDOW_SIZE = [5, 5, 5]
+WINDOW = [5, 5, 5]
 
 NUM_POINTS = 10
 NUM_IMG_FEATURES = NUM_POINTS
@@ -85,7 +85,7 @@ def generate_img_chunk_features(
         labels_chunk = utils.get_chunk(labels, midpoint, CHUNK_SIZE)
 
         # Mark path
-        if neurograph.optimize_proposals:
+        if neurograph.optimize_alignment:
             xyz_list = to_patch_coords(neurograph, edge, midpoint)
             path = geometry_utils.sample_path(xyz_list, NUM_POINTS)
         else:
@@ -120,9 +120,8 @@ def generate_img_profile_features(
         path, "zarr", origin, neurograph.shape, from_center=False
     )
     img = utils.normalize_img(img)
-    simple_edges = neurograph.get_simple_proposals()
     for edge in neurograph.mutable_edges:
-        if neurograph.optimize_proposals and edge in simple_edges:
+        if neurograph.optimize_alignment:
             xyz = to_img_coords(neurograph, edge)
             path = geometry_utils.sample_path(xyz, NUM_POINTS)
         else:
@@ -130,9 +129,7 @@ def generate_img_profile_features(
             xyz_i = utils.world_to_img(neurograph, i)
             xyz_j = utils.world_to_img(neurograph, j)
             path = geometry_utils.make_line(xyz_i, xyz_j, NUM_POINTS)
-        features[edge] = geometry_utils.get_profile(
-            img, path, window_size=WINDOW_SIZE
-        )
+        features[edge] = geometry_utils.get_profile(img, path, window=WINDOW)
     return features
 
 

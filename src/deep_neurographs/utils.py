@@ -15,10 +15,8 @@ import shutil
 from copy import deepcopy
 
 import numpy as np
-import plotly.graph_objects as go
 import tensorstore as ts
 import zarr
-from plotly.subplots import make_subplots
 
 ANISOTROPY = [0.748, 0.748, 1.0]
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "zarr"]
@@ -303,7 +301,7 @@ def patch_to_img(xyz, patch_centroid, patch_dims):
 
 
 def to_world(xyz, shift=[0, 0, 0]):
-    return tuple([(xyz[i] - shift[i]) * ANISOTROPY[i] for i in range(3)])
+    return tuple([xyz[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
 
 
 def to_img(xyz, shift=[0, 0, 0]):
@@ -315,6 +313,16 @@ def apply_anisotropy(xyz, return_int=False):
         return [round(xyz[i] / ANISOTROPY[i]) for i in range(3)]
     else:
         return [xyz[i] / ANISOTROPY[i] for i in range(3)]
+
+
+def is_contained(bbox, img_shape, xyz):
+    xyz = apply_anisotropy(xyz - bbox["min"])
+    for i in range(3):
+        lower_bool = xyz[i] < 0
+        upper_bool = xyz[i] >= img_shape[i]
+        if lower_bool or upper_bool:
+            return False
+    return True
 
 
 # --- miscellaneous ---

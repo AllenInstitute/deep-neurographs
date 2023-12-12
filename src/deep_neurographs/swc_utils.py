@@ -28,7 +28,9 @@ def read_swc(path):
     return contents
 
 
-def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0], idx=False):
+def parse(
+    raw_swc, anisotropy=[1.0, 1.0, 1.0], bbox=None, img_shape=None, idx=False
+):
     """
     Parses a raw swc file to extract the (x,y,z) coordinates and radii. Note
     that node_ids from swc are refactored to index from 0 to n-1 where n is
@@ -60,12 +62,15 @@ def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0], idx=False):
             offset = read_xyz(parts[2:5])
         if not line.startswith("#") and len(line) > 0:
             parts = line.split()
+            xyz = read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
+            if bbox:
+                if not utils.is_contained(bbox, img_shape, xyz):
+                    break
+
             swc_dict["id"].append(int(parts[0]))
             swc_dict["radius"].append(float(parts[-2]))
             swc_dict["pid"].append(int(parts[-1]))
-            swc_dict["xyz"].append(
-                read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
-            )
+            swc_dict["xyz"].append(xyz)
             if swc_dict["id"][-1] < min_id:
                 min_id = swc_dict["id"][-1]
 

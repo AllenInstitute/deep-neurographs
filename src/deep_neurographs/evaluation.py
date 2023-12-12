@@ -56,7 +56,7 @@ def run_evaluation(neurographs, blocks, pred_edges):
         overall_stats_i = get_stats(
             neurographs[block_id],
             neurographs[block_id].mutable_edges,
-            pred_edges[block_id]
+            pred_edges[block_id],
         )
 
         simple_stats_i = get_stats(

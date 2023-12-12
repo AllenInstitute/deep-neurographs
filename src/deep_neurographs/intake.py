@@ -24,7 +24,9 @@ def build_neurograph(
     search_radius=25.0,
     prune=True,
     prune_depth=16,
-    optimize_proposals=False,
+    optimize_depth=15,
+    optimize_alignment=True,
+    optimize_path=False,
     origin=None,
     shape=None,
     smooth=True,
@@ -38,7 +40,9 @@ def build_neurograph(
     neurograph = NeuroGraph(
         swc_dir,
         img_path=img_path,
-        optimize_proposals=optimize_proposals,
+        optimize_depth=optimize_depth,
+        optimize_alignment=optimize_alignment,
+        optimize_path=optimize_path,
         origin=origin,
         shape=shape,
     )
@@ -71,8 +75,12 @@ def init_immutables(
 
     for path in get_paths(neurograph.path):
         swc_id = get_id(path)
-        raw_swc = swc_utils.read_swc(path)
-        swc_dict = swc_utils.parse(raw_swc, anisotropy=anisotropy)
+        swc_dict = swc_utils.parse(
+            swc_utils.read_swc(path),
+            anisotropy=anisotropy,
+            bbox=neurograph.bbox,
+            img_shape=neurograph.shape,
+        )
         if len(swc_dict["xyz"]) < size_threshold:
             continue
         if smooth:

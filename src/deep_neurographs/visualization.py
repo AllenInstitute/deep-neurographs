@@ -9,14 +9,38 @@ Created on Sat July 15 9:00:00 2023
 
 import networkx as nx
 import numpy as np
+import plotly.colors as plc
 import plotly.graph_objects as go
+from plotly import tools
 
 
-def visualize_connected_components(graph):
-    pass
+def visualize_connected_components(
+    graph, return_data=False, title="", vertex_threshold=50
+):
+    # Make plot
+    data = []
+    colors = plc.qualitative.Bold
+    connected_components = nx.connected_components(graph)
+    cnt = 0
+    while True:
+        try:
+            component = next(connected_components)
+            subgraph = graph.subgraph(component)
+            if len(subgraph.nodes) > vertex_threshold:
+                color = colors[cnt % len(colors)]
+                data.extend(plot_edges(graph, subgraph.edges, color=color))
+                cnt += 1
+        except StopIteration:
+            break
+
+    # Output
+    if return_data:
+        return data
+    else:
+        plot(data, title)
 
 
-def visualize_immutables(graph, title="Immutable Graph"):
+def visualize_immutables(graph, title="Initial Segmentation"):
     data = plot_edges(graph, graph.immutable_edges)
     data.append(plot_nodes(graph))
     plot(data, title)
@@ -28,17 +52,14 @@ def visualize_proposals(graph, title="Edge Proposals"):
 
 def visualize_targets(graph, target_graph=None, title="Target Edges"):
     visualize_subset(
-        graph,
-        graph.target_edges,
-        target_graph=target_graph,
-        title=title,
+        graph, graph.target_edges, target_graph=target_graph, title=title
     )
 
 
-def visualize_subset(graph, edges, target_graph=None, title=""):
+def visualize_subset(graph, edges, line_width=5, target_graph=None, title=""):
     data = plot_edges(graph, graph.immutable_edges, color="black")
-    data.extend(plot_edges(graph, edges))
-    data.append(plot_nodes(graph)) 
+    data.extend(plot_edges(graph, edges, line_width=line_width))
+    data.append(plot_nodes(graph))
     if target_graph:
         edges = target_graph.immutable_edges
         data.extend(plot_edges(target_graph, edges, color="blue"))
@@ -59,9 +80,11 @@ def plot_nodes(graph):
     )
 
 
-def plot_edges(graph, edges, color=None):
+def plot_edges(graph, edges, color=None, line_width=3.5):
     traces = []
-    line = dict(width=4) if color is None else dict(color=color, width=3)
+    line = (
+        dict(width=5) if color is None else dict(color=color, width=line_width)
+    )
     for i, j in edges:
         trace = go.Scatter3d(
             x=graph.edges[(i, j)]["xyz"][:, 0],
@@ -78,20 +101,18 @@ def plot_edges(graph, edges, color=None):
 def plot(data, title):
     fig = go.Figure(data=data)
     fig.update_layout(
-        plot_bgcolor="white",
         title=title,
-        scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
-    )
-    fig.update_layout(
+        template="plotly_white",
+        plot_bgcolor="rgba(0, 0, 0, 0)",
         scene=dict(aspectmode="manual", aspectratio=dict(x=1, y=1, z=1)),
         width=1200,
-        height=600,
+        height=800,
     )
     fig.show()
 
 
 def subplot(data1, data2, title):
-    fig = make_subplots(
+    fig = tools.make_subplots(
         rows=1, cols=2, specs=[[{"type": "scene"}, {"type": "scene"}]]
     )
     fig.add_trace(data1, row=1, col=1)
