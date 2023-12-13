@@ -4,7 +4,7 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Generates features.
+Generates features for training and inference.
 
 """
 
@@ -19,9 +19,9 @@ CHUNK_SIZE = [64, 64, 64]
 HALF_CHUNK_SIZE = [CHUNK_SIZE[i] // 2 for i in range(3)]
 WINDOW = [5, 5, 5]
 
-NUM_POINTS = 10
-NUM_IMG_FEATURES = NUM_POINTS
-NUM_SKEL_FEATURES = 11
+N_POINTS = 10
+N_IMG_FEATURES = N_POINTS
+N_SKEL_FEATURES = 11
 
 
 # -- Wrappers --
@@ -87,7 +87,7 @@ def generate_img_chunk_features(
         # Mark path
         if neurograph.optimize_alignment:
             xyz_list = to_patch_coords(neurograph, edge, midpoint)
-            path = geometry_utils.sample_path(xyz_list, NUM_POINTS)
+            path = geometry_utils.sample_path(xyz_list, N_POINTS)
         else:
             d = int(geometry_utils.dist(xyz_i, xyz_j) + 5)
             img_coords_i = utils.img_to_patch(xyz_i, midpoint, HALF_CHUNK_SIZE)
@@ -123,12 +123,12 @@ def generate_img_profile_features(
     for edge in neurograph.mutable_edges:
         if neurograph.optimize_alignment:
             xyz = to_img_coords(neurograph, edge)
-            path = geometry_utils.sample_path(xyz, NUM_POINTS)
+            path = geometry_utils.sample_path(xyz, N_POINTS)
         else:
             i, j = tuple(edge)
             xyz_i = utils.world_to_img(neurograph, i)
             xyz_j = utils.world_to_img(neurograph, j)
-            path = geometry_utils.make_line(xyz_i, xyz_j, NUM_POINTS)
+            path = geometry_utils.make_line(xyz_i, xyz_j, N_POINTS)
         features[edge] = geometry_utils.get_profile(img, path, window=WINDOW)
     return features
 
@@ -194,6 +194,31 @@ def get_radii(neurograph, edge):
 
 # -- Build feature matrix
 def build_feature_matrix(
+    neurographs,
+    features,
+    blocks=[],
+    img_chunks=False,
+    multimodal=False,
+    train_model=False,
+):
+    if train_model:
+        return __training_feature_matrix(
+            neurographs,
+            features,
+            blocks,
+            img_chunks=img_chunks,
+            multimodal=multimodal,
+        )
+    else:
+        return __inference_feature_matrix(
+            neurographs,
+            features,
+            img_chunks=img_chunks,
+            multimodal=multimodal,
+        )
+
+
+def __training_feature_matrix(
     neurographs, features, blocks, img_chunks=False, multimodal=False
 ):
     # Initialize
@@ -204,19 +229,18 @@ def build_feature_matrix(
 
     # Feature extraction
     for block_id in blocks:
-        # Get features
         idx_shift = 0 if X is None else X.shape[0]
         if multimodal:
-            X_i, x_i, y_i, idx_to_edge_i = build_multimodal_submatrix(
-                neurographs[block_id], features[block_id], idx_shift
+            X_i, x_i, y_i, idx_to_edge_i = get_multimodal_features(
+                neurographs[block_id], features[block_id], shift=idx_shift
             )
         elif img_chunks:
-            X_i, y_i, idx_to_edge_i = build_img_chunk_submatrix(
-                neurographs[block_id], features[block_id], idx_shift
+            X_i, y_i, idx_to_edge_i = get_img_chunks(
+                neurographs[block_id], features[block_id], shift=idx_shift
             )
         else:
-            X_i, y_i, idx_to_edge_i = build_feature_submatrix(
-                neurographs[block_id], features[block_id], idx_shift
+            X_i, y_i, idx_to_edge_i = get_feature_vectors(
+                neurographs[block_id], features[block_id], shift=idx_shift
             )
 
         # Concatenate
@@ -242,17 +266,27 @@ def build_feature_matrix(
     return X, y, block_to_idxs, idx_to_edge
 
 
-def build_feature_submatrix(neurograph, features, shift):
+def __inference_feature_matrix(
+    neurographs, features, img_chunks=False, multimodal=False):
+    if multimodal:
+        return get_multimodal_features(neurographs, features)
+    elif img_chunks:
+        return get_img_chunks(neurographs, features)
+    else:
+        return get_feature_vectors(neurographs, features)
+
+
+def get_feature_vectors(neurograph, features, shift=0):
     # Extract info
     features = combine_features(features)
     key = sample(list(features.keys()), 1)[0]
-    num_edges = neurograph.num_mutables()
-    num_features = len(features[key])
+    n_edges = neurograph.num_mutables()
+    n_features = len(features[key])
 
     # Build
     idx_to_edge = dict()
-    X = np.zeros((num_edges, num_features))
-    y = np.zeros((num_edges))
+    X = np.zeros((n_edges, n_features))
+    y = np.zeros((n_edges))
     for i, edge in enumerate(features.keys()):
         idx_to_edge[i + shift] = edge
         X[i, :] = features[edge]
@@ -260,12 +294,12 @@ def build_feature_submatrix(neurograph, features, shift):
     return X, y, idx_to_edge
 
 
-def build_multimodal_submatrix(neurograph, features, shift):
+def get_multimodal_features(neurograph, features, shift=0):
     idx_to_edge = dict()
-    num_edges = neurograph.num_mutables()
-    X = np.zeros(((num_edges, 2) + tuple(CHUNK_SIZE)))
-    x = np.zeros((num_edges, NUM_SKEL_FEATURES))
-    y = np.zeros((num_edges))
+    n_edges = neurograph.num_mutables()
+    X = np.zeros(((n_edges, 2) + tuple(CHUNK_SIZE)))
+    x = np.zeros((n_edges, N_SKEL_FEATURES))
+    y = np.zeros((n_edges))
     for i, edge in enumerate(features["img"].keys()):
         idx_to_edge[i + shift] = edge
         X[i, :] = features["img"][edge]
@@ -274,11 +308,11 @@ def build_multimodal_submatrix(neurograph, features, shift):
     return X, x, y, idx_to_edge
 
 
-def build_img_chunk_submatrix(neurograph, features, shift):
+def get_img_chunks(neurograph, features, shift=0):
     idx_to_edge = dict()
-    num_edges = neurograph.num_mutables()
-    X = np.zeros(((num_edges, 2) + tuple(CHUNK_SIZE)))
-    y = np.zeros((num_edges))
+    n_edges = neurograph.num_mutables()
+    X = np.zeros(((n_edges, 2) + tuple(CHUNK_SIZE)))
+    y = np.zeros((n_edges))
     for i, edge in enumerate(features["img"].keys()):
         idx_to_edge[i + shift] = edge
         X[i, :] = features["img"][edge]
@@ -288,9 +322,9 @@ def build_img_chunk_submatrix(neurograph, features, shift):
 
 # -- Utils --
 def compute_num_features(skel_features=True, img_features=True):
-    num_features = NUM_SKEL_FEATURES if skel_features else 0
-    num_features += NUM_IMG_FEATURES if img_features else 0
-    return num_features
+    n_features = N_SKEL_FEATURES if skel_features else 0
+    n_features += N_IMG_FEATURES if img_features else 0
+    return n_features
 
 
 def combine_features(features):

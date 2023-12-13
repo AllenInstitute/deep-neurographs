@@ -54,8 +54,8 @@ def compute_normal(xyz):
     return normal / np.linalg.norm(normal)
 
 
-def get_midpoint(xyz1, xyz2):
-    return np.mean([xyz1, xyz2], axis=0)
+def get_midpoint(xyz_1, xyz_2):
+    return np.mean([xyz_1, xyz_2], axis=0)
 
 
 # Smoothing
@@ -78,8 +78,11 @@ def fit_spline(xyz, s=None):
 
 def sample_path(path, num_points):
     t = np.linspace(0, 1, num_points)
-    spline_x, spline_y, spline_z = fit_spline(path, s=10)
-    path = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
+    if len(path) > 5:
+        spline_x, spline_y, spline_z = fit_spline(path, s=10)
+        path = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
+    else:
+        path = make_line(path[0], path[-1], 10)
     return path.astype(int)
 
 
@@ -322,6 +325,25 @@ def shortest_path(img, start, end):
         )
 
     def get_nbs(x, y, z):
+        """
+        Gets neighbors of voxel (x, y, z) with respect to a 6-connectivity
+        contraint.
+
+        Parameters
+        ----------
+        x : int
+            X-coordinate.
+        y : int
+            Y-coordinate.
+        z : int
+            Z-coordinate.
+
+        Returns
+        -------
+        list[tuple[int]]
+            List of neighbors of voxel at (x, y, z).
+
+        """
         moves = [
             (1, 0, 0),
             (-1, 0, 0),

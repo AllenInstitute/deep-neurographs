@@ -4,6 +4,7 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
+Subroutines for visualizing neurographs.
 
 """
 
@@ -11,11 +12,11 @@ import networkx as nx
 import numpy as np
 import plotly.colors as plc
 import plotly.graph_objects as go
-from plotly import tools
+from plotly.subplots import make_subplots
 
 
 def visualize_connected_components(
-    graph, return_data=False, title="", vertex_threshold=50
+    graph, line_width=4, return_data=False, title=""
 ):
     # Make plot
     data = []
@@ -26,10 +27,13 @@ def visualize_connected_components(
         try:
             component = next(connected_components)
             subgraph = graph.subgraph(component)
-            if len(subgraph.nodes) > vertex_threshold:
-                color = colors[cnt % len(colors)]
-                data.extend(plot_edges(graph, subgraph.edges, color=color))
-                cnt += 1
+            color = colors[cnt % len(colors)]
+            data.extend(
+                plot_edges(
+                    graph, subgraph.edges, color=color, line_width=line_width,
+                )
+            )
+            cnt += 1
         except StopIteration:
             break
 
@@ -106,19 +110,22 @@ def plot(data, title):
         plot_bgcolor="rgba(0, 0, 0, 0)",
         scene=dict(aspectmode="manual", aspectratio=dict(x=1, y=1, z=1)),
         width=1200,
-        height=800,
+        height=700,
     )
     fig.show()
 
 
-def subplot(data1, data2, title):
-    fig = tools.make_subplots(
+def subplot(data_1, data_2, title):
+    fig = make_subplots(
         rows=1, cols=2, specs=[[{"type": "scene"}, {"type": "scene"}]]
     )
-    fig.add_trace(data1, row=1, col=1)
-    fig.add_trace(data2, row=1, col=2)
-    fig.update_layout(title_text=title, showlegend=True)
+    for data in data_1:
+        fig.add_trace(data, row=1, col=1)
+    
+    for data in data_2:
+        fig.add_trace(data, row=1, col=2)
 
+    fig.update_layout(title_text=title, showlegend=True)
     fig.update_xaxes(row=1, col=1, matches="y", showgrid=False)
     fig.update_yaxes(row=1, col=1, matches="x", showgrid=False)
     fig.update_layout(
@@ -132,5 +139,5 @@ def subplot(data1, data2, title):
         scene_aspectmode="manual", scene_aspectratio=dict(x=1, y=1, z=1)
     )
 
-    fig.update_layout(width=1200, height=800)
+    fig.update_layout(width=1500, height=800)
     fig.show()
