@@ -98,9 +98,7 @@ class NeuroGraph(nx.Graph):
         self.densegraph = DenseGraph(self.path)
 
     # --- Add nodes or edges ---
-    def generate_immutables(
-        self, swc_id, swc_dict, prune=True, prune_depth=16
-    ):
+    def generate_immutables(self, swc_id, swc_dict, prune=True, prune_depth=16):
         """
         Adds nodes to graph from a dictionary generated from an swc files.
 
@@ -140,9 +138,7 @@ class NeuroGraph(nx.Graph):
 
             # Add edge
             self.immutable_edges.add(frozenset(edge))
-            self.add_edge(
-                node_id[i], node_id[j], xyz=xyz, radius=radii, swc_id=swc_id
-            )
+            self.add_edge(node_id[i], node_id[j], xyz=xyz, radius=radii, swc_id=swc_id)
             xyz_to_edge = dict((tuple(xyz), edge) for xyz in xyz)
             check_xyz = set(xyz_to_edge.keys())
             collisions = check_xyz.intersection(set(self.xyz_to_edge.keys()))
@@ -186,9 +182,7 @@ class NeuroGraph(nx.Graph):
 
                 # Get connecting node
                 contained_j = self.is_contained(j)
-                if get_dist(xyz, attrs["xyz"][0]) < 10 and self.is_contained(
-                    i
-                ):
+                if get_dist(xyz, attrs["xyz"][0]) < 10 and self.is_contained(i):
                     node = i
                     xyz = self.nodes[node]["xyz"]
                 elif get_dist(xyz, attrs["xyz"][-1]) < 10 and contained_j:
@@ -205,9 +199,7 @@ class NeuroGraph(nx.Graph):
         if self.optimize_alignment or self.optimize_path:
             self.run_optimization()
 
-    def _get_proposals(
-        self, query_id, query_xyz, num_proposals, search_radius
-    ):
+    def _get_proposals(self, query_id, query_xyz, num_proposals, search_radius):
         """
         Parameters
         ----------
@@ -327,9 +319,7 @@ class NeuroGraph(nx.Graph):
             xyz_1, xyz_2 = geometry_utils.optimize_alignment(self, img, edge)
             proposal = [self.to_world(xyz_1)]
             if self.optimize_path:
-                path = geometry_utils.optimize_path(
-                    img, self.origin, xyz_1, xyz_2
-                )
+                path = geometry_utils.optimize_path(img, self.origin, xyz_1, xyz_2)
                 proposal.append(path)
             proposal.append(self.to_world(xyz_2))
             self.edges[edge]["xyz"] = np.vstack(proposal)
@@ -425,9 +415,7 @@ class NeuroGraph(nx.Graph):
         # Not feasible
         return False
 
-    def is_target(
-        self, target_graph, edge, dist=5, ratio=0.5, strict=True, exclude=10
-    ):
+    def is_target(self, target_graph, edge, dist=5, ratio=0.5, strict=True, exclude=10):
         # Check for cycle
         i, j = tuple(edge)
         if self.creates_cycle((i, j)):
@@ -613,6 +601,13 @@ class NeuroGraph(nx.Graph):
         if type(node_or_xyz) == int:
             node_or_xyz = deepcopy(self.nodes[node_or_xyz]["xyz"])
         return utils.to_world(node_or_xyz, shift=-self.origin)
+
+    def to_patch_coords(self, edge, midpoint, chunk_size):
+        patch_coords = []
+        for xyz in self.edges[edge]["xyz"]:
+            coord = utils.img_to_patch(self.to_img(xyz), midpoint, chunk_size)
+            patch_coords.append(coord)
+        return patch_coords
 
     def to_line_graph(self):
         """

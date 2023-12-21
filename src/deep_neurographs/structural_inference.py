@@ -10,6 +10,7 @@ Created on Sat Dec 12 17:00:00 2023
 
 import numpy as np
 
+
 def get_reconstructions(
     pred_neurographs,
     blocks,
@@ -24,10 +25,7 @@ def get_reconstructions(
     for block_id in blocks:
         # Get positive edge predictions
         edge_probs = get_edge_probs(
-            idx_to_edge,
-            y_pred,
-            low_threshold,
-            valid_idxs=block_to_idxs[block_id],
+            idx_to_edge, y_pred, low_threshold, valid_idxs=block_to_idxs[block_id]
         )
 
         # Refine predictions wrt structure
@@ -52,11 +50,7 @@ def get_reconstruction(
     structure_aware=True,
 ):
     # Get positive edge predictions
-    edge_probs = get_edge_probs(
-        idx_to_edge,
-        y_pred,
-        low_threshold,
-    )
+    edge_probs = get_edge_probs(idx_to_edge, y_pred, low_threshold)
     if structure_aware:
         return get_structure_aware_prediction(
             pred_neurograph,
@@ -77,7 +71,9 @@ def get_edge_probs(idx_to_edge, y_pred, threshold, valid_idxs=[]):
     return edge_probs
 
 
-def get_structure_aware_prediction(pred_neurograph, edge_probs, high_threshold=0.8, low_threshold=0.6):
+def get_structure_aware_prediction(
+    pred_neurograph, edge_probs, high_threshold=0.8, low_threshold=0.6
+):
     # Initializations
     edge_preds = list(edge_probs.keys())
     pred_neurograph.init_predicted_graph()
@@ -100,4 +96,3 @@ def get_structure_aware_prediction(pred_neurograph, edge_probs, high_threshold=0
         if not pred_neurograph.creates_cycle(tuple(edge)):
             viable_edge_preds.append(edge)
     return viable_edge_preds
-

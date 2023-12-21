@@ -9,13 +9,25 @@ Evaluates performance of edge classifiation model.
 """
 import numpy as np
 
-METRICS_LIST = [
-    "precision",
-    "recall",
-    "f1",
-    "# splits fixed",
-    "# merges created",
-]
+METRICS_LIST = ["precision", "recall", "f1", "# splits fixed", "# merges created"]
+
+
+def init_stats():
+    """
+    Initializes a dictionary that stores stats computes by routines in this
+    module.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    dict
+        Dictionary that stores stats computes by routines in this module.
+
+    """
+    return dict([(metric, []) for metric in METRICS_LIST])
 
 
 def run_evaluation(neurographs, blocks, pred_edges):
@@ -40,11 +52,7 @@ def run_evaluation(neurographs, blocks, pred_edges):
         metrics contained in this dictionary are identical to "METRICS_LIST"].
 
     """
-    stats = {
-        "Overall": dict([(metric, []) for metric in METRICS_LIST]),
-        "Simple": dict([(metric, []) for metric in METRICS_LIST]),
-        "Complex": dict([(metric, []) for metric in METRICS_LIST]),
-    }
+    stats = {"Overall": init_stats(), "Simple": init_stats(), "Complex": init_stats()}
     for block_id in blocks:
         # Compute accuracy
         overall_stats_i = get_stats(

@@ -36,7 +36,7 @@ logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 BATCH_SIZE = 32
 NUM_WORKERS = 0
 SHUFFLE = True
-SUPPORTED_CLFS = [
+SUPPORTED_MODELS = [
     "AdaBoost",
     "RandomForest",
     "FeedForwardNet",
@@ -45,7 +45,7 @@ SUPPORTED_CLFS = [
 ]
 
 
-# Training
+# -- Cross Validation --
 def get_kfolds(train_data, k):
     folds = []
     samples = set(train_data)
@@ -60,8 +60,9 @@ def get_kfolds(train_data, k):
     return folds
 
 
+# -- Training --
 def get_clf(key, data=None, num_features=None):
-    assert key in SUPPORTED_CLFS
+    assert key in SUPPORTED_MODELS
     if key == "AdaBoost":
         return AdaBoostClassifier()
     elif key == "RandomForest":
@@ -104,10 +105,7 @@ def train_network(
         shuffle=SHUFFLE,
     )
     valid_loader = DataLoader(
-        valid_set,
-        batch_size=BATCH_SIZE,
-        num_workers=NUM_WORKERS,
-        pin_memory=True,
+        valid_set, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True
     )
 
     # Configure trainer
@@ -149,7 +147,7 @@ def eval_network(X, model):
     return np.array(y_pred)
 
 
-# Lightning Module
+# -- Lightning Module --
 class LitNeuralNet(pl.LightningModule):
     def __init__(self, net=None, lr=10e-3):
         super().__init__()

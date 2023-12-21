@@ -88,12 +88,8 @@ def check_irreducibility(junctions, irreducible_edges):
 
             # Update irreducible edges
             junctions.remove(j)
-            irreducible_edges = utils.remove_key(
-                irreducible_edges, (j, nbs[0])
-            )
-            irreducible_edges = utils.remove_key(
-                irreducible_edges, (j, nbs[1])
-            )
+            irreducible_edges = utils.remove_key(irreducible_edges, (j, nbs[0]))
+            irreducible_edges = utils.remove_key(irreducible_edges, (j, nbs[1]))
             irreducible_edges[tuple(nbs)] = edge
 
             graph.remove_edge(j, nbs[0])

@@ -15,9 +15,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 
-def visualize_connected_components(
-    graph, line_width=4, return_data=False, title=""
-):
+def visualize_connected_components(graph, line_width=4, return_data=False, title=""):
     # Make plot
     data = []
     colors = plc.qualitative.Bold
@@ -29,9 +27,7 @@ def visualize_connected_components(
             subgraph = graph.subgraph(component)
             color = colors[cnt % len(colors)]
             data.extend(
-                plot_edges(
-                    graph, subgraph.edges, color=color, line_width=line_width,
-                )
+                plot_edges(graph, subgraph.edges, color=color, line_width=line_width)
             )
             cnt += 1
         except StopIteration:
@@ -55,9 +51,7 @@ def visualize_proposals(graph, title="Edge Proposals"):
 
 
 def visualize_targets(graph, target_graph=None, title="Target Edges"):
-    visualize_subset(
-        graph, graph.target_edges, target_graph=target_graph, title=title
-    )
+    visualize_subset(graph, graph.target_edges, target_graph=target_graph, title=title)
 
 
 def visualize_subset(graph, edges, line_width=5, target_graph=None, title=""):
@@ -86,9 +80,7 @@ def plot_nodes(graph):
 
 def plot_edges(graph, edges, color=None, line_width=3.5):
     traces = []
-    line = (
-        dict(width=5) if color is None else dict(color=color, width=line_width)
-    )
+    line = dict(width=5) if color is None else dict(color=color, width=line_width)
     for i, j in edges:
         trace = go.Scatter3d(
             x=graph.edges[(i, j)]["xyz"][:, 0],
@@ -116,28 +108,22 @@ def plot(data, title):
 
 
 def subplot(data_1, data_2, title):
-    fig = make_subplots(
-        rows=1, cols=2, specs=[[{"type": "scene"}, {"type": "scene"}]]
-    )
+    fig = make_subplots(rows=1, cols=2, specs=[[{"type": "scene"}, {"type": "scene"}]])
     for data in data_1:
         fig.add_trace(data, row=1, col=1)
-    
+
     for data in data_2:
         fig.add_trace(data, row=1, col=2)
 
     fig.update_layout(title_text=title, showlegend=True)
     fig.update_xaxes(row=1, col=1, matches="y", showgrid=False)
     fig.update_yaxes(row=1, col=1, matches="x", showgrid=False)
-    fig.update_layout(
-        scene_aspectmode="manual", scene_aspectratio=dict(x=1, y=1, z=1)
-    )
+    fig.update_layout(scene_aspectmode="manual", scene_aspectratio=dict(x=1, y=1, z=1))
 
     # Update the size of the second subplot
     fig.update_xaxes(row=1, col=2, matches="y")
     fig.update_yaxes(row=1, col=2, matches="x")
-    fig.update_layout(
-        scene_aspectmode="manual", scene_aspectratio=dict(x=1, y=1, z=1)
-    )
+    fig.update_layout(scene_aspectmode="manual", scene_aspectratio=dict(x=1, y=1, z=1))
 
     fig.update_layout(width=1500, height=800)
     fig.show()

@@ -126,11 +126,7 @@ def open_tensorstore(path, driver):
     ts_arr = ts.open(
         {
             "driver": driver,
-            "kvstore": {
-                "driver": "gcs",
-                "bucket": "allen-nd-goog",
-                "path": path,
-            },
+            "kvstore": {"driver": "gcs", "bucket": "allen-nd-goog", "path": path},
         }
     ).result()
     if driver == "neuroglancer_precomputed":
@@ -144,24 +140,24 @@ def open_tensorstore(path, driver):
 
 def read_img_chunk(img, xyz, shape):
     return img[
-        xyz[2] - shape[2] // 2: xyz[2] + shape[2] // 2,
-        xyz[1] - shape[1] // 2: xyz[1] + shape[1] // 2,
-        xyz[0] - shape[0] // 2: xyz[0] + shape[0] // 2,
+        xyz[2] - shape[2] // 2 : xyz[2] + shape[2] // 2,
+        xyz[1] - shape[1] // 2 : xyz[1] + shape[1] // 2,
+        xyz[0] - shape[0] // 2 : xyz[0] + shape[0] // 2,
     ].transpose(2, 1, 0)
 
 
 def get_chunk(arr, xyz, shape):
-    xyz_1 = [max(xyz[i] - shape[i] // 2, 0) for i in range(3)]
-    xyz_2 = [min(xyz[i] + shape[i] // 2, arr.shape[i] - 1) for i in range(3)]
-    return arr[xyz_1[0]: xyz_2[0], xyz_1[1]: xyz_2[1], xyz_1[2]: xyz_2[2]]
+    start = [xyz[i] - shape[i] // 2 for i in range(3)]
+    end = [xyz[i] + shape[i] // 2 for i in range(3)]
+    return deepcopy(arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]])
 
 
 def read_tensorstore(ts_arr, xyz, shape):
     return (
         ts_arr[
-            xyz[0] - shape[0] // 2: xyz[0] + shape[0] // 2,
-            xyz[1] - shape[1] // 2: xyz[1] + shape[1] // 2,
-            xyz[2] - shape[2] // 2: xyz[2] + shape[2] // 2,
+            xyz[0] - shape[0] // 2 : xyz[0] + shape[0] // 2,
+            xyz[1] - shape[1] // 2 : xyz[1] + shape[1] // 2,
+            xyz[2] - shape[2] // 2 : xyz[2] + shape[2] // 2,
         ]
         .read()
         .result()
@@ -171,12 +167,7 @@ def read_tensorstore(ts_arr, xyz, shape):
 def get_superchunks(img_path, label_path, xyz, shape, from_center=True):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         img_job = executor.submit(
-            get_superchunk,
-            img_path,
-            "zarr",
-            xyz,
-            shape,
-            from_center=from_center,
+            get_superchunk, img_path, "zarr", xyz, shape, from_center=from_center
         )
         label_job = executor.submit(
             get_superchunk,
@@ -248,10 +239,7 @@ def read_mistake_log(path):
                 swc_1 = parts[6].replace(",", "")
                 swc_2 = parts[7].replace(",", "")
                 key = frozenset([swc_1, swc_2])
-                splits_log[key] = {
-                    "swc": [swc_1, swc_2],
-                    "xyz": [xyz_1, xyz_2],
-                }
+                splits_log[key] = {"swc": [swc_1, swc_2], "xyz": [xyz_1, xyz_2]}
     return splits_log
 
 
