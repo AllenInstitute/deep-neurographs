@@ -25,7 +25,10 @@ def get_reconstructions(
     for block_id in blocks:
         # Get positive edge predictions
         edge_probs = get_edge_probs(
-            idx_to_edge, y_pred, low_threshold, valid_idxs=block_to_idxs[block_id]
+            idx_to_edge,
+            y_pred,
+            low_threshold,
+            valid_idxs=block_to_idxs[block_id],
         )
 
         # Refine predictions wrt structure
@@ -79,13 +82,15 @@ def get_structure_aware_prediction(
     pred_neurograph.init_predicted_graph()
 
     # Add best simple edges
-    visited_nodes = set()
     remaining_edge_preds = []
     viable_edge_preds = []
     dists = [pred_neurograph.compute_length(edge) for edge in edge_preds]
     for idx in np.argsort(dists):
         edge = edge_preds[idx]
-        if pred_neurograph.is_simple(edge) and edge_probs[edge] > high_threshold:
+        if (
+            pred_neurograph.is_simple(edge)
+            and edge_probs[edge] > high_threshold
+        ):
             if not pred_neurograph.creates_cycle(tuple(edge)):
                 viable_edge_preds.append(edge)
         else:

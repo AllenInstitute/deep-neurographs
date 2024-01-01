@@ -30,7 +30,11 @@ SUPPORTED_MODELS = [
 
 # -- Wrappers --
 def generate_mutable_features(
-    neurograph, model_type, anisotropy=[1.0, 1.0, 1.0], img_path=None, labels_path=None
+    neurograph,
+    model_type,
+    anisotropy=[1.0, 1.0, 1.0],
+    img_path=None,
+    labels_path=None,
 ):
     """
     Generates feature vectors for every edge proposal in a neurograph.
@@ -40,16 +44,12 @@ def generate_mutable_features(
     neurograph : NeuroGraph
         NeuroGraph generated from a directory of swcs generated from a
         predicted segmentation.
+    model_type : str
+        Indication of model to be trained. Options include: AdaBoost,
+        RandomForest, FeedForwardNet, ConvNet, MultiModalNet.
     anisotropy : list[float], optional
         Real-world to image coordinates scaling factor for (x, y, z).
         The default is [1.0, 1.0, 1.0].
-    img_profile : bool, optional
-        Indication of whether to extract image intensity profile along each
-        edge proposal. The default is True.
-    img_chunks : bool, optional
-        Indication of whether to extract image chunks from the raw image,
-        where each chunk is centered about a given edge proposal. The deafult
-        is False.
     img_path : str, optional
         Path to raw image. The default is None.
     labels_path : str, optional
@@ -64,20 +64,44 @@ def generate_mutable_features(
     """
     features = {"skel": generate_mutable_skel_features(neurograph)}
     if model_type in ["ConvNet", "MultiModalNet"]:
-        features["img_chunks"] = generate_img_chunk_features(
+        features["img_chunks"] = generate_img_chunks(
             neurograph, img_path, labels_path, anisotropy=anisotropy
         )
     if model_type != "ConvNet":
-        features["img_profile"] = generate_img_profile_features(
+        features["img_profile"] = generate_img_profiles(
             neurograph, img_path, anisotropy=anisotropy
         )
     return features
 
 
 # -- Edge feature extraction --
-def generate_img_chunk_features(
+def generate_img_chunks(
     neurograph, img_path, labels_path, anisotropy=[1.0, 1.0, 1.0]
 ):
+    """
+    Generates an image chunk for each edge proposal such that the centroid of
+    the image chunk is the midpoint of the edge proposal. Image chunks contain
+    two channels: raw image and predicted segmentation.
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        NeuroGraph generated from a directory of swcs generated from a
+        predicted segmentation.
+    img_path : str
+        Path to raw image.
+    labels_path : str
+        Path to predicted segmentation.
+    anisotropy : list[float], optional
+        Real-world to image coordinates scaling factor for (x, y, z).
+        The default is [1.0, 1.0, 1.0].
+
+    Returns
+    -------
+    features : dict
+        Dictonary such that each pair is the edge id and image chunk.
+
+    """
     features = dict()
     origin = utils.apply_anisotropy(neurograph.origin, return_int=True)
     img, labels = utils.get_superchunks(
@@ -112,7 +136,28 @@ def generate_img_chunk_features(
     return features
 
 
-def generate_img_profile_features(neurograph, path, anisotropy=[1.0, 1.0, 1.0]):
+def generate_img_profiles(neurograph, path, anisotropy=[1.0, 1.0, 1.0]):
+    """
+    Generates an image intensity profile along each edge proposal.
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        NeuroGraph generated from a directory of swcs generated from a
+        predicted segmentation.
+    path : str
+        Path to raw image.
+    anisotropy : list[float], optional
+        Real-world to image coordinates scaling factor for (x, y, z).
+        The default is [1.0, 1.0, 1.0].
+
+    Returns
+    -------
+    features : dict
+        Dictonary such that each pair is the edge id and image intensity
+        profile.    
+
+    """
     features = dict()
     origin = utils.apply_anisotropy(neurograph.origin, return_int=True)
     img = utils.get_superchunk(
@@ -133,11 +178,27 @@ def generate_img_profile_features(neurograph, path, anisotropy=[1.0, 1.0, 1.0]):
 
 
 def to_img_coords(neurograph, edge):
-    img_coords = []
-    for xyz in neurograph.edges[edge]["xyz"]:
-        img_coords.append(utils.world_to_img(neurograph, xyz))
-    img_coords = np.array(img_coords)
-    return img_coords
+    """
+    Converts xyz coordinate of each vertex in "edge" from real world to image
+    coordinates.
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        NeuroGraph generated from a directory of swcs generated from a
+        predicted segmentation.
+    edge : frozenset
+        The edge from "neurograph" to perform coordinate transformation.
+
+    Returns
+    -------
+    img_coords : numpy.ndarray
+        Image coordinates of each vertex from "edge".
+
+    """
+    xyz_list = neurograph.edges[edge]["xyz"]
+    img_coords = [utils.world_to_img(neurograph, xyz) for xyz in xyz_list]
+    return np.array(img_coords)
 
 
 def generate_mutable_skel_features(neurograph):
@@ -169,18 +230,20 @@ def generate_mutable_skel_features(neurograph):
 def get_directionals(neurograph, edge, window):
     # Compute tangent vectors
     i, j = tuple(edge)
-    tangent = geometry_utils.compute_tangent(neurograph.edges[edge]["xyz"])
-    context_tangent_i = geometry_utils.get_directional(
-        neurograph, i, tangent, window=window
+    edge_directional = geometry_utils.compute_tangent(
+        neurograph.edges[edge]["xyz"]
     )
-    context_tangent_j = geometry_utils.get_directional(
-        neurograph, j, tangent, window=window
+    directional_i = geometry_utils.get_directional(
+        neurograph, i, edge_directional, window=window
+    )
+    directional_j = geometry_utils.get_directional(
+        neurograph, j, edge_directional, window=window
     )
 
     # Compute features
-    inner_product_1 = abs(np.dot(tangent, context_tangent_i))
-    inner_product_2 = abs(np.dot(tangent, context_tangent_j))
-    inner_product_3 = np.dot(context_tangent_i, context_tangent_j)
+    inner_product_1 = abs(np.dot(edge_directional, directional_i))
+    inner_product_2 = abs(np.dot(edge_directional, directional_j))
+    inner_product_3 = np.dot(directional_i, directional_j)
     return inner_product_1, inner_product_2, inner_product_3
 
 
@@ -192,17 +255,17 @@ def get_radii(neurograph, edge):
 
 
 # -- Build feature matrix
-def get_feature_matrix(
-    neurographs, features, model_type, block_ids=[], train_model=False
-):
+def get_feature_matrix(neurographs, features, model_type, block_ids=[]):
     assert model_type in SUPPORTED_MODELS, "Error! model_type not supported"
-    if train_model:
-        return __training_feature_matrix(neurographs, features, block_ids, model_type)
+    if len(block_ids) > 0:
+        return __multiblock_feature_matrix(
+            neurographs, features, block_ids, model_type
+        )
     else:
-        return __inference_feature_matrix(neurographs, features, model_type)
+        return __feature_matrix(neurographs, features, model_type)
 
 
-def __training_feature_matrix(neurographs, features, blocks, model_type):
+def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
     # Initialize
     X = None
     y = None
@@ -211,6 +274,10 @@ def __training_feature_matrix(neurographs, features, blocks, model_type):
 
     # Feature extraction
     for block_id in blocks:
+        if len(neurographs[block_id].mutable_edges) == 0:
+            block_to_idxs[block_id] = set()
+            continue
+
         idx_shift = 0 if X is None else X.shape[0]
         if model_type == "MultiModalNet":
             X_i, x_i, y_i, idx_to_edge_i = get_multimodal_features(
@@ -248,7 +315,7 @@ def __training_feature_matrix(neurographs, features, blocks, model_type):
     return X, y, block_to_idxs, idx_to_edge
 
 
-def __inference_feature_matrix(neurographs, features, model_type):
+def __feature_matrix(neurographs, features, model_type):
     if model_type == "MultiModalNet":
         return get_multimodal_features(neurographs, features)
     elif model_type == "ConvNet":
@@ -305,10 +372,24 @@ def get_img_chunks(neurograph, features, shift=0):
 
 
 # -- Utils --
-def compute_num_features(skel_features=True, img_features=True):
-    n_features = N_SKEL_FEATURES if skel_features else 0
-    n_features += N_PROFILE_POINTS if img_features else 0
-    return n_features
+def count_features(model_type):
+    """
+    Counts number of features based on the "model_type".
+
+    Parameters
+    ----------
+    model_type : str
+        Indication of model to be trained. Options include: AdaBoost,
+        RandomForest, FeedForwardNet, ConvNet, MultiModalNet.
+
+    Returns
+    -------
+    int
+        Number of features.
+
+    """
+    if model_type != "ConvNet":
+        return N_SKEL_FEATURES + N_PROFILE_POINTS
 
 
 def combine_features(features):
@@ -319,5 +400,7 @@ def combine_features(features):
             if combined[edge] is None:
                 combined[edge] = deepcopy(features[key][edge])
             else:
-                combined[edge] = np.concatenate((combined[edge], features[key][edge]))
+                combined[edge] = np.concatenate(
+                    (combined[edge], features[key][edge])
+                )
     return combined

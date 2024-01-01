@@ -10,6 +10,7 @@ General routines for various tasks.
 
 import concurrent.futures
 import json
+import math
 import os
 import shutil
 from copy import deepcopy
@@ -24,6 +25,13 @@ SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "zarr"]
 
 # --- dictionary utils ---
 def remove_item(my_set, item):
+    """
+    Removes item from a set.
+
+    Parameters
+    ----------
+
+    """
     if item in my_set:
         my_set.remove(item)
     return my_set
@@ -54,7 +62,6 @@ def check_key(my_dict, key):
 def remove_key(my_dict, key):
     """
     Removes key from dict in the case when key may need to be reversed
-
     """
     if check_key(my_dict, key):
         my_dict.pop(key)
@@ -126,7 +133,11 @@ def open_tensorstore(path, driver):
     ts_arr = ts.open(
         {
             "driver": driver,
-            "kvstore": {"driver": "gcs", "bucket": "allen-nd-goog", "path": path},
+            "kvstore": {
+                "driver": "gcs",
+                "bucket": "allen-nd-goog",
+                "path": path,
+            },
         }
     ).result()
     if driver == "neuroglancer_precomputed":
@@ -139,35 +150,45 @@ def open_tensorstore(path, driver):
 
 
 def read_img_chunk(img, xyz, shape):
+    start, end = get_start_end(xyz, shape)
     return img[
-        xyz[2] - shape[2] // 2 : xyz[2] + shape[2] // 2,
-        xyz[1] - shape[1] // 2 : xyz[1] + shape[1] // 2,
-        xyz[0] - shape[0] // 2 : xyz[0] + shape[0] // 2,
+        start[2]:end[2], start[1]:end[1], start[0]:end[0],
     ].transpose(2, 1, 0)
 
 
 def get_chunk(arr, xyz, shape):
-    start = [xyz[i] - shape[i] // 2 for i in range(3)]
-    end = [xyz[i] + shape[i] // 2 for i in range(3)]
-    return deepcopy(arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]])
+    start, end = get_start_end(xyz, shape)
+    return deepcopy(
+        arr[start[0]:end[0], start[1]:end[1], start[2]:end[2]]
+    )
 
 
 def read_tensorstore(ts_arr, xyz, shape):
+    start, end = get_start_end(xyz, shape)
     return (
         ts_arr[
-            xyz[0] - shape[0] // 2 : xyz[0] + shape[0] // 2,
-            xyz[1] - shape[1] // 2 : xyz[1] + shape[1] // 2,
-            xyz[2] - shape[2] // 2 : xyz[2] + shape[2] // 2,
+            start[0]:end[0], start[1]:end[1], start[2]:end[2]
         ]
         .read()
         .result()
     )
 
 
+def get_start_end(xyz, shape):
+    start = [xyz[i] - shape[i] // 2 for i in range(3)]
+    end = [xyz[i] + shape[i] // 2 for i in range(3)]
+    return start, end
+
+
 def get_superchunks(img_path, label_path, xyz, shape, from_center=True):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         img_job = executor.submit(
-            get_superchunk, img_path, "zarr", xyz, shape, from_center=from_center
+            get_superchunk,
+            img_path,
+            "zarr",
+            xyz,
+            shape,
+            from_center=from_center,
         )
         label_job = executor.submit(
             get_superchunk,
@@ -239,7 +260,10 @@ def read_mistake_log(path):
                 swc_1 = parts[6].replace(",", "")
                 swc_2 = parts[7].replace(",", "")
                 key = frozenset([swc_1, swc_2])
-                splits_log[key] = {"swc": [swc_1, swc_2], "xyz": [xyz_1, xyz_2]}
+                splits_log[key] = {
+                    "swc": [swc_1, swc_2],
+                    "xyz": [xyz_1, xyz_2],
+                }
     return splits_log
 
 
@@ -301,6 +325,13 @@ def apply_anisotropy(xyz, return_int=False):
         return [round(xyz[i] / ANISOTROPY[i]) for i in range(3)]
     else:
         return [xyz[i] / ANISOTROPY[i] for i in range(3)]
+
+
+# --- math utils ---
+def get_avg_std(data, weights=None):
+    avg = np.average(data, weights=weights)
+    var = np.average((data - avg) ** 2, weights=weights)
+    return avg, math.sqrt(var)
 
 
 def is_contained(bbox, img_shape, xyz):

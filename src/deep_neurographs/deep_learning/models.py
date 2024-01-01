@@ -127,7 +127,11 @@ class ConvNet(nn.Module):
         """
         conv_layer = nn.Sequential(
             nn.Conv3d(
-                in_channels, out_channels, kernel_size=(3, 3, 3), stride=1, padding=0
+                in_channels,
+                out_channels,
+                kernel_size=(3, 3, 3),
+                stride=1,
+                padding=0,
             ),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(),
@@ -227,7 +231,11 @@ class MultiModalNet(nn.Module):
         """
         conv_layer = nn.Sequential(
             nn.Conv3d(
-                in_channels, out_channels, kernel_size=(3, 3, 3), stride=1, padding=0
+                in_channels,
+                out_channels,
+                kernel_size=(3, 3, 3),
+                stride=1,
+                padding=0,
             ),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(),

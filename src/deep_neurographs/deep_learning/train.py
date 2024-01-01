@@ -27,6 +27,7 @@ from torcheval.metrics.functional import (
     binary_recall,
 )
 
+from deep_neurographs import feature_extraction as extracter
 from deep_neurographs.deep_learning import datasets as ds
 from deep_neurographs.deep_learning import models
 
@@ -46,10 +47,26 @@ SUPPORTED_MODELS = [
 
 
 # -- Cross Validation --
-def get_kfolds(train_data, k):
+def get_kfolds(filenames, k):
+    """
+    Partitions "filenames" into k-folds to perform cross validation.
+
+    Parameters
+    ----------
+    filenames : list[str]
+        List of filenames of samples for training.
+    k : int
+        Number of folds to be used in k-fold cross validation.
+
+    Returns
+    -------
+    folds : list[list[str]]
+        Partition of "filesnames" into k-folds.
+
+    """
     folds = []
-    samples = set(train_data)
-    num_samples = int(np.floor(len(train_data) / k))
+    samples = set(filenames)
+    num_samples = int(np.floor(len(filenames) / k))
     assert num_samples > 0, "Sample size is too small for {}-folds".format(k)
     for i in range(k):
         samples_i = sample(samples, num_samples)
@@ -61,39 +78,102 @@ def get_kfolds(train_data, k):
 
 
 # -- Training --
-def get_clf(key, data=None, num_features=None):
-    assert key in SUPPORTED_MODELS
-    if key == "AdaBoost":
+def fit_model(
+    model_type, X, y, lr=1e-3, logger=False, max_epochs=50, profile=False
+):
+    """
+    Fits a model to a training dataset.
+
+    Parameters
+    ----------
+    model_type : str
+        Indication of type of model. Options are "AdaBoost",
+        "RandomForest", "FeedForwardNet", "ConvNet", and
+        "MultiModalNet".
+    X : numpy.ndarray
+        Feature matrix.
+    y : numpy.ndarray
+        Labels to be learned.
+    lr : float, optional
+        Learning rate to be used if model is a neural network. The default is
+        1e-3.
+    logger : bool, optional
+        Indication of whether to log performance stats while neural network
+        trains. The default is False.
+    max_epochs : int, optional
+        Maximum number of epochs used to train neural network. The default is
+        50.
+    profile : bool, optional
+        Indication of whether to profile runtime of training neural network.
+        The default is False.
+
+    Returns
+    -------
+    ...
+    """
+    if model_type in ["FeedForwardNet", "ConvNet", "MultiModalNet"]:
+        data = {"inputs": X, "labels": y}
+        net, dataset = get_model(model_type, data=data)
+        model = train_network(
+            net, dataset, logger=logger, lr=lr, max_epochs=max_epochs
+        )
+    else:
+        model = get_model(model_type)
+        model.fit(X, y)
+    return model
+
+
+def evaluate_model():
+    pass
+
+
+def get_model(model_type, data=None):
+    """
+    Gets classification model to be fit.
+
+    Parameters
+    ----------
+    model_type : str
+        Indication of type of model. Options are "AdaBoost",
+        "RandomForest", "FeedForwardNet", "ConvNet", and
+        "MultiModalNet".
+    data : dict, optional
+        Training data used to fit model. This dictionary must contain the keys
+        "inputs" and "labels" which correspond to the feature matrix and
+        target labels to be learned. The default is None.
+
+    Returns
+    -------
+    ...
+
+    """
+    assert model_type in SUPPORTED_MODELS
+    if model_type == "AdaBoost":
         return AdaBoostClassifier()
-    elif key == "RandomForest":
+    elif model_type == "RandomForest":
         return RandomForestClassifier()
-    elif key == "FeedForwardNet":
-        net = models.FeedForwardNet(num_features)
-        train_data = ds.ProposalDataset(data["inputs"], data["labels"])
-    elif key == "ConvNet":
+    elif model_type == "FeedForwardNet":
+        n_features = extracter.count_features(model_type)
+        net = models.FeedForwardNet(n_features)
+        dataset = ds.ProposalDataset(data["inputs"], data["labels"])
+    elif model_type == "ConvNet":
         net = models.ConvNet()
         models.init_weights(net)
-        train_data = ds.ImgProposalDataset(
+        dataset = ds.ImgProposalDataset(
             data["inputs"], data["labels"], transform=True
         )
-    elif key == "MultiModalNet":
-        net = models.MultiModalNet(num_features)
+    elif model_type == "MultiModalNet":
+        n_features = extracter.count_features(model_type)
+        net = models.MultiModalNet(n_features)
         models.init_weights(net)
-        train_data = ds.MultiModalDataset(
+        dataset = ds.MultiModalDataset(
             data["inputs"], data["labels"], transform=True
         )
-    return net, train_data
+    return net, dataset
 
 
 def train_network(
-    net,
-    dataset,
-    logger=True,
-    lr=10e-3,
-    max_epochs=100,
-    model_summary=True,
-    profile=False,
-    progress_bar=True,
+    net, dataset, logger=True, lr=1e-3, max_epochs=50, profile=False
 ):
     # Load data
     train_set, valid_set = random_split(dataset)
@@ -105,7 +185,10 @@ def train_network(
         shuffle=SHUFFLE,
     )
     valid_loader = DataLoader(
-        valid_set, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=True
+        valid_set,
+        batch_size=BATCH_SIZE,
+        num_workers=NUM_WORKERS,
+        pin_memory=True,
     )
 
     # Configure trainer
@@ -118,8 +201,8 @@ def train_network(
         accelerator="gpu",
         callbacks=[ckpt_callback],
         devices=1,
-        enable_model_summary=model_summary,
-        enable_progress_bar=progress_bar,
+        enable_model_summary=True,
+        enable_progress_bar=True,
         logger=logger,
         log_every_n_steps=1,
         max_epochs=max_epochs,
@@ -149,7 +232,7 @@ def eval_network(X, model):
 
 # -- Lightning Module --
 class LitNeuralNet(pl.LightningModule):
-    def __init__(self, net=None, lr=10e-3):
+    def __init__(self, net=None, lr=1e-3):
         super().__init__()
         self.net = net
         self.lr = lr

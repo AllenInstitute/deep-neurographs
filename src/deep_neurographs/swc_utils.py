@@ -28,7 +28,9 @@ def read_swc(path):
     return contents
 
 
-def parse(raw_swc, anisotropy=[1.0, 1.0, 1.0], bbox=None, img_shape=None, idx=False):
+def parse(
+    raw_swc, anisotropy=[1.0, 1.0, 1.0], bbox=None, img_shape=None, idx=False
+):
     """
     Parses a raw swc file to extract the (x,y,z) coordinates and radii. Note
     that node_ids from swc are refactored to index from 0 to n-1 where n is
@@ -247,7 +249,9 @@ def dir_to_volume(swc_dir, radius_plus=0):
     for vid, f in enumerate(utils.listdir(swc_dir, ext=".swc")):
         swc_dict = smooth(parse(read_swc(os.path.join(swc_dir, f))))
         volume.update(
-            file_to_volume(swc_dict, sparse=True, vid=f, radius_plus=radius_plus)
+            file_to_volume(
+                swc_dict, sparse=True, vid=f, radius_plus=radius_plus
+            )
         )
     return volume
 

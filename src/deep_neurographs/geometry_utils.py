@@ -344,7 +344,14 @@ def shortest_path(img, start, end):
             List of neighbors of voxel at (x, y, z).
 
         """
-        moves = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+        moves = [
+            (1, 0, 0),
+            (-1, 0, 0),
+            (0, 1, 0),
+            (0, -1, 0),
+            (0, 0, 1),
+            (0, 0, -1),
+        ]
         return [
             (x + dx, y + dy, z + dz)
             for dx, dy, dz in moves
