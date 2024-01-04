@@ -152,7 +152,7 @@ def open_tensorstore(path, driver):
 def read_img_chunk(img, xyz, shape):
     start, end = get_start_end(xyz, shape)
     return img[
-        start[2]:end[2], start[1]:end[1], start[0]:end[0],
+        start[2]:end[2], start[1]:end[1], start[0]:end[0]
     ].transpose(2, 1, 0)
 
 
@@ -166,9 +166,7 @@ def get_chunk(arr, xyz, shape):
 def read_tensorstore(ts_arr, xyz, shape):
     start, end = get_start_end(xyz, shape)
     return (
-        ts_arr[
-            start[0]:end[0], start[1]:end[1], start[2]:end[2]
-        ]
+        ts_arr[start[0]:end[0], start[1]:end[1], start[2]:end[2]]
         .read()
         .result()
     )
@@ -365,3 +363,11 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
+
+
+def progress_bar(current, total, bar_length=50):
+    progress = int(current / total * bar_length)
+    bar = (
+        f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
+    )
+    print(f"\r{bar}", end="", flush=True)

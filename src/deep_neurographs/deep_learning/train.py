@@ -173,7 +173,7 @@ def get_model(model_type, data=None):
 
 
 def train_network(
-    net, dataset, logger=True, lr=1e-3, max_epochs=50, profile=False
+    net, dataset, logger=False, lr=1e-3, max_epochs=50, profile=False
 ):
     # Load data
     train_set, valid_set = random_split(dataset)
@@ -202,7 +202,7 @@ def train_network(
         callbacks=[ckpt_callback],
         devices=1,
         enable_model_summary=True,
-        enable_progress_bar=True,
+        enable_progress_bar=False,
         logger=logger,
         log_every_n_steps=1,
         max_epochs=max_epochs,

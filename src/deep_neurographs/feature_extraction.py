@@ -120,19 +120,18 @@ def generate_img_chunks(
         labels_chunk = utils.get_chunk(labels, midpoint, CHUNK_SIZE)
 
         # Mark path
+        d = int(geometry_utils.dist(xyz_i, xyz_j) + 5)
         if neurograph.optimize_alignment or neurograph.optimize_path:
             xyz_list = neurograph.to_patch_coords(edge, midpoint, CHUNK_SIZE)
-            path = geometry_utils.sample_path(xyz_list, N_PROFILE_POINTS)
+            path = geometry_utils.sample_path(xyz_list, d)
         else:
-            d = int(geometry_utils.dist(xyz_i, xyz_j) + 5)
             img_coords_i = utils.img_to_patch(xyz_i, midpoint, CHUNK_SIZE)
             img_coords_j = utils.img_to_patch(xyz_j, midpoint, CHUNK_SIZE)
             path = geometry_utils.make_line(img_coords_i, img_coords_j, d)
 
         labels_chunk[labels_chunk > 0] = 1
-        labels_chunk = geometry_utils.fill_path(labels_chunk, path)
+        labels_chunk = geometry_utils.fill_path(labels_chunk, path, val=2)
         features[edge] = np.stack([img_chunk, labels_chunk], axis=0)
-
     return features
 
 
@@ -155,7 +154,7 @@ def generate_img_profiles(neurograph, path, anisotropy=[1.0, 1.0, 1.0]):
     -------
     features : dict
         Dictonary such that each pair is the edge id and image intensity
-        profile.    
+        profile.
 
     """
     features = dict()
@@ -206,8 +205,8 @@ def generate_mutable_skel_features(neurograph):
     for edge in neurograph.mutable_edges:
         i, j = tuple(edge)
         radius_i, radius_j = get_radii(neurograph, edge)
-        dot1, dot2, dot3 = get_directionals(neurograph, edge, 5)
-        ddot1, ddot2, ddot3 = get_directionals(neurograph, edge, 10)
+        dot1, dot2, dot3 = get_directionals(neurograph, edge, 8)
+        ddot1, ddot2, ddot3 = get_directionals(neurograph, edge, 16)
         features[edge] = np.concatenate(
             (
                 neurograph.compute_length(edge),

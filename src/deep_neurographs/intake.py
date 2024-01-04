@@ -76,7 +76,7 @@ def init_immutables(
     for path in get_paths(neurograph.path):
         swc_id = get_id(path)
         swc_dict = swc_utils.parse(
-            swc_utils.read_swc(path),
+            path,
             anisotropy=anisotropy,
             bbox=neurograph.bbox,
             img_shape=neurograph.shape,

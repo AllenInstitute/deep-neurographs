@@ -22,32 +22,23 @@ from deep_neurographs import utils
 
 
 # -- io utils --
-def read_swc(path):
-    with open(path, "r") as file:
-        contents = file.readlines()
-    return contents
-
-
-def parse(
-    raw_swc, anisotropy=[1.0, 1.0, 1.0], bbox=None, img_shape=None, idx=False
-):
+def parse(path, anisotropy=[1.0, 1.0, 1.0], bbox=None, img_shape=None):
     """
-    Parses a raw swc file to extract the (x,y,z) coordinates and radii. Note
+    Parses an swc file to extract the contents which is stored in a dict. Note
     that node_ids from swc are refactored to index from 0 to n-1 where n is
     the number of entries in the swc file.
 
     Parameters
     ----------
-    raw_swc : list[str]
-        Contents of an swc file.
+    path : str
+        Path to an swc file.
     anisotropy : list[float]
         Image to real-world coordinates scaling factors for [x, y, z] due to
         anistropy of the microscope.
 
     Returns
     -------
-    dict
-        The (x,y,z) coordinates and radii stored in "raw_swc".
+    ...
 
     """
     # Initialize swc
@@ -56,7 +47,7 @@ def parse(
     # Parse raw data
     min_id = np.inf
     offset = [0, 0, 0]
-    for line in raw_swc:
+    for line in read(path):
         if line.startswith("# OFFSET"):
             parts = line.split()
             offset = read_xyz(parts[2:5])
@@ -80,6 +71,12 @@ def parse(
         swc_dict["pid"][i] -= min_id
 
     return swc_dict
+
+
+def read(path):
+    with open(path, "r") as file:
+        contents = file.readlines()
+    return contents
 
 
 def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
@@ -247,7 +244,7 @@ def file_to_volume(swc_dict, sparse=False, vid=None, radius_plus=0):
 def dir_to_volume(swc_dir, radius_plus=0):
     volume = dict()
     for vid, f in enumerate(utils.listdir(swc_dir, ext=".swc")):
-        swc_dict = smooth(parse(read_swc(os.path.join(swc_dir, f))))
+        swc_dict = smooth(parse(os.path.join(swc_dir, f)))
         volume.update(
             file_to_volume(
                 swc_dict, sparse=True, vid=f, radius_plus=radius_plus

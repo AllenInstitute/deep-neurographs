@@ -386,7 +386,7 @@ class NeuroGraph(nx.Graph):
         for idx in np.argsort(dists):
             edge = remaining_proposals[idx]
             add_bool = self.is_target(
-                target_neurograph, edge, dist=8, ratio=0.4, exclude=10
+                target_neurograph, edge, dist=7, ratio=0.4, exclude=15
             )
             if add_bool:
                 self.target_edges.add(edge)
