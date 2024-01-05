@@ -4,7 +4,7 @@ Created on Sun July 16 14:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-General routines for various tasks.
+General helper routines for various tasks.
 
 """
 
@@ -30,6 +30,14 @@ def remove_item(my_set, item):
 
     Parameters
     ----------
+    my_set : set
+        Set to be queried.
+    item :
+        Value to query.
+
+    Returns
+    -------
+        Set "my_set" with "item" removed if it existed.
 
     """
     if item in my_set:
@@ -39,18 +47,20 @@ def remove_item(my_set, item):
 
 def check_key(my_dict, key):
     """
-    Checks whether "key" is contained in dictionary. If so, returns the
+    Checks whether "key" is contained in "my_dict". If so, returns the
     corresponding value.
 
     Parameters
     ----------
     my_dict : dict
         Dictionary to be checked
-    key : all
+    key : hashable data type
 
     Returns
     -------
     dict value or bool
+       If "key" is a key in "my_dict", then the associated value is returned.
+       Otherwise, the bool "False" is returned.
 
     """
     if key in my_dict.keys():
@@ -61,31 +71,91 @@ def check_key(my_dict, key):
 
 def remove_key(my_dict, key):
     """
-    Removes key from dict in the case when key may need to be reversed
+    Removes "key" from "my_dict" in the case when key may need to be reversed.
+
+    Parameters
+    ----------
+    my_dict : dict
+        Dictionary to be queried
+    key : hashable data type
+        Key to query.
+
+    Returns
+    -------
+    my_dict : dict
+        Dictionary "my_dict" with key-value associated with "key" removed if
+        it existed.
+
     """
     if check_key(my_dict, key):
         my_dict.pop(key)
     elif check_key(my_dict, (key[1], key[0])):
         my_dict.pop((key[1], key[0]))
-    else:
-        print("key not found")
     return my_dict
 
 
 # --- os utils ---
 def mkdir(path, delete=False):
-    if os.path.exists(path) and delete:
-        shutil.rmtree(path)
+    """
+    Creates a directory at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path of directory to be created.
+    delete : bool, optional
+        Indication of whether to delete directory at path if it already
+        exists. The default is False.
+
+    Returns
+    -------
+    None
+
+    """
+    if delete:
+        rmdir(path)
     if not os.path.exists(path):
         os.mkdir(path)
 
 
 def rmdir(path):
+    """
+    Removes directory and all subdirectories at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path to directory and subdirectories to be deleted if they exist.
+
+    Returns
+    -------
+    None
+
+    """
     if os.path.exists(path):
         shutil.rmtree(path)
 
 
 def listdir(path, ext=None):
+    """
+    Lists all files in the directory at "path". If an extension "ext" is
+    provided, then only files containing "ext" are returned.
+
+    Parameters
+    ----------
+    path : str
+        Path to directory to be searched.
+
+    ext : str, optional
+       Extension of file type of interest. The default is None.
+
+    Returns
+    -------
+    list
+        List of all files in directory at "path" with extension "ext" if
+        provided. Otherwise, list of all files in directory.
+
+    """
     if ext is None:
         return [f for f in os.listdir(path)]
     else:
@@ -93,6 +163,25 @@ def listdir(path, ext=None):
 
 
 def list_subdirs(path, keyword=None):
+    """
+    Creates list of all subdirectories at "path". If "keyword" is provided,
+    then only subdirectories containing "keyword" are contained in list.
+
+    Parameters
+    ----------
+    path : str
+        Path to directory containing subdirectories to be listed.
+
+    keyword : str, optional
+        Only subdirectories containing "keyword" are contained in list that is
+        returned. The default is None.
+
+    Returns
+    -------
+    list
+        List of all subdirectories at "path".
+
+    """
     subdirs = []
     for d in os.listdir(path):
         if os.path.isdir(os.path.join(path, d)):
@@ -105,6 +194,20 @@ def list_subdirs(path, keyword=None):
 
 # --- io utils ---
 def open_zarr(path):
+    """
+    Opens zarr file at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path to zarr file to be opened.
+
+    Returns
+    -------
+    np.ndarray
+        Contents of zarr file at "path".
+
+    """
     n5store = zarr.N5FSStore(path, "r")
     if "653980" in path:
         return zarr.open(n5store).ch488.s0
@@ -222,6 +325,7 @@ def read_json(path):
     Returns
     -------
     dict
+        Contents of json file.
 
     """
     with open(path, "r") as f:
@@ -230,47 +334,22 @@ def read_json(path):
 
 
 def read_txt(path):
+    """
+    Reads txt file stored at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path where txt file is stored.
+
+    Returns
+    -------
+    str
+        Contents of txt file.
+
+    """
     with open(path, "r") as f:
         return f.read()
-
-
-def read_mistake_coords(path, anisotropy=[1.0, 1.0, 1.0], shift=[0, 0, 0]):
-    xyz = []
-    with open(path, "r") as file:
-        for line in file:
-            if not line.startswith("#") and len(line) > 0:
-                parts = line.split()
-                xyz_1 = extract_coords(parts[0:3])
-                xyz_2 = extract_coords(parts[3:6])
-                xyz.append(to_img(xyz_1, anisotropy, shift=shift))
-                xyz.append(to_img(xyz_2, anisotropy, shift=shift))
-    return np.array(xyz)
-
-
-def read_mistake_log(path):
-    splits_log = dict()
-    with open(path, "r") as file:
-        for line in file:
-            if not line.startswith("#") and len(line) > 0:
-                parts = line.split()
-                xyz_1 = extract_coords(parts[0:3])
-                xyz_2 = extract_coords(parts[3:6])
-                swc_1 = parts[6].replace(",", "")
-                swc_2 = parts[7].replace(",", "")
-                key = frozenset([swc_1, swc_2])
-                splits_log[key] = {
-                    "swc": [swc_1, swc_2],
-                    "xyz": [xyz_1, xyz_2],
-                }
-    return splits_log
-
-
-def extract_coords(parts):
-    coords = []
-    for p in parts:
-        p = p.replace("[", "").replace("]", "").replace(",", "")
-        coords.append(float(p))
-    return np.array(coords, dtype=int)
 
 
 def write_json(path, contents):
@@ -349,8 +428,7 @@ def get_img_mip(img, axis=0):
 
 def normalize_img(img):
     img -= np.min(img)
-    img = img / np.max(img)
-    return img
+    return img / np.max(img)
 
 
 def time_writer(t, unit="seconds"):
