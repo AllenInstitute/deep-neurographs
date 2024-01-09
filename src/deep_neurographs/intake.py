@@ -8,16 +8,17 @@ Builds neurograph for neuron reconstruction.
 
 """
 
-import os
 import concurrent.futures
-
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from google.cloud import storage
 from io import BytesIO
-from deep_neurographs import swc_utils, utils
-from deep_neurographs.neurograph import NeuroGraph
 from time import time
 from zipfile import ZipFile
+
+from google.cloud import storage
+
+from deep_neurographs import swc_utils, utils
+from deep_neurographs.neurograph import NeuroGraph
 
 N_PROPOSALS_PER_LEAF = 3
 OPTIMIZE_ALIGNMENT = False
@@ -45,8 +46,9 @@ def build_neurograph_from_local(
     size_threshold=SIZE_THRESHOLD,
     smooth=SMOOTH,
 ):
-    assert utils.xor(swc_dir, swc_list), "Error: provide swc_dir or swc_paths"
+    assert utils.xor(swc_dir, swc_paths), "Error: provide swc_dir or swc_paths"
     neurograph = NeuroGraph(
+        swc_dir=swc_dir,
         img_path=img_path,
         optimize_depth=optimize_depth,
         optimize_alignment=optimize_alignment,
@@ -65,7 +67,7 @@ def build_neurograph_from_local(
     if search_radius > 0:
         neurograph.generate_proposals(
             n_proposals_per_leaf=n_proposals_per_leaf,
-            search_radius=search_radius
+            search_radius=search_radius,
         )
     return neurograph
 
@@ -100,7 +102,7 @@ def build_neurograph_from_gcs_zips(
     if search_radius > 0:
         neurograph.generate_proposals(
             n_proposals_per_leaf=n_proposals_per_leaf,
-            search_radius=search_radius
+            search_radius=search_radius,
         )
     return neurograph
 
@@ -117,16 +119,13 @@ def init_immutables_from_local(
     swc_paths = get_paths(swc_dir) if swc_dir else swc_paths
     for path in swc_paths:
         neurograph.ingest_swc_from_local(
-            path,
-            prune=True,
-            prune_depth=16,
-            smooth=smooth,
+            path, prune=True, prune_depth=16, smooth=smooth
         )
     return neurograph
 
 
 def get_paths(swc_dir):
-    swc_paths = []
+    paths = []
     for f in utils.listdir(swc_dir, ext=".swc"):
         paths.append(os.path.join(swc_dir, f))
     return paths
@@ -145,7 +144,7 @@ def init_immutables_from_gcs_zips(
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     zip_paths = list_gcs_filenames(bucket, cloud_path, ".zip")
-    n_swc_files = 2080791 #count_files_in_zips(bucket, zip_paths)
+    n_swc_files = 2080791  # count_files_in_zips(bucket, zip_paths)
     chunk_size = int(n_swc_files * 0.05)
     print("# zip files:", len(zip_paths))
     print(f"# swc files: {utils.reformat_number(n_swc_files)} \n\n")
@@ -158,10 +157,7 @@ def init_immutables_from_gcs_zips(
     print(f"-- Starting Multithread Reads with chunk_size={chunk_size} -- \n")
     for path in zip_paths:
         # Add to neurograph
-        swc_dicts = process_gcs_zip(
-            bucket,
-            path,
-        )
+        swc_dicts = process_gcs_zip(bucket, path)
         if smooth:
             with concurrent.futures.ProcessPoolExecutor() as executor:
                 swc_dicts = list(executor.map(swc_utils.smooth, swc_dicts))
@@ -199,7 +195,7 @@ def list_files_in_gcs_zip(zip_content):
     Lists all files in a zip file stored in a GCS bucket.
 
     """
-    with ZipFile(BytesIO(zip_content), 'r') as zip_file:
+    with ZipFile(BytesIO(zip_content), "r") as zip_file:
         return zip_file.namelist()
 
 
@@ -233,18 +229,16 @@ def process_gcs_zip(bucket, zip_path):
 
 
 def report_runtimes(
-    n_files,
-    n_files_completed,
-    chunk_size,
-    chunk_runtime,
-    total_runtime,
+    n_files, n_files_completed, chunk_size, chunk_runtime, total_runtime
 ):
     n_files_remaining = n_files - n_files_completed
     file_rate = chunk_runtime / chunk_size
-    eta = (total_runtime + n_files_remaining  * file_rate) / 60
+    eta = (total_runtime + n_files_remaining * file_rate) / 60
     files_processed = f"{n_files_completed - chunk_size}-{n_files_completed}"
     print(f"Completed: {round(100 * n_files_completed / n_files, 2)}%")
-    print(f"Runtime for Files : {files_processed} {round(chunk_runtime, 4)} seconds")
+    print(
+        f"Runtime for Files : {files_processed} {round(chunk_runtime, 4)} seconds"
+    )
     print(f"File Processing Rate: {file_rate} seconds")
     print(f"Approximate Total Runtime: {round(eta, 4)} minutes")
     print("")

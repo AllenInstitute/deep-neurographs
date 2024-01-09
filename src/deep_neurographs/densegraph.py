@@ -66,7 +66,7 @@ class DenseGraph:
         for f in utils.listdir(swc_dir, ext=".swc"):
             # Construct Graph
             path = os.path.join(swc_dir, f)
-            swc_dict = swc_utils.parse(path)
+            swc_dict = swc_utils.parse_local_swc(path)
             graph, xyz_to_node = swc_utils.file_to_graph(
                 swc_dict, set_attrs=True, return_dict=True
             )
