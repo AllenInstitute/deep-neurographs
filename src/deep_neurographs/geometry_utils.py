@@ -60,7 +60,7 @@ def get_midpoint(xyz_1, xyz_2):
 
 # Smoothing
 def smooth_branch(xyz, s=None):
-    if xyz.shape[0] > 5:
+    if xyz.shape[0] > 8:
         t = np.linspace(0, 1, xyz.shape[0])
         spline_x, spline_y, spline_z = fit_spline(xyz, s=s)
         xyz = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
@@ -95,7 +95,6 @@ def fill_path(img, path, val=-1):
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
         img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
-        # img[x, y, z] = val
     return img
 
 
