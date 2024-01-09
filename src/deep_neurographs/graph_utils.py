@@ -14,17 +14,6 @@ import networkx as nx
 from deep_neurographs import swc_utils, utils
 
 
-def get_irreducibles(graph):
-    leafs = []
-    junctions = []
-    for i in graph.nodes:
-        if graph.degree[i] == 1:
-            leafs.append(i)
-        elif graph.degree[i] > 2:
-            junctions.append(i)
-    return leafs, junctions
-
-
 def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16):
     graph = swc_utils.file_to_graph(swc_dict)
     leafs, junctions = get_irreducibles(graph)
@@ -38,6 +27,17 @@ def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16):
             junctions, irreducible_edges
         )
     return leafs, junctions, irreducible_edges
+
+
+def get_irreducibles(graph):
+    leafs = []
+    junctions = []
+    for i in graph.nodes:
+        if graph.degree[i] == 1:
+            leafs.append(i)
+        elif graph.degree[i] > 2:
+            junctions.append(i)
+    return leafs, junctions
 
 
 def extract_irreducible_edges(

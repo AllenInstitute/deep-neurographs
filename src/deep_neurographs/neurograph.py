@@ -17,6 +17,7 @@ from scipy.spatial import KDTree
 
 from deep_neurographs import geometry_utils
 from deep_neurographs import graph_utils as gutils
+from deep_neurographs import swc_utils
 from deep_neurographs import utils
 from deep_neurographs.densegraph import DenseGraph
 from deep_neurographs.geometry_utils import dist as get_dist
@@ -34,7 +35,7 @@ class NeuroGraph(nx.Graph):
 
     def __init__(
         self,
-        swc_path,
+        swc_dir=None,
         img_path=None,
         label_mask=None,
         optimize_depth=10,
@@ -42,6 +43,7 @@ class NeuroGraph(nx.Graph):
         optimize_path=False,
         origin=None,
         shape=None,
+        size_threshold=30,
     ):
         """
         Parameters
@@ -54,10 +56,11 @@ class NeuroGraph(nx.Graph):
 
         """
         super(NeuroGraph, self).__init__()
-        self.path = swc_path
+        self.path = swc_dir
         self.label_mask = label_mask
         self.leafs = set()
         self.junctions = set()
+        self.size_threshold = size_threshold
 
         self.immutable_edges = set()
         self.mutable_edges = set()
@@ -98,7 +101,20 @@ class NeuroGraph(nx.Graph):
         self.densegraph = DenseGraph(self.path)
 
     # --- Add nodes or edges ---
-    def generate_immutables(
+    def ingest_swc_from_local(self, path, prune=True, prune_depth=16, smooth=True):
+        swc_id = utils.get_id(path)
+        swc_dict = swc_utils.parse_local_swc(
+            path,
+            bbox=self.bbox,
+            img_shape=self.shape,
+        )
+        if len(swc_dict["xyz"]) > self.size_threshold:
+            swc_dict = swc_utils.smooth(swc_dict) if smooth else swc_dict
+            self.add_immutables(
+                swc_id, swc_dict, prune=prune, prune_depth=prune_depth
+            )
+
+    def add_immutables(
         self, swc_id, swc_dict, prune=True, prune_depth=16
     ):
         """
@@ -109,7 +125,7 @@ class NeuroGraph(nx.Graph):
         node_id : int
             Node id.
         swc_dict : dict
-            Dictionary generated from an swc where the keys are swc type
+            Dictionary generated from an swc where the keys are swc
             attributes.
 
         Returns
@@ -156,13 +172,10 @@ class NeuroGraph(nx.Graph):
             self.leafs.add(node_id[l])
 
         for j in junctions:
-            self.junctions.add(node_id[j])
-
-        # Build kdtree
-        self._init_kdtree()
+            self.junctions.add(node_id[j])        
 
     # --- Proposal Generation ---
-    def generate_proposals(self, num_proposals=3, search_radius=25.0):
+    def generate_proposals(self, n_proposals_per_leaf=3, search_radius=25.0):
         """
         Generates edges for the graph.
 
@@ -171,13 +184,14 @@ class NeuroGraph(nx.Graph):
         None
 
         """
+        self._init_kdtree()
         self.mutable_edges = set()
         for leaf in self.leafs:
             if not self.is_contained(leaf):
                 continue
             xyz_leaf = self.nodes[leaf]["xyz"]
-            proposals = self._get_proposals(
-                leaf, xyz_leaf, num_proposals, search_radius
+            proposals = self.__get_proposals(
+                leaf, xyz_leaf, n_proposals_per_leaf, search_radius
             )
             for xyz in proposals:
                 # Extract info on mutable connection
@@ -205,20 +219,29 @@ class NeuroGraph(nx.Graph):
         if self.optimize_alignment or self.optimize_path:
             self.run_optimization()
 
-    def _get_proposals(
-        self, query_id, query_xyz, num_proposals, search_radius
+    def __get_proposals(
+        self, query_id, query_xyz, n_proposals_per_leaf, search_radius
     ):
         """
+        Generates edge proposals for node "query_id" by finding points on
+        distinct connected components near "query_xyz".
+
         Parameters
         ----------
         query_id : int
             Node id of the query node.
         query_xyz : tuple[float]
-            The (x,y,z) coordinates of the query node.
+            (x,y,z) coordinates of the query node.
+        n_proposals_per_leaf : int
+            Number of proposals generated from node "query_id".
+        search_radius : float
+            Maximum Euclidean length of edge proposal.
 
         Returns
         -------
-        None.
+        list
+            List of "n_proposals_per_leaf" best edge proposals generated from
+            "query_node".
 
         """
         best_xyz = dict()
@@ -238,17 +261,17 @@ class NeuroGraph(nx.Graph):
                 elif d < best_dist[swc_id]:
                     best_xyz[swc_id] = xyz
                     best_dist[swc_id] = d
-        return self._get_best_edges(best_dist, best_xyz, num_proposals)
+        return self._get_best_edges(best_dist, best_xyz, n_proposals_per_leaf)
 
-    def _get_best_edges(self, dists, xyz, num_proposals):
+    def _get_best_edges(self, dists, xyz, n_proposals_per_leaf):
         """
-        Gets the at most "num_proposals" nodes that are closest to the
-        target node.
+        Gets the at most "n_proposals_per_leaf" nodes that are closest to
+        "xyz".
 
         """
-        if len(dists.keys()) > num_proposals:
+        if len(dists.keys()) > n_proposals_per_leaf:
             keys = sorted(dists, key=dists.__getitem__)
-            return [xyz[key] for key in keys[0:num_proposals]]
+            return [xyz[key] for key in keys[0:n_proposals_per_leaf]]
         else:
             return list(xyz.values())
 

@@ -422,6 +422,15 @@ def is_contained(bbox, img_shape, xyz):
 
 
 # --- miscellaneous ---
+def get_id(path):
+    """
+    Gets segment id of the swc file at "path".
+
+    """
+    filename = path.split("/")[-1]
+    return filename.replace(".0.swc", "")
+
+
 def get_img_mip(img, axis=0):
     return np.max(img, axis=axis)
 
@@ -429,6 +438,10 @@ def get_img_mip(img, axis=0):
 def normalize_img(img):
     img -= np.min(img)
     return img / np.max(img)
+
+
+def reformat_number(number):
+    return f"{number:,}"
 
 
 def time_writer(t, unit="seconds"):
@@ -449,3 +462,10 @@ def progress_bar(current, total, bar_length=50):
         f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
     )
     print(f"\r{bar}", end="", flush=True)
+
+def xor(a, b):
+    if (a and b) or (not a and not b):
+        return False
+    else:
+        return True
+    

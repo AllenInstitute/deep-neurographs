@@ -22,7 +22,23 @@ from deep_neurographs import utils
 
 
 # -- io utils --
-def parse(path, anisotropy=[1.0, 1.0, 1.0], bbox=None, img_shape=None):
+def parse_local_swc(path, bbox=None, img_shape=None):
+    return parse(
+        read_from_local(path),
+        bbox=bbox,
+        img_shape=img_shape,
+    )
+
+
+def parse_gcs_zip(zip_file, path, bbox=None, img_shape=None):
+    return parse(
+        read_from_gcs_zip(zip_file, path),
+        bbox=bbox,
+        img_shape=img_shape,
+    )
+
+
+def parse(swc_contents, bbox=None, img_shape=None):
     """
     Parses an swc file to extract the contents which is stored in a dict. Note
     that node_ids from swc are refactored to index from 0 to n-1 where n is
@@ -32,28 +48,23 @@ def parse(path, anisotropy=[1.0, 1.0, 1.0], bbox=None, img_shape=None):
     ----------
     path : str
         Path to an swc file.
-    anisotropy : list[float]
-        Image to real-world coordinates scaling factors for [x, y, z] due to
-        anistropy of the microscope.
+    ...
 
     Returns
     -------
     ...
 
     """
-    # Initialize swc
-    swc_dict = {"id": [], "radius": [], "pid": [], "xyz": []}
-
-    # Parse raw data
     min_id = np.inf
     offset = [0, 0, 0]
-    for line in read(path):
+    swc_dict = {"id": [], "radius": [], "pid": [], "xyz": []}
+    for line in swc_contents:
         if line.startswith("# OFFSET"):
             parts = line.split()
             offset = read_xyz(parts[2:5])
         if not line.startswith("#") and len(line) > 0:
             parts = line.split()
-            xyz = read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
+            xyz = read_xyz(parts[2:5], offset=offset)
             if bbox:
                 if not utils.is_contained(bbox, img_shape, xyz):
                     break
@@ -73,13 +84,35 @@ def parse(path, anisotropy=[1.0, 1.0, 1.0], bbox=None, img_shape=None):
     return swc_dict
 
 
-def read(path):
+def read_from_local(path):
+    """
+    Reads swc file stored at "path" on local machine.
+
+    Parameters
+    ----------
+    Path : str
+        Path to swc file to be read.
+
+    Returns
+    -------
+    list
+        List such that each entry is a line from the swc file.
+
+    """
     with open(path, "r") as file:
-        contents = file.readlines()
-    return contents
+        return file.readlines()
 
 
-def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
+def read_from_gcs_zip(zip_file, path):
+    """
+    Reads the content of an swc file from a zip file in a GCS bucket.
+
+    """
+    with zip_file.open(path) as text_file:
+        return text_file.read().decode('utf-8').splitlines()
+
+
+def read_xyz(xyz, offset=[0, 0, 0]):
     """
     Reads the (z,y,x) coordinates from an swc file, then reverses and scales
     them.
@@ -88,18 +121,14 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
     ----------
     zyx : str
         (z,y,x) coordinates.
-    anisotropy : list[float]
-        Image to real-world coordinates scaling factors for [x, y, z] due to
-        anistropy of the microscope.
 
     Returns
     -------
-    list
+    tuple
         The (x,y,z) coordinates from an swc file.
 
     """
-    xyz = [float(xyz[i]) * anisotropy[i] + offset[i] for i in range(3)]
-    return tuple(xyz)
+    return tuple([float(xyz[i]) + offset[i] for i in range(3)])
 
 
 def write_swc(path, contents):
@@ -282,7 +311,7 @@ def smooth(swc_dict):
 
 def upd_edge(xyz, idxs):
     idxs = np.array(idxs)
-    xyz[idxs] = geometry_utils.smooth_branch(xyz[idxs].copy())
+    xyz[idxs] = geometry_utils.smooth_branch(xyz[idxs], s=10)
     return xyz
 
 
