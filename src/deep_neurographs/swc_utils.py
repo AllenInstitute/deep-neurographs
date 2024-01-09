@@ -23,18 +23,12 @@ from deep_neurographs import utils
 
 # -- io utils --
 def parse_local_swc(path, bbox=None, img_shape=None):
-    return parse(
-        read_from_local(path),
-        bbox=bbox,
-        img_shape=img_shape,
-    )
+    return parse(read_from_local(path), bbox=bbox, img_shape=img_shape)
 
 
 def parse_gcs_zip(zip_file, path, bbox=None, img_shape=None):
     return parse(
-        read_from_gcs_zip(zip_file, path),
-        bbox=bbox,
-        img_shape=img_shape,
+        read_from_gcs_zip(zip_file, path), bbox=bbox, img_shape=img_shape
     )
 
 
@@ -109,7 +103,7 @@ def read_from_gcs_zip(zip_file, path):
 
     """
     with zip_file.open(path) as text_file:
-        return text_file.read().decode('utf-8').splitlines()
+        return text_file.read().decode("utf-8").splitlines()
 
 
 def read_xyz(xyz, offset=[0, 0, 0]):

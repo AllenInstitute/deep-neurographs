@@ -17,8 +17,7 @@ from scipy.spatial import KDTree
 
 from deep_neurographs import geometry_utils
 from deep_neurographs import graph_utils as gutils
-from deep_neurographs import swc_utils
-from deep_neurographs import utils
+from deep_neurographs import swc_utils, utils
 from deep_neurographs.densegraph import DenseGraph
 from deep_neurographs.geometry_utils import dist as get_dist
 
@@ -66,6 +65,7 @@ class NeuroGraph(nx.Graph):
         self.mutable_edges = set()
         self.target_edges = set()
         self.xyz_to_edge = dict()
+        self.kdtree = None
 
         self.img_path = img_path
         self.optimize_depth = optimize_depth
@@ -101,12 +101,12 @@ class NeuroGraph(nx.Graph):
         self.densegraph = DenseGraph(self.path)
 
     # --- Add nodes or edges ---
-    def ingest_swc_from_local(self, path, prune=True, prune_depth=16, smooth=True):
+    def ingest_swc_from_local(
+        self, path, prune=True, prune_depth=16, smooth=True
+    ):
         swc_id = utils.get_id(path)
         swc_dict = swc_utils.parse_local_swc(
-            path,
-            bbox=self.bbox,
-            img_shape=self.shape,
+            path, bbox=self.bbox, img_shape=self.shape
         )
         if len(swc_dict["xyz"]) > self.size_threshold:
             swc_dict = swc_utils.smooth(swc_dict) if smooth else swc_dict
@@ -114,9 +114,7 @@ class NeuroGraph(nx.Graph):
                 swc_id, swc_dict, prune=prune, prune_depth=prune_depth
             )
 
-    def add_immutables(
-        self, swc_id, swc_dict, prune=True, prune_depth=16
-    ):
+    def add_immutables(self, swc_id, swc_dict, prune=True, prune_depth=16):
         """
         Adds nodes to graph from a dictionary generated from an swc files.
 
@@ -172,7 +170,7 @@ class NeuroGraph(nx.Graph):
             self.leafs.add(node_id[l])
 
         for j in junctions:
-            self.junctions.add(node_id[j])        
+            self.junctions.add(node_id[j])
 
     # --- Proposal Generation ---
     def generate_proposals(self, n_proposals_per_leaf=3, search_radius=25.0):
@@ -184,7 +182,7 @@ class NeuroGraph(nx.Graph):
         None
 
         """
-        self._init_kdtree()
+        self.init_kdtree()
         self.mutable_edges = set()
         for leaf in self.leafs:
             if not self.is_contained(leaf):
@@ -305,10 +303,10 @@ class NeuroGraph(nx.Graph):
             self.xyz_to_edge[tuple(xyz)] = edge
         self.immutable_edges.add(frozenset(edge))
 
-    def _init_kdtree(self):
+    def init_kdtree(self):
         """
         Builds a KD-Tree from the (x,y,z) coordinates of the subnodes of
-        each node in the graph.
+        each connected component in the graph.
 
         Parameters
         ----------
@@ -319,7 +317,8 @@ class NeuroGraph(nx.Graph):
         None
 
         """
-        self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
+        if not self.kdtree:
+            self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
 
     def _query_kdtree(self, query, d):
         """
@@ -385,9 +384,12 @@ class NeuroGraph(nx.Graph):
     # --- Ground Truth Generation ---
     def init_targets(self, target_neurograph):
         # Initializations
+        msg = "Error: Provide swc_dir/swc_paths to initialize target edges!"
+        assert target_neurograph.path, msg
+        target_neurograph.init_densegraph()
+        target_neurograph.init_kdtree()
         self.target_edges = set()
         self.init_predicted_graph()
-        target_neurograph.init_densegraph()
 
         # Add best simple edges
         remaining_proposals = []

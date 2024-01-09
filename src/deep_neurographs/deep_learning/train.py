@@ -223,8 +223,17 @@ def random_split(train_set, train_ratio=0.85):
 
 
 def eval_network(X, model):
+    # Prep data
+    if type(X) == dict:
+        X = [
+            torch.tensor(X["features"], dtype=torch.float32),
+            torch.tensor(X["imgs"], dtype=torch.float32),
+        ]
+    else:
+        X = torch.tensor(X, dtype=torch.float32)
+
+    # Run model
     model.eval()
-    X = torch.tensor(X, dtype=torch.float32)
     with torch.no_grad():
         y_pred = sigmoid(model.net(X))
     return np.array(y_pred)
