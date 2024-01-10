@@ -22,14 +22,20 @@ from deep_neurographs import utils
 
 
 # -- io utils --
-def parse_local_swc(path, bbox=None, img_shape=None):
-    return parse(read_from_local(path), bbox=bbox, img_shape=img_shape)
+def parse_local_swc(path, bbox=None, img_shape=None, min_size=0):
+    swc_contents = read_from_local(path)
+    if len(swc_contents) > min_size:
+        return parse(swc_contents, bbox=bbox, img_shape=img_shape)
+    else:
+        return []
 
 
-def parse_gcs_zip(zip_file, path, bbox=None, img_shape=None):
-    return parse(
-        read_from_gcs_zip(zip_file, path), bbox=bbox, img_shape=img_shape
-    )
+def parse_gcs_zip(zip_file, path, bbox=None, img_shape=None, min_size=0):
+    swc_contents = read_from_gcs_zip(zip_file, path)
+    if len(swc_contents) > min_size:
+        return parse(swc_contents, bbox=bbox, img_shape=img_shape)
+    else:
+        return []
 
 
 def parse(swc_contents, bbox=None, img_shape=None):
@@ -59,7 +65,7 @@ def parse(swc_contents, bbox=None, img_shape=None):
         if not line.startswith("#") and len(line) > 0:
             parts = line.split()
             xyz = read_xyz(parts[2:5], offset=offset)
-            if bbox:
+            if bbox and img_shape:
                 if not utils.is_contained(bbox, img_shape, xyz):
                     break
 
@@ -240,7 +246,7 @@ def make_entry(graph, i, parent, r, reindex):
 
 
 # -- Conversions --
-def file_to_graph(swc_dict, graph_id=None, set_attrs=False, return_dict=False):
+def to_graph(swc_dict, graph_id=None, set_attrs=False, return_dict=False):
     graph = nx.Graph(graph_id=graph_id)
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
     xyz_to_node = dict()
@@ -255,32 +261,11 @@ def file_to_graph(swc_dict, graph_id=None, set_attrs=False, return_dict=False):
         return graph
 
 
-def file_to_volume(swc_dict, sparse=False, vid=None, radius_plus=0):
-    volume = []
-    for i in swc_dict["id"]:
-        r = max(int(np.round(swc_dict["radius"][i] + radius_plus)), 5)
-        xyz = cp(swc_dict["xyz"][i])
-        volume.extend(generate_coords(xyz, r))
-    return dict(zip_broadcast(volume, vid)) if sparse else np.array(volume)
-
-
-def dir_to_volume(swc_dir, radius_plus=0):
-    volume = dict()
-    for vid, f in enumerate(utils.listdir(swc_dir, ext=".swc")):
-        swc_dict = smooth(parse(os.path.join(swc_dir, f)))
-        volume.update(
-            file_to_volume(
-                swc_dict, sparse=True, vid=f, radius_plus=radius_plus
-            )
-        )
-    return volume
-
-
 # -- miscellaneous --
 def smooth(swc_dict):
     if len(swc_dict["xyz"]) > 10:
         xyz = np.array(swc_dict["xyz"])
-        graph = file_to_graph(swc_dict)
+        graph = to_graph(swc_dict)
         leafs, junctions = gutils.get_irreducibles(graph)
         if len(junctions) == 0:
             xyz = geometry_utils.smooth_branch(xyz)
