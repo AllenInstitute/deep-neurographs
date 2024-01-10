@@ -15,13 +15,11 @@ from deep_neurographs import swc_utils, utils
 
 
 def extract_irreducible_graph(swc_dict, prune=True, prune_depth=16):
-    graph = swc_utils.file_to_graph(swc_dict)
+    graph = swc_utils.to_graph(swc_dict)
     leafs, junctions = get_irreducibles(graph)
     irreducible_edges, leafs = extract_irreducible_edges(
         graph, leafs, junctions, swc_dict, prune=prune, prune_depth=prune_depth
     )
-
-    # Check irreducility holds after pruning
     if prune:
         irreducible_edges, junctions = check_irreducibility(
             junctions, irreducible_edges
