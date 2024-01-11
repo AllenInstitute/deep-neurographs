@@ -7,6 +7,9 @@ Created on Wed June 5 16:00:00 2023
 
 Routines that extract the irreducible components of a graph.
 
+--define what an irreducible is
+--define what a branch is
+
 """
 
 from copy import deepcopy
@@ -28,12 +31,13 @@ def get_irreducibles(swc_dict, prune=True, depth=16, smooth=True):
     ----------
     swc_dict : dict
         Contents of an swc file.
-    prune : True
-        Indication of whether to prune short branches.
-    depth : int
-        Path length that determines whether a branch is short.
-    smooth : bool
-        Indication of whether to smooth each branch.
+    prune : bool, optional
+        Indication of whether to prune short branches. The default is True.
+    depth : int, optional
+        Path length that determines whether a branch is short. The default is
+        16.
+    smooth : bool, optional
+        Indication of whether to smooth each branch. The default is True.
 
     Returns
     -------
@@ -107,6 +111,23 @@ def get_irreducible_nodes(graph):
 
 
 def prune_short_branches(graph, depth):
+    """
+    Prunes all short branches from "graph". A short branch is a path between a
+    leaf and junction node with a path length smaller than depth.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched
+    depth : int
+        Path length that determines whether a branch is short.
+
+    Returns
+    -------
+    graph : networkx.Graph
+        Graph with short branches pruned.
+
+    """
     remove_nodes = []
     for leaf in get_leafs(graph):
         remove_nodes.extend(inspect_branch(graph, leaf, depth))
@@ -115,6 +136,26 @@ def prune_short_branches(graph, depth):
 
 
 def inspect_branch(graph, leaf, depth):
+    """
+    Determines whether the branch emanating from "leaf" should be pruned.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+    leaf : int
+        Leaf node being inspected to determine whether it is the endpoint of
+        a short branch that should be pruned.
+    depth : int
+        Path length that determines whether a branch is short.
+
+    Returns
+    -------
+    list
+        If branch is short, then the list of nodes in the branch is returned.
+        Otherwise, an empty list is returned.
+
+    """
     path = [leaf]
     for (i, j) in nx.dfs_edges(graph, source=leaf, depth_limit=depth):
         if graph.degree(j) > 2:
@@ -125,6 +166,19 @@ def inspect_branch(graph, leaf, depth):
 
 
 def get_leafs(graph):
+    """
+    Gets leaf nodes of "graph".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched
+
+    Returns
+    -------
+    list
+        Leaf nodes "graph".
+    """
     return [i for i in graph.nodes if graph.degree[i] == 1]
 
 
