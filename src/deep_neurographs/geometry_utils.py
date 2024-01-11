@@ -9,9 +9,9 @@ from deep_neurographs import utils
 
 
 # Directional Vectors
-def get_directional(neurograph, i, proposal_tangent, window=5):
+def get_directional(neurograph, i, proposal_tangent, window=5, n_svd_points=10):
     directionals = []
-    d = neurograph.optimize_depth
+    d = n_svd_points
     for branch in neurograph.get_branches(i):
         if branch.shape[0] >= window + d:
             xyz = deepcopy(branch[d:, :])

@@ -19,7 +19,7 @@ import numpy as np
 import tensorstore as ts
 import zarr
 
-ANISOTROPY = [0.748, 0.748, 1.0]
+ANISOTROPY = np.array([0.748, 0.748, 1.0])
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "zarr"]
 
 
@@ -393,15 +393,15 @@ def to_world(xyz, shift=[0, 0, 0]):
     return tuple([xyz[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
 
 
-def to_img(xyz, shift=[0, 0, 0]):
+def to_img(xyz, shift=np.array([0, 0, 0])):
     return apply_anisotropy(xyz - shift, return_int=True)
 
 
 def apply_anisotropy(xyz, return_int=False):
     if return_int:
-        return [round(xyz[i] / ANISOTROPY[i]) for i in range(3)]
+        return (xyz / ANISOTROPY).astype(int)
     else:
-        return [xyz[i] / ANISOTROPY[i] for i in range(3)]
+        return xyz / ANISOTROPY
 
 
 # --- math utils ---
@@ -413,17 +413,28 @@ def get_avg_std(data, weights=None):
 
 def is_contained(bbox, xyz):
     xyz = apply_anisotropy(xyz - bbox["min"])
-    dims = bbox["max"] - bbox["min"]
-    for i in range(3):
-        lower_bool = xyz[i] < 0
-        upper_bool = xyz[i] >= dims[i]
-        if lower_bool or upper_bool:
-            return False
-    return True
+    shape = bbox["max"] - bbox["min"]
+    if any(xyz < 0) or any(xyz >= shape):
+        return False
+    else:
+        return True
 
 
 # --- miscellaneous ---
-def get_id(path):
+def get_bbox(origin, shape):
+    """
+    Origin is assumed to be top, front, left corner.
+
+    """
+    if origin and shape:
+        origin = np.array(origin)
+        shape = np.array(shape)
+        return {"min": origin, "max": origin + shape}
+    else:
+        return None
+
+
+def get_swc_id(path):
     """
     Gets segment id of the swc file at "path".
 

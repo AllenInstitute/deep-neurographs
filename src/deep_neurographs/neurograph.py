@@ -35,54 +35,37 @@ class NeuroGraph(nx.Graph):
 
     def __init__(
         self,
+        bbox=None,
         swc_dir=None,
         img_path=None,
         label_mask=None,
-        optimize_depth=10,
-        optimize_alignment=False,
-        optimize_path=False,
-        origin=None,
-        shape=None,
-        size_threshold=30,
     ):
-        """
-        Parameters
-        ----------
-        None.
-
-        Returns
-        -------
-        None.
-
-        """
         super(NeuroGraph, self).__init__()
-        self.path = swc_dir
+        # Initialize paths
+        self.img_path = img_path
         self.label_mask = label_mask
+        self.swc_paths = swc_dir
+
+        # Initialize node and edge sets
         self.leafs = set()
         self.junctions = set()
-        self.size_threshold = size_threshold
-
         self.immutable_edges = set()
         self.mutable_edges = set()
         self.target_edges = set()
+
+        # Initialize data structures for proposals
+        self.complex_proposals = set()
+        self.simple_proposals = set()
         self.xyz_to_edge = dict()
         self.kdtree = None
 
-        self.img_path = img_path
-        self.optimize_depth = optimize_depth
-        self.optimize_alignment = optimize_alignment
-        self.optimize_path = optimize_path
-        self.simple_proposals = set()
-        self.complex_proposals = set()
-
-        self.bbox = None
-        self.shape = shape
-        if origin and shape:
-            self.bbox = {
-                "min": np.array(origin),
-                "max": np.array([origin[i] + shape[i] for i in range(3)]),
-            }
-            self.origin = np.array(origin)
+        # Initialize bounding box (if exists)
+        self.bbox = bbox
+        if self.bbox:
+            self.origin = bbox["min"]
+            self.shape = (bbox["max"] - bbox["min"]).astype(int)
+        else:
+            self.shape = None
 
     def init_immutable_graph(self, add_attrs=False):
         immutable_graph = nx.Graph()
@@ -99,57 +82,26 @@ class NeuroGraph(nx.Graph):
         self.predicted_graph = self.init_immutable_graph()
 
     def init_densegraph(self):
-        self.densegraph = DenseGraph(self.path)
+        self.densegraph = DenseGraph(self.swc_paths)
 
     # --- Add nodes or edges ---
-    def ingest_swc_from_local(
-        self, path, prune=True, prune_depth=16, smooth=True
-    ):
-        # Parse swc
-        swc_id = utils.get_id(path)
-        swc_dict = swc_utils.parse_local_swc(path, bbox=self.bbox)
-        if len(swc_dict["xyz"]) > self.size_threshold:
-            return None
-
-        # Build neurograph
-        t0 = time()
-        leafs, junctions, edges = gutils.get_irreducibles(
-            swc_dict, prune=prune, depth=prune_depth, smooth=smooth
-        )
-        self.extraction += time() - t0
-        self.add_immutables(swc_id, swc_dict, leafs, junctions, edges)
-
-    def add_immutables(self, swc_id, swc_dict, leafs, junctions, edges):
-        """
-        Adds nodes to graph from a dictionary generated from an swc files.
-
-        Parameters
-        ----------
-        node_id : int
-            Node id.
-        swc_dict : dict
-            Dictionary generated from an swc where the keys are swc
-            attributes.
-
-        Returns
-        -------
-        None.
-
-        """
+    def add_immutables(self, swc_dict, irreducibles):
         # Add nodes
-
         node_id = dict()
+        leafs = irreducibles["leafs"]
+        junctions = irreducibles["junctions"]
         for i in list(leafs) + list(junctions):
             node_id[i] = len(self.nodes)
             self.add_node(
                 node_id[i],
                 xyz=np.array(swc_dict["xyz"][i]),
                 radius=swc_dict["radius"][i],
-                swc_id=swc_id,
+                swc_id=swc_dict["swc_id"],
             )
 
         # Add edges
         t0 = time()
+        edges = irreducibles["edges"]
         for i, j in edges.keys():
             # Get edge
             edge = (node_id[i], node_id[j])
@@ -159,7 +111,11 @@ class NeuroGraph(nx.Graph):
             # Add edge
             self.immutable_edges.add(frozenset(edge))
             self.add_edge(
-                node_id[i], node_id[j], xyz=xyz, radius=radii, swc_id=swc_id
+                node_id[i],
+                node_id[j],
+                xyz=xyz,
+                radius=radii,
+                swc_id=swc_dict["swc_id"]
             )
             xyz_to_edge = dict((tuple(xyz), edge) for xyz in xyz)
             check_xyz = set(xyz_to_edge.keys())
@@ -168,7 +124,6 @@ class NeuroGraph(nx.Graph):
                 for xyz in collisions:
                     del xyz_to_edge[xyz]
             self.xyz_to_edge.update(xyz_to_edge)
-        self.add_edges_timer += time() - t0
 
         # Update leafs and junctions
         for l in leafs:
@@ -178,7 +133,7 @@ class NeuroGraph(nx.Graph):
             self.junctions.add(node_id[j])
 
     # --- Proposal Generation ---
-    def generate_proposals(self, n_proposals_per_leaf=3, search_radius=25.0):
+    def generate_proposals(self, search_radius, n_proposals_per_leaf=3, optimize=False, optimization_depth=10):
         """
         Generates edges for the graph.
 
@@ -212,6 +167,7 @@ class NeuroGraph(nx.Graph):
                     node = j
                     xyz = self.nodes[node]["xyz"]
                 else:
+                    # run complex optimization here
                     idxs = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0]
                     node = self.add_immutable_node((i, j), attrs, idxs[0])
 
@@ -219,7 +175,8 @@ class NeuroGraph(nx.Graph):
                 self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
                 self.mutable_edges.add(frozenset((leaf, node)))
 
-        if self.optimize_alignment or self.optimize_path:
+        # Check whether to optimization proposals
+        if optimize:
             self.run_optimization()
 
     def __get_proposals(
@@ -352,13 +309,7 @@ class NeuroGraph(nx.Graph):
         )
         for edge in self.mutable_edges:
             xyz_1, xyz_2 = geometry_utils.optimize_alignment(self, img, edge)
-            proposal = [self.to_world(xyz_1)]
-            if self.optimize_path:
-                path = geometry_utils.optimize_path(
-                    img, self.origin, xyz_1, xyz_2
-                )
-                proposal.append(path)
-            proposal.append(self.to_world(xyz_2))
+            proposal = [self.to_world(xyz_1), self.to_world(xyz_2)]
             self.edges[edge]["xyz"] = np.vstack(proposal)
 
     def get_branch(self, xyz_or_node):
@@ -390,7 +341,7 @@ class NeuroGraph(nx.Graph):
     def init_targets(self, target_neurograph):
         # Initializations
         msg = "Error: Provide swc_dir/swc_paths to initialize target edges!"
-        assert target_neurograph.path, msg
+        assert target_neurograph.swc_path, msg
         target_neurograph.init_densegraph()
         target_neurograph.init_kdtree()
         self.target_edges = set()
@@ -569,8 +520,7 @@ class NeuroGraph(nx.Graph):
         return nbs
 
     def compute_length(self, edge, metric="l2"):
-        i, j = tuple(edge)
-        xyz_1, xyz_2 = self.get_edge_attr("xyz", i, j)
+        xyz_1, xyz_2 = self.get_edge_attr("xyz", edge)
         return get_dist(xyz_1, xyz_2, metric=metric)
 
     def path_length(self, metric="l2"):
@@ -592,14 +542,9 @@ class NeuroGraph(nx.Graph):
         if self.bbox:
             if type(node_or_xyz) == int:
                 node_or_xyz = deepcopy(self.nodes[node_or_xyz]["xyz"])
-            xyz = utils.apply_anisotropy(node_or_xyz - self.bbox["min"])
-            img_shape = np.array(self.shape)
-            for i in range(3):
-                lower_bool = xyz[i] < 32
-                upper_bool = xyz[i] > img_shape[i] - 32
-                if lower_bool or upper_bool:
-                    return False
-        return True
+            return utils.is_contained(self.bbox, node_or_xyz)
+        else:
+            return True
 
     def is_leaf(self, i):
         return True if self.immutable_degree(i) == 1 else False
@@ -613,13 +558,10 @@ class NeuroGraph(nx.Graph):
         self.predicted_graph.remove_edges_from([edge])
         return True
 
-    def get_edge_attr(self, key, i, j):
-        attr_1 = self.nodes[i][key]
-        attr_2 = self.nodes[j][key]
-        return attr_1, attr_2
-
-    def get_center(self):
-        return geometry_utils.get_midpoint(self.bbox["min"], self.bbox["max"])
+    def get_edge_attr(self, key, edge):
+        i, j = edge
+        xyz_arr = gutils.get_edge_attr(self, edge, key)
+        return xyz_arr[0], xyz_arr[1]
 
     def get_complex_proposals(self):
         return set([e for e in self.mutable_edges if not self.is_simple(e)])
@@ -629,10 +571,7 @@ class NeuroGraph(nx.Graph):
 
     def is_simple(self, edge):
         i, j = tuple(edge)
-        if self.immutable_degree(i) == 1 and self.immutable_degree(j) == 1:
-            return True
-        else:
-            return False
+        return True if self.is_leaf(i) and self.is_leaf(j) else False
 
     def to_img(self, node_or_xyz):
         if type(node_or_xyz) == int:

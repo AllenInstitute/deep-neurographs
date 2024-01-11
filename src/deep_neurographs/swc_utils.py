@@ -22,6 +22,15 @@ from deep_neurographs import utils
 
 
 # -- io utils --
+def process_local_paths(paths, min_size, bbox=None):
+    swc_dicts = []
+    for path in paths:
+        swc_dict_i = parse_local_swc(path, bbox=bbox)
+        swc_dict_i["swc_id"] = utils.get_swc_id(path)
+        swc_dicts.append(swc_dict_i)
+    return swc_dicts
+
+
 def parse_local_swc(path, bbox=None, min_size=0):
     swc_contents = read_from_local(path)
     parse_bool = len(swc_contents) > min_size

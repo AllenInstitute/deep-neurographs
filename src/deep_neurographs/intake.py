@@ -20,60 +20,65 @@ from google.cloud import storage
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import swc_utils, utils
 from deep_neurographs.neurograph import NeuroGraph
-from deep_neurographs.swc_utils import parse_gcs_zip
+from deep_neurographs.swc_utils import parse_gcs_zip, process_local_paths
 
 N_PROPOSALS_PER_LEAF = 3
-OPTIMIZE_ALIGNMENT = False
-OPTIMIZE_DEPTH = 15
+OPTIMIZE_PROPOSALS = False
+OPTIMIZATION_DEPTH = 15
 PRUNE = True
 PRUNE_DEPTH = 16
 SEARCH_RADIUS = 0
 MIN_SIZE = 30
-SMOOTH = False
+SMOOTH = True
 
 
-# --- Build graph ---
+# --- Build graph wrappers ---
 def build_neurograph_from_local(
     swc_dir=None,
     swc_paths=None,
-    img_patch_shape=None,
     img_patch_origin=None,
+    img_patch_shape=None,
     img_path=None,
+    min_size=MIN_SIZE,
     n_proposals_per_leaf=N_PROPOSALS_PER_LEAF,
     prune=PRUNE,
     prune_depth=PRUNE_DEPTH,
-    optimize_alignment=OPTIMIZE_ALIGNMENT,
-    optimize_depth=OPTIMIZE_DEPTH,
+    optimize_proposals=OPTIMIZE_PROPOSALS,
+    optimization_depth=OPTIMIZATION_DEPTH,
     search_radius=SEARCH_RADIUS,
-    min_size=MIN_SIZE,
     smooth=SMOOTH,
 ):
+    # Process swc files
+    t0 = time()
     assert utils.xor(swc_dir, swc_paths), "Error: provide swc_dir or swc_paths"
-    neurograph = NeuroGraph(
-        swc_dir=swc_dir,
+    bbox = utils.get_bbox(img_patch_origin, img_patch_shape)
+    paths = get_paths(swc_dir) if swc_dir else swc_paths
+    swc_dicts = process_local_paths(paths, min_size, bbox=bbox)
+    print(f"process_local_paths(): {time() - t0} seconds")
+
+    # Build neurograph
+    t0 = time()
+    neurograph = build_neurograph(
+        swc_dicts,
+        bbox=bbox,
         img_path=img_path,
-        optimize_depth=optimize_depth,
-        optimize_alignment=optimize_alignment,
-        origin=img_patch_origin,
-        shape=img_patch_shape,
-    )
-    print("Build Graph...")
-    neurograph = init_immutables_from_local(
-        neurograph,
-        swc_dir=swc_dir,
-        swc_paths=swc_paths,
         prune=prune,
         prune_depth=prune_depth,
-        min_size=min_size,
         smooth=smooth,
-    )
+        )
+    print(f"build_neurograph(): {time() - t0} seconds")
+
+    # Generate proposals
     t0 = time()
     if search_radius > 0:
         neurograph.generate_proposals(
+            search_radius,
             n_proposals_per_leaf=n_proposals_per_leaf,
-            search_radius=search_radius,
+            optimize=optimize_proposals,
+            optimization_depth=optimization_depth,
         )
-    print(f"   generate_proposals(): {time() - t0} seconds")
+    print(f"generate_proposals(): {time() - t0} seconds")
+
     return neurograph
 
 
@@ -86,8 +91,8 @@ def build_neurograph_from_gcs_zips(
     search_radius=SEARCH_RADIUS,
     prune=PRUNE,
     prune_depth=PRUNE_DEPTH,
-    optimize_alignment=OPTIMIZE_ALIGNMENT,
-    optimize_depth=OPTIMIZE_DEPTH,
+    optimize_proposals=OPTIMIZE_PROPOSALS,
+    optimization_depth=OPTIMIZATION_DEPTH,
     smooth=SMOOTH,
 ):
     """
@@ -99,27 +104,34 @@ def build_neurograph_from_gcs_zips(
         Name of GCS bucket where zips are stored.
     cloud_path : str
         Path within GCS bucket to directory containing zips.
-    img_path : str
+    img_path : str, optional
         Path to image stored GCS Bucket that swc files were generated from.
-    min_size : int
-        Minimum path length of swc files which are stored.
-    n_proposals_per_leaf : int
+        The default is None.
+    min_size : int, optional
+        Minimum path length of swc files which are stored. The default is the
+        global variable "MIN_SIZE".
+    n_proposals_per_leaf : int, optional
         Number of edge proposals generated from each leaf node in an swc file.
-    search_radius : float
-        Maximum Euclidean length of an edge proposal.
-    prune : bool
-        Indication of whether to prune short branches.
-    prune_depth : int
+        The default is the global variable "N_PROPOSALS_PER_LEAF".
+    search_radius : float, optional
+        Maximum Euclidean length of an edge proposal. The default is the
+        global variable "SEARCH_RADIUS".
+    prune : bool, optional
+        Indication of whether to prune short branches. The default is the
+        global variable "PRUNE".
+    prune_depth : int, optional
         Branches less than "prune_depth" microns are pruned if "prune" is
-        True.
-    optimize_alignment : bool
+        True. The default is the global variable "PRUNE_DEPTH".
+    optimize_proposals : bool, optional
         Indication of whether to optimize alignment of edge proposals to image
-        signal.
-    optimize_depth : int
+        signal. The default is the global variable "OPTIMIZE_PROPOSALS".
+    optimization_depth : int, optional
         Distance from each edge proposal end point that is search during
-        alignment optimization.
-    smooth : bool
-        Indication of whether to smooth branches from swc files.
+        alignment optimization. The default is the global variable
+        "OPTIMIZATION_DEPTH".
+    smooth : bool, optional
+        Indication of whether to smooth branches from swc files. The default
+        is the global variable "SMOOTH".
 
     Returns
     -------
@@ -127,55 +139,24 @@ def build_neurograph_from_gcs_zips(
         Neurograph generated from zips of swc files stored in a GCS bucket.
 
     """
-    swc_dicts = download_gcs_zips(bucket_name, cloud_path, min_size=min_size)
+    swc_dicts = download_gcs_zips(bucket_name, cloud_path, min_size)
     neurograph = build_neurograph(
         swc_dicts,
         img_path=img_path,
         prune=prune,
         prune_depth=prune_depth,
         smooth=smooth,
-        optimize_alignment=OPTIMIZE_ALIGNMENT,
-        optimize_depth=OPTIMIZE_DEPTH,
     )
     if search_radius > 0:
         neurograph.generate_proposals(
+            search_radius,
             n_proposals_per_leaf=n_proposals_per_leaf,
-            search_radius=search_radius,
         )
     return neurograph
 
 
-def init_immutables_from_local(
-    neurograph,
-    swc_dir=None,
-    swc_paths=None,
-    prune=PRUNE,
-    prune_depth=PRUNE_DEPTH,
-    min_size=MIN_SIZE,
-    smooth=SMOOTH,
-):
-    neurograph.extraction = 0
-    neurograph.add_edges_timer = 0
-    swc_paths = get_paths(swc_dir) if swc_dir else swc_paths
-    for path in swc_paths:
-        neurograph.ingest_swc_from_local(
-            path, prune=True, prune_depth=16, smooth=smooth
-        )
-    print(
-        f"   extract_irreducible_graph(): {neurograph.extraction} seconds"
-    )
-    print(f"   add_edges(): {neurograph.add_edges_timer} seconds")
-    return neurograph
-
-
-def get_paths(swc_dir):
-    paths = []
-    for f in utils.listdir(swc_dir, ext=".swc"):
-        paths.append(os.path.join(swc_dir, f))
-    return paths
-
-
-def download_gcs_zips(bucket_name, cloud_path, min_size=0):
+# -- Read swc files --
+def download_gcs_zips(bucket_name, cloud_path, min_size):
     """
     Downloads swc files from zips stored in a GCS bucket.
 
@@ -262,6 +243,58 @@ def list_gcs_filenames(bucket, cloud_path, extension):
     return [blob.name for blob in blobs if extension in blob.name]
 
 
+# -- Build neurograph ---
+def build_neurograph(
+    swc_dicts,
+    bbox=None,
+    img_path=None,
+    prune=PRUNE,
+    prune_depth=PRUNE_DEPTH,
+    smooth=SMOOTH,
+):
+    # Extract irreducibles
+    t0 = time()
+    n_components = len(swc_dicts)
+    irreducibles = [None] * n_components
+    for i in range(n_components):
+        irreducibles[i] = gutils.get_irreducibles(
+            swc_dicts[i], prune=prune, depth=prune_depth, smooth=smooth
+        )
+    print(f"   --> get_irreducibles(): {time() - t0} seconds")
+
+    # Build neurograph
+    t0 = time()
+    neurograph = NeuroGraph(
+        bbox=bbox,
+        img_path=img_path,
+    )
+    for i in range(n_components):
+        neurograph.add_immutables(swc_dicts[i], irreducibles[i])
+    print(f"   --> add_irreducibles(): {time() - t0} seconds")
+    return neurograph
+
+
+# -- Utils --
+def get_paths(swc_dir):
+    paths = []
+    for f in utils.listdir(swc_dir, ext=".swc"):
+        paths.append(os.path.join(swc_dir, f))
+    return paths
+
+
+def get_start_ids(swc_dicts):
+    # runtime: ~ 1 minute
+    t0 = time()
+    node_ids = []
+    cnt = 0
+    for swc_dict in swc_dicts:
+        graph = swc_utils.to_graph(swc_dict)
+        leafs, junctions = gutils.get_irreducibles(graph)
+        node_ids.append(cnt)
+        cnt += len(leafs) + len(junctions)
+    return node_ids
+
+
 def report_runtimes(
     n_files, n_files_completed, chunk_size, start, start_chunk
 ):
@@ -278,52 +311,3 @@ def report_runtimes(
     print(f"Zip Processing Rate: {file_rate} seconds")
     print(f"Approximate Total Runtime: {round(eta, 4)} minutes")
     print("")
-
-
-def build_neurograph(
-    swc_dicts,
-    img_path=None,
-    optimize_alignment=OPTIMIZE_ALIGNMENT,
-    optimize_depth=OPTIMIZE_DEPTH,
-    prune=PRUNE,
-    prune_depth=PRUNE_DEPTH,
-    smooth=SMOOTH,
-):
-    graph_list = build_graphs(swc_dicts, prune, prune_depth, smooth)
-    start_ids = get_start_ids(swc_dicts)
-    print("Total Runtime:", 1600 * t)
-    stop
-    neurograph = NeuroGraph(
-        img_path=img_path,
-        optimize_alignment=optimize_alignment,
-        optimize_depth=optimize_depth,
-    )
-
-
-def build_graphs(swc_dicts, prune, prune_depth, smooth):
-    t0 = time()
-    graphs = [None] * len(swc_dicts)
-    for i, swc_dict in enumerate(swc_dicts):
-        graphs[i] = build_subgraph(swc_dict)
-    t = time() - t0
-    print(f"build_subgraphs(): {t} seconds")
-    return graphs
-
-
-def build_subgraph(swc_dict):
-    graph = nx.Graph()
-    graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
-    return graph
-
-
-def get_start_ids(swc_dicts):
-    # runtime: ~ 1 minute
-    t0 = time()
-    node_ids = []
-    cnt = 0
-    for swc_dict in swc_dicts:
-        graph = swc_utils.to_graph(swc_dict)
-        leafs, junctions = gutils.get_irreducibles(graph)
-        node_ids.append(cnt)
-        cnt += len(leafs) + len(junctions)
-    return node_ids

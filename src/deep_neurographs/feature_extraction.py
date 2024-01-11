@@ -164,40 +164,12 @@ def generate_img_profiles(neurograph, path, anisotropy=[1.0, 1.0, 1.0]):
     )
     img = utils.normalize_img(img)
     for edge in neurograph.mutable_edges:
-        if neurograph.optimize_alignment or neurograph.optimize_path:
-            xyz = to_img_coords(neurograph, edge)
-            path = geometry_utils.sample_path(xyz, N_PROFILE_POINTS)
-        else:
-            i, j = tuple(edge)
-            xyz_i = utils.world_to_img(neurograph, i)
-            xyz_j = utils.world_to_img(neurograph, j)
-            path = geometry_utils.make_line(xyz_i, xyz_j, N_PROFILE_POINTS)
+        xyz_i, xyz_j = neurograph.get_edge_attr("xyz", edge)
+        xyz_i = utils.world_to_img(neurograph, xyz_i)
+        xyz_j = utils.world_to_img(neurograph, xyz_j)
+        path = geometry_utils.make_line(xyz_i, xyz_j, N_PROFILE_POINTS)
         features[edge] = geometry_utils.get_profile(img, path, window=WINDOW)
     return features
-
-
-def to_img_coords(neurograph, edge):
-    """
-    Converts xyz coordinate of each vertex in "edge" from real world to image
-    coordinates.
-
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        NeuroGraph generated from a directory of swcs generated from a
-        predicted segmentation.
-    edge : frozenset
-        The edge from "neurograph" to perform coordinate transformation.
-
-    Returns
-    -------
-    img_coords : numpy.ndarray
-        Image coordinates of each vertex from "edge".
-
-    """
-    xyz_list = neurograph.edges[edge]["xyz"]
-    img_coords = [utils.world_to_img(neurograph, xyz) for xyz in xyz_list]
-    return np.array(img_coords)
 
 
 def generate_mutable_skel_features(neurograph):

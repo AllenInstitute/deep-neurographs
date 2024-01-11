@@ -8,6 +8,15 @@ Created on Wed June 5 16:00:00 2023
 Routines that extract the irreducible components of a graph.
 
 --define what an irreducible is
+    leafs : set
+        Nodes with degreee 1.
+    junctions : set
+        Nodes with degree > 2.
+    edges : dict
+        Set of edges connecting nodes in leafs and junctions. The keys are
+        pairs of nodes connected by an edge and values are a dictionary of
+        attributes.
+
 --define what a branch is
 
 """
@@ -41,14 +50,10 @@ def get_irreducibles(swc_dict, prune=True, depth=16, smooth=True):
 
     Returns
     -------
-    leafs : set
-        Nodes with degreee 1.
-    junctions : set
-        Nodes with degree > 2.
-    edges : dict
-        Set of edges connecting nodes in leafs and junctions. The keys are
-        pairs of nodes connected by an edge and values are a dictionary of
-        attributes.
+    dict
+        Irreducibles stored in a dictionary where key-values are type of
+        irreducible (i.e. leaf, junction, or edge) and corresponding set of
+        all irreducibles from the graph of that type.
 
     """
     # Initializations
@@ -80,7 +85,7 @@ def get_irreducibles(swc_dict, prune=True, depth=16, smooth=True):
             nbs = append_value(nbs, root, j)
             nbs = append_value(nbs, j, root)
             root = None
-    return leafs, junctions, edges
+    return {"leafs": leafs, "junctions": junctions, "edges": edges}
 
 
 def get_irreducible_nodes(graph):
