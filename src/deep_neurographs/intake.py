@@ -17,7 +17,8 @@ from zipfile import ZipFile
 
 from google.cloud import storage
 
-from deep_neurographs import graph_utils as gutils, swc_utils, utils
+from deep_neurographs import graph_utils as gutils
+from deep_neurographs import swc_utils, utils
 from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.swc_utils import parse_gcs_zip
 
@@ -56,6 +57,7 @@ def build_neurograph_from_local(
         origin=img_patch_origin,
         shape=img_patch_shape,
     )
+    print("Build Graph...")
     neurograph = init_immutables_from_local(
         neurograph,
         swc_dir=swc_dir,
@@ -65,11 +67,13 @@ def build_neurograph_from_local(
         min_size=min_size,
         smooth=smooth,
     )
+    t0 = time()
     if search_radius > 0:
         neurograph.generate_proposals(
             n_proposals_per_leaf=n_proposals_per_leaf,
             search_radius=search_radius,
         )
+    print(f"   generate_proposals(): {time() - t0} seconds")
     return neurograph
 
 
@@ -113,7 +117,7 @@ def build_neurograph_from_gcs_zips(
         signal.
     optimize_depth : int
         Distance from each edge proposal end point that is search during
-        alignment optimization. 
+        alignment optimization.
     smooth : bool
         Indication of whether to smooth branches from swc files.
 
@@ -150,11 +154,17 @@ def init_immutables_from_local(
     min_size=MIN_SIZE,
     smooth=SMOOTH,
 ):
+    neurograph.extraction = 0
+    neurograph.add_edges_timer = 0
     swc_paths = get_paths(swc_dir) if swc_dir else swc_paths
     for path in swc_paths:
         neurograph.ingest_swc_from_local(
             path, prune=True, prune_depth=16, smooth=smooth
         )
+    print(
+        f"   extract_irreducible_graph(): {neurograph.extraction} seconds"
+    )
+    print(f"   add_edges(): {neurograph.add_edges_timer} seconds")
     return neurograph
 
 
@@ -165,11 +175,7 @@ def get_paths(swc_dir):
     return paths
 
 
-def download_gcs_zips(
-    bucket_name,
-    cloud_path,
-    min_size=0,
-):
+def download_gcs_zips(bucket_name, cloud_path, min_size=0):
     """
     Downloads swc files from zips stored in a GCS bucket.
 
@@ -192,7 +198,7 @@ def download_gcs_zips(
     bucket = storage_client.bucket(bucket_name)
     zip_paths = list_gcs_filenames(bucket, cloud_path, ".zip")
     chunk_size = int(len(zip_paths) * 0.1)
-    print(f"# zip files: {len(zip_paths)} \n\n", )
+    print(f"# zip files: {len(zip_paths)} \n\n")
 
     # Parse
     cnt = 1
@@ -257,7 +263,7 @@ def list_gcs_filenames(bucket, cloud_path, extension):
 
 
 def report_runtimes(
-    n_files, n_files_completed, chunk_size, start, start_chunk,
+    n_files, n_files_completed, chunk_size, start, start_chunk
 ):
     runtime = time() - start
     chunk_runtime = time() - start_chunk
@@ -281,7 +287,7 @@ def build_neurograph(
     optimize_depth=OPTIMIZE_DEPTH,
     prune=PRUNE,
     prune_depth=PRUNE_DEPTH,
-    smooth=SMOOTH
+    smooth=SMOOTH,
 ):
     graph_list = build_graphs(swc_dicts, prune, prune_depth, smooth)
     start_ids = get_start_ids(swc_dicts)
@@ -291,7 +297,8 @@ def build_neurograph(
         img_path=img_path,
         optimize_alignment=optimize_alignment,
         optimize_depth=optimize_depth,
-        )
+    )
+
 
 def build_graphs(swc_dicts, prune, prune_depth, smooth):
     t0 = time()
@@ -307,7 +314,7 @@ def build_subgraph(swc_dict):
     graph = nx.Graph()
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
     return graph
-    
+
 
 def get_start_ids(swc_dicts):
     # runtime: ~ 1 minute

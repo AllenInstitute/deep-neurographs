@@ -9,6 +9,7 @@ Implementation of subclass of Networkx.Graph called "NeuroGraph".
 """
 
 from copy import deepcopy
+from time import time
 
 import networkx as nx
 import numpy as np
@@ -104,17 +105,21 @@ class NeuroGraph(nx.Graph):
     def ingest_swc_from_local(
         self, path, prune=True, prune_depth=16, smooth=True
     ):
+        # Parse swc
         swc_id = utils.get_id(path)
-        swc_dict = swc_utils.parse_local_swc(
-            path, bbox=self.bbox, img_shape=self.shape
-        )
+        swc_dict = swc_utils.parse_local_swc(path, bbox=self.bbox)
         if len(swc_dict["xyz"]) > self.size_threshold:
-            swc_dict = swc_utils.smooth(swc_dict) if smooth else swc_dict
-            self.add_immutables(
-                swc_id, swc_dict, prune=prune, prune_depth=prune_depth
-            )
+            return None
 
-    def add_immutables(self, swc_id, swc_dict, prune=True, prune_depth=16):
+        # Build neurograph
+        t0 = time()
+        leafs, junctions, edges = gutils.get_irreducibles(
+            swc_dict, prune=prune, depth=prune_depth, smooth=smooth
+        )
+        self.extraction += time() - t0
+        self.add_immutables(swc_id, swc_dict, leafs, junctions, edges)
+
+    def add_immutables(self, swc_id, swc_dict, leafs, junctions, edges):
         """
         Adds nodes to graph from a dictionary generated from an swc files.
 
@@ -132,11 +137,9 @@ class NeuroGraph(nx.Graph):
 
         """
         # Add nodes
-        leafs, junctions, edges = gutils.extract_irreducible_graph(
-            swc_dict, prune=prune, prune_depth=prune_depth
-        )
+
         node_id = dict()
-        for i in leafs + junctions:
+        for i in list(leafs) + list(junctions):
             node_id[i] = len(self.nodes)
             self.add_node(
                 node_id[i],
@@ -146,6 +149,7 @@ class NeuroGraph(nx.Graph):
             )
 
         # Add edges
+        t0 = time()
         for i, j in edges.keys():
             # Get edge
             edge = (node_id[i], node_id[j])
@@ -164,6 +168,7 @@ class NeuroGraph(nx.Graph):
                 for xyz in collisions:
                     del xyz_to_edge[xyz]
             self.xyz_to_edge.update(xyz_to_edge)
+        self.add_edges_timer += time() - t0
 
         # Update leafs and junctions
         for l in leafs:

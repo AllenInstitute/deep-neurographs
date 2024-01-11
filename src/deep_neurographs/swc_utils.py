@@ -11,10 +11,10 @@ Routines for working with swc files.
 
 import os
 from copy import deepcopy as cp
+from itertools import repeat
 
 import networkx as nx
 import numpy as np
-from more_itertools import zip_broadcast
 
 from deep_neurographs import geometry_utils
 from deep_neurographs import graph_utils as gutils
@@ -22,23 +22,18 @@ from deep_neurographs import utils
 
 
 # -- io utils --
-def parse_local_swc(path, bbox=None, img_shape=None, min_size=0):
+def parse_local_swc(path, bbox=None, min_size=0):
     swc_contents = read_from_local(path)
-    if len(swc_contents) > min_size:
-        return parse(swc_contents, bbox=bbox, img_shape=img_shape)
-    else:
-        return []
+    parse_bool = len(swc_contents) > min_size
+    return parse(swc_contents, bbox=bbox) if parse_bool else []
 
 
-def parse_gcs_zip(zip_file, path, bbox=None, img_shape=None, min_size=0):
+def parse_gcs_zip(zip_file, path, min_size=0):
     swc_contents = read_from_gcs_zip(zip_file, path)
-    if len(swc_contents) > min_size:
-        return parse(swc_contents, bbox=bbox, img_shape=img_shape)
-    else:
-        return []
+    return parse(swc_contents) if len(swc_contents) > min_size else []
 
 
-def parse(swc_contents, bbox=None, img_shape=None):
+def parse(swc_contents, bbox=None):
     """
     Parses an swc file to extract the contents which is stored in a dict. Note
     that node_ids from swc are refactored to index from 0 to n-1 where n is
@@ -65,8 +60,8 @@ def parse(swc_contents, bbox=None, img_shape=None):
         if not line.startswith("#") and len(line) > 0:
             parts = line.split()
             xyz = read_xyz(parts[2:5], offset=offset)
-            if bbox and img_shape:
-                if not utils.is_contained(bbox, img_shape, xyz):
+            if bbox:
+                if not utils.is_contained(bbox, xyz):
                     break
 
             swc_dict["id"].append(int(parts[0]))
@@ -131,7 +126,7 @@ def read_xyz(xyz, offset=[0, 0, 0]):
     return tuple([float(xyz[i]) + offset[i] for i in range(3)])
 
 
-def write_swc(path, contents):
+def write(path, contents):
     if type(contents) is list:
         write_list(path, contents)
     elif type(contents) is dict:
@@ -246,19 +241,22 @@ def make_entry(graph, i, parent, r, reindex):
 
 
 # -- Conversions --
-def to_graph(swc_dict, graph_id=None, set_attrs=False, return_dict=False):
+def to_graph(swc_dict, graph_id=None, set_attrs=False):
     graph = nx.Graph(graph_id=graph_id)
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
-    xyz_to_node = dict()
     if set_attrs:
-        for i in graph.nodes:
-            graph.nodes[i]["xyz"] = swc_dict["xyz"][i]
-            graph.nodes[i]["radius"] = swc_dict["radius"][i]
-            xyz_to_node[swc_dict["xyz"][i]] = i
-    if return_dict:
+        graph = __add_attributes(swc_dict, graph)
+        xyz_to_node = dict(zip(swc_dict["xyz"], swc_dict["id"]))
         return graph, xyz_to_node
-    else:
-        return graph
+    return graph
+
+
+def __add_attributes(swc_dict, graph):
+    xyz = swc_dict["xyz"]
+    radii = swc_dict["radius"]
+    attrs = [{"xyz": xyz[i], "radius": radii[i]} for i in graph.nodes]
+    nx.set_node_attributes(graph, dict(zip(swc_dict["id"], attrs)))
+    return graph
 
 
 # -- miscellaneous --
@@ -266,7 +264,7 @@ def smooth(swc_dict):
     if len(swc_dict["xyz"]) > 10:
         xyz = np.array(swc_dict["xyz"])
         graph = to_graph(swc_dict)
-        leafs, junctions = gutils.get_irreducibles(graph)
+        leafs, junctions = gutils.get_irreducible_nodes(graph)
         if len(junctions) == 0:
             xyz = geometry_utils.smooth_branch(xyz)
         else:
@@ -291,29 +289,4 @@ def smooth(swc_dict):
 def upd_edge(xyz, idxs):
     idxs = np.array(idxs)
     xyz[idxs] = geometry_utils.smooth_branch(xyz[idxs], s=10)
-    return xyz
-
-
-def upd_dict(upd, path, radius, pid):
-    for k in range(len(path)):
-        next_id = len(upd["id"])
-        upd["id"].append(next_id)
-        upd["xyz"].append(path[k])
-        upd["radius"].append(radius[k])
-        if len(upd["pid"]) == 0:
-            upd["pid"].extend([1, 0])
-        elif k == 0:
-            upd["pid"].append(pid)
-        else:
-            upd["pid"].append(next_id - 1)
-    return upd, next_id
-
-
-def generate_coords(center, r):
-    xyz = []
-    for x in range(-r, r + 1):
-        for y in range(-r, r + 1):
-            for z in range(-r, r + 1):
-                if abs(x) + abs(y) + abs(z) <= r:
-                    xyz.append((center[0] + x, center[1] + y, center[2] + z))
     return xyz

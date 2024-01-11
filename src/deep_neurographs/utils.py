@@ -411,11 +411,12 @@ def get_avg_std(data, weights=None):
     return avg, math.sqrt(var)
 
 
-def is_contained(bbox, img_shape, xyz):
+def is_contained(bbox, xyz):
     xyz = apply_anisotropy(xyz - bbox["min"])
+    dims = bbox["max"] - bbox["min"]
     for i in range(3):
         lower_bool = xyz[i] < 0
-        upper_bool = xyz[i] >= img_shape[i]
+        upper_bool = xyz[i] >= dims[i]
         if lower_bool or upper_bool:
             return False
     return True
