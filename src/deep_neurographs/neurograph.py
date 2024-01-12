@@ -9,7 +9,6 @@ Implementation of subclass of Networkx.Graph called "NeuroGraph".
 """
 
 from copy import deepcopy
-from time import time
 
 import networkx as nx
 import numpy as np
@@ -18,7 +17,7 @@ from scipy.spatial import KDTree
 
 from deep_neurographs import geometry_utils
 from deep_neurographs import graph_utils as gutils
-from deep_neurographs import swc_utils, utils
+from deep_neurographs import utils
 from deep_neurographs.densegraph import DenseGraph
 from deep_neurographs.geometry_utils import dist as get_dist
 
@@ -34,11 +33,7 @@ class NeuroGraph(nx.Graph):
     """
 
     def __init__(
-        self,
-        bbox=None,
-        swc_dir=None,
-        img_path=None,
-        label_mask=None,
+        self, bbox=None, swc_dir=None, img_path=None, label_mask=None
     ):
         super(NeuroGraph, self).__init__()
         # Initialize paths
@@ -85,7 +80,7 @@ class NeuroGraph(nx.Graph):
         self.densegraph = DenseGraph(self.swc_paths)
 
     # --- Add nodes or edges ---
-    def add_immutables(self, swc_dict, irreducibles):
+    def add_immutables(self, irreducibles, swc_dict, swc_id):
         # Add nodes
         node_id = dict()
         leafs = irreducibles["leafs"]
@@ -96,11 +91,10 @@ class NeuroGraph(nx.Graph):
                 node_id[i],
                 xyz=np.array(swc_dict["xyz"][i]),
                 radius=swc_dict["radius"][i],
-                swc_id=swc_dict["swc_id"],
+                swc_id=swc_id,
             )
 
         # Add edges
-        t0 = time()
         edges = irreducibles["edges"]
         for i, j in edges.keys():
             # Get edge
@@ -111,11 +105,7 @@ class NeuroGraph(nx.Graph):
             # Add edge
             self.immutable_edges.add(frozenset(edge))
             self.add_edge(
-                node_id[i],
-                node_id[j],
-                xyz=xyz,
-                radius=radii,
-                swc_id=swc_dict["swc_id"]
+                node_id[i], node_id[j], xyz=xyz, radius=radii, swc_id=swc_id
             )
             xyz_to_edge = dict((tuple(xyz), edge) for xyz in xyz)
             check_xyz = set(xyz_to_edge.keys())
@@ -133,7 +123,13 @@ class NeuroGraph(nx.Graph):
             self.junctions.add(node_id[j])
 
     # --- Proposal Generation ---
-    def generate_proposals(self, search_radius, n_proposals_per_leaf=3, optimize=False, optimization_depth=10):
+    def generate_proposals(
+        self,
+        search_radius,
+        n_proposals_per_leaf=3,
+        optimize=False,
+        optimization_depth=10,
+    ):
         """
         Generates edges for the graph.
 

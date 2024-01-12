@@ -8,9 +8,12 @@ Builds neurograph for neuron reconstruction.
 
 """
 
-import concurrent.futures
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import (
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    as_completed,
+)
 from io import BytesIO
 from time import time
 from zipfile import ZipFile
@@ -65,7 +68,7 @@ def build_neurograph_from_local(
         prune=prune,
         prune_depth=prune_depth,
         smooth=smooth,
-        )
+    )
     print(f"build_neurograph(): {time() - t0} seconds")
 
     # Generate proposals
@@ -149,8 +152,7 @@ def build_neurograph_from_gcs_zips(
     )
     if search_radius > 0:
         neurograph.generate_proposals(
-            search_radius,
-            n_proposals_per_leaf=n_proposals_per_leaf,
+            search_radius, n_proposals_per_leaf=n_proposals_per_leaf
         )
     return neurograph
 
@@ -215,7 +217,6 @@ def download_zip(bucket, zip_path, min_size=0):
 
 
 def count_files_in_zips(bucket, zip_paths):
-    t0 = time()
     file_cnt = 0
     for zip_path in zip_paths:
         zip_blob = bucket.blob(zip_path)
@@ -244,7 +245,7 @@ def list_gcs_filenames(bucket, cloud_path, extension):
 
 
 # -- Build neurograph ---
-def build_neurograph(
+def build_neurograph_old(
     swc_dicts,
     bbox=None,
     img_path=None,
@@ -254,22 +255,53 @@ def build_neurograph(
 ):
     # Extract irreducibles
     t0 = time()
-    n_components = len(swc_dicts)
-    irreducibles = [None] * n_components
-    for i in range(n_components):
-        irreducibles[i] = gutils.get_irreducibles(
-            swc_dicts[i], prune=prune, depth=prune_depth, smooth=smooth
+    irreducibles = dict()
+    for key in swc_dicts.keys():
+        irreducibles[key] = gutils.get_irreducibles(
+            swc_dicts[key], prune=prune, depth=prune_depth, smooth=smooth
         )
     print(f"   --> get_irreducibles(): {time() - t0} seconds")
 
     # Build neurograph
     t0 = time()
-    neurograph = NeuroGraph(
-        bbox=bbox,
-        img_path=img_path,
-    )
-    for i in range(n_components):
-        neurograph.add_immutables(swc_dicts[i], irreducibles[i])
+    neurograph = NeuroGraph(bbox=bbox, img_path=img_path)
+    for key in swc_dicts.keys():
+        neurograph.add_immutables(swc_dicts[key], irreducibles[key])
+    print(f"   --> add_irreducibles(): {time() - t0} seconds")
+    return neurograph
+
+
+def build_neurograph(
+    swc_dicts,
+    bbox=None,
+    img_path=None,
+    prune=PRUNE,
+    prune_depth=PRUNE_DEPTH,
+    smooth=SMOOTH,
+):
+    # Extract irreducibles
+    irreducibles = dict()
+    with ProcessPoolExecutor() as executor:
+        # Assign Processes
+        processes = [None] * len(swc_dicts)
+        for i, key in enumerate(swc_dicts.keys()):
+            processes[i] = executor.submit(
+                gutils.get_irreducibles,
+                swc_dicts[key],
+                key,
+                prune,
+                prune_depth,
+                smooth,
+            )
+        for process in as_completed(processes):
+            process_id, result = process.result()
+            irreducibles[process_id] = result
+
+    # Build neurograph
+    t0 = time()
+    neurograph = NeuroGraph(bbox=bbox, img_path=img_path)
+    for key in swc_dicts.keys():
+        neurograph.add_immutables(irreducibles[key], swc_dicts[key], key)
     print(f"   --> add_irreducibles(): {time() - t0} seconds")
     return neurograph
 
@@ -283,8 +315,6 @@ def get_paths(swc_dir):
 
 
 def get_start_ids(swc_dicts):
-    # runtime: ~ 1 minute
-    t0 = time()
     node_ids = []
     cnt = 0
     for swc_dict in swc_dicts:
@@ -308,6 +338,6 @@ def report_runtimes(
     print(
         f"Runtime for Zips {files_processed}: {round(chunk_runtime, 4)} seconds"
     )
-    print(f"Zip Processing Rate: {file_rate} seconds")
+    print(f"Zip Processing Rate: {rate} seconds")
     print(f"Approximate Total Runtime: {round(eta, 4)} minutes")
     print("")

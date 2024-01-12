@@ -9,10 +9,6 @@ Routines for working with swc files.
 
 """
 
-import os
-from copy import deepcopy as cp
-from itertools import repeat
-
 import networkx as nx
 import numpy as np
 
@@ -23,11 +19,10 @@ from deep_neurographs import utils
 
 # -- io utils --
 def process_local_paths(paths, min_size, bbox=None):
-    swc_dicts = []
+    swc_dicts = dict()
     for path in paths:
-        swc_dict_i = parse_local_swc(path, bbox=bbox)
-        swc_dict_i["swc_id"] = utils.get_swc_id(path)
-        swc_dicts.append(swc_dict_i)
+        swc_id = utils.get_swc_id(path)
+        swc_dicts[swc_id] = parse_local_swc(path, bbox=bbox)
     return swc_dicts
 
 

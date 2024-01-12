@@ -9,7 +9,9 @@ from deep_neurographs import utils
 
 
 # Directional Vectors
-def get_directional(neurograph, i, proposal_tangent, window=5, n_svd_points=10):
+def get_directional(
+    neurograph, i, proposal_tangent, window=5, n_svd_points=10
+):
     directionals = []
     d = n_svd_points
     for branch in neurograph.get_branches(i):
@@ -18,7 +20,7 @@ def get_directional(neurograph, i, proposal_tangent, window=5, n_svd_points=10):
         elif branch.shape[0] <= d:
             xyz = deepcopy(branch)
         else:
-            xyz = deepcopy(branch[d : window + d, :])
+            xyz = deepcopy(branch[d: window + d, :])
         directionals.append(compute_tangent(xyz))
 
     # Determine best
@@ -94,7 +96,7 @@ def get_profile(img, xyz_arr, window=[5, 5, 5]):
 def fill_path(img, path, val=-1):
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
-        img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
+        img[x - 1: x + 2, y - 1: y + 2, z - 1: z + 2] = val
     return img
 
 

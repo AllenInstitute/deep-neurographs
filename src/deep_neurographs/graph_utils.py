@@ -21,16 +21,15 @@ Routines that extract the irreducible components of a graph.
 
 """
 
-from copy import deepcopy
 from random import sample
 
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry_utils, swc_utils, utils
+from deep_neurographs import geometry_utils, swc_utils
 
 
-def get_irreducibles(swc_dict, prune=True, depth=16, smooth=True):
+def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
     """
     Gets irreducible components of the graph stored in "swc_dict". The
     irreducible components consist of the leaf and junction nodes along with
@@ -40,6 +39,9 @@ def get_irreducibles(swc_dict, prune=True, depth=16, smooth=True):
     ----------
     swc_dict : dict
         Contents of an swc file.
+    swc_id : str, optional
+        Filename of swc which is used to run this routine with
+        multiprocessing. The default is None.
     prune : bool, optional
         Indication of whether to prune short branches. The default is True.
     depth : int, optional
@@ -85,7 +87,10 @@ def get_irreducibles(swc_dict, prune=True, depth=16, smooth=True):
             nbs = append_value(nbs, root, j)
             nbs = append_value(nbs, j, root)
             root = None
-    return {"leafs": leafs, "junctions": junctions, "edges": edges}
+
+    # Output
+    irreducibles = {"leafs": leafs, "junctions": junctions, "edges": edges}
+    return swc_id, irreducibles
 
 
 def get_irreducible_nodes(graph):
