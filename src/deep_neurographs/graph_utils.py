@@ -65,6 +65,7 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
 
     # Extract irreducibles
     leafs, junctions = get_irreducible_nodes(dense_graph)
+    assert len(leafs) > 0, "Error: swc with no leaf nodes!"
     source = sample(leafs, 1)[0]
     root = None
     edges = dict()

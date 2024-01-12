@@ -21,15 +21,15 @@ from deep_neurographs import utils
 def process_local_paths(paths, min_size, bbox=None):
     swc_dicts = dict()
     for path in paths:
-        swc_id = utils.get_swc_id(path)
-        swc_dicts[swc_id] = parse_local_swc(path, bbox=bbox)
+        swc_dicts.update(parse_local_swc(path, bbox=bbox, min_size=min_size))
     return swc_dicts
 
 
-def parse_local_swc(path, bbox=None, min_size=0):
+def parse_local_swc(path, bbox=None, min_size=25):
+    swc_id = utils.get_swc_id(path)
     swc_contents = read_from_local(path)
-    parse_bool = len(swc_contents) > min_size
-    return parse(swc_contents, bbox=bbox) if parse_bool else []
+    swc_dict = parse(swc_contents, bbox=bbox)
+    return {swc_id: swc_dict} if len(swc_dict["id"]) > min_size else dict()
 
 
 def parse_gcs_zip(zip_file, path, min_size=0):
@@ -61,7 +61,7 @@ def parse(swc_contents, bbox=None):
         if line.startswith("# OFFSET"):
             parts = line.split()
             offset = read_xyz(parts[2:5])
-        if not line.startswith("#") and len(line) > 0:
+        if not line.startswith("#"):
             parts = line.split()
             xyz = read_xyz(parts[2:5], offset=offset)
             if bbox:

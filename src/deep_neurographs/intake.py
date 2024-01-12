@@ -28,10 +28,10 @@ from deep_neurographs.swc_utils import parse_gcs_zip, process_local_paths
 N_PROPOSALS_PER_LEAF = 3
 OPTIMIZE_PROPOSALS = False
 OPTIMIZATION_DEPTH = 15
-PRUNE = True
+PRUNE = False
 PRUNE_DEPTH = 16
 SEARCH_RADIUS = 0
-MIN_SIZE = 30
+MIN_SIZE = 35
 SMOOTH = True
 
 
@@ -281,6 +281,8 @@ def build_neurograph(
 ):
     # Extract irreducibles
     irreducibles = dict()
+    """
+    -- asynchronous --
     with ProcessPoolExecutor() as executor:
         # Assign Processes
         processes = [None] * len(swc_dicts)
@@ -296,6 +298,15 @@ def build_neurograph(
         for process in as_completed(processes):
             process_id, result = process.result()
             irreducibles[process_id] = result
+    """
+    for key in swc_dicts.keys():
+        _, irreducibles[key] = gutils.get_irreducibles(
+                swc_dicts[key],
+                swc_id=key,
+                prune=prune,
+                depth=prune_depth,
+                smooth=smooth
+        )
 
     # Build neurograph
     t0 = time()
