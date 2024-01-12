@@ -26,14 +26,14 @@ class DenseGraph:
 
     """
 
-    def __init__(self, swc_dir):
+    def __init__(self, swc_paths):
         """
         Constructs a DenseGraph object from a directory of swc files.
 
         Parameters
         ----------
-        swc_dir : path
-            Path to directory of swc files which are used to construct a hash
+        swc_paths : list[str]
+            List of paths to swc files which are used to construct a hash
             table in which the entries are filename-graph pairs.
 
         Returns
@@ -43,18 +43,18 @@ class DenseGraph:
         """
         self.xyz_to_node = dict()
         self.xyz_to_swc = dict()
-        self.init_graphs(swc_dir)
+        self.init_graphs(swc_paths)
         self.init_kdtree()
 
-    def init_graphs(self, swc_dir):
+    def init_graphs(self, swc_paths):
         """
-        Initializes graphs by reading swc files in "swc_dir". Graphs are
+        Initializes graphs by reading swc files in "swc_paths". Graphs are
         stored in a hash table where the entries are filename-graph pairs.
 
         Parameters
         ----------
-        swc_dir : path
-            Path to directory of swc files which are used to construct a hash
+        swc_paths : list[str]
+            List of paths to swc files which are used to construct a hash
             table in which the entries are filename-graph pairs.
 
         Returns
@@ -63,16 +63,15 @@ class DenseGraph:
 
         """
         self.graphs = dict()
-        for f in utils.listdir(swc_dir, ext=".swc"):
+        for path in swc_paths:
             # Construct Graph
-            path = os.path.join(swc_dir, f)
             swc_dict = swc_utils.parse_local_swc(path)
             graph, xyz_to_node = swc_utils.to_graph(swc_dict, set_attrs=True)
 
             # Store
-            xyz_to_id = dict(zip_broadcast(swc_dict["xyz"], f))
-            self.graphs[f] = graph
-            self.xyz_to_node[f] = xyz_to_node
+            xyz_to_id = dict(zip_broadcast(swc_dict["xyz"], path))
+            self.graphs[path] = graph
+            self.xyz_to_node[path] = xyz_to_node
             self.xyz_to_swc.update(xyz_to_id)
 
     def init_kdtree(self):

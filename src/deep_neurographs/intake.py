@@ -65,6 +65,7 @@ def build_neurograph_from_local(
         swc_dicts,
         bbox=bbox,
         img_path=img_path,
+        swc_paths=paths,
         prune=prune,
         prune_depth=prune_depth,
         smooth=smooth,
@@ -245,36 +246,11 @@ def list_gcs_filenames(bucket, cloud_path, extension):
 
 
 # -- Build neurograph ---
-def build_neurograph_old(
-    swc_dicts,
-    bbox=None,
-    img_path=None,
-    prune=PRUNE,
-    prune_depth=PRUNE_DEPTH,
-    smooth=SMOOTH,
-):
-    # Extract irreducibles
-    t0 = time()
-    irreducibles = dict()
-    for key in swc_dicts.keys():
-        irreducibles[key] = gutils.get_irreducibles(
-            swc_dicts[key], prune=prune, depth=prune_depth, smooth=smooth
-        )
-    print(f"   --> get_irreducibles(): {time() - t0} seconds")
-
-    # Build neurograph
-    t0 = time()
-    neurograph = NeuroGraph(bbox=bbox, img_path=img_path)
-    for key in swc_dicts.keys():
-        neurograph.add_immutables(swc_dicts[key], irreducibles[key])
-    print(f"   --> add_irreducibles(): {time() - t0} seconds")
-    return neurograph
-
-
 def build_neurograph(
     swc_dicts,
     bbox=None,
     img_path=None,
+    swc_paths=None,
     prune=PRUNE,
     prune_depth=PRUNE_DEPTH,
     smooth=SMOOTH,
@@ -310,7 +286,7 @@ def build_neurograph(
 
     # Build neurograph
     t0 = time()
-    neurograph = NeuroGraph(bbox=bbox, img_path=img_path)
+    neurograph = NeuroGraph(bbox=bbox, img_path=img_path, swc_paths=swc_paths)
     for key in swc_dicts.keys():
         neurograph.add_immutables(irreducibles[key], swc_dicts[key], key)
     print(f"   --> add_irreducibles(): {time() - t0} seconds")

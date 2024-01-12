@@ -21,15 +21,16 @@ from deep_neurographs import utils
 def process_local_paths(paths, min_size, bbox=None):
     swc_dicts = dict()
     for path in paths:
-        swc_dicts.update(parse_local_swc(path, bbox=bbox, min_size=min_size))
+        swc_dict = parse_local_swc(path, bbox=bbox, min_size=min_size)
+        if len(swc_dict):
+            swc_id = utils.get_swc_id(path)
+            swc_dicts[swc_id] = swc_dict
     return swc_dicts
 
 
-def parse_local_swc(path, bbox=None, min_size=25):
-    swc_id = utils.get_swc_id(path)
-    swc_contents = read_from_local(path)
-    swc_dict = parse(swc_contents, bbox=bbox)
-    return {swc_id: swc_dict} if len(swc_dict["id"]) > min_size else dict()
+def parse_local_swc(path, bbox=None, min_size=0):
+    contents = read_from_local(path)
+    return parse(contents, bbox=bbox) if len(contents) > min_size else []
 
 
 def parse_gcs_zip(zip_file, path, min_size=0):
@@ -80,7 +81,7 @@ def parse(swc_contents, bbox=None):
         swc_dict["id"][i] -= min_id
         swc_dict["pid"][i] -= min_id
 
-    return swc_dict
+    return swc_dict if len(swc_dict["id"]) > 1 else []
 
 
 def read_from_local(path):

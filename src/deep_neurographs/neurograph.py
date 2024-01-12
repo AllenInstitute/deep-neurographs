@@ -33,13 +33,13 @@ class NeuroGraph(nx.Graph):
     """
 
     def __init__(
-        self, bbox=None, swc_dir=None, img_path=None, label_mask=None
+        self, bbox=None, swc_paths=None, img_path=None, label_mask=None
     ):
         super(NeuroGraph, self).__init__()
         # Initialize paths
         self.img_path = img_path
         self.label_mask = label_mask
-        self.swc_paths = swc_dir
+        self.swc_paths = swc_paths
 
         # Initialize node and edge sets
         self.leafs = set()
@@ -204,7 +204,7 @@ class NeuroGraph(nx.Graph):
         best_dist = dict()
         query_swc_id = self.nodes[query_id]["swc_id"]
         for xyz in self._query_kdtree(query_xyz, search_radius):
-            if not self.is_contained(xyz):
+            if not self.is_contained(xyz, buffer=36):
                 continue
             xyz = tuple(xyz)
             edge = self.xyz_to_edge[xyz]
@@ -336,8 +336,8 @@ class NeuroGraph(nx.Graph):
     # --- Ground Truth Generation ---
     def init_targets(self, target_neurograph):
         # Initializations
-        msg = "Error: Provide swc_dir/swc_paths to initialize target edges!"
-        assert target_neurograph.swc_path, msg
+        msg = "Provide swc_dir/swc_paths to initialize target edges!"
+        assert target_neurograph.swc_paths, msg
         target_neurograph.init_densegraph()
         target_neurograph.init_kdtree()
         self.target_edges = set()
@@ -534,11 +534,11 @@ class NeuroGraph(nx.Graph):
     def is_nb(self, i, j):
         return True if i in self.neighbors(j) else False
 
-    def is_contained(self, node_or_xyz):
+    def is_contained(self, node_or_xyz, buffer=0):
         if self.bbox:
             if type(node_or_xyz) == int:
                 node_or_xyz = deepcopy(self.nodes[node_or_xyz]["xyz"])
-            return utils.is_contained(self.bbox, node_or_xyz)
+            return utils.is_contained(self.bbox, node_or_xyz, buffer=buffer)
         else:
             return True
 

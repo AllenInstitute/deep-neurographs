@@ -411,10 +411,10 @@ def get_avg_std(data, weights=None):
     return avg, math.sqrt(var)
 
 
-def is_contained(bbox, xyz):
+def is_contained(bbox, xyz, buffer=0):
     xyz = apply_anisotropy(xyz - bbox["min"])
     shape = bbox["max"] - bbox["min"]
-    if any(xyz < 0) or any(xyz >= shape):
+    if any(xyz < buffer) or any(xyz >= shape - buffer):
         return False
     else:
         return True
