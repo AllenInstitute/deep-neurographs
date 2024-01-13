@@ -9,8 +9,11 @@ Routines for working with swc files.
 
 """
 
+from io import BytesIO
 import networkx as nx
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from zipfile import ZipFile
 
 from deep_neurographs import geometry_utils
 from deep_neurographs import graph_utils as gutils
@@ -21,21 +24,39 @@ from deep_neurographs import utils
 def process_local_paths(paths, min_size, bbox=None):
     swc_dicts = dict()
     for path in paths:
-        swc_dict = parse_local_swc(path, bbox=bbox, min_size=min_size)
-        if len(swc_dict):
-            swc_id = utils.get_swc_id(path)
+        swc_id, swc_dict = parse_local_swc(path, bbox=bbox, min_size=min_size)
+        if len(swc_dict["id"]) > min_size:
             swc_dicts[swc_id] = swc_dict
+    return swc_dicts
+
+
+def process_gsc_zip(bucket, zip_path, min_size=0):
+    swc_dicts = dict()
+    zip_blob = bucket.blob(zip_path)
+    zip_content = zip_blob.download_as_bytes()
+    with ZipFile(BytesIO(zip_content)) as zip_file:
+        with ThreadPoolExecutor() as executor:
+            threads = [
+                executor.submit(parse_gcs_zip, zip_file, path, min_size)
+                for path in utils.list_files_in_gcs_zip(zip_content)
+            ]
+        for thread in as_completed(threads):
+            swc_id, result = thread.result()
+            if len(result["id"]) > min_size:
+                swc_dicts[swc_id] = result
     return swc_dicts
 
 
 def parse_local_swc(path, bbox=None, min_size=0):
     contents = read_from_local(path)
-    return parse(contents, bbox=bbox) if len(contents) > min_size else []
+    swc_dict = parse(contents) if len(contents) > min_size else {"id": [-1]}
+    return utils.get_swc_id(path), swc_dict
 
 
 def parse_gcs_zip(zip_file, path, min_size=0):
-    swc_contents = read_from_gcs_zip(zip_file, path)
-    return parse(swc_contents) if len(swc_contents) > min_size else []
+    contents = read_from_gcs_zip(zip_file, path)
+    swc_dict = parse(contents) if len(contents) > min_size else {"id": [-1]}
+    return utils.get_swc_id(path), swc_dict
 
 
 def parse(swc_contents, bbox=None):
@@ -81,7 +102,7 @@ def parse(swc_contents, bbox=None):
         swc_dict["id"][i] -= min_id
         swc_dict["pid"][i] -= min_id
 
-    return swc_dict if len(swc_dict["id"]) > 1 else []
+    return swc_dict if len(swc_dict["id"]) > 1 else {"id": [-1]}
 
 
 def read_from_local(path):

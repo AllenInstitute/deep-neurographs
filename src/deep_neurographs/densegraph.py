@@ -9,13 +9,11 @@ graph and each node in this graph.
 
 """
 
-import os
-
 import networkx as nx
 from more_itertools import zip_broadcast
 from scipy.spatial import KDTree
 
-from deep_neurographs import swc_utils, utils
+from deep_neurographs import swc_utils
 from deep_neurographs.geometry_utils import dist as get_dist
 
 
