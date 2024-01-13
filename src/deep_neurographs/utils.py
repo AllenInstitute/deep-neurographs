@@ -14,6 +14,8 @@ import math
 import os
 import shutil
 from copy import deepcopy
+from io import BytesIO
+from zipfile import ZipFile
 
 import numpy as np
 import tensorstore as ts
@@ -190,6 +192,25 @@ def list_subdirs(path, keyword=None):
             elif keyword in d:
                 subdirs.append(d)
     return subdirs
+
+
+# -- gcs utils --
+def list_files_in_gcs_zip(zip_content):
+    """
+    Lists all files in a zip file stored in a GCS bucket.
+
+    """
+    with ZipFile(BytesIO(zip_content), "r") as zip_file:
+        return zip_file.namelist()
+
+
+def list_gcs_filenames(bucket, cloud_path, extension):
+    """
+    Lists all files in a GCS bucket with the given extension.
+
+    """
+    blobs = bucket.list_blobs(prefix=cloud_path)
+    return [blob.name for blob in blobs if extension in blob.name]
 
 
 # --- io utils ---
