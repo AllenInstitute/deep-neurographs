@@ -98,6 +98,7 @@ def parse(swc_contents, bbox=None):
                 min_id = swc_dict["id"][-1]
 
     # Reindex from zero
+    swc_dict["radius"] = np.array(swc_dict["radius"])
     for i in range(len(swc_dict["id"])):
         swc_dict["id"][i] -= min_id
         swc_dict["pid"][i] -= min_id
