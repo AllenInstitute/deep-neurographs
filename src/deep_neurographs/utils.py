@@ -489,12 +489,12 @@ def time_writer(t, unit="seconds"):
     return t, unit
 
 
-def progress_bar(current, total, bar_length=50):
+def progress_bar(current, total, bar_length=50, eta=None):
     progress = int(current / total * bar_length)
-    bar = (
-        f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
-    )
-    print(f"\r{bar}", end="", flush=True)
+    n_completed = f"Completed: {current}/{total}"
+    bar = f"[{'=' * progress}{' ' * (bar_length - progress)}]"
+    eta = f"Time Remaining: {eta}" if eta else ""
+    print(f"\r{bar} {n_completed} | {eta}", end="", flush=True)
 
 
 def xor(a, b):

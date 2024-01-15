@@ -52,7 +52,7 @@ def build_neurograph_from_local(
 ):
     # Process swc files
     t0 = time()
-    assert utils.xor(swc_dir, swc_paths), "Error: provide swc_dir or swc_paths"
+    assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
     bbox = utils.get_bbox(img_patch_origin, img_patch_shape)
     paths = get_paths(swc_dir) if swc_dir else swc_paths
     swc_dicts = process_local_paths(paths, min_size, bbox=bbox)
@@ -144,7 +144,8 @@ def build_neurograph_from_gcs_zips(
     # Process swc files
     t0 = time()
     swc_dicts = download_gcs_zips(bucket_name, cloud_path, min_size)
-    print(f"download_gcs_zips(): {time() - t0} seconds")
+    t, unit = utils.time_writer(time() - t0)
+    print(f"\ndownload_gcs_zips(): {t} {unit}")
 
     # Build neurograph
     t0 = time()
@@ -193,16 +194,11 @@ def download_gcs_zips(bucket_name, cloud_path, min_size):
     # Parse
     cnt = 1
     t0 = time()
-    t1 = time()
     swc_dicts = dict()
     for i, path in enumerate(zip_paths):
         swc_dicts.update(process_gsc_zip(bucket, path, min_size=min_size))
-        if len(swc_dicts) > 10000:
-            break
         if i > cnt * chunk_size:
-            report_runtimes(len(zip_paths), i, chunk_size, t0, t1)
-            t1 = time()
-            cnt += 1
+            cnt, t0 = report_progress(i, len(zip_paths), chunk_size, cnt, t0)
     return swc_dicts
 
 
@@ -239,6 +235,7 @@ def build_neurograph(
                 prune_depth,
                 smooth,
             )
+        print("assigned threads")
         for process in as_completed(processes):
             process_id, result = process.result()
             irreducibles[process_id] = result
@@ -284,18 +281,16 @@ def get_paths(swc_dir):
     return paths
 
 
-def report_runtimes(
-    n_files, n_files_completed, chunk_size, start, start_chunk
-):
-    runtime = time() - start
-    chunk_runtime = time() - start_chunk
-    n_files_remaining = n_files - n_files_completed
-    rate = chunk_runtime / chunk_size
-    eta = (runtime + n_files_remaining * rate) / 60
-    zip_processed = f"{n_files_completed - chunk_size}-{n_files_completed}"
-    print(f"Completed: {round(100 * n_files_completed / n_files, 2)}%")
-    print(
-        f"Runtime for Zips {zip_processed}: {round(chunk_runtime, 4)} seconds"
-    )
-    print(f"Approximate Total Runtime: {round(eta, 4)} minutes")
-    print("")
+def report_progress(current, total, chunk_size, cnt, t0):
+    eta = get_eta(current, total, chunk_size, t0)
+    utils.progress_bar(current, total, eta=eta)
+    return cnt + 1, time()
+
+
+def get_eta(current, total, chunk_size, t0):
+    chunk_runtime = time() - t0
+    remaining = total - current
+    eta = remaining * (chunk_runtime / chunk_size)
+    t, unit = utils.time_writer(eta)
+    return f"{round(t, 4)} {unit}"
+ 
