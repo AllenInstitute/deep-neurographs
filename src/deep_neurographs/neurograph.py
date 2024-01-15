@@ -13,7 +13,9 @@ from copy import deepcopy
 import networkx as nx
 import numpy as np
 import tensorstore as ts
+from operator import itemgetter
 from scipy.spatial import KDTree
+from time import time
 
 from deep_neurographs import geometry_utils
 from deep_neurographs import graph_utils as gutils
@@ -80,19 +82,26 @@ class NeuroGraph(nx.Graph):
         self.densegraph = DenseGraph(self.swc_paths)
 
     # --- Add nodes or edges ---
-    def add_immutables(self, irreducibles, swc_dict, swc_id):
-        # Add nodes
+    def add_immutables(self, irreducibles, swc_dict, swc_id, start_id=None):
+        # Initializations
         node_id = dict()
-        leafs = irreducibles["leafs"]
-        junctions = irreducibles["junctions"]
-        for i in list(leafs) + list(junctions):
-            node_id[i] = len(self.nodes)
+        cur_id = start_id if start_id else len(self.nodes)
+        for i in irreducibles["leafs"].union(irreducibles["junctions"]):
+            node_id[i] = cur_id
             self.add_node(
                 node_id[i],
                 xyz=np.array(swc_dict["xyz"][i]),
                 radius=swc_dict["radius"][i],
                 swc_id=swc_id,
             )
+            cur_id += 1
+
+        # Update leafs and junctions
+        for leaf in irreducibles["leafs"]:
+            self.leafs.add(node_id[leaf])
+
+        for junction in irreducibles["junctions"]:
+            self.junctions.add(node_id[junction])
 
         # Add edges
         edges = irreducibles["edges"]
@@ -114,13 +123,6 @@ class NeuroGraph(nx.Graph):
                 for xyz in collisions:
                     del xyz_to_edge[xyz]
             self.xyz_to_edge.update(xyz_to_edge)
-
-        # Update leafs and junctions
-        for l in leafs:
-            self.leafs.add(node_id[l])
-
-        for j in junctions:
-            self.junctions.add(node_id[j])
 
     # --- Proposal Generation ---
     def generate_proposals(

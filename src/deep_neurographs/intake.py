@@ -11,7 +11,9 @@ Builds neurograph for neuron reconstruction.
 import os
 from concurrent.futures import (
     ProcessPoolExecutor,
+    ThreadPoolExecutor,
     as_completed,
+    wait,
 )
 from time import time
 
@@ -25,7 +27,7 @@ from deep_neurographs.swc_utils import process_local_paths, process_gsc_zip
 N_PROPOSALS_PER_LEAF = 3
 OPTIMIZE_PROPOSALS = False
 OPTIMIZATION_DEPTH = 15
-PRUNE = False
+PRUNE = True
 PRUNE_DEPTH = 16
 SEARCH_RADIUS = 0
 MIN_SIZE = 35
@@ -54,7 +56,6 @@ def build_neurograph_from_local(
     bbox = utils.get_bbox(img_patch_origin, img_patch_shape)
     paths = get_paths(swc_dir) if swc_dir else swc_paths
     swc_dicts = process_local_paths(paths, min_size, bbox=bbox)
-    print(f"process_local_paths(): {time() - t0} seconds")
 
     # Build neurograph
     t0 = time()
@@ -243,14 +244,37 @@ def build_neurograph(
             irreducibles[process_id] = result
     print(f"   --> get_irreducibles(): {time() - t0} seconds")
 
-    # Build neurograph
-    t0 = time()
+    # Build neurograph    
     neurograph = NeuroGraph(bbox=bbox, img_path=img_path, swc_paths=swc_paths)
+    start_ids = get_start_ids(swc_dicts)
+
+    t0 = time()
     for key in swc_dicts.keys():
-        neurograph.add_immutables(irreducibles[key], swc_dicts[key], key)
-    print(f"   --> add_irreducibles(): {time() - t0} seconds")
+        neurograph.add_immutables(
+            irreducibles[key], swc_dicts[key], key
+        )
+    print(f"   --> synchronous - add_irreducibles(): {time() - t0} seconds")
+
+    """
+    t0 = time()
+    with ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(
+                neurograph.add_immutables, irreducibles[key], swc_dicts[key], key, start_ids[key]): key for key in swc_dicts.keys()
+        }        
+        wait(futures)
+    print(f"   --> asynchronous - add_irreducibles(): {time() - t0} seconds")
+    """
     return neurograph
 
+
+def get_start_ids(swc_dicts):
+    start_id = 0
+    start_ids = dict()
+    for key in swc_dicts.keys():
+        start_ids[key] = start_id
+        start_id += len(swc_dicts[key]["id"])
+    return start_ids
 
 # -- Utils --
 def get_paths(swc_dir):

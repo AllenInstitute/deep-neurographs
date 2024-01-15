@@ -76,10 +76,20 @@ def parse(swc_contents, bbox=None):
     ...
 
     """
+    # Initializations
+    start = 0
+    end = len(swc_contents)
+    swc_dict = {
+        "id": np.zeros((len(swc_contents)), dtype=np.int16),
+        "radius": np.zeros((len(swc_contents)), dtype=np.float16),
+        "pid": np.zeros((len(swc_contents)), dtype=np.int16),
+        "xyz": [],
+    }
+
+    # Parse
     min_id = np.inf
     offset = [0, 0, 0]
-    swc_dict = {"id": [], "radius": [], "pid": [], "xyz": []}
-    for line in swc_contents:
+    for i, line in enumerate(swc_contents):
         if line.startswith("# OFFSET"):
             parts = line.split()
             offset = read_xyz(parts[2:5])
@@ -88,19 +98,22 @@ def parse(swc_contents, bbox=None):
             xyz = read_xyz(parts[2:5], offset=offset)
             if bbox:
                 if not utils.is_contained(bbox, xyz):
+                    end = i
                     break
-
-            swc_dict["id"].append(int(parts[0]))
-            swc_dict["radius"].append(float(parts[-2]))
-            swc_dict["pid"].append(int(parts[-1]))
+            swc_dict["id"][i] = int(parts[0])
+            swc_dict["radius"][i] = float(parts[-2])
+            swc_dict["pid"][i] = int(parts[-1])
             swc_dict["xyz"].append(xyz)
-            if swc_dict["id"][-1] < min_id:
-                min_id = swc_dict["id"][-1]
-
+            if swc_dict["id"][i] < min_id:
+                min_id = swc_dict["id"][i]
+        else:
+            start += 1
+                       
     # Reindex from zero
-    for i in range(len(swc_dict["id"])):
-        swc_dict["id"][i] -= min_id
-        swc_dict["pid"][i] -= min_id
+    swc_dict["id"] -= min_id
+    swc_dict["pid"] -=min_id
+    for key in [key for key in swc_dict.keys() if key != "xyz"]:
+        swc_dict[key] = swc_dict[key][start:end]
 
     return swc_dict if len(swc_dict["id"]) > 1 else {"id": [-1]}
 

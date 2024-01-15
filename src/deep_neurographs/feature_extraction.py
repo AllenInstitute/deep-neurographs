@@ -121,7 +121,7 @@ def generate_img_chunks(
 
         # Mark path
         d = int(geometry_utils.dist(xyz_i, xyz_j) + 5)
-        if neurograph.optimize_alignment or neurograph.optimize_path:
+        if neurograph.optimize_alignment:
             xyz_list = neurograph.to_patch_coords(edge, midpoint, CHUNK_SIZE)
             path = geometry_utils.sample_path(xyz_list, d)
         else:

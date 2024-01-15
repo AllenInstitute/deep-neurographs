@@ -63,13 +63,13 @@ class DenseGraph:
         self.graphs = dict()
         for path in swc_paths:
             # Construct Graph
-            swc_dict = swc_utils.parse_local_swc(path)
+            swc_id, swc_dict = swc_utils.parse_local_swc(path)
             graph, xyz_to_node = swc_utils.to_graph(swc_dict, set_attrs=True)
 
             # Store
-            xyz_to_id = dict(zip_broadcast(swc_dict["xyz"], path))
-            self.graphs[path] = graph
-            self.xyz_to_node[path] = xyz_to_node
+            xyz_to_id = dict(zip_broadcast(swc_dict["xyz"], swc_id))
+            self.graphs[swc_id] = graph
+            self.xyz_to_node[swc_id] = xyz_to_node
             self.xyz_to_swc.update(xyz_to_id)
 
     def init_kdtree(self):
@@ -125,8 +125,8 @@ class DenseGraph:
             file (i.e. graph).
 
         """
-        swc_identical = self.xyz_to_swc[xyz_1] == self.xyz_to_swc[xyz_2]
-        return True if swc_identical else False
+        is_identical = self.xyz_to_swc[xyz_1] == self.xyz_to_swc[xyz_2]
+        return True if is_identical else False
 
     def connect_nodes(self, xyz_1, xyz_2):
         """
@@ -148,19 +148,19 @@ class DenseGraph:
             Length of path with respect to l2-metric.
 
         """
-        graph_id = self.xyz_to_swc[xyz_1]
-        i = self.xyz_to_node[graph_id][xyz_1]
-        j = self.xyz_to_node[graph_id][xyz_2]
-        path = nx.shortest_path(self.graphs[graph_id], source=i, target=j)
-        return path, self.path_length(graph_id, path)
+        swc_id = self.xyz_to_swc[xyz_1]
+        i = self.xyz_to_node[swc_id][xyz_1]
+        j = self.xyz_to_node[swc_id][xyz_2]
+        path = nx.shortest_path(self.graphs[swc_id], source=i, target=j)
+        return path, self.path_length(swc_id, path)
 
-    def path_length(self, graph_id, path):
+    def path_length(self, swc_id, path):
         """
         Computes length of path with respect to the l2-metric.
 
         Parameters
         ----------
-        graph_id : str
+        swc_id : str
             ID of graph that path belongs to.
         path : list[int]
             List of nodes that form a path.
@@ -173,8 +173,8 @@ class DenseGraph:
         path_length = 0
         for i in range(1, len(path)):
             path_length += get_dist(
-                self.graphs[graph_id].nodes[i]["xyz"],
-                self.graphs[graph_id].nodes[i - 1]["xyz"],
+                self.graphs[swc_id].nodes[i]["xyz"],
+                self.graphs[swc_id].nodes[i - 1]["xyz"],
             )
         return path_length
 
