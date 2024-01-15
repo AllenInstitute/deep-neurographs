@@ -124,11 +124,10 @@ def fast_parse(contents):
 
     """
     contents, offset = get_contents(contents)
-    dtype = np.int16 if len(contents) < 2 ** 16 else np.int32
     swc_dict = {
-        "id": np.zeros((len(contents)), dtype=dtype),
-        "radius": np.zeros((len(contents)), dtype=np.float16),
-        "pid": np.zeros((len(contents)), dtype=dtype),
+        "id": np.zeros((len(contents)), dtype=int),
+        "radius": np.zeros((len(contents)), dtype=float),
+        "pid": np.zeros((len(contents)), dtype=int),
         "xyz": []
     }
 
@@ -203,7 +202,7 @@ def read_xyz(xyz, offset=[0, 0, 0]):
         The (x,y,z) coordinates from an swc file.
 
     """
-    return tuple([np.float32(xyz[i]) + offset[i] for i in range(3)])
+    return tuple([float(xyz[i]) + offset[i] for i in range(3)])
 
 
 def write(path, contents):

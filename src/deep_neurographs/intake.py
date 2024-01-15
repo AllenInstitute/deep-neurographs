@@ -147,7 +147,7 @@ def build_neurograph_from_gcs_zips(
     t0 = time()
     swc_dicts = download_gcs_zips(bucket_name, cloud_path, min_size)
     t, unit = utils.time_writer(time() - t0)
-    print(f"\ndownload_gcs_zips(): {t} {unit}")
+    print(f"\ndownload_gcs_zips(): {t} {unit} \n")
 
     # Build neurograph
     t0 = time()
@@ -190,17 +190,19 @@ def download_gcs_zips(bucket_name, cloud_path, min_size):
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     zip_paths = utils.list_gcs_filenames(bucket, cloud_path, ".zip")
-    chunk_size = int(len(zip_paths) * 0.1)
+    chunk_size = int(len(zip_paths) * 0.05)
     print(f"# zip files: {len(zip_paths)} \n")
 
     # Parse
     cnt = 1
     t0 = time()
+    t1 = time()
     swc_dicts = dict()
+    print("Process swc files...")
     for i, path in enumerate(zip_paths):
         swc_dicts.update(process_gsc_zip(bucket, path, min_size=min_size))
         if i > cnt * chunk_size:
-            cnt, t0 = report_progress(i, len(zip_paths), chunk_size, cnt, t0)
+            cnt, t1 = report_progress(i, len(zip_paths), chunk_size, cnt, t0, t1)
     return swc_dicts
 
 
@@ -223,10 +225,14 @@ def build_neurograph(
     smooth=SMOOTH,
 ):
     # Extract irreducibles
-    t0 = time()
+    cnt = 1
+    chunk_size = int(len(swc_dicts) * 0.05)
     irreducibles = dict()
+    print("Build graph...")
+    print("# connected components:", len(swc_dicts))
     with ProcessPoolExecutor() as executor:
         # Assign Processes
+        t0 = time()
         processes = [None] * len(swc_dicts)
         for i, key in enumerate(swc_dicts.keys()):
             processes[i] = executor.submit(
@@ -237,13 +243,23 @@ def build_neurograph(
                 prune_depth,
                 smooth,
             )
-        print("assigned threads")
-        for process in as_completed(processes):
+        t, unit = utils.time_writer(time() - t0)
+        print(f"assigned_threads(): {t} {unit}")
+
+        # Store results
+        t0 = time()
+        t1 = time()
+        for i, process in enumerate(as_completed(processes)):
             process_id, result = process.result()
             irreducibles[process_id] = result
-    print(f"   --> get_irreducibles(): {time() - t0} seconds")
+            if i > cnt * chunk_size:
+                cnt, t1 = report_progress(i, len(swc_dicts), chunk_size, cnt, t0, t1)
+    t, unit = utils.time_writer(time() - t0)
+    print("")
+    print(f"get_irreducibles(): {t} {unit}")
+    stop
 
-    # Build neurograph    
+    # Build neurograph 
     neurograph = NeuroGraph(bbox=bbox, img_path=img_path, swc_paths=swc_paths)
     start_ids = get_start_ids(swc_dicts)
 
@@ -252,7 +268,8 @@ def build_neurograph(
         neurograph.add_immutables(
             irreducibles[key], swc_dicts[key], key
         )
-    print(f"   --> synchronous - add_irreducibles(): {time() - t0} seconds")
+        del swc_dicts[key]
+    print(f"add_irreducibles(): {time() - t0} seconds")
 
     """
     t0 = time()
@@ -283,16 +300,26 @@ def get_paths(swc_dir):
     return paths
 
 
-def report_progress(current, total, chunk_size, cnt, t0):
-    eta = get_eta(current, total, chunk_size, t0)
-    utils.progress_bar(current, total, eta=eta)
+def report_progress(current, total, chunk_size, cnt, t0, t1):
+    # Compute
+    eta = get_eta(current, total, chunk_size, t1)
+    runtime = get_runtime(current, total, chunk_size, t0, t1)
+
+    # Write results
+    utils.progress_bar(current, total, eta=eta, runtime=runtime)
     return cnt + 1, time()
 
 
-def get_eta(current, total, chunk_size, t0):
+def get_eta(current, total, chunk_size, t0, return_str=True):
     chunk_runtime = time() - t0
     remaining = total - current
     eta = remaining * (chunk_runtime / chunk_size)
     t, unit = utils.time_writer(eta)
+    return f"{round(t, 4)} {unit}" if return_str else eta
+
+
+def get_runtime(current, total, chunk_size, t0, t1):
+    eta = get_eta(current, total, chunk_size, t1, return_str=False)
+    total_runtime = time() - t0 + eta
+    t, unit = utils.time_writer(total_runtime)
     return f"{round(t, 4)} {unit}"
- 
