@@ -57,7 +57,6 @@ def build_neurograph_from_local(
     paths = get_paths(swc_dir) if swc_dir else swc_paths
     t0 = time()
     swc_dicts = process_local_paths(paths, min_size, bbox=bbox)
-    print(f"build_neurograph_from_local(): {time() - t0} seconds")
 
     # Build neurograph
     t0 = time()
@@ -228,7 +227,9 @@ def build_neurograph(
     cnt = 1
     chunk_size = int(len(swc_dicts) * 0.05)
     irreducibles = dict()
-    print("Build graph...")
+    n_nodes = 0
+    n_edges = 0
+    print("Extract irreducible nodes and edges...")
     print("# connected components:", len(swc_dicts))
     with ProcessPoolExecutor() as executor:
         # Assign Processes
@@ -244,7 +245,7 @@ def build_neurograph(
                 smooth,
             )
         t, unit = utils.time_writer(time() - t0)
-        print(f"assigned_threads(): {t} {unit}")
+        print(f"assigned_threads(): {round(t, 4)} {unit}")
 
         # Store results
         t0 = time()
@@ -252,11 +253,13 @@ def build_neurograph(
         for i, process in enumerate(as_completed(processes)):
             process_id, result = process.result()
             irreducibles[process_id] = result
+            n_nodes += len(result["leafs"]) + len(result["junctions"])
+            n_edges += len(result["edges"])
             if i > cnt * chunk_size:
                 cnt, t1 = report_progress(i, len(swc_dicts), chunk_size, cnt, t0, t1)
     t, unit = utils.time_writer(time() - t0)
     print("")
-    print(f"get_irreducibles(): {t} {unit}")
+    print(f"get_irreducibles(): {round(t, 4)} {unit}")
     stop
 
     # Build neurograph 
