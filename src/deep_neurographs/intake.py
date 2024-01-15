@@ -55,7 +55,9 @@ def build_neurograph_from_local(
     assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
     bbox = utils.get_bbox(img_patch_origin, img_patch_shape)
     paths = get_paths(swc_dir) if swc_dir else swc_paths
+    t0 = time()
     swc_dicts = process_local_paths(paths, min_size, bbox=bbox)
+    print(f"build_neurograph_from_local(): {time() - t0} seconds")
 
     # Build neurograph
     t0 = time()

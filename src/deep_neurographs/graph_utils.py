@@ -230,6 +230,7 @@ def upd_branch_endpoint(edges, key, old_xyz, new_xyz):
 
 # -- attribute utils --
 def __init_edge_attrs(swc_dict, i):
+    #print(len(swc_dict["radius"]), i)
     return {"radius": [swc_dict["radius"][i]], "xyz": [swc_dict["xyz"][i]]}
 
 
