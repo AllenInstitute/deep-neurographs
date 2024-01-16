@@ -83,40 +83,28 @@ class NeuroGraph(nx.Graph):
 
     # --- Add nodes or edges ---
     def add_immutables(self, irreducibles, swc_id, start_id=None):
-        # Initializations
-        node_id = dict()
+        # Nodes
+        node_ids = dict()
         cur_id = start_id if start_id else len(self.nodes)
-        leaf_ids = list(irreducibles["leafs"].keys())
-        junction_ids = list(irreducibles["junctions"].keys())
-        for i in leaf_ids + junction_ids:
-            node_id[i] = cur_id
-            self.add_node(
-                node_id[i],
-                xyz=irreducibles[i]["xyz"],
-                radius=irreducibles[i]["radius"],
-                swc_id=swc_id,
-            )
-            cur_id += 1
-
-        # Update leafs and junctions
-        for leaf in irreducibles["leafs"].keys():
-            self.leafs.add(node_id[leaf])
-
-        for junction in irreducibles["junctions"].keys():
-            self.junctions.add(node_id[junction])
+        node_ids, cur_id = self.__add_nodes(
+            irreducibles, "leafs", node_ids, cur_id, swc_id
+        )
+        node_ids, cur_id = self.__add_nodes(
+            irreducibles, "junctions", node_ids, cur_id, swc_id
+        )
 
         # Add edges
         edges = irreducibles["edges"]
         for i, j in edges.keys():
             # Get edge
-            edge = (node_id[i], node_id[j])
+            edge = (node_ids[i], node_ids[j])
             xyz = np.array(edges[(i, j)]["xyz"])
             radii = np.array(edges[(i, j)]["radius"])
 
             # Add edge
             self.immutable_edges.add(frozenset(edge))
             self.add_edge(
-                node_id[i], node_id[j], xyz=xyz, radius=radii, swc_id=swc_id
+                node_ids[i], node_ids[j], xyz=xyz, radius=radii, swc_id=swc_id
             )
             xyz_to_edge = dict((tuple(xyz), edge) for xyz in xyz)
             check_xyz = set(xyz_to_edge.keys())
@@ -125,6 +113,22 @@ class NeuroGraph(nx.Graph):
                 for xyz in collisions:
                     del xyz_to_edge[xyz]
             self.xyz_to_edge.update(xyz_to_edge)
+    
+    def __add_nodes(self, nodes, key, node_ids, cur_id, swc_id):
+        for i in nodes[key].keys():
+            node_ids[i] = cur_id
+            self.add_node(
+                node_ids[i],
+                xyz=nodes[key][i]["xyz"],
+                radius=nodes[key][i]["radius"],
+                swc_id=swc_id,
+            )
+            if key == "leafs":
+                self.leafs.add(cur_id)
+            else:
+                self.junctions.add(cur_id)
+            cur_id += 1
+        return node_ids, cur_id
 
     # --- Proposal Generation ---
     def generate_proposals(
