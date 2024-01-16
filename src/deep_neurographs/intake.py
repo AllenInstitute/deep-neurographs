@@ -227,8 +227,9 @@ def build_neurograph(
     smooth=SMOOTH,
 ):
     # Extract irreducibles
+    n_components = len(swc_dicts)
     print("Extract irreducible nodes and edges...")
-    print("# connected components:", utils.reformat_number(len(swc_dicts)))
+    print("# connected components:", utils.reformat_number(n_components))
     irreducibles, n_nodes, n_edges = get_irreducibles(
         swc_dicts,
         prune=prune,
@@ -242,7 +243,9 @@ def build_neurograph(
     print("# edges:", utils.reformat_number(n_edges))
     neurograph = NeuroGraph(bbox=bbox, img_path=img_path, swc_paths=swc_paths)
     t0, t1 = utils.init_timers()
-    while True:
+    chunk_size = max(int(n_components * 0.05), 1)
+    cnt, i = 1, 0
+    while len(irreducibles):
         key, irreducible_set = irreducibles.popitem()
         neurograph.add_immutables(
             irreducible_set, key
@@ -272,7 +275,7 @@ def get_irreducibles(
     smooth=SMOOTH,
 ):
     n_components = len(swc_dicts)
-    chunk_size = int(n_components * 0.02)
+    chunk_size = max(int(n_components * 0.02), 1)
     with ProcessPoolExecutor() as executor:
         # Assign Processes
         processes = [None] * n_components
