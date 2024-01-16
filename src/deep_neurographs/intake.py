@@ -51,11 +51,9 @@ def build_neurograph_from_local(
     smooth=SMOOTH,
 ):
     # Process swc files
-    t0 = time()
     assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
     bbox = utils.get_bbox(img_patch_origin, img_patch_shape)
     paths = get_paths(swc_dir) if swc_dir else swc_paths
-    t0 = time()
     swc_dicts = process_local_paths(paths, min_size, bbox=bbox)
 
     # Build neurograph
@@ -243,19 +241,21 @@ def build_neurograph(
     print("# nodes:", utils.reformat_number(n_nodes))
     print("# edges:", utils.reformat_number(n_edges))
     neurograph = NeuroGraph(bbox=bbox, img_path=img_path, swc_paths=swc_paths)
-    start_ids = get_start_ids(swc_dicts)
     t0, t1 = utils.init_timers()
-    for key in swc_dicts.keys():
+    n_components = len(irreducibles.keys())
+    chunk_size = int(n_components) * 0.05
+    cnt = 1
+    for i, key in enumerate(irreducibles.keys()):
         neurograph.add_immutables(
             irreducibles[key], key
         )
-        del swc_dicts[key]
         if i > cnt * chunk_size:
-            cnt, t1 = report_progress(i, len(swc_dicts), chunk_size, cnt, t0, t1)
+            cnt, t1 = report_progress(i, n_components, chunk_size, cnt, t0, t1)
     print(f"add_irreducibles(): {time() - t0} seconds")
 
     """
     t0 = time()
+    start_ids = get_start_ids(swc_dicts)
     with ThreadPoolExecutor() as executor:
         futures = {
             executor.submit(
