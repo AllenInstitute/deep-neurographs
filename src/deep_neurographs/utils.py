@@ -15,6 +15,7 @@ import os
 import shutil
 from copy import deepcopy
 from io import BytesIO
+from time import time
 from zipfile import ZipFile
 
 import numpy as np
@@ -487,6 +488,10 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
+
+
+def init_timers():
+    return time(), time()
 
 
 def progress_bar(current, total, bar_length=50, eta=None, runtime=None):
