@@ -195,7 +195,7 @@ def download_gcs_zips(bucket_name, cloud_path, min_size):
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     zip_paths = utils.list_gcs_filenames(bucket, cloud_path, ".zip")
-    chunk_size = int(len(zip_paths) * 0.05)
+    chunk_size = int(len(zip_paths) * 0.02)
     print(f"# zip files: {len(zip_paths)} \n")
 
     # Parse
@@ -245,11 +245,11 @@ def build_neurograph(
     neurograph = NeuroGraph(bbox=bbox, img_path=img_path, swc_paths=swc_paths)
     start_ids = get_start_ids(swc_dicts)
     t0, t1 = utils.init_timers()
-    for key in swc_dicts.keys():
+    while True:
+        key, irreducible_set = irreducibles.popitem()
         neurograph.add_immutables(
-            irreducibles[key], key
+            irreducible_set, key
         )
-        del swc_dicts[key]
         if i > cnt * chunk_size:
             cnt, t1 = report_progress(i, len(swc_dicts), chunk_size, cnt, t0, t1)
     print(f"add_irreducibles(): {time() - t0} seconds")
@@ -274,7 +274,7 @@ def get_irreducibles(
     smooth=SMOOTH,
 ):
     n_components = len(swc_dicts)
-    chunk_size = int(n_components * 0.05)
+    chunk_size = int(n_components * 0.02)
     with ProcessPoolExecutor() as executor:
         # Assign Processes
         processes = [None] * n_components

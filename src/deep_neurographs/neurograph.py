@@ -86,8 +86,8 @@ class NeuroGraph(nx.Graph):
         # Initializations
         node_id = dict()
         cur_id = start_id if start_id else len(self.nodes)
-        leaf_ids = irreducibles["leafs"].keys()
-        junction_ids = irreducibles["junctions"].keys()
+        leaf_ids = list(irreducibles["leafs"].keys())
+        junction_ids = list(irreducibles["junctions"].keys())
         for i in leaf_ids + junction_ids:
             node_id[i] = cur_id
             self.add_node(
