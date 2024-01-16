@@ -157,12 +157,18 @@ def build_neurograph_from_gcs_zips(
         prune_depth=prune_depth,
         smooth=smooth,
     )
-    print(f"build_neurograph(): {time() - t0} seconds")
+    t, unit = utils.time_writer(time() - t0)
+    print(f"build_neurograph(): {t} {unit} \n")
 
+    # Generate proposals
     if search_radius > 0:
+        t0 = time()
+        print("Generate edge proposals...")
         neurograph.generate_proposals(
             search_radius, n_proposals_per_leaf=n_proposals_per_leaf
         )
+        t, unit = utils.time_writer(time() - t0)
+    print(f"generate_proposals(): {t} {unit} \n")
     return neurograph
 
 
@@ -194,8 +200,7 @@ def download_gcs_zips(bucket_name, cloud_path, min_size):
 
     # Parse
     cnt = 1
-    t0 = time()
-    t1 = time()
+    t0, t1 = utils.init_timers()
     swc_dicts = dict()
     print("Process swc files...")
     for i, path in enumerate(zip_paths):
@@ -224,54 +229,29 @@ def build_neurograph(
     smooth=SMOOTH,
 ):
     # Extract irreducibles
-    cnt = 1
-    chunk_size = int(len(swc_dicts) * 0.05)
-    irreducibles = dict()
-    n_nodes = 0
-    n_edges = 0
     print("Extract irreducible nodes and edges...")
-    print("# connected components:", len(swc_dicts))
-    with ProcessPoolExecutor() as executor:
-        # Assign Processes
-        t0 = time()
-        processes = [None] * len(swc_dicts)
-        for i, key in enumerate(swc_dicts.keys()):
-            processes[i] = executor.submit(
-                gutils.get_irreducibles,
-                swc_dicts[key],
-                key,
-                prune,
-                prune_depth,
-                smooth,
-            )
-        t, unit = utils.time_writer(time() - t0)
-        print(f"assigned_threads(): {round(t, 4)} {unit}")
+    print("# connected components:", utils.reformat_number(len(swc_dicts)))
+    irreducibles, n_nodes, n_edges = get_irreducibles(
+        swc_dicts,
+        prune=prune,
+        prune_depth=prune_depth,
+        smooth=smooth,
+    )
 
-        # Store results
-        t0 = time()
-        t1 = time()
-        for i, process in enumerate(as_completed(processes)):
-            process_id, result = process.result()
-            irreducibles[process_id] = result
-            n_nodes += len(result["leafs"]) + len(result["junctions"])
-            n_edges += len(result["edges"])
-            if i > cnt * chunk_size:
-                cnt, t1 = report_progress(i, len(swc_dicts), chunk_size, cnt, t0, t1)
-    t, unit = utils.time_writer(time() - t0)
-    print("")
-    print(f"get_irreducibles(): {round(t, 4)} {unit}")
-    stop
-
-    # Build neurograph 
+    # Build neurograph
+    print("Build graph...")
+    print("# nodes:", utils.reformat_number(n_nodes))
+    print("# edges:", utils.reformat_number(n_edges))
     neurograph = NeuroGraph(bbox=bbox, img_path=img_path, swc_paths=swc_paths)
     start_ids = get_start_ids(swc_dicts)
-
-    t0 = time()
+    t0, t1 = utils.init_timers()
     for key in swc_dicts.keys():
         neurograph.add_immutables(
-            irreducibles[key], swc_dicts[key], key
+            irreducibles[key], key
         )
         del swc_dicts[key]
+        if i > cnt * chunk_size:
+            cnt, t1 = report_progress(i, len(swc_dicts), chunk_size, cnt, t0, t1)
     print(f"add_irreducibles(): {time() - t0} seconds")
 
     """
@@ -287,6 +267,51 @@ def build_neurograph(
     return neurograph
 
 
+def get_irreducibles(
+    swc_dicts,
+    prune=PRUNE,
+    prune_depth=PRUNE_DEPTH,
+    smooth=SMOOTH,
+):
+    n_components = len(swc_dicts)
+    chunk_size = int(n_components * 0.05)
+    with ProcessPoolExecutor() as executor:
+        # Assign Processes
+        processes = [None] * n_components
+        t0, i = time(), 0
+        while swc_dicts:
+            key, swc_dict = swc_dicts.popitem()
+            processes[i] = executor.submit(
+                gutils.get_irreducibles,
+                swc_dict,
+                key,
+                prune,
+                prune_depth,
+                smooth,
+            )
+            i += 1
+        t, unit = utils.time_writer(time() - t0)
+        print(f"assigned_threads(): {round(t, 4)} {unit}")
+
+        # Store results
+        t0, t1 = utils.init_timers()
+        irreducibles = dict()
+        n_nodes, n_edges = 0, 0
+        progress_cnt = 1
+        for i, process in enumerate(as_completed(processes)):
+            process_id, result = process.result()
+            irreducibles[process_id] = result
+            n_nodes += len(result["leafs"]) + len(result["junctions"])
+            n_edges += len(result["edges"])
+            if i > progress_cnt * chunk_size:
+                progress_cnt, t1 = report_progress(
+                    i, n_components, chunk_size, progress_cnt, t0, t1
+                )
+    t, unit = utils.time_writer(time() - t0)
+    print("\n" + f"get_irreducibles(): {round(t, 4)} {unit} \n")
+    return irreducibles, n_nodes, n_edges
+
+
 def get_start_ids(swc_dicts):
     start_id = 0
     start_ids = dict()
@@ -294,6 +319,7 @@ def get_start_ids(swc_dicts):
         start_ids[key] = start_id
         start_id += len(swc_dicts[key]["id"])
     return start_ids
+
 
 # -- Utils --
 def get_paths(swc_dir):

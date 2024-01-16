@@ -82,25 +82,27 @@ class NeuroGraph(nx.Graph):
         self.densegraph = DenseGraph(self.swc_paths)
 
     # --- Add nodes or edges ---
-    def add_immutables(self, irreducibles, swc_dict, swc_id, start_id=None):
+    def add_immutables(self, irreducibles, swc_id, start_id=None):
         # Initializations
         node_id = dict()
         cur_id = start_id if start_id else len(self.nodes)
-        for i in irreducibles["leafs"].union(irreducibles["junctions"]):
+        leaf_ids = irreducibles["leafs"].keys()
+        junction_ids = irreducibles["junctions"].keys()
+        for i in leaf_ids + junction_ids:
             node_id[i] = cur_id
             self.add_node(
                 node_id[i],
-                xyz=np.array(swc_dict["xyz"][i]),
-                radius=swc_dict["radius"][i],
+                xyz=irreducibles[i]["xyz"],
+                radius=irreducibles[i]["radius"],
                 swc_id=swc_id,
             )
             cur_id += 1
 
         # Update leafs and junctions
-        for leaf in irreducibles["leafs"]:
+        for leaf in irreducibles["leafs"].keys():
             self.leafs.add(node_id[leaf])
 
-        for junction in irreducibles["junctions"]:
+        for junction in irreducibles["junctions"].keys():
             self.junctions.add(node_id[junction])
 
         # Add edges
