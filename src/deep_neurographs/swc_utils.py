@@ -9,12 +9,12 @@ Routines for working with swc files.
 
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
+from zipfile import ZipFile
+
 import networkx as nx
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from time import time
-from zipfile import ZipFile
 
 from deep_neurographs import geometry_utils
 from deep_neurographs import graph_utils as gutils
@@ -60,7 +60,9 @@ def parse_local_swc(path, bbox=None, min_size=0):
 
 def parse_gcs_zip(zip_file, path, min_size=0):
     contents = read_from_gcs_zip(zip_file, path)
-    swc_dict = fast_parse(contents) if len(contents) > min_size else {"id": [-1]}
+    swc_dict = (
+        fast_parse(contents) if len(contents) > min_size else {"id": [-1]}
+    )
     return utils.get_swc_id(path), swc_dict
 
 
@@ -81,10 +83,9 @@ def parse(contents, bbox=None):
     ...
 
     """
+    contents, offset = get_contents(contents)
     min_id = np.inf
-    offset = [0, 0, 0]
     swc_dict = {"id": [], "radius": [], "pid": [], "xyz": []}
-    contents, swc_id = get_contents(contents)
     for line in contents:
         parts = line.split()
         xyz = read_xyz(parts[2:5], offset=offset)
@@ -124,14 +125,13 @@ def fast_parse(contents):
 
     """
     contents, offset = get_contents(contents)
+    min_id = np.inf
     swc_dict = {
         "id": np.zeros((len(contents)), dtype=int),
         "radius": np.zeros((len(contents)), dtype=float),
         "pid": np.zeros((len(contents)), dtype=int),
-        "xyz": []
+        "xyz": [],
     }
-
-    min_id = np.inf
     for i, line in enumerate(contents):
         parts = line.split()
         xyz = read_xyz(parts[2:5], offset=offset)

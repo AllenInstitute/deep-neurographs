@@ -20,7 +20,7 @@ def get_directional(
         elif branch.shape[0] <= d:
             xyz = deepcopy(branch)
         else:
-            xyz = deepcopy(branch[d: window + d, :])
+            xyz = deepcopy(branch[d : window + d, :])
         directionals.append(compute_tangent(xyz))
 
     # Determine best
