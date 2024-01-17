@@ -92,6 +92,7 @@ class NeuroGraph(nx.Graph):
         )
 
         # Add edges
+        """
         edges = irreducibles["edges"]
         for i, j in edges.keys():
             # Get edge
@@ -111,6 +112,7 @@ class NeuroGraph(nx.Graph):
                 for xyz in collisions:
                     del xyz_to_edge[xyz]
             self.xyz_to_edge.update(xyz_to_edge)
+        """
 
     def __add_nodes(self, nodes, key, node_ids, cur_id, swc_id):
         for i in nodes[key].keys():
