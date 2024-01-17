@@ -252,7 +252,8 @@ def build_neurograph(
         )
         if i > cnt * chunk_size:
             cnt, t1 = report_progress(i, n_components, chunk_size, cnt, t0, t1)
-    print(f"add_irreducibles(): {time() - t0} seconds")
+        i += 1
+    print("\n" + f"add_irreducibles(): {time() - t0} seconds")
 
     """
     t0 = time()
