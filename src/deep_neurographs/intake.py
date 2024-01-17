@@ -22,7 +22,7 @@ from google.cloud import storage
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 from deep_neurographs.neurograph import NeuroGraph
-from deep_neurographs.swc_utils import process_local_paths, process_gsc_zip
+from deep_neurographs.swc_utils import process_gsc_zip, process_local_paths
 
 N_PROPOSALS_PER_LEAF = 3
 OPTIMIZE_PROPOSALS = False
@@ -57,7 +57,6 @@ def build_neurograph_from_local(
     swc_dicts = process_local_paths(paths, min_size, bbox=bbox)
 
     # Build neurograph
-    t0 = time()
     neurograph = build_neurograph(
         swc_dicts,
         bbox=bbox,
@@ -67,10 +66,8 @@ def build_neurograph_from_local(
         prune_depth=prune_depth,
         smooth=smooth,
     )
-    print(f"build_neurograph(): {time() - t0} seconds")
 
     # Generate proposals
-    t0 = time()
     if search_radius > 0:
         neurograph.generate_proposals(
             search_radius,
@@ -78,8 +75,6 @@ def build_neurograph_from_local(
             optimize=optimize_proposals,
             optimization_depth=optimization_depth,
         )
-    print(f"generate_proposals(): {time() - t0} seconds")
-
     return neurograph
 
 

@@ -13,9 +13,7 @@ from copy import deepcopy
 import networkx as nx
 import numpy as np
 import tensorstore as ts
-from operator import itemgetter
 from scipy.spatial import KDTree
-from time import time
 
 from deep_neurographs import geometry_utils
 from deep_neurographs import graph_utils as gutils
@@ -113,7 +111,7 @@ class NeuroGraph(nx.Graph):
                 for xyz in collisions:
                     del xyz_to_edge[xyz]
             self.xyz_to_edge.update(xyz_to_edge)
-    
+
     def __add_nodes(self, nodes, key, node_ids, cur_id, swc_id):
         for i in nodes[key].keys():
             node_ids[i] = cur_id
