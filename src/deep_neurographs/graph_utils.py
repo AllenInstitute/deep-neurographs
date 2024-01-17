@@ -195,7 +195,7 @@ def get_leafs(graph):
 
 
 def __smooth_branch(swc_dict, attrs, edges, nbs, root, j):
-    attrs["xyz"] = geometry_utils.smooth_branch(np.array(attrs["xyz"]))
+    attrs["xyz"] = geometry_utils.smooth_branch(np.array(attrs["xyz"]), s=10)
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, root, 0)
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, j, -1)
     edges[(root, j)] = attrs
