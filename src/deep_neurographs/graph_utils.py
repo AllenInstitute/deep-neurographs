@@ -66,11 +66,10 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
     # Extract irreducibles
     leafs, junctions = get_irreducible_nodes(dense_graph, swc_dict)
     assert len(leafs) > 0, "Error: swc with no leaf nodes!"
-    source = sample(leafs.keys(), 1)[0]
     root = None
     edges = dict()
     nbs = dict()
-    for (i, j) in nx.dfs_edges(dense_graph, source=source):
+    for (i, j) in nx.dfs_edges(dense_graph, source=sample(leafs, 1)[0]):
         # Check if start of path is valid
         if root is None:
             root = i
@@ -90,6 +89,8 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
             root = None
 
     # Output
+    leafs = set_node_attrs(swc_dict, leafs)
+    junctions = set_node_attrs(swc_dict, junctions)
     irreducibles = {"leafs": leafs, "junctions": junctions, "edges": edges}
     return swc_id, irreducibles
 
@@ -111,13 +112,13 @@ def get_irreducible_nodes(graph, swc_dict):
         Nodes with degree > 2.
 
     """
-    leafs = dict()
-    junctions = dict()
+    leafs = set()
+    junctions = set()
     for i in graph.nodes:
         if graph.degree[i] == 1:
-            leafs[i] = init_node_attrs(swc_dict, i)
+            leafs.add(i)
         elif graph.degree[i] > 2:
-            junctions[i] = init_node_attrs(swc_dict, i)
+            junctions.add(i)
     return leafs, junctions
 
 
@@ -194,7 +195,7 @@ def get_leafs(graph):
 
 
 def __smooth_branch(swc_dict, attrs, edges, nbs, root, j):
-    attrs["xyz"] = geometry_utils.smooth_branch(np.array(attrs["xyz"]))
+    attrs["xyz"] = geometry_utils.smooth_branch(np.array(attrs["xyz"]), s=10)
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, root, 0)
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, j, -1)
     edges[(root, j)] = attrs
@@ -230,7 +231,6 @@ def upd_branch_endpoint(edges, key, old_xyz, new_xyz):
 
 # -- attribute utils --
 def init_edge_attrs(swc_dict, i):
-    #print(len(swc_dict["radius"]), i)
     return {"radius": [swc_dict["radius"][i]], "xyz": [swc_dict["xyz"][i]]}
 
 
@@ -247,3 +247,19 @@ def get_edge_attr(graph, edge, attr):
 
 def init_node_attrs(swc_dict, i):
     return {"radius": swc_dict["radius"][i], "xyz": swc_dict["xyz"][i]}
+
+
+def set_node_attrs(swc_dict, nodes):
+    node_attrs = dict()
+    for i in nodes:
+        node_attrs[i] = init_node_attrs(swc_dict, i)
+    return node_attrs
+
+
+def upd_node_attrs(swc_dict, leafs, junctions, i):
+    upd_attrs = {"radius": swc_dict["radius"][i], "xyz": swc_dict["xyz"][i]}
+    if i in leafs:
+        leafs[i] = upd_attrs
+    else:
+        junctions[i] = upd_attrs
+    return leafs, junctions

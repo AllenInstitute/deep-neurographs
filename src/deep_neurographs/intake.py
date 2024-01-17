@@ -13,7 +13,6 @@ from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
     as_completed,
-    wait,
 )
 from time import time
 
@@ -22,7 +21,7 @@ from google.cloud import storage
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 from deep_neurographs.neurograph import NeuroGraph
-from deep_neurographs.swc_utils import process_local_paths, process_gsc_zip
+from deep_neurographs.swc_utils import process_gsc_zip, process_local_paths
 
 N_PROPOSALS_PER_LEAF = 3
 OPTIMIZE_PROPOSALS = False
@@ -57,7 +56,6 @@ def build_neurograph_from_local(
     swc_dicts = process_local_paths(paths, min_size, bbox=bbox)
 
     # Build neurograph
-    t0 = time()
     neurograph = build_neurograph(
         swc_dicts,
         bbox=bbox,
@@ -67,10 +65,8 @@ def build_neurograph_from_local(
         prune_depth=prune_depth,
         smooth=smooth,
     )
-    print(f"build_neurograph(): {time() - t0} seconds")
 
     # Generate proposals
-    t0 = time()
     if search_radius > 0:
         neurograph.generate_proposals(
             search_radius,
@@ -78,8 +74,6 @@ def build_neurograph_from_local(
             optimize=optimize_proposals,
             optimization_depth=optimization_depth,
         )
-    print(f"generate_proposals(): {time() - t0} seconds")
-
     return neurograph
 
 
@@ -204,7 +198,9 @@ def download_gcs_zips(bucket_name, cloud_path, min_size):
     for i, path in enumerate(zip_paths):
         swc_dicts.update(process_gsc_zip(bucket, path, min_size=min_size))
         if i > cnt * chunk_size:
-            cnt, t1 = report_progress(i, len(zip_paths), chunk_size, cnt, t0, t1)
+            cnt, t1 = report_progress(
+                i, len(zip_paths), chunk_size, cnt, t0, t1
+            )
     return swc_dicts
 
 
@@ -231,10 +227,7 @@ def build_neurograph(
     print("Extract irreducible nodes and edges...")
     print("# connected components:", utils.reformat_number(n_components))
     irreducibles, n_nodes, n_edges = get_irreducibles(
-        swc_dicts,
-        prune=prune,
-        prune_depth=prune_depth,
-        smooth=smooth,
+        swc_dicts, prune=prune, prune_depth=prune_depth, smooth=smooth
     )
 
     # Build neurograph
@@ -247,9 +240,7 @@ def build_neurograph(
     cnt, i = 1, 0
     while len(irreducibles):
         key, irreducible_set = irreducibles.popitem()
-        neurograph.add_immutables(
-            irreducible_set, key
-        )
+        neurograph.add_immutables(irreducible_set, key)
         if i > cnt * chunk_size:
             cnt, t1 = report_progress(i, n_components, chunk_size, cnt, t0, t1)
     print(f"add_irreducibles(): {time() - t0} seconds")
@@ -261,7 +252,7 @@ def build_neurograph(
         futures = {
             executor.submit(
                 neurograph.add_immutables, irreducibles[key], swc_dicts[key], key, start_ids[key]): key for key in swc_dicts.keys()
-        }        
+        }
         wait(futures)
     print(f"   --> asynchronous - add_irreducibles(): {time() - t0} seconds")
     """
@@ -269,10 +260,7 @@ def build_neurograph(
 
 
 def get_irreducibles(
-    swc_dicts,
-    prune=PRUNE,
-    prune_depth=PRUNE_DEPTH,
-    smooth=SMOOTH,
+    swc_dicts, prune=PRUNE, prune_depth=PRUNE_DEPTH, smooth=SMOOTH
 ):
     n_components = len(swc_dicts)
     chunk_size = max(int(n_components * 0.02), 1)
