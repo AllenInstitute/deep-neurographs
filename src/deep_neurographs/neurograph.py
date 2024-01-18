@@ -80,10 +80,10 @@ class NeuroGraph(nx.Graph):
         self.densegraph = DenseGraph(self.swc_paths)
 
     # --- Add nodes or edges ---
-    def add_immutables(self, irreducibles, swc_id, start_id=None):
+    def add_immutables(self, irreducibles, swc_id):
         # Nodes
         node_ids = dict()
-        cur_id = start_id if start_id else len(self.nodes)
+        cur_id = len(self.nodes)
         node_ids, cur_id = self.__add_nodes(
             irreducibles, "leafs", node_ids, cur_id, swc_id
         )
@@ -92,25 +92,19 @@ class NeuroGraph(nx.Graph):
         )
 
         # Add edges
-        edges = irreducibles["edges"]
-        for i, j in edges.keys():
-            # Get edge
-            edge = (node_ids[i], node_ids[j])
-            xyz = np.array(edges[(i, j)]["xyz"])
-            radii = np.array(edges[(i, j)]["radius"])
-
-            # Add edge
-            self.immutable_edges.add(frozenset(edge))
+        for edge, values in irreducibles["edges"].items():
+            i, j = edge
+            self.immutable_edges.add(frozenset((node_ids[i], node_ids[j])))
             self.add_edge(
-                node_ids[i], node_ids[j], xyz=xyz, radius=radii, swc_id=swc_id
+                node_ids[i],
+                node_ids[j],
+                radius=values["radius"],
+                xyz=values["xyz"],
+                swc_id=swc_id
             )
-            xyz_to_edge = dict((tuple(xyz), edge) for xyz in xyz)
-            check_xyz = set(xyz_to_edge.keys())
-            collisions = check_xyz.intersection(set(self.xyz_to_edge.keys()))
-            if len(collisions) > 0:
-                for xyz in collisions:
-                    del xyz_to_edge[xyz]
-            self.xyz_to_edge.update(xyz_to_edge)
+            for xyz in values["xyz"][::2]:
+                self.xyz_to_edge[tuple(xyz)] = (i, j)
+            self.xyz_to_edge[tuple(values["xyz"][-1])] = (i, j)
 
     def __add_nodes(self, nodes, key, node_ids, cur_id, swc_id):
         for i in nodes[key].keys():

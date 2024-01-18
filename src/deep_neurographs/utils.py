@@ -97,6 +97,32 @@ def remove_key(my_dict, key):
     return my_dict
 
 
+def append_dict_value(my_dict, key, value):
+    """
+    Appends "value" to the list stored at "key".
+
+    Parameters
+    ----------
+    my_dict : dict
+        Dictionary to be queried.
+    key : hashable data type
+        Key to be query.
+    value : list item type
+        Value to append to list stored at "key".
+
+    Returns
+    -------
+    my_dict : dict
+        Updated dictionary.
+
+    """
+    if key in my_dict.keys():
+        my_dict[key].append(value)
+    else:
+        my_dict[key] = [value]
+    return my_dict
+
+
 # --- os utils ---
 def mkdir(path, delete=False):
     """
@@ -500,7 +526,7 @@ def progress_bar(current, total, bar_length=50, eta=None, runtime=None):
     bar = f"[{'=' * progress}{' ' * (bar_length - progress)}]"
     eta = f"Time Remaining: {eta}" if eta else ""
     runtime = f"Estimated Total Runtime: {runtime}" if runtime else ""
-    print(f"\r{bar} {n_completed} | {eta} | {runtime}", end="", flush=True)
+    print(f"\r{bar} {n_completed} | {eta} | {runtime}    ", end="", flush=True)
 
 
 def xor(a, b):

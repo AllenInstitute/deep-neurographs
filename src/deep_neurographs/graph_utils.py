@@ -7,17 +7,19 @@ Created on Wed June 5 16:00:00 2023
 
 Routines that extract the irreducible components of a graph.
 
---define what an irreducible is
-    leafs : set
-        Nodes with degreee 1.
-    junctions : set
-        Nodes with degree > 2.
-    edges : dict
-        Set of edges connecting nodes in leafs and junctions. The keys are
-        pairs of nodes connected by an edge and values are a dictionary of
-        attributes.
 
---define what a branch is
+Terminology
+------------
+
+Leaf: a node with degree 1.
+
+Junction: a node with degree > 2.
+
+Irreducibles: the irreducibles of a graph G=(V,E) consists of (1) leaf nodes
+V_l, (2) junction nodes, and (3) 
+junction nodes along 
+
+Branch: the sequence of nodes between two 
 
 """
 
@@ -26,7 +28,7 @@ from random import sample
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry_utils, swc_utils
+from deep_neurographs import geometry_utils, swc_utils, utils
 
 
 def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
@@ -58,17 +60,20 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
         all irreducibles from the graph of that type.
 
     """
-    # Initializations
+    # Build dense graph
     dense_graph = swc_utils.to_graph(swc_dict)
     if prune:
         dense_graph = prune_short_branches(dense_graph, depth)
 
-    # Extract irreducibles
+    # Extract nodes
     leafs, junctions = get_irreducible_nodes(dense_graph, swc_dict)
-    assert len(leafs) > 0, "Error: swc with no leaf nodes!"
-    root = None
+    if len(leafs) == 0:
+        return False, None
+    
+    # Extract edges
     edges = dict()
     nbs = dict()
+    root = None
     for (i, j) in nx.dfs_edges(dense_graph, source=sample(leafs, 1)[0]):
         # Check if start of path is valid
         if root is None:
@@ -84,8 +89,8 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
                 )
             else:
                 edges[(root, j)] = attrs
-            nbs = append_value(nbs, root, j)
-            nbs = append_value(nbs, j, root)
+            nbs = utils.append_dict_value(nbs, root, j)
+            nbs = utils.append_dict_value(nbs, j, root)
             root = None
 
     # Output
@@ -196,6 +201,7 @@ def get_leafs(graph):
 
 def __smooth_branch(swc_dict, attrs, edges, nbs, root, j):
     attrs["xyz"] = geometry_utils.smooth_branch(np.array(attrs["xyz"]), s=10)
+    attrs["radius"] = np.array(attrs["radius"])
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, root, 0)
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, j, -1)
     edges[(root, j)] = attrs
@@ -211,14 +217,6 @@ def upd_xyz(swc_dict, attrs, edges, nbs, i, start_or_end):
             )
     swc_dict["xyz"][i] = attrs["xyz"][start_or_end]
     return swc_dict, edges
-
-
-def append_value(my_dict, key, value):
-    if key in my_dict.keys():
-        my_dict[key].append(value)
-    else:
-        my_dict[key] = [value]
-    return my_dict
 
 
 def upd_branch_endpoint(edges, key, old_xyz, new_xyz):
@@ -242,6 +240,11 @@ def upd_edge_attrs(swc_dict, attrs, i):
 
 def get_edge_attr(graph, edge, attr):
     edge_data = graph.get_edge_data(*edge)
+    print("here")
+    print(edge)
+    print(graph.edges[edge])
+    print(edge_data)
+    print(attr)
     return edge_data[attr]
 
 
