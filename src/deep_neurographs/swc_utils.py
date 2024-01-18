@@ -127,18 +127,17 @@ def fast_parse(contents):
     contents, offset = get_contents(contents)
     min_id = np.inf
     swc_dict = {
-        "id": np.zeros((len(contents)), dtype=int),
-        "radius": np.zeros((len(contents)), dtype=float),
-        "pid": np.zeros((len(contents)), dtype=int),
-        "xyz": [],
+        "id": np.zeros((len(contents)), dtype=np.int32),
+        "radius": np.zeros((len(contents)), dtype=np.float32),
+        "pid": np.zeros((len(contents)), dtype=np.int32),
+        "xyz": np.zeros((len(contents), 3), dtype=np.int32),
     }
     for i, line in enumerate(contents):
         parts = line.split()
-        xyz = read_xyz(parts[2:5], offset=offset)
-        swc_dict["id"][i] = int(parts[0])
-        swc_dict["radius"][i] = float(parts[-2])
-        swc_dict["pid"][i] = int(parts[-1])
-        swc_dict["xyz"].append(xyz)
+        swc_dict["id"][i] = parts[0]
+        swc_dict["radius"][i] = parts[-2]
+        swc_dict["pid"][i] = parts[-1]
+        swc_dict["xyz"][i] = read_xyz(parts[2:5], offset=offset)
 
     # Reindex from zero
     min_id = np.min(swc_dict["id"])
