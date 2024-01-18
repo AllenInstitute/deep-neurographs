@@ -28,7 +28,7 @@ from random import sample
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry_utils, swc_utils
+from deep_neurographs import geometry_utils, swc_utils, utils
 
 
 def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
@@ -240,6 +240,11 @@ def upd_edge_attrs(swc_dict, attrs, i):
 
 def get_edge_attr(graph, edge, attr):
     edge_data = graph.get_edge_data(*edge)
+    print("here")
+    print(edge)
+    print(graph.edges[edge])
+    print(edge_data)
+    print(attr)
     return edge_data[attr]
 
 
