@@ -244,18 +244,6 @@ def build_neurograph(
         if i > cnt * chunk_size:
             cnt, t1 = report_progress(i, n_components, chunk_size, cnt, t0, t1)
     print(f"add_irreducibles(): {time() - t0} seconds")
-
-    """
-    t0 = time()
-    start_ids = get_start_ids(swc_dicts)
-    with ThreadPoolExecutor() as executor:
-        futures = {
-            executor.submit(
-                neurograph.add_immutables, irreducibles[key], swc_dicts[key], key, start_ids[key]): key for key in swc_dicts.keys()
-        }
-        wait(futures)
-    print(f"   --> asynchronous - add_irreducibles(): {time() - t0} seconds")
-    """
     return neurograph
 
 
