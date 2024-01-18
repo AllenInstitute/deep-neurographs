@@ -245,18 +245,6 @@ def build_neurograph(
             cnt, t1 = report_progress(i, n_components, chunk_size, cnt, t0, t1)
         i += 1
     print("\n" + f"add_irreducibles(): {time() - t0} seconds")
-
-    """
-    t0 = time()
-    start_ids = get_start_ids(swc_dicts)
-    with ThreadPoolExecutor() as executor:
-        futures = {
-            executor.submit(
-                neurograph.add_immutables, irreducibles[key], swc_dicts[key], key, start_ids[key]): key for key in swc_dicts.keys()
-        }
-        wait(futures)
-    print(f"   --> asynchronous - add_irreducibles(): {time() - t0} seconds")
-    """
     return neurograph
 
 
@@ -290,9 +278,10 @@ def get_irreducibles(
         progress_cnt = 1
         for i, process in enumerate(as_completed(processes)):
             process_id, result = process.result()
-            irreducibles[process_id] = result
-            n_nodes += len(result["leafs"]) + len(result["junctions"])
-            n_edges += len(result["edges"])
+            if process_id:
+                irreducibles[process_id] = result
+                n_nodes += len(result["leafs"]) + len(result["junctions"])
+                n_edges += len(result["edges"])
             if i > progress_cnt * chunk_size:
                 progress_cnt, t1 = report_progress(
                     i, n_components, chunk_size, progress_cnt, t0, t1
@@ -300,15 +289,6 @@ def get_irreducibles(
     t, unit = utils.time_writer(time() - t0)
     print("\n" + f"get_irreducibles(): {round(t, 4)} {unit} \n")
     return irreducibles, n_nodes, n_edges
-
-
-def get_start_ids(swc_dicts):
-    start_id = 0
-    start_ids = dict()
-    for key in swc_dicts.keys():
-        start_ids[key] = start_id
-        start_id += len(swc_dicts[key]["id"])
-    return start_ids
 
 
 # -- Utils --
@@ -320,11 +300,8 @@ def get_paths(swc_dir):
 
 
 def report_progress(current, total, chunk_size, cnt, t0, t1):
-    # Compute
     eta = get_eta(current, total, chunk_size, t1)
     runtime = get_runtime(current, total, chunk_size, t0, t1)
-
-    # Write results
     utils.progress_bar(current, total, eta=eta, runtime=runtime)
     return cnt + 1, time()
 
