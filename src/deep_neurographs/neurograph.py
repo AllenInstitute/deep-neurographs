@@ -308,10 +308,10 @@ class NeuroGraph(nx.Graph):
             proposal = [self.to_world(xyz_1), self.to_world(xyz_2)]
             self.edges[edge]["xyz"] = np.vstack(proposal)
 
-    def get_branch(self, xyz_or_node):
+    def get_branch(self, xyz_or_node, key="xyz"):
         if type(xyz_or_node) == int:
             nb = self.get_immutable_nbs(xyz_or_node)[0]
-            return self.orient_edge((xyz_or_node, nb), xyz_or_node)
+            return self.orient_edge((xyz_or_node, nb), xyz_or_node, key=key)
         else:
             edge = self.xyz_to_edge[tuple(xyz_or_node)]
             branch = deepcopy(self.edges[edge]["xyz"])
@@ -320,18 +320,17 @@ class NeuroGraph(nx.Graph):
             else:
                 return branch
 
-    def get_branches(self, i):
+    def get_branches(self, i, key="xyz"):
         branches = []
-        for j in self.neighbors(i):
-            if frozenset((i, j)) in self.immutable_edges:
-                branches.append(self.orient_edge((i, j), i))
+        for j in self.get_immutable_nbs(i):
+            branches.append(self.orient_edge((i, j), i, key=key))
         return branches
 
-    def orient_edge(self, edge, i):
+    def orient_edge(self, edge, i, key="xyz"):
         if (self.edges[edge]["xyz"][0, :] == self.nodes[i]["xyz"]).all():
-            return self.edges[edge]["xyz"]
+            return self.edges[edge][key]
         else:
-            return np.flip(self.edges[edge]["xyz"], axis=0)
+            return np.flip(self.edges[edge][key], axis=0)
 
     # --- Ground Truth Generation ---
     def init_targets(self, target_neurograph):
