@@ -10,10 +10,11 @@ graph and each node in this graph.
 """
 
 import networkx as nx
+import numpy as np
 from more_itertools import zip_broadcast
 from scipy.spatial import KDTree
 
-from deep_neurographs import swc_utils
+from deep_neurographs import swc_utils, utils
 from deep_neurographs.geometry_utils import dist as get_dist
 
 
@@ -67,6 +68,8 @@ class DenseGraph:
             graph, xyz_to_node = swc_utils.to_graph(swc_dict, set_attrs=True)
 
             # Store
+            if type(swc_dict["xyz"]) == np.ndarray:
+                swc_dict["xyz"] = utils.numpy_to_hashable(swc_dict["xyz"])
             xyz_to_id = dict(zip_broadcast(swc_dict["xyz"], swc_id))
             self.graphs[swc_id] = graph
             self.xyz_to_node[swc_id] = xyz_to_node

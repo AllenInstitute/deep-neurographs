@@ -500,6 +500,10 @@ def normalize_img(img):
     return img / np.max(img)
 
 
+def numpy_to_hashable(arr):
+    return [tuple(item) for item in arr.tolist()]
+
+
 def reformat_number(number):
     return f"{number:,}"
 

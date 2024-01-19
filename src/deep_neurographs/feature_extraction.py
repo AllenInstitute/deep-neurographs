@@ -176,36 +176,18 @@ def generate_mutable_skel_features(neurograph):
     features = dict()
     for edge in neurograph.mutable_edges:
         i, j = tuple(edge)
-        radius_i, radius_j = get_radii(neurograph, edge)
-        avg_radius_i, avg_radius_j = get_avg_radii(neurograph, edge)
-        avg_len_i, avg_len_j = get_avg_branch_len(neurograph, edge)
-        dot4_1, dot4_2, dot4_3 = get_directionals(neurograph, edge, 4)
-        dot8_1, dot8_2, dot8_3 = get_directionals(neurograph, edge, 8)
-        dot16_1, dot16_2, dot16_3 = get_directionals(neurograph, edge, 16)
-        dot32_1, dot32_2, dot_32_3 = get_directionals(neurograph, edge, 32)
         features[edge] = np.concatenate(
             (
                 neurograph.compute_length(edge),
                 neurograph.immutable_degree(i),
                 neurograph.immutable_degree(j),
-                radius_i,
-                radius_j,
-                #avg_radius_i,
-                #avg_radius_j,
-                #avg_len_i,
-                #avg_len_j,
-                #dot4_1,
-                #dot4_2,
-                #dot4_3,
-                dot8_1,
-                dot8_2,
-                dot8_3,
-                dot16_1,
-                dot16_2,
-                dot16_3,
-                dot32_1,
-                dot32_2,
-                dot32_3,
+                get_radii(neurograph, edge),
+                get_avg_radii(neurograph, edge),
+                #get_avg_branch_len(neurograph, edge)
+                get_directionals(neurograph, edge, 4),
+                get_directionals(neurograph, edge, 8),
+                get_directionals(neurograph, edge, 16),
+                get_directionals(neurograph, edge, 32),
             ),
             axis=None,
         )
@@ -229,14 +211,14 @@ def get_directionals(neurograph, edge, window):
     inner_product_1 = abs(np.dot(edge_directional, directional_i))
     inner_product_2 = abs(np.dot(edge_directional, directional_j))
     inner_product_3 = np.dot(directional_i, directional_j)
-    return inner_product_1, inner_product_2, inner_product_3
+    return np.array([inner_product_1, inner_product_2, inner_product_3])
 
 
 def get_avg_radii(neurograph, edge):
     i, j = tuple(edge)
     radii_i = neurograph.get_branches(i, key="radius")
     radii_j = neurograph.get_branches(j, key="radius")
-    return get_avg_radii(radii_i), get_avg_radii(radii_j)
+    return np.array([get_avg_radius(radii_i), get_avg_radius(radii_j)])
 
 
 def get_avg_radius(radii_list):
@@ -245,13 +227,13 @@ def get_avg_radius(radii_list):
         end = min(16, len(radii) - 1)
         avg += np.mean(radii[0:end]) / len(radii_list)
     return avg
-    
+
 
 def get_radii(neurograph, edge):
     i, j = tuple(edge)
     radius_i = neurograph.nodes[i]["radius"]
     radius_j = neurograph.nodes[j]["radius"]
-    return radius_i, radius_j
+    return np.array([radius_i, radius_j])
 
 
 # -- Build feature matrix
