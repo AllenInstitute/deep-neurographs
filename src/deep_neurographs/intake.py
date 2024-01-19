@@ -139,9 +139,7 @@ def build_neurograph_from_gcs_zips(
     print("Process swc files...")
     total_runtime, t0 = utils.init_timers()
     swc_dicts = download_gcs_zips(bucket_name, cloud_path, min_size)
-    t_stamp, unit_stamp = utils.time_writer(time() - total_runtime)
     t, unit = utils.time_writer(time() - t0)
-    print(f"\nTime Stamp: {round(t_stamp, 4)} {unit_stamp}")
     print(f"Module Runtime(): {round(t, 4)} {unit} \n")
 
     # Build neurograph
@@ -155,8 +153,6 @@ def build_neurograph_from_gcs_zips(
         smooth=smooth,
     )
     t, unit = utils.time_writer(time() - t0)
-    t_stamp, unit_stamp = utils.time_writer(time() - total_runtime)
-    print(f"Time Stamp: {round(t_stamp, 4)} {unit_stamp}")
     print(f"Module Runtime(): {round(t, 4)} {unit} \n")
 
     # Generate proposals
@@ -167,13 +163,12 @@ def build_neurograph_from_gcs_zips(
             search_radius, n_proposals_per_leaf=n_proposals_per_leaf
         )
         t, unit = utils.time_writer(time() - t0)
-        time_stamp, unit_stamp = utils.time_writer(time() - total_runtime)
         print("\n# proposals:", len(neurograph.mutable_edges))
-        print(f"Time Stamp: {round(t_stamp, 4)} {unit_stamp}")
         print(f"Module Runtime(): {round(t, 4)} {unit} \n")
 
     t, unit = utils.time_writer(time() - total_runtime)
     print(f"Total Runtime: {round(t, 4)} {unit}")
+    print(f"Memory Consumption: {round(utils.get_memory_usage(), 4)} GBs")
     return neurograph
 
 
