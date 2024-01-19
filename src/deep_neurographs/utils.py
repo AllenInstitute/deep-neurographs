@@ -12,6 +12,7 @@ import concurrent.futures
 import json
 import math
 import os
+import psutil
 import shutil
 from copy import deepcopy
 from io import BytesIO
@@ -508,16 +509,8 @@ def reformat_number(number):
     return f"{number:,}"
 
 
-def time_writer(t, unit="seconds"):
-    assert unit in ["seconds", "minutes", "hours"]
-    upd_unit = {"seconds": "minutes", "minutes": "hours"}
-    if t < 60 or unit == "hours":
-        return t, unit
-    else:
-        t /= 60
-        unit = upd_unit[unit]
-        t, unit = time_writer(t, unit=unit)
-    return t, unit
+def get_memory_usage():
+    return psutil.virtual_memory().used / 1e9
 
 
 def init_timers():
@@ -533,8 +526,13 @@ def progress_bar(current, total, bar_length=50, eta=None, runtime=None):
     print(f"\r{bar} {n_completed} | {eta} | {runtime}    ", end="", flush=True)
 
 
-def xor(a, b):
-    if (a and b) or (not a and not b):
-        return False
+def time_writer(t, unit="seconds"):
+    assert unit in ["seconds", "minutes", "hours"]
+    upd_unit = {"seconds": "minutes", "minutes": "hours"}
+    if t < 60 or unit == "hours":
+        return t, unit
     else:
-        return True
+        t /= 60
+        unit = upd_unit[unit]
+        t, unit = time_writer(t, unit=unit)
+    return t, unit
