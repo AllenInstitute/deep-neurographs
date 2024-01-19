@@ -11,7 +11,6 @@ Builds neurograph for neuron reconstruction.
 import os
 from concurrent.futures import (
     ProcessPoolExecutor,
-    ThreadPoolExecutor,
     as_completed,
 )
 from time import time
@@ -42,6 +41,7 @@ def build_neurograph_from_local(
     img_path=None,
     min_size=MIN_SIZE,
     n_proposals_per_leaf=N_PROPOSALS_PER_LEAF,
+    progress_bar=False,
     prune=PRUNE,
     prune_depth=PRUNE_DEPTH,
     optimize_proposals=OPTIMIZE_PROPOSALS,
@@ -61,6 +61,7 @@ def build_neurograph_from_local(
         bbox=bbox,
         img_path=img_path,
         swc_paths=paths,
+        progress_bar=progress_bar,
         prune=prune,
         prune_depth=prune_depth,
         smooth=smooth,
@@ -229,22 +230,29 @@ def build_neurograph(
     bbox=None,
     img_path=None,
     swc_paths=None,
+    progress_bar=True,
     prune=PRUNE,
     prune_depth=PRUNE_DEPTH,
     smooth=SMOOTH,
 ):
     # Extract irreducibles
     n_components = len(swc_dicts)
-    print("(1) Extract irreducible nodes and edges")
-    print("# connected components:", utils.reformat_number(n_components))
+    if progress_bar:
+        print("(1) Extract irreducible nodes and edges")
+        print("# connected components:", utils.reformat_number(n_components))
     irreducibles, n_nodes, n_edges = get_irreducibles(
-        swc_dicts, prune=prune, prune_depth=prune_depth, smooth=smooth
+        swc_dicts,
+        progress_bar=progress_bar,
+        prune=prune,
+        prune_depth=prune_depth,
+        smooth=smooth,
     )
 
     # Build neurograph
-    print("(2) Combine irreducibles...")
-    print("# nodes:", utils.reformat_number(n_nodes))
-    print("# edges:", utils.reformat_number(n_edges))
+    if progress_bar:
+        print("(2) Combine irreducibles...")
+        print("# nodes:", utils.reformat_number(n_nodes))
+        print("# edges:", utils.reformat_number(n_edges))
     neurograph = NeuroGraph(bbox=bbox, img_path=img_path, swc_paths=swc_paths)
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_components * 0.05), 1)
@@ -252,23 +260,28 @@ def build_neurograph(
     while len(irreducibles):
         key, irreducible_set = irreducibles.popitem()
         neurograph.add_immutables(irreducible_set, key)
-        if i > cnt * chunk_size:
+        if i > cnt * chunk_size and progress_bar:
             cnt, t1 = report_progress(i, n_components, chunk_size, cnt, t0, t1)
         i += 1
-    t, unit = utils.time_writer(time() - t0)
-    print("\n" + f"add_irreducibles(): {round(t, 4)} {unit}")
+    if progress_bar:
+        t, unit = utils.time_writer(time() - t0)
+        print("\n" + f"add_irreducibles(): {round(t, 4)} {unit}")
     return neurograph
 
 
 def get_irreducibles(
-    swc_dicts, prune=PRUNE, prune_depth=PRUNE_DEPTH, smooth=SMOOTH
+    swc_dicts,
+    progress_bar=True,
+    prune=PRUNE,
+    prune_depth=PRUNE_DEPTH,
+    smooth=SMOOTH,
 ):
     n_components = len(swc_dicts)
     chunk_size = max(int(n_components * 0.02), 1)
     with ProcessPoolExecutor() as executor:
         # Assign Processes
+        i = 0
         processes = [None] * n_components
-        t0, i = time(), 0
         while swc_dicts:
             key, swc_dict = swc_dicts.popitem()
             processes[i] = executor.submit(
@@ -280,8 +293,6 @@ def get_irreducibles(
                 smooth,
             )
             i += 1
-        t, unit = utils.time_writer(time() - t0)
-        print(f"assigned_threads(): {round(t, 4)} {unit}")
 
         # Store results
         t0, t1 = utils.init_timers()
@@ -294,12 +305,13 @@ def get_irreducibles(
                 irreducibles[process_id] = result
                 n_nodes += len(result["leafs"]) + len(result["junctions"])
                 n_edges += len(result["edges"])
-            if i > progress_cnt * chunk_size:
+            if i > progress_cnt * chunk_size and progress_bar:
                 progress_cnt, t1 = report_progress(
                     i, n_components, chunk_size, progress_cnt, t0, t1
                 )
-    t, unit = utils.time_writer(time() - t0)
-    print("\n" + f"get_irreducibles(): {round(t, 4)} {unit} \n")
+    if progress_bar:
+        t, unit = utils.time_writer(time() - t0)
+        print("\n" + f"get_irreducibles(): {round(t, 4)} {unit}")
     return irreducibles, n_nodes, n_edges
 
 

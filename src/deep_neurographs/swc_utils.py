@@ -323,8 +323,11 @@ def to_graph(swc_dict, graph_id=None, set_attrs=False):
     graph = nx.Graph(graph_id=graph_id)
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
     if set_attrs:
+        xyz = swc_dict["xyz"]
+        if type(swc_dict["xyz"]) == np.ndarray:
+            xyz = utils.numpy_to_hashable(swc_dict["xyz"])
         graph = __add_attributes(swc_dict, graph)
-        xyz_to_node = dict(zip(swc_dict["xyz"], swc_dict["id"]))
+        xyz_to_node = dict(zip(xyz, swc_dict["id"]))
         return graph, xyz_to_node
     return graph
 

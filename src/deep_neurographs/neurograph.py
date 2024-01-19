@@ -83,7 +83,7 @@ class NeuroGraph(nx.Graph):
     def add_immutables(self, irreducibles, swc_id):
         # Nodes
         node_ids = dict()
-        cur_id = len(self.nodes)
+        cur_id = len(self.nodes) + 1
         node_ids, cur_id = self.__add_nodes(
             irreducibles, "leafs", node_ids, cur_id, swc_id
         )
@@ -100,11 +100,12 @@ class NeuroGraph(nx.Graph):
                 node_ids[j],
                 radius=values["radius"],
                 xyz=values["xyz"],
-                swc_id=swc_id
+                swc_id=swc_id,
             )
+            edge = (node_ids[i], node_ids[j])
             for xyz in values["xyz"][::2]:
-                self.xyz_to_edge[tuple(xyz)] = (i, j)
-            self.xyz_to_edge[tuple(values["xyz"][-1])] = (i, j)
+                self.xyz_to_edge[tuple(xyz)] = edge
+            self.xyz_to_edge[tuple(values["xyz"][-1])] = edge
 
     def __add_nodes(self, nodes, key, node_ids, cur_id, swc_id):
         for i in nodes[key].keys():
@@ -163,7 +164,6 @@ class NeuroGraph(nx.Graph):
                     node = j
                     xyz = self.nodes[node]["xyz"]
                 else:
-                    # run complex optimization here
                     idxs = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0]
                     node = self.add_immutable_node((i, j), attrs, idxs[0])
 
@@ -204,18 +204,20 @@ class NeuroGraph(nx.Graph):
         best_dist = dict()
         query_swc_id = self.nodes[query_id]["swc_id"]
         for xyz in self._query_kdtree(query_xyz, search_radius):
+            # Check whether xyz is contained
             if not self.is_contained(xyz, buffer=36):
                 continue
-            xyz = tuple(xyz)
-            edge = self.xyz_to_edge[xyz]
+
+            # Check whether
+            edge = self.xyz_to_edge[tuple(xyz)]
             swc_id = gutils.get_edge_attr(self, edge, "swc_id")
             if swc_id != query_swc_id:
                 d = get_dist(xyz, query_xyz)
                 if swc_id not in best_dist.keys():
-                    best_xyz[swc_id] = xyz
+                    best_xyz[swc_id] = tuple(xyz)
                     best_dist[swc_id] = d
                 elif d < best_dist[swc_id]:
-                    best_xyz[swc_id] = xyz
+                    best_xyz[swc_id] = tuple(xyz)
                     best_dist[swc_id] = d
         return self._get_best_edges(best_dist, best_xyz, n_proposals_per_leaf)
 
@@ -238,7 +240,7 @@ class NeuroGraph(nx.Graph):
         self.immutable_edges.remove(frozenset(edge))
 
         # Add new node and split edge
-        node_id = len(self.nodes)
+        node_id = len(self.nodes) + 1
         self.add_node(
             node_id,
             xyz=tuple(attrs["xyz"][idx]),

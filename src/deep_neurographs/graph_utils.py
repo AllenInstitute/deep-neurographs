@@ -15,11 +15,10 @@ Leaf: a node with degree 1.
 
 Junction: a node with degree > 2.
 
-Irreducibles: the irreducibles of a graph G=(V,E) consists of (1) leaf nodes
-V_l, (2) junction nodes, and (3) 
-junction nodes along 
+Irreducibles: the irreducibles of a graph G=(V,E) consists of 1) leaf nodes
+V_l, 2) junction nodes, and 3) edges connecting (1) and (2).
 
-Branch: the sequence of nodes between two 
+Branch: the sequence of nodes between two irreducible nodes.
 
 """
 
@@ -69,7 +68,7 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
     leafs, junctions = get_irreducible_nodes(dense_graph, swc_dict)
     if len(leafs) == 0:
         return False, None
-    
+
     # Extract edges
     edges = dict()
     nbs = dict()
@@ -83,6 +82,7 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
         # Visit j
         attrs = upd_edge_attrs(swc_dict, attrs, j)
         if j in leafs or j in junctions:
+            attrs = set_edge_attrs(attrs)
             if smooth:
                 swc_dict, edges = __smooth_branch(
                     swc_dict, attrs, edges, nbs, root, j
@@ -200,26 +200,94 @@ def get_leafs(graph):
 
 
 def __smooth_branch(swc_dict, attrs, edges, nbs, root, j):
-    attrs["xyz"] = geometry_utils.smooth_branch(np.array(attrs["xyz"]), s=10)
-    attrs["radius"] = np.array(attrs["radius"])
+    """
+    Smoothes a branch then updates "swc_dict" and "edges" with the new xyz
+    coordinates of the branch end points. Note that this branch is an edge
+    in the irreducible graph being built.
+
+    Parameters
+    ----------
+    swc_dict : dict
+        Contents of an swc file.
+    attrs : dict
+        Attributes (from swc file) of edge being smoothed.
+    edges : dict
+        Dictionary where the keys are edges in irreducible graph and values
+        are the corresponding attributes.
+    nbs : dict
+        Dictionary where the keys are nodes and values are the neighbors.
+    root : int
+        End point of branch to be smoothed.
+    j : int
+        End point of branch to be smoothed.
+    """
+    attrs["xyz"] = geometry_utils.smooth_branch(attrs["xyz"], s=10)
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, root, 0)
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, j, -1)
     edges[(root, j)] = attrs
     return swc_dict, edges
 
 
-def upd_xyz(swc_dict, attrs, edges, nbs, i, start_or_end):
+def upd_xyz(swc_dict, attrs, edges, nbs, i, endpoint):
+    """
+    Updates "swc_dict" and "edges" with the new xyz coordinates of the branch
+    end points.
+
+    Parameters
+    ----------
+    swc_dict : dict
+        Contents of an swc file.
+    attrs : dict
+        Attributes (from swc file) of edge being smoothed.
+    edges : dict
+        Dictionary where the keys are edges in irreducible graph and values
+        are the corresponding attributes.
+    nbs : dict
+        Dictionary where the keys are nodes and values are the neighbors.
+    endpoint : int
+        End point of branch to be smoothed.
+
+    Returns
+    -------
+    swc_dict : dict
+        Updated with new xyz coordinates.
+    edges : dict
+        Updated with new xyz coordinates.
+
+    """
     if i in nbs.keys():
         for j in nbs[i]:
             key = (i, j) if (i, j) in edges.keys() else (j, i)
-            edges = upd_branch_endpoint(
-                edges, key, swc_dict["xyz"][i], attrs["xyz"][start_or_end]
+            edges = upd_endpoint_xyz(
+                edges, key, swc_dict["xyz"][i], attrs["xyz"][endpoint]
             )
-    swc_dict["xyz"][i] = attrs["xyz"][start_or_end]
+    swc_dict["xyz"][i] = attrs["xyz"][endpoint]
     return swc_dict, edges
 
 
-def upd_branch_endpoint(edges, key, old_xyz, new_xyz):
+def upd_endpoint_xyz(edges, key, old_xyz, new_xyz):
+    """
+    Updates "edges" with the new xyz coordinates of the branch
+    end points.
+
+    Parameters
+    ----------
+    edges : dict
+        Dictionary where the keys are edges in irreducible graph and values
+        are the corresponding attributes.
+    key : tuple
+        The edge id of the entry in "edges" which needs to be updated.
+    old_xyz : numpy.ndarray
+        Current xyz coordinate of end point.
+    new_xyz : numpy.ndarray
+        New xyz coordinate of end point.
+
+    Returns
+    -------
+    edges : dict
+        Updated with new xyz coordinates.
+
+    """
     if all(edges[key]["xyz"][0] == old_xyz):
         edges[key]["xyz"][0] = new_xyz
     else:
@@ -240,12 +308,13 @@ def upd_edge_attrs(swc_dict, attrs, i):
 
 def get_edge_attr(graph, edge, attr):
     edge_data = graph.get_edge_data(*edge)
-    print("here")
-    print(edge)
-    print(graph.edges[edge])
-    print(edge_data)
-    print(attr)
     return edge_data[attr]
+
+
+def set_edge_attrs(attrs):
+    attrs["xyz"] = np.array(attrs["xyz"], dtype=np.float32)
+    attrs["radius"] = np.array(attrs["radius"], dtype=np.float16)
+    return attrs
 
 
 def init_node_attrs(swc_dict, i):
