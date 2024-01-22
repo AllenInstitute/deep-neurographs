@@ -140,7 +140,7 @@ def build_neurograph_from_gcs_zips(
     total_runtime, t0 = utils.init_timers()
     swc_dicts = download_gcs_zips(bucket_name, cloud_path, min_size)
     t, unit = utils.time_writer(time() - t0)
-    print(f"Module Runtime(): {round(t, 4)} {unit} \n")
+    print(f"\nModule Runtime(): {round(t, 4)} {unit} \n")
 
     # Build neurograph
     print("Build NeuroGraph...")
@@ -163,7 +163,7 @@ def build_neurograph_from_gcs_zips(
             search_radius, n_proposals_per_leaf=n_proposals_per_leaf
         )
         t, unit = utils.time_writer(time() - t0)
-        print("\n# proposals:", len(neurograph.mutable_edges))
+        print("# proposals:", utils.reformat_number(len(neurograph.mutable_edges)))
         print(f"Module Runtime(): {round(t, 4)} {unit} \n")
 
     t, unit = utils.time_writer(time() - total_runtime)
