@@ -227,7 +227,7 @@ def get_avg_radius(radii_list):
         avg += np.mean(radii[0:end]) / len(radii_list)
     return avg
 
-
+ 
 def get_avg_branch_lens(neurograph, edge):
     i, j = tuple(edge)
     branches_i = neurograph.get_branches(i, key="xyz")

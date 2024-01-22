@@ -343,7 +343,7 @@ def upd_edge_attrs(swc_dict, attrs, i):
 
 
 def get_edge_attr(graph, edge, attr):
-    """
+  """
     Gets the attribute "attr" of "edge".
 
     Parameters
@@ -362,13 +362,13 @@ def get_edge_attr(graph, edge, attr):
     """
     return graph.edges[edge][attr]
 
-
+ 
 def set_edge_attrs(attrs):
     attrs["xyz"] = np.array(attrs["xyz"], dtype=np.float32)
     attrs["radius"] = np.array(attrs["radius"], dtype=np.float16)
     return attrs
 
-
+ 
 def set_node_attrs(swc_dict, nodes):
     attrs = dict()
     for i in nodes:
