@@ -164,7 +164,6 @@ def build_neurograph_from_gcs_zips(
         )
         t, unit = utils.time_writer(time() - t0)
         print("# proposals:", utils.reformat_number(len(neurograph.mutable_edges)))
-        print(f"Module Runtime(): {round(t, 4)} {unit} \n")
 
     t, unit = utils.time_writer(time() - total_runtime)
     print(f"Total Runtime: {round(t, 4)} {unit}")
