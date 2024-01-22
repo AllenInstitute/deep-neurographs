@@ -210,7 +210,7 @@ def __smooth_branch(swc_dict, attrs, edges, nbs, root, j):
     swc_dict : dict
         Contents of an swc file.
     attrs : dict
-        Attributes (from swc file) of edge being smoothed.
+        Attributes (from "swc_dict") of edge being smoothed.
     edges : dict
         Dictionary where the keys are edges in irreducible graph and values
         are the corresponding attributes.
@@ -238,7 +238,7 @@ def upd_xyz(swc_dict, attrs, edges, nbs, i, endpoint):
     swc_dict : dict
         Contents of an swc file.
     attrs : dict
-        Attributes (from swc file) of edge being smoothed.
+        Attributes (from "swc_dict") of edge being smoothed.
     edges : dict
         Dictionary where the keys are edges in irreducible graph and values
         are the corresponding attributes.
@@ -297,35 +297,85 @@ def upd_endpoint_xyz(edges, key, old_xyz, new_xyz):
 
 # -- attribute utils --
 def init_edge_attrs(swc_dict, i):
+    """
+    Initializes edge attribute dictionary with attributes from node "i" which
+    is an end point of the edge.
+
+    Parameters
+    ----------
+    swc_dict : dict
+        Contents of an swc file.
+    i : int
+        End point of edge and the swc attributes of this node are used to
+        initialize the edge attriubte dictionary.
+
+    Returns
+    -------
+    dict
+        Edge attribute dictionary.
+
+    """
     return {"radius": [swc_dict["radius"][i]], "xyz": [swc_dict["xyz"][i]]}
 
 
 def upd_edge_attrs(swc_dict, attrs, i):
+    """
+    Updates an edge attribute dictionary with attributes of node i.
+
+    Parameters
+    ----------
+    swc_dict : dict
+        Contents of an swc file.
+    attrs : dict
+        Attributes (from "swc_dict") of edge being updated.
+    i : int
+        Node of edge whose attributes will be added to "attrs".
+
+    Returns
+    -------
+    attrs : dict
+        Edge attribute dictionary.
+
+    """
     attrs["radius"].append(swc_dict["radius"][i])
     attrs["xyz"].append(swc_dict["xyz"][i])
     return attrs
 
 
 def get_edge_attr(graph, edge, attr):
-    edge_data = graph.get_edge_data(*edge)
-    return edge_data[attr]
+  """
+    Gets the attribute "attr" of "edge".
 
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph which "edge" belongs to.
+    edge : tuple
+        Edge to be queried for its attributes.
+    attr : str
+        Attribute to be queried.
 
+    Returns
+    -------
+    Attribute "attr" of "edge"
+
+    """
+    return graph.edges[edge][attr]
+
+ 
 def set_edge_attrs(attrs):
     attrs["xyz"] = np.array(attrs["xyz"], dtype=np.float32)
     attrs["radius"] = np.array(attrs["radius"], dtype=np.float16)
     return attrs
 
-
-def init_node_attrs(swc_dict, i):
-    return {"radius": swc_dict["radius"][i], "xyz": swc_dict["xyz"][i]}
-
-
+ 
 def set_node_attrs(swc_dict, nodes):
-    node_attrs = dict()
+    attrs = dict()
     for i in nodes:
-        node_attrs[i] = init_node_attrs(swc_dict, i)
-    return node_attrs
+        attrs[i] = {
+            "radius": swc_dict["radius"][i], "xyz": swc_dict["xyz"][i]
+        }
+    return attrs
 
 
 def upd_node_attrs(swc_dict, leafs, junctions, i):

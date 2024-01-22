@@ -18,7 +18,7 @@ from deep_neurographs import geometry_utils, utils
 CHUNK_SIZE = [64, 64, 64]
 WINDOW = [5, 5, 5]
 N_PROFILE_POINTS = 10
-N_SKEL_FEATURES = 11
+N_SKEL_FEATURES = 18
 SUPPORTED_MODELS = [
     "AdaBoost",
     "RandomForest",
@@ -183,8 +183,7 @@ def generate_mutable_skel_features(neurograph):
                 neurograph.immutable_degree(j),
                 get_radii(neurograph, edge),
                 get_avg_radii(neurograph, edge),
-                #get_avg_branch_len(neurograph, edge)
-                get_directionals(neurograph, edge, 4),
+                get_avg_branch_lens(neurograph, edge),
                 get_directionals(neurograph, edge, 8),
                 get_directionals(neurograph, edge, 16),
                 get_directionals(neurograph, edge, 32),
@@ -227,6 +226,20 @@ def get_avg_radius(radii_list):
         end = min(16, len(radii) - 1)
         avg += np.mean(radii[0:end]) / len(radii_list)
     return avg
+
+ 
+def get_avg_branch_lens(neurograph, edge):
+    i, j = tuple(edge)
+    branches_i = neurograph.get_branches(i, key="xyz")
+    branches_j = neurograph.get_branches(j, key="xyz")
+    return np.array([get_branch_len(branches_i), get_branch_len(branches_j)])
+
+
+def get_branch_len(branch_list):
+    branch_len = 0
+    for branch in branch_list:
+        branch_len += len(branch) / len(branch_list)
+    return branch_len
 
 
 def get_radii(neurograph, edge):
