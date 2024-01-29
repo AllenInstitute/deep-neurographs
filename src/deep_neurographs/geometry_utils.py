@@ -5,7 +5,7 @@ from copy import deepcopy
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 from scipy.linalg import svd
-
+from scipy.spatial import distance 
 from deep_neurographs import utils
 
 
@@ -428,7 +428,7 @@ def dist(v_1, v_2, metric="l2"):
     if metric == "l1":
         return np.sum(v_1 - v_2)
     else:
-        return math.dist(v_1, v_2)
+        return distance.euclidean(v_1, v_2)
 
 
 def make_line(xyz_1, xyz_2, num_steps):
