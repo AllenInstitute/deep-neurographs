@@ -79,8 +79,8 @@ def fit_spline(xyz, s=None):
     return spline_x, spline_y, spline_z
 
 
-def sample_path(path, num_points):
-    t = np.linspace(0, 1, num_points)
+def sample_path(path, n_points):
+    t = np.linspace(0, 1, n_points)
     if len(path) > 5:
         spline_x, spline_y, spline_z = fit_spline(path, s=10)
         path = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
@@ -431,10 +431,40 @@ def dist(v_1, v_2, metric="l2"):
         return distance.euclidean(v_1, v_2)
 
 
-def make_line(xyz_1, xyz_2, num_steps):
+def check_dists(xyz_1, xyz_2, xyz_3, radius):
+    """
+    Checks whether distance between "xyz_1", "xyz_3" and "xyz_2", "xyz_3" is 
+    sufficiently small. Routine is used during edge proposal generation to 
+    determine whether to create new vertex at "xyz_2" or draw proposal between
+    "xyz_1" and existing node at "xyz_3".
+
+    Parameters
+    ----------
+    xyz_1 : np.ndarray
+        xyz coordinate of leaf node (i.e. source of edge proposal).
+    xyz_2 : np.ndarray
+        xyz coordinate queried from kdtree (i.e. dest of edge proposal).
+    xyz_3 : np.ndarray
+        xyz coordinate of existing node in graph that is near "xyz_2".
+    radius : float
+        Maximum Euclidean length of edge proposal.
+
+    Parameters
+    ----------
+    bool
+        Indication of whether to draw edge proposal between "xyz_1" and
+        "xyz_3".
+
+    """
+    d_1 = dist(xyz_1, xyz_3) < radius
+    d_2 = dist(xyz_2, xyz_3) < 5
+    return True if d_1 and d_2 else False
+
+
+def make_line(xyz_1, xyz_2, n_steps):
     xyz_1 = np.array(xyz_1)
     xyz_2 = np.array(xyz_2)
-    t_steps = np.linspace(0, 1, num_steps)
+    t_steps = np.linspace(0, 1, n_steps)
     return np.array([(1 - t) * xyz_1 + t * xyz_2 for t in t_steps], dtype=int)
 
 
