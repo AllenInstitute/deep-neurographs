@@ -290,6 +290,12 @@ def open_tensorstore(path, driver):
                 "bucket": "allen-nd-goog",
                 "path": path,
             },
+            "context": {
+                "cache_pool": {"total_bytes_limit": 1000000000},
+                "cache_pool#remote": {"total_bytes_limit": 1000000000},
+                "data_copy_concurrency": {"limit": 8},
+            },
+            "recheck_cached_data": "open",
         }
     ).result()
     if driver == "neuroglancer_precomputed":
@@ -304,21 +310,21 @@ def open_tensorstore(path, driver):
 def read_img_chunk(img, xyz, shape):
     start, end = get_start_end(xyz, shape)
     return img[
-        start[2]: end[2], start[1]: end[1], start[0]: end[0]
+        start[2] : end[2], start[1] : end[1], start[0] : end[0]
     ].transpose(2, 1, 0)
 
 
 def get_chunk(arr, xyz, shape):
     start, end = get_start_end(xyz, shape)
     return deepcopy(
-        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+        arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
     )
 
 
 def read_tensorstore(ts_arr, xyz, shape):
     start, end = get_start_end(xyz, shape)
     return (
-        ts_arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+        ts_arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
         .read()
         .result()
     )

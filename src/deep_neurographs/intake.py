@@ -9,10 +9,7 @@ Builds neurograph for neuron reconstruction.
 """
 
 import os
-from concurrent.futures import (
-    ProcessPoolExecutor,
-    as_completed,
-)
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from time import time
 
 from google.cloud import storage
@@ -163,7 +160,10 @@ def build_neurograph_from_gcs_zips(
             search_radius, n_proposals_per_leaf=n_proposals_per_leaf
         )
         t, unit = utils.time_writer(time() - t0)
-        print("# proposals:", utils.reformat_number(len(neurograph.mutable_edges)))
+        print(
+            "# proposals:",
+            utils.reformat_number(len(neurograph.mutable_edges)),
+        )
 
     t, unit = utils.time_writer(time() - total_runtime)
     print(f"Total Runtime: {round(t, 4)} {unit}")
