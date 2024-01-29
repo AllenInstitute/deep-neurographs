@@ -1,10 +1,11 @@
 import heapq
+import math
 from copy import deepcopy
 
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 from scipy.linalg import svd
-
+from scipy.spatial import distance 
 from deep_neurographs import utils
 
 
@@ -427,7 +428,7 @@ def dist(v_1, v_2, metric="l2"):
     if metric == "l1":
         return np.linalg.norm(np.subtract(v_1, v_2), ord=1)
     else:
-        return np.linalg.norm(np.subtract(v_1, v_2), ord=2)
+        return distance.euclidean(v_1, v_2)
 
 
 def make_line(xyz_1, xyz_2, num_steps):
