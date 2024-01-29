@@ -243,7 +243,7 @@ def generate_img_profiles(
     )
     img = utils.normalize_img(img)
     for edge in neurograph.mutable_edges:
-        xyz_i, xyz_j = neurograph.get_edge_attr("xyz", edge)
+        xyz_i, xyz_j = neurograph.get_edge_attr(edge, "xyz")
         xyz_i = utils.world_to_img(neurograph, xyz_i)
         xyz_j = utils.world_to_img(neurograph, xyz_j)
         path = geometry_utils.make_line(xyz_i, xyz_j, N_PROFILE_POINTS)

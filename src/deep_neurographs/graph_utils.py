@@ -92,6 +92,11 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
             nbs = utils.append_dict_value(nbs, root, j)
             nbs = utils.append_dict_value(nbs, j, root)
             root = None
+            
+            if all(attrs["xyz"][0] == attrs["xyz"][-1]):
+                print(root, j)
+                print(attrs)
+                stop
 
     # Output
     leafs = set_node_attrs(swc_dict, leafs)
@@ -290,7 +295,7 @@ def upd_endpoint_xyz(edges, key, old_xyz, new_xyz):
     """
     if all(edges[key]["xyz"][0] == old_xyz):
         edges[key]["xyz"][0] = new_xyz
-    else:
+    elif all(edges[key]["xyz"][-1] == old_xyz):
         edges[key]["xyz"][-1] = new_xyz
     return edges
 

@@ -352,7 +352,7 @@ class NeuroGraph(nx.Graph):
             edge = proposals[idx]
             if self.is_simple(edge):
                 add_bool = self.is_target(
-                    target_neurograph, edge, dist=5, ratio=0.7, exclude=10
+                    target_neurograph, edge, dist=3, ratio=0.7, exclude=5
                 )
                 if add_bool:
                     self.target_edges.add(edge)
@@ -364,7 +364,7 @@ class NeuroGraph(nx.Graph):
         for idx in np.argsort(dists):
             edge = remaining_proposals[idx]
             add_bool = self.is_target(
-                target_neurograph, edge, dist=7, ratio=0.4, exclude=15
+                target_neurograph, edge, dist=5, ratio=0.5, exclude=5
             )
             if add_bool:
                 self.target_edges.add(edge)
@@ -517,7 +517,7 @@ class NeuroGraph(nx.Graph):
         return nbs
 
     def compute_length(self, edge, metric="l2"):
-        xyz_1, xyz_2 = self.get_edge_attr("xyz", edge)
+        xyz_1, xyz_2 = self.get_edge_attr(edge, "xyz")
         return get_dist(xyz_1, xyz_2, metric=metric)
 
     def path_length(self, metric="l2"):
@@ -555,10 +555,9 @@ class NeuroGraph(nx.Graph):
         self.predicted_graph.remove_edges_from([edge])
         return True
 
-    def get_edge_attr(self, key, edge):
-        i, j = edge
+    def get_edge_attr(self, edge, key):
         xyz_arr = gutils.get_edge_attr(self, edge, key)
-        return xyz_arr[0], xyz_arr[1]
+        return xyz_arr[0], xyz_arr[-1]
 
     def get_complex_proposals(self):
         return set([e for e in self.mutable_edges if not self.is_simple(e)])
