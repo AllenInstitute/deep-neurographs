@@ -426,7 +426,7 @@ def dist(v_1, v_2, metric="l2"):
 
     """
     if metric == "l1":
-        return np.linalg.norm(np.subtract(v_1, v_2), ord=1)
+        return np.sum(v_1 - v_2)
     else:
         return distance.euclidean(v_1, v_2)
 
