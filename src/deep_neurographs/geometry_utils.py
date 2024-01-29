@@ -1,4 +1,5 @@
 import heapq
+import math
 from copy import deepcopy
 
 import numpy as np
@@ -425,9 +426,9 @@ def dist(v_1, v_2, metric="l2"):
 
     """
     if metric == "l1":
-        return np.linalg.norm(np.subtract(v_1, v_2), ord=1)
+        return np.sum(v_1 - v_2)
     else:
-        return np.linalg.norm(np.subtract(v_1, v_2), ord=2)
+        return math.dist(v_1, v_2)
 
 
 def make_line(xyz_1, xyz_2, num_steps):
