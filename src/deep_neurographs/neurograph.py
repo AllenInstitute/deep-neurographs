@@ -19,7 +19,7 @@ from deep_neurographs import geometry_utils
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 from deep_neurographs.densegraph import DenseGraph
-from deep_neurographs.geometry_utils import dist as get_dist
+from deep_neurographs.geometry_utils import dist as get_dist, check_dists
 
 SUPPORTED_LABEL_MASK_TYPES = [dict, np.array, ts.TensorStore]
 
@@ -126,7 +126,7 @@ class NeuroGraph(nx.Graph):
     # --- Proposal Generation ---
     def generate_proposals(
         self,
-        search_radius,
+        radius,
         n_proposals_per_leaf=3,
         optimize=False,
         optimization_depth=10,
@@ -146,7 +146,7 @@ class NeuroGraph(nx.Graph):
                 continue
             xyz_leaf = self.nodes[leaf]["xyz"]
             proposals = self.__get_proposals(
-                leaf, xyz_leaf, n_proposals_per_leaf, search_radius
+                leaf, xyz_leaf, n_proposals_per_leaf, radius
             )
             for xyz in proposals:
                 # Extract info on mutable connection
@@ -154,15 +154,14 @@ class NeuroGraph(nx.Graph):
                 attrs = self.get_edge_data(i, j)
 
                 # Get connecting node
-                contained_j = self.is_contained(j)
-                if get_dist(xyz, attrs["xyz"][0]) < 10 and self.is_contained(
-                    i
-                ):
+                d1 = check_dists(xyz_leaf, xyz, self.nodes[i]["xyz"], radius)
+                d2 = check_dists(xyz_leaf, xyz, self.nodes[j]["xyz"], radius)
+                if d1 and self.is_contained(i):
+                    xyz = deepcopy(self.nodes[i]["xyz"])
                     node = i
-                    xyz = self.nodes[node]["xyz"]
-                elif get_dist(xyz, attrs["xyz"][-1]) < 10 and contained_j:
+                elif d2 and self.is_contained(j):
+                    xyz = deepcopy(self.nodes[j]["xyz"])
                     node = j
-                    xyz = self.nodes[node]["xyz"]
                 else:
                     idxs = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0]
                     node = self.add_immutable_node((i, j), attrs, idxs[0])
@@ -176,7 +175,7 @@ class NeuroGraph(nx.Graph):
             self.run_optimization()
 
     def __get_proposals(
-        self, query_id, query_xyz, n_proposals_per_leaf, search_radius
+        self, query_id, query_xyz, n_proposals_per_leaf, radius
     ):
         """
         Generates edge proposals for node "query_id" by finding points on
@@ -190,7 +189,7 @@ class NeuroGraph(nx.Graph):
             (x,y,z) coordinates of the query node.
         n_proposals_per_leaf : int
             Number of proposals generated from node "query_id".
-        search_radius : float
+        radius : float
             Maximum Euclidean length of edge proposal.
 
         Returns
@@ -203,7 +202,7 @@ class NeuroGraph(nx.Graph):
         best_xyz = dict()
         best_dist = dict()
         query_swc_id = self.nodes[query_id]["swc_id"]
-        for xyz in self._query_kdtree(query_xyz, search_radius):
+        for xyz in self._query_kdtree(query_xyz, radius):
             # Check whether xyz is contained
             if not self.is_contained(xyz, buffer=36):
                 continue

@@ -154,7 +154,7 @@ def build_neurograph_from_gcs_zips(
 
     # Generate proposals
     if search_radius > 0:
-        print("Generate edge proposals...")
+        print("Generate Edge Proposals...")
         t0 = time()
         neurograph.generate_proposals(
             search_radius, n_proposals_per_leaf=n_proposals_per_leaf

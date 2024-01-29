@@ -92,11 +92,6 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
             nbs = utils.append_dict_value(nbs, root, j)
             nbs = utils.append_dict_value(nbs, j, root)
             root = None
-            
-            if all(attrs["xyz"][0] == attrs["xyz"][-1]):
-                print(root, j)
-                print(attrs)
-                stop
 
     # Output
     leafs = set_node_attrs(swc_dict, leafs)
