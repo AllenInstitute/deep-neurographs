@@ -343,7 +343,7 @@ def upd_edge_attrs(swc_dict, attrs, i):
 
 
 def get_edge_attr(graph, edge, attr):
-  """
+    """
     Gets the attribute "attr" of "edge".
 
     Parameters
