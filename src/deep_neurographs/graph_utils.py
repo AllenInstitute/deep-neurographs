@@ -27,7 +27,7 @@ from random import sample
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry_utils, swc_utils, utils
+from deep_neurographs import geometry, swc_utils, utils
 
 
 def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
@@ -82,7 +82,7 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
         # Visit j
         attrs = upd_edge_attrs(swc_dict, attrs, j)
         if j in leafs or j in junctions:
-            attrs = set_edge_attrs(attrs)
+            attrs = to_numpy(attrs)
             if smooth:
                 swc_dict, edges = __smooth_branch(
                     swc_dict, attrs, edges, nbs, root, j
@@ -221,7 +221,7 @@ def __smooth_branch(swc_dict, attrs, edges, nbs, root, j):
     j : int
         End point of branch to be smoothed.
     """
-    attrs["xyz"] = geometry_utils.smooth_branch(attrs["xyz"], s=10)
+    attrs["xyz"] = geometry.smooth_branch(attrs["xyz"], s=5)
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, root, 0)
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, j, -1)
     edges[(root, j)] = attrs
@@ -363,13 +363,44 @@ def get_edge_attr(graph, edge, attr):
     return graph.edges[edge][attr]
 
 
-def set_edge_attrs(attrs):
+def to_numpy(attrs):
+    """
+    Converts edge attributes from a list to NumPy array.
+
+    Parameters
+    ----------
+    attrs : dict
+        Dictionary containing attributes of some edge.
+
+    Returns
+    -------
+    attrs : dict
+        Updated edge attribute dictionary.
+
+    """
     attrs["xyz"] = np.array(attrs["xyz"], dtype=np.float32)
     attrs["radius"] = np.array(attrs["radius"], dtype=np.float16)
     return attrs
 
 
 def set_node_attrs(swc_dict, nodes):
+    """
+    Set node attributes by extracting values from "swc_dict".
+
+    Parameters
+    ----------
+    swc_dict : dict
+        Contents of an swc file.
+    nodes : list
+        List of nodes to set attributes.
+
+    Returns
+    -------
+    attrs : dict
+        Dictionary in which keys are node ids and values are a dictionary of
+        attributes extracted from "swc_dict".
+
+    """
     attrs = dict()
     for i in nodes:
         attrs[i] = {"radius": swc_dict["radius"][i], "xyz": swc_dict["xyz"][i]}
@@ -377,6 +408,32 @@ def set_node_attrs(swc_dict, nodes):
 
 
 def upd_node_attrs(swc_dict, leafs, junctions, i):
+    """
+    Updates node attributes by extracting values from "swc_dict".
+
+    Parameters
+    ----------
+    swc_dict : dict
+        Contents of an swc file that contains the smoothed xyz coordinates of
+        corresponding to "leafs" and "junctions". Note xyz coordinates are
+        smoothed during edge extraction.
+    leafs : dict
+        Dictionary where keys are leaf node ids and values are attribute
+        dictionaries.
+    junctions : dict
+        Dictionary where keys are junction node ids and values are attribute
+        dictionaries.
+    i : int
+        Node to be updated.
+
+    Returns
+    -------
+    leafs : dict
+        Updated dictionary if "i" was contained in "leafs.keys()".
+    junctions : dict
+        Updated dictionary if "i" was contained in "junctions.keys()".
+
+    """
     upd_attrs = {"radius": swc_dict["radius"][i], "xyz": swc_dict["xyz"][i]}
     if i in leafs:
         leafs[i] = upd_attrs

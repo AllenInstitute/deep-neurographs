@@ -15,7 +15,7 @@ from more_itertools import zip_broadcast
 from scipy.spatial import KDTree
 
 from deep_neurographs import swc_utils, utils
-from deep_neurographs.geometry_utils import dist as get_dist
+from deep_neurographs.geometry import dist as get_dist
 
 
 class DenseGraph:
