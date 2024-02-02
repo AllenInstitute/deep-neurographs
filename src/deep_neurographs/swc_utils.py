@@ -16,7 +16,7 @@ from zipfile import ZipFile
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry_utils
+from deep_neurographs import geometry
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 
@@ -130,7 +130,7 @@ def fast_parse(contents):
         "id": np.zeros((len(contents)), dtype=np.int32),
         "radius": np.zeros((len(contents)), dtype=np.float32),
         "pid": np.zeros((len(contents)), dtype=np.int32),
-        "xyz": np.zeros((len(contents), 3), dtype=np.int32),
+        "xyz": np.zeros((len(contents), 3), dtype=np.float32),
     }
     for i, line in enumerate(contents):
         parts = line.split()
@@ -347,7 +347,7 @@ def smooth(swc_dict):
         graph = to_graph(swc_dict)
         leafs, junctions = gutils.get_irreducible_nodes(graph)
         if len(junctions) == 0:
-            xyz = geometry_utils.smooth_branch(xyz)
+            xyz = geometry.smooth_branch(xyz)
         else:
             idxs = []
             root = None
@@ -369,5 +369,5 @@ def smooth(swc_dict):
 
 def upd_edge(xyz, idxs):
     idxs = np.array(idxs)
-    xyz[idxs] = geometry_utils.smooth_branch(xyz[idxs], s=10)
+    xyz[idxs] = geometry.smooth_branch(xyz[idxs], s=10)
     return xyz

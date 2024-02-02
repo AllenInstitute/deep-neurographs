@@ -15,11 +15,12 @@ import numpy as np
 import tensorstore as ts
 from scipy.spatial import KDTree
 
-from deep_neurographs import geometry_utils
+from deep_neurographs import geometry
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 from deep_neurographs.densegraph import DenseGraph
-from deep_neurographs.geometry_utils import dist as get_dist, check_dists
+from deep_neurographs.geometry import check_dists
+from deep_neurographs.geometry import dist as get_dist
 
 SUPPORTED_LABEL_MASK_TYPES = [dict, np.array, ts.TensorStore]
 
@@ -57,9 +58,10 @@ class NeuroGraph(nx.Graph):
         # Initialize bounding box (if exists)
         self.bbox = bbox
         if self.bbox:
-            self.origin = bbox["min"]
+            self.origin = bbox["min"].astype(int)
             self.shape = (bbox["max"] - bbox["min"]).astype(int)
         else:
+            self.origin = np.array([0, 0, 0], dtype=int)
             self.shape = None
 
     def init_immutable_graph(self, add_attrs=False):
@@ -305,9 +307,8 @@ class NeuroGraph(nx.Graph):
             self.img_path, "zarr", origin, self.shape, from_center=False
         )
         for edge in self.mutable_edges:
-            xyz_1, xyz_2 = geometry_utils.optimize_alignment(self, img, edge)
-            proposal = [self.to_world(xyz_1), self.to_world(xyz_2)]
-            self.edges[edge]["xyz"] = np.vstack(proposal)
+            xyz_1, xyz_2 = geometry.optimize_alignment(self, img, edge)
+            self.edges[edge]["xyz"] = np.array([xyz_1, xyz_2])
 
     def get_branch(self, xyz_or_node, key="xyz"):
         if type(xyz_or_node) == int:
@@ -351,7 +352,7 @@ class NeuroGraph(nx.Graph):
             edge = proposals[idx]
             if self.is_simple(edge):
                 add_bool = self.is_target(
-                    target_neurograph, edge, dist=3, ratio=0.7, exclude=5
+                    target_neurograph, edge, dist=7, ratio=0.7, exclude=10
                 )
                 if add_bool:
                     self.target_edges.add(edge)
@@ -363,7 +364,7 @@ class NeuroGraph(nx.Graph):
         for idx in np.argsort(dists):
             edge = remaining_proposals[idx]
             add_bool = self.is_target(
-                target_neurograph, edge, dist=5, ratio=0.5, exclude=5
+                target_neurograph, edge, dist=8, ratio=0.5, exclude=10
             )
             if add_bool:
                 self.target_edges.add(edge)

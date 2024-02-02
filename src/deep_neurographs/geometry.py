@@ -1,11 +1,12 @@
 import heapq
-import math
 from copy import deepcopy
 
 import numpy as np
+import tensorstore as ts
 from scipy.interpolate import UnivariateSpline
 from scipy.linalg import svd
-from scipy.spatial import distance 
+from scipy.spatial import distance
+
 from deep_neurographs import utils
 
 
@@ -67,7 +68,7 @@ def smooth_branch(xyz, s=None):
         t = np.linspace(0, 1, xyz.shape[0])
         spline_x, spline_y, spline_z = fit_spline(xyz, s=s)
         xyz = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
-    return xyz
+    return xyz.astype(np.float32)
 
 
 def fit_spline(xyz, s=None):
@@ -90,14 +91,24 @@ def sample_path(path, n_points):
 
 
 # Image feature extraction
-def get_profile(img, xyz_arr, window=[5, 5, 5]):
-    return [np.max(utils.get_chunk(img, xyz, window)) for xyz in xyz_arr]
+def get_profile(img, xyz_arr, process_id=None, window=[5, 5, 5]):
+    profile = []
+    for xyz in xyz_arr:
+        if type(img) == ts.TensorStore:
+            profile.append(np.max(utils.read_tensorstore(img, xyz, window)))
+        else:
+            profile.append(np.max(utils.get_chunk(img, xyz, window)))
+
+    if process_id:
+        return process_id, profile
+    else:
+        return profile
 
 
 def fill_path(img, path, val=-1):
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
-        img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
+        img[x - 1: x + 2, y - 1: y + 2, z - 1: z + 2] = val
     return img
 
 
@@ -156,8 +167,8 @@ def optimize_simple_alignment(neurograph, img, edge, depth=15):
     i, j = tuple(edge)
     branch_i = neurograph.get_branch(i)
     branch_j = neurograph.get_branch(j)
-    xyz_i, xyz_j, _ = align(neurograph, img, branch_i, branch_j, depth)
-    return xyz_i, xyz_j
+    d_i, d_j, _ = align(neurograph, img, branch_i, branch_j, depth)
+    return branch_i[d_i], branch_j[d_j]
 
 
 def optimize_complex_alignment(neurograph, img, edge, depth=15):
@@ -185,9 +196,11 @@ def optimize_complex_alignment(neurograph, img, edge, depth=15):
     i, j = tuple(edge)
     branch = neurograph.get_branch(i if neurograph.is_leaf(i) else j)
     branches = neurograph.get_branches(j if neurograph.is_leaf(i) else i)
-    xyz_1, leaf_1, val_1 = align(neurograph, img, branch, branches[0], depth)
-    xyz_2, leaf_2, val_2 = align(neurograph, img, branch, branches[1], depth)
-    return (xyz_1, leaf_1) if val_1 > val_2 else (xyz_2, leaf_2)
+    d1, e1, val_1 = align(neurograph, img, branch, branches[0], depth)
+    d2, e2, val_2 = align(neurograph, img, branch, branches[1], depth)
+    pair_1 = (branch[d1], branches[0][e1])
+    pair_2 = (branch[d2], branches[1][e2])
+    return pair_1 if val_1 > val_2 else pair_2
 
 
 def align(neurograph, img, branch_1, branch_2, depth):
@@ -225,20 +238,20 @@ def align(neurograph, img, branch_1, branch_2, depth):
         and "best_xyz_2".
 
     """
-    best_xyz_1 = None
-    best_xyz_2 = None
+    best_d1 = None
+    best_d2 = None
     best_score = 0
-    for d_1 in range(min(depth, len(branch_1) - 1)):
-        xyz_1 = neurograph.to_img(branch_1[d_1])
-        for d_2 in range(min(depth, len(branch_2) - 1)):
-            xyz_2 = neurograph.to_img(branch_2[d_2])
+    for d1 in range(min(depth, len(branch_1) - 1)):
+        xyz_1 = neurograph.to_img(branch_1[d1])
+        for d2 in range(min(depth, len(branch_2) - 1)):
+            xyz_2 = neurograph.to_img(branch_2[d2])
             line = make_line(xyz_1, xyz_2, 10)
             score = np.mean(get_profile(img, line, window=[3, 3, 3]))
             if score > best_score:
                 best_score = score
-                best_xyz_1 = deepcopy(xyz_1)
-                best_xyz_2 = deepcopy(xyz_2)
-    return best_xyz_1, best_xyz_2, best_score
+                best_d1 = d1
+                best_d2 = d2
+    return best_d1, best_d2, best_score
 
 
 def optimize_path(img, origin, xyz_1, xyz_2):
@@ -433,8 +446,8 @@ def dist(v_1, v_2, metric="l2"):
 
 def check_dists(xyz_1, xyz_2, xyz_3, radius):
     """
-    Checks whether distance between "xyz_1", "xyz_3" and "xyz_2", "xyz_3" is 
-    sufficiently small. Routine is used during edge proposal generation to 
+    Checks whether distance between "xyz_1", "xyz_3" and "xyz_2", "xyz_3" is
+    sufficiently small. Routine is used during edge proposal generation to
     determine whether to create new vertex at "xyz_2" or draw proposal between
     "xyz_1" and existing node at "xyz_3".
 

@@ -13,8 +13,11 @@ from copy import deepcopy
 from random import sample
 
 import numpy as np
+import tensorstore as ts
 
-from deep_neurographs import geometry_utils, utils
+from deep_neurographs import geometry
+from deep_neurographs import graph_utils as gutils
+from deep_neurographs import utils
 
 CHUNK_SIZE = [64, 64, 64]
 WINDOW = [5, 5, 5]
@@ -31,12 +34,7 @@ SUPPORTED_MODELS = [
 
 # -- Wrappers --
 def generate_mutable_features(
-    neurograph,
-    model_type,
-    anisotropy=[1.0, 1.0, 1.0],
-    img_path=None,
-    labels_path=None,
-    proposal_list=None,
+    neurograph, model_type, img_path=None, labels_path=None, proposals=None
 ):
     """
     Generates feature vectors for every edge proposal in a neurograph.
@@ -47,16 +45,13 @@ def generate_mutable_features(
         NeuroGraph generated from a directory of swcs generated from a
         predicted segmentation.
     model_type : str
-        Indication of model to be trained. Options include: AdaBoost,
-        RandomForest, FeedForwardNet, ConvNet, MultiModalNet.
-    anisotropy : list[float], optional
-        Real-world to image coordinates scaling factor for (x, y, z).
-        The default is [1.0, 1.0, 1.0].
+        Type of model to be trained. Options include: AdaBoost, RandomForest,
+        FeedForwardNet, ConvNet, MultiModalNet.
     img_path : str, optional
         Path to raw image. The default is None.
     labels_path : str, optional
         Path to predicted segmentation. The default is None.
-    proposal_list : list[frozenset], optional
+    proposals : list[frozenset], optional
         List of edge proposals for which features will be generated. The
         default is None.
 
@@ -68,83 +63,63 @@ def generate_mutable_features(
 
     """
     features = {
-        "skel": generate_mutable_skel_features(
-            neurograph, proposal_list=proposal_list
-        )
+        "skel": generate_skel_features(neurograph, proposals=proposals)
     }
     if model_type in ["ConvNet", "MultiModalNet"]:
-        features["img_chunks"] = generate_img_chunks(
+        features["img_chunks"], features["img_profile"] = generate_img_chunks(
             neurograph,
             img_path,
             labels_path,
-            anisotropy=anisotropy,
-            proposal_list=proposal_list,
+            model_type=model_type,
+            proposals=proposals,
         )
-    if model_type != "ConvNet":
+    if model_type in ["AdaBoost", "RandomForest", "FeedForwardNet"]:
         features["img_profile"] = generate_img_profiles(
-            neurograph,
-            img_path,
-            anisotropy=anisotropy,
-            proposal_list=proposal_list,
+            neurograph, img_path, proposals=proposals
         )
     return features
 
 
 # -- Edge feature extraction --
 def generate_img_chunks(
-    neurograph,
-    img_path,
-    labels_path,
-    anisotropy=[1.0, 1.0, 1.0],
-    proposal_list=None,
+    neurograph, img_path, labels_path, model_type=None, proposals=None
 ):
     if neurograph.bbox:
         return generate_img_chunks_via_superchunk(
-            neurograph,
-            img_path,
-            labels_path,
-            anisotropy=[1.0, 1.0, 1.0],
-            proposal_list=proposal_list,
+            neurograph, img_path, labels_path, proposals=proposals
         )
     else:
-        return generate_img_chunks_via_multithreading(
-            neurograph,
-            img_path,
-            labels_path,
-            anisotropy=[1.0, 1.0, 1.0],
-            proposal_list=proposal_list,
+        return generate_img_chunks_via_multithreads(
+            neurograph, img_path, labels_path, proposals=proposals
         )
 
 
-def generate_img_chunks_via_multithreading(
-    neurograph,
-    img_path,
-    labels_path,
-    anisotropy=[1.0, 1.0, 1.0],
-    proposal_list=None,
+def generate_img_chunks_via_multithreads(
+    neurograph, img_path, labels_path, proposals=None
 ):
-    features = dict()
-    img = utils.open_tensorstore(img_path, 'neuroglancer_precomputed')
-    labels = utils.open_tensorstore(labels_path, 'neuroglancer_precomputed')
+    img = utils.open_tensorstore(img_path, "zarr")
+    labels = utils.open_tensorstore(labels_path, "neuroglancer_precomputed")
     with ThreadPoolExecutor() as executor:
-        threads = [None] * len(proposal_list)
-        for i, edge in enumerate(proposal_list):
+        # Assign Threads
+        threads = [None] * len(proposals)
+        for i, edge in enumerate(proposals):
             xyz_i, xyz_j = gutils.get_edge_attr(neurograph, edge, "xyz")
             threads[i] = executor.submit(
-                get_img_chunk, img, labels, xyz_i, xyz_j, edge
+                get_img_chunk_features, img, labels, xyz_i, xyz_j, edge
             )
+
+        # Save result
+        chunks = dict()
+        profiles = dict()
         for thread in as_completed(threads):
-            edge, result = thread.result()
-            features[edge] = result
-    return features
+            edge, chunk, profile = thread.result()
+            chunks[edge] = chunk
+            profiles[edge] = profile
+    return chunks, profiles
 
 
 def generate_img_chunks_via_superchunk(
-    neurograph,
-    img_path,
-    labels_path,
-    anisotropy=[1.0, 1.0, 1.0],
-    proposal_list=None,
+    neurograph, img_path, labels_path, proposals=None
 ):
     """
     Generates an image chunk for each edge proposal such that the centroid of
@@ -160,10 +135,7 @@ def generate_img_chunks_via_superchunk(
         Path to raw image.
     labels_path : str
         Path to predicted segmentation.
-    anisotropy : list[float], optional
-        Real-world to image coordinates scaling factor for (x, y, z).
-        The default is [1.0, 1.0, 1.0].
-    proposal_list : list[frozenset], optional
+    proposals : list[frozenset], optional
         List of edge proposals for which features will be generated. The
         default is None.
 
@@ -173,47 +145,90 @@ def generate_img_chunks_via_superchunk(
         Dictonary such that each pair is the edge id and image chunk.
 
     """
-    features = dict()
+    chunk_features = dict()
+    profile_features = dict()
     origin = utils.apply_anisotropy(neurograph.origin, return_int=True)
     img, labels = utils.get_superchunks(
         img_path, labels_path, origin, neurograph.shape, from_center=False
     )
-    img = utils.normalize_img(img)
     for edge in neurograph.mutable_edges:
         # Compute image coordinates
         i, j = tuple(edge)
-        xyz = get_edge_attr(neurograph, edge, "xyz")
+        xyz = gutils.get_edge_attr(neurograph, edge, "xyz")
         xyz_i = utils.world_to_img(neurograph, xyz[0])
         xyz_j = utils.world_to_img(neurograph, xyz[1])
-        features[edge] = get_img_chunk(img, labels, xyz_i, xyz_j)
-    return features
+        chunk, profile = get_img_chunk_features(img, labels, xyz_i, xyz_j)
+        chunk_features[edge] = chunk
+        profile_features[edge] = profile
+    return chunk_features, profile_features
 
 
-def get_img_chunk(img, labels, xyz_i, xyz_j, process_id=None):
+def get_img_chunk_features(img, labels, xyz_i, xyz_j, process_id=None):
     # Extract chunks
-    midpoint = geometry_utils.get_midpoint(xyz_i, xyz_j).astype(int)
-    img_chunk = utils.get_chunk(img, midpoint, CHUNK_SIZE)
-    labels_chunk = utils.get_chunk(labels, midpoint, CHUNK_SIZE)
-
-    # Mark path
-    d = int(geometry_utils.dist(xyz_i, xyz_j) + 5)
-    img_coords_i = utils.img_to_patch(xyz_i, midpoint, CHUNK_SIZE)
-    img_coords_j = utils.img_to_patch(xyz_j, midpoint, CHUNK_SIZE)
-    path = geometry_utils.make_line(img_coords_i, img_coords_j, d)
-
-    labels_chunk[labels_chunk > 0] = 1
-    labels_chunk = geometry_utils.fill_path(labels_chunk, path, val=2)
-    if process_id:
-        return np.stack([img_chunk, labels_chunk], axis=0), process_id
+    midpoint = geometry.get_midpoint(xyz_i, xyz_j).astype(int)
+    if type(img) == ts.TensorStore:
+        img_chunk = utils.read_tensorstore(img, midpoint, CHUNK_SIZE)
+        labels_chunk = utils.read_tensorstore(labels, midpoint, CHUNK_SIZE)
     else:
-        return np.stack([img_chunk, labels_chunk], axis=0)
+        img_chunk = utils.get_chunk(img, midpoint, CHUNK_SIZE)
+        labels_chunk = utils.get_chunk(labels, midpoint, CHUNK_SIZE)
+
+    # Coordinate transform
+    img_chunk = utils.normalize_img(img_chunk)
+    xyz_i = utils.img_to_patch(xyz_i, midpoint, CHUNK_SIZE)
+    xyz_j = utils.img_to_patch(xyz_j, midpoint, CHUNK_SIZE)
+
+    # Generate features
+    path = geometry.make_line(xyz_i, xyz_j, N_PROFILE_POINTS)
+    profile = geometry.get_profile(img_chunk, path, window=WINDOW)
+    labels_chunk[labels_chunk > 0] = 1
+    labels_chunk = geometry.fill_path(labels_chunk, path, val=2)
+    chunk = np.stack([img_chunk, labels_chunk], axis=0)
+
+    # Output
+    if process_id:
+        return process_id, chunk, profile
+    else:
+        return chunk, profile
 
 
-def generate_img_profiles(
-    neurograph, path, anisotropy=[1.0, 1.0, 1.0], proposal_list=None
+def generate_img_profiles(neurograph, path, proposals=None):
+    if neurograph.bbox:
+        return generate_img_profiles_via_superchunk(
+            neurograph, path, proposals=proposals
+        )
+    else:
+        return generate_img_profiles_via_multithreads(
+            neurograph, path, proposals=proposals
+        )
+
+
+def generate_img_profiles_via_multithreads(
+    neurograph, img_path, proposals=None
 ):
+    profile_features = dict()
+    img = utils.open_tensorstore(img_path, "zarr")
+    with ThreadPoolExecutor() as executor:
+        # Assign threads
+        threads = [None] * len(proposals)
+        for i, edge in enumerate(proposals):
+            xyz_i, xyz_j = gutils.get_edge_attr(neurograph, edge, "xyz")
+            xyz_i = utils.world_to_img(neurograph, xyz_i)
+            xyz_j = utils.world_to_img(neurograph, xyz_j)
+            line = geometry.make_line(xyz_i, xyz_j, N_PROFILE_POINTS)
+            threads[i] = executor.submit(geometry.get_profile, img, line, edge)
+
+        # Store result
+        for thread in as_completed(threads):
+            edge, profile = thread.result()
+            profile_features[edge] = profile
+    return profile_features
+
+
+def generate_img_profiles_via_superchunk(neurograph, path, proposals=None):
     """
-    Generates an image intensity profile along each edge proposal.
+    Generates an image intensity profile along each edge proposal by reading
+    a single superchunk from cloud that contains all proposals.
 
     Parameters
     ----------
@@ -222,10 +237,7 @@ def generate_img_profiles(
         predicted segmentation.
     path : str
         Path to raw image.
-    anisotropy : list[float], optional
-        Real-world to image coordinates scaling factor for (x, y, z).
-        The default is [1.0, 1.0, 1.0].
-    proposal_list : list[frozenset], optional
+    proposals : list[frozenset], optional
         List of edge proposals for which features will be generated. The
         default is None.
 
@@ -246,12 +258,12 @@ def generate_img_profiles(
         xyz_i, xyz_j = neurograph.get_edge_attr(edge, "xyz")
         xyz_i = utils.world_to_img(neurograph, xyz_i)
         xyz_j = utils.world_to_img(neurograph, xyz_j)
-        path = geometry_utils.make_line(xyz_i, xyz_j, N_PROFILE_POINTS)
-        features[edge] = geometry_utils.get_profile(img, path, window=WINDOW)
+        path = geometry.make_line(xyz_i, xyz_j, N_PROFILE_POINTS)
+        features[edge] = geometry.get_profile(img, path, window=WINDOW)
     return features
 
 
-def generate_mutable_skel_features(neurograph, proposal_list=None):
+def generate_skel_features(neurograph, proposals=None):
     features = dict()
     for edge in neurograph.mutable_edges:
         i, j = tuple(edge)
@@ -275,20 +287,18 @@ def generate_mutable_skel_features(neurograph, proposal_list=None):
 def get_directionals(neurograph, edge, window):
     # Compute tangent vectors
     i, j = tuple(edge)
-    edge_directional = geometry_utils.compute_tangent(
-        neurograph.edges[edge]["xyz"]
+    edge_direction = geometry.compute_tangent(neurograph.edges[edge]["xyz"])
+    direction_i = geometry.get_directional(
+        neurograph, i, edge_direction, window=window
     )
-    directional_i = geometry_utils.get_directional(
-        neurograph, i, edge_directional, window=window
-    )
-    directional_j = geometry_utils.get_directional(
-        neurograph, j, edge_directional, window=window
+    direction_j = geometry.get_directional(
+        neurograph, j, edge_direction, window=window
     )
 
     # Compute features
-    inner_product_1 = abs(np.dot(edge_directional, directional_i))
-    inner_product_2 = abs(np.dot(edge_directional, directional_j))
-    inner_product_3 = np.dot(directional_i, directional_j)
+    inner_product_1 = abs(np.dot(edge_direction, direction_i))
+    inner_product_2 = abs(np.dot(edge_direction, direction_j))
+    inner_product_3 = np.dot(direction_i, direction_j)
     return np.array([inner_product_1, inner_product_2, inner_product_3])
 
 

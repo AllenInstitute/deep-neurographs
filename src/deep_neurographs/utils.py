@@ -12,7 +12,6 @@ import concurrent.futures
 import json
 import math
 import os
-import psutil
 import shutil
 from copy import deepcopy
 from io import BytesIO
@@ -20,6 +19,7 @@ from time import time
 from zipfile import ZipFile
 
 import numpy as np
+import psutil
 import tensorstore as ts
 import zarr
 
@@ -310,21 +310,21 @@ def open_tensorstore(path, driver):
 def read_img_chunk(img, xyz, shape):
     start, end = get_start_end(xyz, shape)
     return img[
-        start[2] : end[2], start[1] : end[1], start[0] : end[0]
+        start[2]: end[2], start[1]: end[1], start[0]: end[0]
     ].transpose(2, 1, 0)
 
 
 def get_chunk(arr, xyz, shape):
     start, end = get_start_end(xyz, shape)
     return deepcopy(
-        arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
+        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
     )
 
 
 def read_tensorstore(ts_arr, xyz, shape):
     start, end = get_start_end(xyz, shape)
     return (
-        ts_arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
+        ts_arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
         .read()
         .result()
     )
