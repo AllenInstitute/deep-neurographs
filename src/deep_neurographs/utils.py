@@ -24,7 +24,7 @@ import tensorstore as ts
 import zarr
 
 ANISOTROPY = np.array([0.748, 0.748, 1.0])
-SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "zarr"]
+SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "zarr", "n5"]
 
 
 # --- dictionary utils ---
@@ -321,10 +321,10 @@ def get_chunk(arr, xyz, shape):
     )
 
 
-def read_tensorstore(ts_arr, xyz, shape):
+def read_tensorstore(arr, xyz, shape):
     start, end = get_start_end(xyz, shape)
     return (
-        ts_arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
+        arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
         .read()
         .result()
     )

@@ -45,7 +45,6 @@ def compute_tangent(xyz):
     if xyz.shape[0] == 2:
         tangent = (xyz[1] - xyz[0]) / dist(xyz[1], xyz[0])
     else:
-        xyz = smooth_branch(xyz, s=10)
         U, S, VT = compute_svd(xyz)
         tangent = VT[0]
     return tangent / np.linalg.norm(tangent)

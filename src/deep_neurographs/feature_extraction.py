@@ -14,7 +14,7 @@ from random import sample
 
 import numpy as np
 
-from deep_neurographs import geometry_utils, utils
+from deep_neurographs import geometry_utils, graph_utils as gutils, utils
 
 CHUNK_SIZE = [64, 64, 64]
 WINDOW = [5, 5, 5]
@@ -80,7 +80,7 @@ def generate_mutable_features(
             anisotropy=anisotropy,
             proposal_list=proposal_list,
         )
-    if model_type != "ConvNet":
+    if False:# model_type != "ConvNet":
         features["img_profile"] = generate_img_profiles(
             neurograph,
             img_path,
@@ -124,8 +124,9 @@ def generate_img_chunks_via_multithreading(
     proposal_list=None,
 ):
     features = dict()
-    img = utils.open_tensorstore(img_path, 'neuroglancer_precomputed')
-    labels = utils.open_tensorstore(labels_path, 'neuroglancer_precomputed')
+    driver = "n5" if "n5" in img_path else "zarr" 
+    img = utils.open_tensorstore(img_path, driver)
+    labels = utils.open_tensorstore(labels_path, "neuroglancer_precomputed")
     with ThreadPoolExecutor() as executor:
         threads = [None] * len(proposal_list)
         for i, edge in enumerate(proposal_list):
@@ -134,7 +135,7 @@ def generate_img_chunks_via_multithreading(
                 get_img_chunk, img, labels, xyz_i, xyz_j, edge
             )
         for thread in as_completed(threads):
-            edge, result = thread.result()
+            result, edge = thread.result()
             features[edge] = result
     return features
 
@@ -192,8 +193,8 @@ def generate_img_chunks_via_superchunk(
 def get_img_chunk(img, labels, xyz_i, xyz_j, process_id=None):
     # Extract chunks
     midpoint = geometry_utils.get_midpoint(xyz_i, xyz_j).astype(int)
-    img_chunk = utils.get_chunk(img, midpoint, CHUNK_SIZE)
-    labels_chunk = utils.get_chunk(labels, midpoint, CHUNK_SIZE)
+    img_chunk = utils.read_tensorstore(img, midpoint, CHUNK_SIZE)
+    labels_chunk = utils.read_tensorstore(labels, midpoint, CHUNK_SIZE)
 
     # Mark path
     d = int(geometry_utils.dist(xyz_i, xyz_j) + 5)
