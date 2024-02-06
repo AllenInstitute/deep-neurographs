@@ -15,6 +15,7 @@ import os
 import shutil
 from copy import deepcopy
 from io import BytesIO
+from skimage.color import label2rgb
 from time import time
 from zipfile import ZipFile
 
@@ -425,6 +426,11 @@ def write_json(path, contents):
         json.dump(contents, f)
 
 
+def write_txt(path, contents):
+    f = open(path, "w")
+    f.write(contents)
+    f.close()
+
 # --- coordinate conversions ---
 def world_to_img(neurograph, node_or_xyz):
     if type(node_or_xyz) == int:
@@ -498,6 +504,12 @@ def get_swc_id(path):
 
 def get_img_mip(img, axis=0):
     return np.max(img, axis=axis)
+
+
+def get_labels_mip(img, axis=0):
+    mip = np.max(img, axis=axis)
+    mip = label2rgb(mip)
+    return (255 * mip).astype(np.uint8)
 
 
 def normalize_img(img):
