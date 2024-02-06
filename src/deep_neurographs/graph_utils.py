@@ -60,12 +60,13 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
 
     """
     # Build dense graph
+    swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
     dense_graph = swc_utils.to_graph(swc_dict)
     if prune:
         dense_graph = prune_short_branches(dense_graph, depth)
 
     # Extract nodes
-    leafs, junctions = get_irreducible_nodes(dense_graph, swc_dict)
+    leafs, junctions = get_irreducible_nodes(dense_graph)
     if len(leafs) == 0:
         return False, None
 
@@ -100,7 +101,7 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
     return swc_id, irreducibles
 
 
-def get_irreducible_nodes(graph, swc_dict):
+def get_irreducible_nodes(graph):
     """
     Gets irreducible nodes (i.e. leafs and junctions) of a graph.
 
@@ -315,7 +316,8 @@ def init_edge_attrs(swc_dict, i):
         Edge attribute dictionary.
 
     """
-    return {"radius": [swc_dict["radius"][i]], "xyz": [swc_dict["xyz"][i]]}
+    j = swc_dict["idx"][i] 
+    return {"radius": [swc_dict["radius"][j]], "xyz": [swc_dict["xyz"][j]]}
 
 
 def upd_edge_attrs(swc_dict, attrs, i):
@@ -337,8 +339,9 @@ def upd_edge_attrs(swc_dict, attrs, i):
         Edge attribute dictionary.
 
     """
-    attrs["radius"].append(swc_dict["radius"][i])
-    attrs["xyz"].append(swc_dict["xyz"][i])
+    j = swc_dict["idx"][i] 
+    attrs["radius"].append(swc_dict["radius"][j])
+    attrs["xyz"].append(swc_dict["xyz"][j])
     return attrs
 
 
@@ -403,7 +406,8 @@ def set_node_attrs(swc_dict, nodes):
     """
     attrs = dict()
     for i in nodes:
-        attrs[i] = {"radius": swc_dict["radius"][i], "xyz": swc_dict["xyz"][i]}
+        j = swc_dict["idx"][i] 
+        attrs[i] = {"radius": swc_dict["radius"][j], "xyz": swc_dict["xyz"][j]}
     return attrs
 
 
@@ -434,7 +438,8 @@ def upd_node_attrs(swc_dict, leafs, junctions, i):
         Updated dictionary if "i" was contained in "junctions.keys()".
 
     """
-    upd_attrs = {"radius": swc_dict["radius"][i], "xyz": swc_dict["xyz"][i]}
+    j = swc_dict["idx"][i] 
+    upd_attrs = {"radius": swc_dict["radius"][j], "xyz": swc_dict["xyz"][j]}
     if i in leafs:
         leafs[i] = upd_attrs
     else:

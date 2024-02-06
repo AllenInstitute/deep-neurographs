@@ -60,9 +60,8 @@ def parse_local_swc(path, bbox=None, min_size=0):
 
 def parse_gcs_zip(zip_file, path, min_size=0):
     contents = read_from_gcs_zip(zip_file, path)
-    swc_dict = (
-        fast_parse(contents) if len(contents) > min_size else {"id": [-1]}
-    )
+    parse_bool = len(contents) > min_size
+    swc_dict = fast_parse(contents) if parse_bool else {"id": [-1]}
     return utils.get_swc_id(path), swc_dict
 
 
@@ -143,8 +142,13 @@ def fast_parse(contents):
     min_id = np.min(swc_dict["id"])
     swc_dict["id"] -= min_id
     swc_dict["pid"] -= min_id
+    swc_dict["radius"] /= 1000.0
     return swc_dict
 
+
+def reindex(arr, idxs):
+    return arr[idxs]
+    
 
 def get_contents(swc_contents):
     offset = [0, 0, 0]
@@ -333,10 +337,12 @@ def to_graph(swc_dict, graph_id=None, set_attrs=False):
 
 
 def __add_attributes(swc_dict, graph):
-    xyz = swc_dict["xyz"]
-    radii = swc_dict["radius"]
-    attrs = [{"xyz": xyz[i], "radius": radii[i]} for i in graph.nodes]
-    nx.set_node_attributes(graph, dict(zip(swc_dict["id"], attrs)))
+    attrs = dict()
+    for idx, node_id in enumerate(swc_dict["id"]):
+        attrs[node_id] = {
+            "xyz": swc_dict["xyz"][idx], "radius": swc_dict["radius"][idx]
+        }
+    nx.set_node_attributes(graph, attrs)
     return graph
 
 
