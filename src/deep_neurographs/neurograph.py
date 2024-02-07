@@ -169,7 +169,7 @@ class NeuroGraph(nx.Graph):
                     node = self.add_immutable_node((i, j), attrs, idxs[0])
 
                 # Add edge
-                self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
+                #self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
                 self.mutable_edges.add(frozenset((leaf, node)))
 
         # Check whether to optimization proposals

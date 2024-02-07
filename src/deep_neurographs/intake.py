@@ -207,8 +207,6 @@ def download_gcs_zips(bucket_name, cloud_path, min_size):
             cnt, t1 = report_progress(
                 i, len(zip_paths), chunk_size, cnt, t0, t1
             )
-        if len(swc_dicts) > 2000:
-            stop
     return swc_dicts
 
 
