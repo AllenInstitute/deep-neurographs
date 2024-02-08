@@ -9,10 +9,11 @@ Created on Sat Dec 12 17:00:00 2023
 """
 
 import numpy as np
+from deep_neurographs import graph_utils as gutils
 
 
 def get_reconstructions(
-    pred_neurographs,
+    neurographs,
     blocks,
     block_to_idxs,
     idx_to_edge,
@@ -23,7 +24,7 @@ def get_reconstructions(
 ):
     edge_preds = dict()
     for block_id in blocks:
-        # Get positive edge predictions
+        # Get positive predictions
         edge_probs = get_edge_probs(
             idx_to_edge,
             y_pred,
@@ -34,7 +35,7 @@ def get_reconstructions(
         # Refine predictions wrt structure
         if structure_aware:
             edge_preds[block_id] = get_structure_aware_prediction(
-                pred_neurographs[block_id],
+                neurographs[block_id],
                 edge_probs,
                 high_threshold=high_threshold,
                 low_threshold=low_threshold,
@@ -45,7 +46,7 @@ def get_reconstructions(
 
 
 def get_reconstruction(
-    pred_neurograph,
+    neurograph,
     y_pred,
     idx_to_edge,
     high_threshold=0.9,
@@ -56,7 +57,7 @@ def get_reconstruction(
     edge_probs = get_edge_probs(idx_to_edge, y_pred, low_threshold)
     if structure_aware:
         return get_structure_aware_prediction(
-            pred_neurograph,
+            neurograph,
             edge_probs,
             high_threshold=high_threshold,
             low_threshold=low_threshold,
@@ -75,29 +76,27 @@ def get_edge_probs(idx_to_edge, y_pred, threshold, valid_idxs=[]):
 
 
 def get_structure_aware_prediction(
-    pred_neurograph, edge_probs, high_threshold=0.8, low_threshold=0.6
+    neurograph, probs, high_threshold=0.8, low_threshold=0.6
 ):
     # Initializations
-    edge_preds = list(edge_probs.keys())
-    pred_neurograph.init_predicted_graph()
+    proposals = list(probs.keys())
+    pred_graph = neurograph.copy_graph()
 
     # Add best simple edges
-    remaining_edge_preds = []
-    viable_edge_preds = []
-    dists = [pred_neurograph.compute_length(edge) for edge in edge_preds]
+    positive_predictions = []
+    remaining_proposals = []
+    dists = [neurograph.compute_length(edge) for edge in proposals]
     for idx in np.argsort(dists):
-        edge = edge_preds[idx]
-        if (
-            pred_neurograph.is_simple(edge)
-            and edge_probs[edge] > high_threshold
-        ):
-            if not pred_neurograph.creates_cycle(tuple(edge)):
-                viable_edge_preds.append(edge)
+        edge = proposals[idx]
+        if neurograph.is_simple(edge) and probs[edge] > high_threshold:
+            if not gutils.creates_cycle(pred_graph, tuple(edge)):
+                pred_graph.add_edges_from([edge])
+                positive_predictions.append(edge)
         else:
-            remaining_edge_preds.append(edge)
+            remaining_proposals.append(edge)
 
-    # Add remaining valid edges
-    for edge in remaining_edge_preds:
-        if not pred_neurograph.creates_cycle(tuple(edge)):
-            viable_edge_preds.append(edge)
-    return viable_edge_preds
+    # Add remaining viable edges
+    for edge in remaining_proposals:
+        if not gutils.creates_cycle(pred_graph, tuple(edge)):
+            positive_predictions.append(edge)
+    return positive_predictions

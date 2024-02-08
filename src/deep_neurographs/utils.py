@@ -283,7 +283,7 @@ def open_tensorstore(path, driver):
 
     """
     assert driver in SUPPORTED_DRIVERS, "Error! Driver is not supported!"
-    ts_arr = ts.open(
+    arr = ts.open(
         {
             "driver": driver,
             "kvstore": {
@@ -300,29 +300,29 @@ def open_tensorstore(path, driver):
         }
     ).result()
     if driver == "neuroglancer_precomputed":
-        return ts_arr[ts.d["channel"][0]]
-    elif driver == "zarr":
-        ts_arr = ts_arr[0, 0, :, :, :]
-        ts_arr = ts_arr[ts.d[0].transpose[2]]
-        ts_arr = ts_arr[ts.d[0].transpose[1]]
-    return ts_arr
+        return arr[ts.d["channel"][0]]
+    return arr
 
 
+"""
 def read_img_chunk(img, xyz, shape):
     start, end = get_start_end(xyz, shape, from_center=from_center)
     return img[
         start[2]: end[2], start[1]: end[1], start[0]: end[0]
     ].transpose(2, 1, 0)
+"""
 
 
 def get_chunk(arr, xyz, shape, from_center=True):
     start, end = get_start_end(xyz, shape, from_center=from_center)
-    return deepcopy(arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]])
+    return deepcopy(
+        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+    )
 
 
 def read_tensorstore(arr, xyz, shape, from_center=True):
     chunk = get_chunk(arr, xyz, shape, from_center=from_center)
-    return np.swapaxes(chunk.read().result(), 0, 2)
+    return chunk.read().result()
 
 
 def get_start_end(xyz, shape, from_center=True):
@@ -335,7 +335,7 @@ def get_start_end(xyz, shape, from_center=True):
     return start, end
 
 
-def get_superchunks(img_path, label_path, xyz, shape, from_center=True):
+def get_superchunks(img_path, labels_path, xyz, shape, from_center=True):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         img_job = executor.submit(
             get_superchunk,
@@ -345,26 +345,23 @@ def get_superchunks(img_path, label_path, xyz, shape, from_center=True):
             shape,
             from_center=from_center,
         )
-        label_job = executor.submit(
+        labels_job = executor.submit(
             get_superchunk,
-            label_path,
+            labels_path,
             "neuroglancer_precomputed",
             xyz,
             shape,
             from_center=from_center,
         )
     img = img_job.result().astype(np.int16)
-    label = label_job.result().astype(np.int64)
-    return img, label
+    labels = labels_job.result().astype(np.int64)
+    assert img.shape == labels.shape, "img.shape != labels.shape"
+    return img, labels
 
 
 def get_superchunk(path, driver, xyz, shape, from_center=True):
-    ts_arr = open_tensorstore(path, driver)
-    if from_center:
-        return read_tensorstore(ts_arr, xyz, shape)
-    else:
-        xyz = [xyz[i] + shape[i] // 2 for i in range(3)]
-        return read_tensorstore(ts_arr, xyz, shape)
+    arr = open_tensorstore(path, driver)
+    return read_tensorstore(arr, xyz, shape, from_center=from_center)
 
 
 def read_json(path):
@@ -431,13 +428,8 @@ def write_txt(path, contents):
     f.write(contents)
     f.close()
 
+
 # --- coordinate conversions ---
-def world_to_img(neurograph, node_or_xyz):
-    if type(node_or_xyz) == int:
-        node_or_xyz = deepcopy(neurograph.nodes[node_or_xyz]["xyz"])
-    return to_img(node_or_xyz, shift=neurograph.origin)
-
-
 def img_to_patch(xyz, patch_centroid, patch_dims):
     half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
     return np.round(xyz - patch_centroid + half_patch_dims).astype(int)
@@ -452,13 +444,13 @@ def to_world(xyz, shift=[0, 0, 0]):
     return tuple([xyz[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
 
 
-def to_img(xyz, shift=np.array([0, 0, 0])):
-    return apply_anisotropy(xyz - shift, return_int=True)
+def to_img(xyz):
+    return (xyz / ANISOTROPY).astype(int)
 
 
 def apply_anisotropy(xyz, return_int=False):
     if return_int:
-        return (xyz / ANISOTROPY).astype(int)
+        return
     else:
         return xyz / ANISOTROPY
 
@@ -470,24 +462,21 @@ def get_avg_std(data, weights=None):
     return avg, math.sqrt(var)
 
 
-def is_contained(bbox, xyz, buffer=0):
-    xyz = apply_anisotropy(xyz - bbox["min"])
-    shape = bbox["max"] - bbox["min"]
-    if any(xyz < buffer) or any(xyz >= shape - buffer):
-        return False
-    else:
-        return True
+def is_contained(bbox, xyz, buffer=5):
+    above = any(xyz > bbox["max"] - buffer)
+    below = any(xyz < bbox["min"] + buffer)
+    return False if above or below else True
 
 
 # --- miscellaneous ---
-def get_bbox(origin, shape):
+def get_img_bbox(origin, shape):
     """
     Origin is assumed to be top, front, left corner.
 
     """
     if origin and shape:
         origin = np.array(origin)
-        shape = np.array(shape)
+        shape = np.array(shape)  # for i in [2, 1, 0]])
         return {"min": origin, "max": origin + shape}
     else:
         return None
