@@ -316,7 +316,7 @@ def init_edge_attrs(swc_dict, i):
         Edge attribute dictionary.
 
     """
-    j = swc_dict["idx"][i] 
+    j = swc_dict["idx"][i]
     return {"radius": [swc_dict["radius"][j]], "xyz": [swc_dict["xyz"][j]]}
 
 
@@ -339,7 +339,7 @@ def upd_edge_attrs(swc_dict, attrs, i):
         Edge attribute dictionary.
 
     """
-    j = swc_dict["idx"][i] 
+    j = swc_dict["idx"][i]
     attrs["radius"].append(swc_dict["radius"][j])
     attrs["xyz"].append(swc_dict["xyz"][j])
     return attrs
@@ -406,7 +406,7 @@ def set_node_attrs(swc_dict, nodes):
     """
     attrs = dict()
     for i in nodes:
-        j = swc_dict["idx"][i] 
+        j = swc_dict["idx"][i]
         attrs[i] = {"radius": swc_dict["radius"][j], "xyz": swc_dict["xyz"][j]}
     return attrs
 
@@ -438,10 +438,38 @@ def upd_node_attrs(swc_dict, leafs, junctions, i):
         Updated dictionary if "i" was contained in "junctions.keys()".
 
     """
-    j = swc_dict["idx"][i] 
+    j = swc_dict["idx"][i]
     upd_attrs = {"radius": swc_dict["radius"][j], "xyz": swc_dict["xyz"][j]}
     if i in leafs:
         leafs[i] = upd_attrs
     else:
         junctions[i] = upd_attrs
     return leafs, junctions
+
+
+# -- miscellaneous --
+def creates_cycle(graph, edge):
+    """
+    Checks whether adding "edge" to "graph" creates a cycle.
+
+    Paramaters
+    ----------
+    graph : networkx.Graph
+        Graph to be checked for cycles.
+    edge : tuple
+        Edge to be added to "graph"
+
+    Returns
+    -------
+    bool
+        Indication of whether adding "edge" to graph creates a cycle.
+
+    """
+    graph.add_edges_from([edge])
+    try:
+        nx.find_cycle(graph)
+        graph.remove_edges_from([edge])
+        return True
+    except:
+        graph.remove_edges_from([edge])
+        return False

@@ -97,7 +97,8 @@ def generate_img_chunks(
 def generate_img_chunks_via_multithreads(
     neurograph, img_path, labels_path, proposals=None
 ):
-    img = utils.open_tensorstore(img_path, "zarr")
+    driver = "n5" if ".n5" in img_path else "zarr"
+    img = utils.open_tensorstore(img_path, driver)
     labels = utils.open_tensorstore(labels_path, "neuroglancer_precomputed")
     with ThreadPoolExecutor() as executor:
         # Assign Threads
@@ -155,9 +156,9 @@ def generate_img_chunks_via_superchunk(
         # Compute image coordinates
         i, j = tuple(edge)
         xyz = gutils.get_edge_attr(neurograph, edge, "xyz")
-        xyz_i = utils.world_to_img(neurograph, xyz[0])
-        xyz_j = utils.world_to_img(neurograph, xyz[1])
-        chunk, profile = get_img_chunk_features(img, labels, xyz_i, xyz_j)
+        coord_i = utils.to_img(xyz[0])
+        coord_j = utils.to_img(xyz[1])
+        chunk, profile = get_img_chunk_features(img, labels, coord_i, coord_j)
         chunk_features[edge] = chunk
         profile_features[edge] = profile
     return chunk_features, profile_features
@@ -203,19 +204,18 @@ def generate_img_profiles(neurograph, path, proposals=None):
         )
 
 
-def generate_img_profiles_via_multithreads(
-    neurograph, img_path, proposals=None
-):
+def generate_img_profiles_via_multithreads(neurograph, path, proposals=None):
     profile_features = dict()
-    img = utils.open_tensorstore(img_path, "zarr")
+    driver = "n5" if ".n5" in path else "zarr"
+    img = utils.open_tensorstore(path, driver)
     with ThreadPoolExecutor() as executor:
         # Assign threads
         threads = [None] * len(proposals)
         for i, edge in enumerate(proposals):
             xyz_i, xyz_j = gutils.get_edge_attr(neurograph, edge, "xyz")
-            xyz_i = utils.world_to_img(neurograph, xyz_i)
-            xyz_j = utils.world_to_img(neurograph, xyz_j)
-            line = geometry.make_line(xyz_i, xyz_j, N_PROFILE_POINTS)
+            coord_i = utils.to_img(xyz_i)
+            coord_j = utils.to_img(xyz_j)
+            line = geometry.make_line(coord_i, coord_j, N_PROFILE_POINTS)
             threads[i] = executor.submit(geometry.get_profile, img, line, edge)
 
         # Store result
@@ -249,16 +249,16 @@ def generate_img_profiles_via_superchunk(neurograph, path, proposals=None):
 
     """
     features = dict()
-    origin = utils.apply_anisotropy(neurograph.origin, return_int=True)
+    driver = "n5" if ".n5" in path else "zarr"
     img = utils.get_superchunk(
-        path, "zarr", origin, neurograph.shape, from_center=False
+        path, driver, neurograph.origin, neurograph.shape, from_center=False
     )
     img = utils.normalize_img(img)
     for edge in neurograph.mutable_edges:
         xyz_i, xyz_j = neurograph.get_edge_attr(edge, "xyz")
-        xyz_i = utils.world_to_img(neurograph, xyz_i)
-        xyz_j = utils.world_to_img(neurograph, xyz_j)
-        path = geometry.make_line(xyz_i, xyz_j, N_PROFILE_POINTS)
+        coord_i = utils.to_img(xyz_i) - neurograph.origin
+        coord_j = utils.to_img(xyz_j) - neurograph.origin
+        path = geometry.make_line(coord_i, coord_j, N_PROFILE_POINTS)
         features[edge] = geometry.get_profile(img, path, window=WINDOW)
     return features
 
@@ -270,8 +270,8 @@ def generate_skel_features(neurograph, proposals=None):
         features[edge] = np.concatenate(
             (
                 neurograph.compute_length(edge),
-                neurograph.immutable_degree(i),
-                neurograph.immutable_degree(j),
+                neurograph.get_degree_temp(i),
+                neurograph.get_degree_temp(j),
                 get_radii(neurograph, edge),
                 get_avg_radii(neurograph, edge),
                 get_avg_branch_lens(neurograph, edge),
@@ -413,7 +413,7 @@ def get_feature_vectors(neurograph, features, shift=0):
     features = combine_features(features)
     features.keys()
     key = sample(list(features.keys()), 1)[0]
-    n_edges = neurograph.num_mutables()
+    n_edges = neurograph.n_mutables()
     n_features = len(features[key])
 
     # Build
@@ -429,7 +429,7 @@ def get_feature_vectors(neurograph, features, shift=0):
 
 def get_multimodal_features(neurograph, features, shift=0):
     idx_to_edge = dict()
-    n_edges = neurograph.num_mutables()
+    n_edges = neurograph.n_mutables()
     X = np.zeros(((n_edges, 2) + tuple(CHUNK_SIZE)))
     x = np.zeros((n_edges, N_SKEL_FEATURES + N_PROFILE_POINTS))
     y = np.zeros((n_edges))
@@ -445,7 +445,7 @@ def get_multimodal_features(neurograph, features, shift=0):
 
 def get_img_chunks(neurograph, features, shift=0):
     idx_to_edge = dict()
-    n_edges = neurograph.num_mutables()
+    n_edges = neurograph.n_mutables()
     X = np.zeros(((n_edges, 2) + tuple(CHUNK_SIZE)))
     y = np.zeros((n_edges))
     for i, edge in enumerate(features["img_chunks"].keys()):

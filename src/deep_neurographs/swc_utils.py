@@ -22,10 +22,12 @@ from deep_neurographs import utils
 
 
 # -- io utils --
-def process_local_paths(paths, min_size, bbox=None):
+def process_local_paths(paths, min_size, img_bbox=None):
     swc_dicts = dict()
     for path in paths:
-        swc_id, swc_dict = parse_local_swc(path, bbox=bbox, min_size=min_size)
+        swc_id, swc_dict = parse_local_swc(
+            path, img_bbox=img_bbox, min_size=min_size
+        )
         if len(swc_dict["id"]) > min_size:
             swc_dicts[swc_id] = swc_dict
     return swc_dicts
@@ -48,11 +50,13 @@ def process_gsc_zip(bucket, zip_path, min_size=0):
     return swc_dicts
 
 
-def parse_local_swc(path, bbox=None, min_size=0):
+def parse_local_swc(path, img_bbox=None, min_size=0):
     contents = read_from_local(path)
     parse_bool = len(contents) > min_size
-    if parse_bool:
-        swc_dict = parse(contents, bbox=bbox) if bbox else fast_parse(contents)
+    if parse_bool and img_bbox:
+        swc_dict = parse(contents, img_bbox)
+    elif parse_bool:
+        swc_dict = fast_parse(contents)
     else:
         swc_dict = {"id": [-1]}
     return utils.get_swc_id(path), swc_dict
@@ -65,7 +69,7 @@ def parse_gcs_zip(zip_file, path, min_size=0):
     return utils.get_swc_id(path), swc_dict
 
 
-def parse(contents, bbox=None):
+def parse(contents, img_bbox):
     """
     Parses an swc file to extract the contents which is stored in a dict. Note
     that node_ids from swc are refactored to index from 0 to n-1 where n is
@@ -88,8 +92,9 @@ def parse(contents, bbox=None):
     for line in contents:
         parts = line.split()
         xyz = read_xyz(parts[2:5], offset=offset)
-        if bbox:
-            if not utils.is_contained(bbox, xyz):
+        if img_bbox:
+            img_coord = utils.to_img(np.array(xyz))
+            if not utils.is_contained(img_bbox, img_coord, buffer=8):
                 break
         swc_dict["id"].append(int(parts[0]))
         swc_dict["radius"].append(float(parts[-2]))
@@ -98,10 +103,12 @@ def parse(contents, bbox=None):
         if swc_dict["id"][-1] < min_id:
             min_id = swc_dict["id"][-1]
 
-    # Reindex from zero
-    for i in range(len(swc_dict["id"])):
-        swc_dict["id"][i] -= min_id
-        swc_dict["pid"][i] -= min_id
+    # Reindex from zero and reformat
+    if len(swc_dict["id"]) > 0:
+        swc_dict["id"] = np.array(swc_dict["id"], dtype=int) - min_id
+        swc_dict["pid"] = np.array(swc_dict["pid"], dtype=int) - min_id
+        swc_dict["radius"] = np.array(swc_dict["radius"])
+        swc_dict["xyz"] = np.array(swc_dict["xyz"])
 
     return swc_dict if len(swc_dict["id"]) > 1 else {"id": [-1]}
 
@@ -148,7 +155,7 @@ def fast_parse(contents):
 
 def reindex(arr, idxs):
     return arr[idxs]
-    
+
 
 def get_contents(swc_contents):
     offset = [0, 0, 0]
@@ -340,7 +347,8 @@ def __add_attributes(swc_dict, graph):
     attrs = dict()
     for idx, node_id in enumerate(swc_dict["id"]):
         attrs[node_id] = {
-            "xyz": swc_dict["xyz"][idx], "radius": swc_dict["radius"][idx]
+            "xyz": swc_dict["xyz"][idx],
+            "radius": swc_dict["radius"][idx],
         }
     nx.set_node_attributes(graph, attrs)
     return graph

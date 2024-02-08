@@ -48,14 +48,14 @@ def build_neurograph_from_local(
 ):
     # Process swc files
     assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
-    bbox = utils.get_bbox(img_patch_origin, img_patch_shape)
+    img_bbox = utils.get_img_bbox(img_patch_origin, img_patch_shape)
     paths = get_paths(swc_dir) if swc_dir else swc_paths
-    swc_dicts = process_local_paths(paths, min_size, bbox=bbox)
+    swc_dicts = process_local_paths(paths, min_size, img_bbox=img_bbox)
 
     # Build neurograph
     neurograph = build_neurograph(
         swc_dicts,
-        bbox=bbox,
+        img_bbox=img_bbox,
         img_path=img_path,
         swc_paths=paths,
         progress_bar=progress_bar,
@@ -207,8 +207,6 @@ def download_gcs_zips(bucket_name, cloud_path, min_size):
             cnt, t1 = report_progress(
                 i, len(zip_paths), chunk_size, cnt, t0, t1
             )
-        if len(swc_dicts) > 2000:
-            stop
     return swc_dicts
 
 
@@ -223,7 +221,7 @@ def count_files_in_zips(bucket, zip_paths):
 # -- Build neurograph ---
 def build_neurograph(
     swc_dicts,
-    bbox=None,
+    img_bbox=None,
     img_path=None,
     swc_paths=None,
     progress_bar=True,
@@ -249,13 +247,16 @@ def build_neurograph(
         print("(2) Combine irreducibles...")
         print("# nodes:", utils.reformat_number(n_nodes))
         print("# edges:", utils.reformat_number(n_edges))
-    neurograph = NeuroGraph(bbox=bbox, img_path=img_path, swc_paths=swc_paths)
+
+    neurograph = NeuroGraph(
+        img_bbox=img_bbox, img_path=img_path, swc_paths=swc_paths
+    )
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_components * 0.05), 1)
     cnt, i = 1, 0
     while len(irreducibles):
         key, irreducible_set = irreducibles.popitem()
-        neurograph.add_immutables(irreducible_set, key)
+        neurograph.add_component(irreducible_set, key)
         if i > cnt * chunk_size and progress_bar:
             cnt, t1 = report_progress(i, n_components, chunk_size, cnt, t0, t1)
         i += 1

@@ -22,7 +22,7 @@ def get_directional(
         elif branch.shape[0] <= d:
             xyz = deepcopy(branch)
         else:
-            xyz = deepcopy(branch[d : window + d, :])
+            xyz = deepcopy(branch[d: window + d, :])
         directionals.append(compute_tangent(xyz))
 
     # Determine best
@@ -38,6 +38,28 @@ def get_directional(
 
 
 def compute_svd(xyz):
+    """
+    Compute singular value decomposition (svd) of an NxD array where N is the
+    number of points and D is the dimension of the space.
+
+    Parameters
+    ----------
+    xyz : numpy.ndarray
+        Array containing data points.
+
+    Returns
+    -------
+    numpy.ndarry
+        Unitary matrix having left singular vectors as columns. Of shape
+        (N, N) or (N, min(N, D)), depending on full_matrices.
+    numpy.ndarray
+        Singular values, sorted in non-increasing order. Of shape (K,), with
+        K = min(N, D).
+    numpy.ndarray
+        Unitary matrix having right singular vectors as rows. Of shape (D, D)
+        or (K, D) depending on full_matrices.
+
+    """
     xyz = xyz - np.mean(xyz, axis=0)
     return svd(xyz)
 
@@ -242,9 +264,9 @@ def align(neurograph, img, branch_1, branch_2, depth):
     best_d2 = None
     best_score = 0
     for d1 in range(min(depth, len(branch_1) - 1)):
-        xyz_1 = neurograph.to_img(branch_1[d1])
+        xyz_1 = neurograph.to_img(branch_1[d1], shift=True)
         for d2 in range(min(depth, len(branch_2) - 1)):
-            xyz_2 = neurograph.to_img(branch_2[d2])
+            xyz_2 = neurograph.to_img(branch_2[d2], shift=True)
             line = make_line(xyz_1, xyz_2, 10)
             score = np.mean(get_profile(img, line, window=[3, 3, 3]))
             if score > best_score:
@@ -481,6 +503,5 @@ def make_line(xyz_1, xyz_2, n_steps):
     return np.array([(1 - t) * xyz_1 + t * xyz_2 for t in t_steps], dtype=int)
 
 
-def normalize(x, norm="l2"):
-    zero_vec = np.zeros((3))
-    return x / abs(dist(zero_vec, x, metric=norm))
+def normalize(vec, norm="l2"):
+    return vec / abs(dist(np.zeros((3)), vec, metric=norm))

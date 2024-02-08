@@ -45,7 +45,7 @@ def visualize_connected_components(
 
 
 def visualize_immutables(graph, title="Initial Segmentation"):
-    data = plot_edges(graph, graph.immutable_edges)
+    data = plot_edges(graph, graph.get_immutables_temp())
     data.append(plot_nodes(graph))
     plot(data, title)
 
@@ -61,11 +61,11 @@ def visualize_targets(graph, target_graph=None, title="Target Edges"):
 
 
 def visualize_subset(graph, edges, line_width=5, target_graph=None, title=""):
-    data = plot_edges(graph, graph.immutable_edges, color="black")
+    data = plot_edges(graph, graph.get_immutables_temp(), color="black")
     data.extend(plot_edges(graph, edges, line_width=line_width))
     data.append(plot_nodes(graph))
     if target_graph:
-        edges = target_graph.immutable_edges
+        edges = target_graph.get_immutables_temp()
         data.extend(plot_edges(target_graph, edges, color="blue"))
     plot(data, title)
 
