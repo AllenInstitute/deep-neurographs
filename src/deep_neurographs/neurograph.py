@@ -44,7 +44,7 @@ class NeuroGraph(nx.Graph):
         # Initialize node and edge sets
         self.leafs = set()
         self.junctions = set()
-        self.mutable_edges = set()
+        self.proposals = dict()
         self.target_edges = set()
 
         # Initialize data structures for proposals
@@ -77,7 +77,7 @@ class NeuroGraph(nx.Graph):
         edges = []
         for edge in self.edges:
             edge = frozenset(edge)
-            if edge not in self.mutable_edges:
+            if edge not in self.proposals:
                 edges.append(edge)
         return edges
 
@@ -144,7 +144,7 @@ class NeuroGraph(nx.Graph):
 
         """
         self.init_kdtree()
-        self.mutable_edges = set()
+        self.proposals = dict()
         for leaf in self.leafs:
             if not self.is_contained(leaf):
                 continue
@@ -153,7 +153,7 @@ class NeuroGraph(nx.Graph):
                 leaf, xyz_leaf, n_proposals_per_leaf, radius
             )
             for xyz in proposals:
-                # Extract info on mutable connection
+                # Extract info on proposal
                 (i, j) = self.xyz_to_edge[xyz]
                 attrs = self.get_edge_data(i, j)
 
@@ -171,8 +171,8 @@ class NeuroGraph(nx.Graph):
                     node = self.split_edge((i, j), attrs, idxs[0])
 
                 # Add edge
-                self.add_edge(leaf, node, xyz=np.array([xyz_leaf, xyz]))
-                self.mutable_edges.add(frozenset((leaf, node)))
+                edge = frozenset((leaf, node))
+                self.proposals[edge] = {"xyz": np.array([xyz_leaf, xyz])}
 
         # Check whether to optimization proposals
         if optimize:
@@ -327,25 +327,13 @@ class NeuroGraph(nx.Graph):
         img = utils.get_superchunk(
             self.img_path, driver, self.origin, self.shape, from_center=False
         )
-        for edge in self.mutable_edges:
+        for edge in self.proposals:
             xyz_1, xyz_2 = geometry.optimize_alignment(self, img, edge)
-            self.edges[edge]["xyz"] = np.array([xyz_1, xyz_2])
-
-    def get_branch(self, xyz_or_node, key="xyz"):
-        if type(xyz_or_node) == int:
-            nb = self.get_nbs_temp(xyz_or_node)[0]
-            return self.orient_edge((xyz_or_node, nb), xyz_or_node, key=key)
-        else:
-            edge = self.xyz_to_edge[tuple(xyz_or_node)]
-            branch = deepcopy(self.edges[edge]["xyz"])
-            if not (branch[0] == xyz_or_node).all():
-                return np.flip(branch, axis=0)
-            else:
-                return branch
+            self.proposals[edge]["xyz"] = np.array([xyz_1, xyz_2])
 
     def get_branches(self, i, key="xyz"):
         branches = []
-        for j in self.get_nbs_temp(i):
+        for j in self.neighbors(i):
             branches.append(self.orient_edge((i, j), i, key=key))
         return branches
 
@@ -368,7 +356,7 @@ class NeuroGraph(nx.Graph):
         # Add best simple edges
         remaining_proposals = []
         proposals = self.filter_infeasible(target_neurograph)
-        dists = [self.compute_length(edge) for edge in proposals]
+        dists = [self.proposal_length(edge) for edge in proposals]
         for idx in np.argsort(dists):
             edge = proposals[idx]
             if self.is_simple(edge):
@@ -387,7 +375,7 @@ class NeuroGraph(nx.Graph):
             remaining_proposals.append(edge)
 
         # Check remaining proposals
-        dists = [self.compute_length(edge) for edge in remaining_proposals]
+        dists = [self.proposal_length(edge) for edge in remaining_proposals]
         for idx in np.argsort(dists):
             edge = remaining_proposals[idx]
             add_bool = self.is_target(
@@ -404,7 +392,7 @@ class NeuroGraph(nx.Graph):
 
     def filter_infeasible(self, target_neurograph):
         proposals = list()
-        for edge in self.mutable_edges:
+        for edge in self.proposals:
             i, j = tuple(edge)
             xyz_i = self.nodes[i]["xyz"]
             xyz_j = self.nodes[j]["xyz"]
@@ -438,8 +426,8 @@ class NeuroGraph(nx.Graph):
             return False
 
         # Check projection distance
-        xyz_i = self.edges[edge]["xyz"][0]
-        xyz_j = self.edges[edge]["xyz"][-1]
+        xyz_i = self.proposals[edge]["xyz"][0]
+        xyz_j = self.proposals[edge]["xyz"][-1]
         _, d_i = target_graph.get_projection(xyz_i)
         _, d_j = target_graph.get_projection(xyz_j)
         if d_i > dist or d_j > dist:
@@ -459,7 +447,7 @@ class NeuroGraph(nx.Graph):
             r_i = self.nodes[i]["radius"]
             r_j = self.nodes[j]["radius"]
             reconstruction.add_edge(
-                i, j, xyz=self.edges[i, j]["xyz"], radius=[r_i, r_j]
+                i, j, xyz=self.proposals[i, j]["xyz"], radius=[r_i, r_j]
             )
         return reconstruction
 
@@ -496,9 +484,9 @@ class NeuroGraph(nx.Graph):
         """
         return self.number_of_edges()
 
-    def n_mutables(self):
+    def n_proposals(self):
         """
-        Computes number of mutable edges in the graph.
+        Computes number of edges proposals in the graph.
 
         Parameters
         ----------
@@ -507,38 +495,20 @@ class NeuroGraph(nx.Graph):
         Returns
         -------
         int
-            Number of mutable edges in the graph.
+            Number of edge proposals in the graph.
 
         """
-        return len(self.mutable_edges)
+        return len(self.proposals)
 
-    def get_degree_temp(self, i):
-        return len(self.get_nbs_temp(i))
+    def get_proposals(self):
+        return self.proposals.keys()
 
-    def get_nbs_temp(self, i):
-        nbs = []
-        for j in self.neighbors(i):
-            if frozenset((i, j)) not in self.mutable_edges:
-                nbs.append(j)
-        return nbs
+    def proposal_xyz(self, edge):
+        return tuple(self.proposals[edge]["xyz"])
 
-    def get_immutables_temp(self):
-        return [
-            edge
-            for edge in self.edges
-            if frozenset(edge) not in self.mutable_edges
-        ]
-
-    def compute_length(self, edge, metric="l2"):
-        xyz_1, xyz_2 = self.get_edge_attr(edge, "xyz")
+    def proposal_length(self, edge, metric="l2"):
+        xyz_1, xyz_2 = tuple(self.proposals[edge]["xyz"])
         return get_dist(xyz_1, xyz_2, metric=metric)
-
-    def path_length(self, metric="l2"):
-        length = 0
-        for edge in self.edges:
-            if edge not in self.mutable_edges:
-                length += self.compute_length(edge, metric=metric)
-        return length
 
     def get_projection(self, xyz):
         _, idx = self.kdtree.query(xyz, k=1)
@@ -565,17 +535,17 @@ class NeuroGraph(nx.Graph):
         return img_coord - shift
 
     def is_leaf(self, i):
-        return True if self.get_degree_temp(i) == 1 else False
+        return True if self.degree[i] == 1 else False
 
     def get_edge_attr(self, edge, key):
         xyz_arr = gutils.get_edge_attr(self, edge, key)
         return xyz_arr[0], xyz_arr[-1]
 
     def get_complex_proposals(self):
-        return set([e for e in self.mutable_edges if not self.is_simple(e)])
+        return set([e for e in self.get_proposals() if not self.is_simple(e)])
 
     def get_simple_proposals(self):
-        return set([e for e in self.mutable_edges if self.is_simple(e)])
+        return set([e for e in self.get_proposals() if self.is_simple(e)])
 
     def is_simple(self, edge):
         i, j = tuple(edge)
@@ -588,22 +558,3 @@ class NeuroGraph(nx.Graph):
             coord = utils.img_to_patch(img_coord, midpoint, chunk_size)
             patch_coords.append(coord)
         return patch_coords
-
-    def to_line_graph(self):
-        """
-        Converts graph to a line graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        networkx.Graph
-            Line graph.
-
-        """
-        graph = nx.Graph()
-        graph.add_nodes_from(self.nodes)
-        graph.add_edges_from(self.edges)
-        return nx.line_graph(graph)

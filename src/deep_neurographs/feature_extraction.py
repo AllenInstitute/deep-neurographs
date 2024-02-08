@@ -33,8 +33,8 @@ SUPPORTED_MODELS = [
 
 
 # -- Wrappers --
-def generate_mutable_features(
-    neurograph, model_type, img_path=None, labels_path=None, proposals=None
+def generate_features(
+neurograph, model_type, img_path=None, labels_path=None, proposals=None
 ):
     """
     Generates feature vectors for every edge proposal in a neurograph.
@@ -103,10 +103,10 @@ def generate_img_chunks_via_multithreads(
     with ThreadPoolExecutor() as executor:
         # Assign Threads
         threads = [None] * len(proposals)
-        for i, edge in enumerate(proposals):
-            xyz_i, xyz_j = gutils.get_edge_attr(neurograph, edge, "xyz")
-            threads[i] = executor.submit(
-                get_img_chunk_features, img, labels, xyz_i, xyz_j, edge
+        for t, edge in enumerate(proposals):
+            xyz_i, xyz_j = neurograph.proposal_xyz(edge)
+            threads[t] = executor.submit(
+                get_img_chunks, img, labels, xyz_i, xyz_j, edge
             )
 
         # Save result
@@ -152,19 +152,18 @@ def generate_img_chunks_via_superchunk(
     img, labels = utils.get_superchunks(
         img_path, labels_path, origin, neurograph.shape, from_center=False
     )
-    for edge in neurograph.mutable_edges:
+    for edge in neurograph.proposals:
         # Compute image coordinates
-        i, j = tuple(edge)
-        xyz = gutils.get_edge_attr(neurograph, edge, "xyz")
-        coord_i = utils.to_img(xyz[0])
-        coord_j = utils.to_img(xyz[1])
-        chunk, profile = get_img_chunk_features(img, labels, coord_i, coord_j)
-        chunk_features[edge] = chunk
+        xyz_0, xyz_1 = neurograph.proposal_xyz(edge)
+        coord_0 = utils.to_img(xyz[0]) - neurograph.origin
+        coord_1 = utils.to_img(xyz[1]) - neurograph.origin
+        chunks, profile = get_img_chunks(img, labels, coord_0, coord_1)
+        chunk_features[edge] = chunks
         profile_features[edge] = profile
     return chunk_features, profile_features
 
 
-def get_img_chunk_features(img, labels, xyz_i, xyz_j, process_id=None):
+def get_img_chunks(img, labels, xyz_i, xyz_j, thread_id=None):
     # Extract chunks
     midpoint = geometry.get_midpoint(xyz_i, xyz_j).astype(int)
     if type(img) == ts.TensorStore:
@@ -187,8 +186,8 @@ def get_img_chunk_features(img, labels, xyz_i, xyz_j, process_id=None):
     chunk = np.stack([img_chunk, labels_chunk], axis=0)
 
     # Output
-    if process_id:
-        return process_id, chunk, profile
+    if thread_id:
+        return thread_id, chunk, profile
     else:
         return chunk, profile
 
@@ -254,24 +253,24 @@ def generate_img_profiles_via_superchunk(neurograph, path, proposals=None):
         path, driver, neurograph.origin, neurograph.shape, from_center=False
     )
     img = utils.normalize_img(img)
-    for edge in neurograph.mutable_edges:
-        xyz_i, xyz_j = neurograph.get_edge_attr(edge, "xyz")
-        coord_i = utils.to_img(xyz_i) - neurograph.origin
-        coord_j = utils.to_img(xyz_j) - neurograph.origin
-        path = geometry.make_line(coord_i, coord_j, N_PROFILE_POINTS)
+    for edge in neurograph.proposals:
+        xyz_0, xyz_1 = neurograph.proposal_xyz(edge)
+        coord_0 = utils.to_img(xyz_0) - neurograph.origin
+        coord_1 = utils.to_img(xyz_1) - neurograph.origin
+        path = geometry.make_line(coord_0, coord_1, N_PROFILE_POINTS)
         features[edge] = geometry.get_profile(img, path, window=WINDOW)
     return features
 
 
 def generate_skel_features(neurograph, proposals=None):
     features = dict()
-    for edge in neurograph.mutable_edges:
+    for edge in neurograph.proposals:
         i, j = tuple(edge)
         features[edge] = np.concatenate(
             (
-                neurograph.compute_length(edge),
-                neurograph.get_degree_temp(i),
-                neurograph.get_degree_temp(j),
+                neurograph.proposal_length(edge),
+                neurograph.degree[i],
+                neurograph.degree[j],
                 get_radii(neurograph, edge),
                 get_avg_radii(neurograph, edge),
                 get_avg_branch_lens(neurograph, edge),
@@ -287,7 +286,7 @@ def generate_skel_features(neurograph, proposals=None):
 def get_directionals(neurograph, edge, window):
     # Compute tangent vectors
     i, j = tuple(edge)
-    edge_direction = geometry.compute_tangent(neurograph.edges[edge]["xyz"])
+    edge_direction = geometry.compute_tangent(neurograph.proposals[edge]["xyz"])
     direction_i = geometry.get_directional(
         neurograph, i, edge_direction, window=window
     )
@@ -358,7 +357,7 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
 
     # Feature extraction
     for block_id in blocks:
-        if len(neurographs[block_id].mutable_edges) == 0:
+        if neurographs[block_id].n_proposals() == 0:
             block_to_idxs[block_id] = set()
             continue
 
@@ -413,13 +412,11 @@ def get_feature_vectors(neurograph, features, shift=0):
     features = combine_features(features)
     features.keys()
     key = sample(list(features.keys()), 1)[0]
-    n_edges = neurograph.n_mutables()
-    n_features = len(features[key])
 
     # Build
     idx_to_edge = dict()
-    X = np.zeros((n_edges, n_features))
-    y = np.zeros((n_edges))
+    X = np.zeros((neurograph.n_proposals(), len(features[key])))
+    y = np.zeros((neurograph.n_proposals()))
     for i, edge in enumerate(features.keys()):
         idx_to_edge[i + shift] = edge
         X[i, :] = features[edge]
@@ -429,7 +426,7 @@ def get_feature_vectors(neurograph, features, shift=0):
 
 def get_multimodal_features(neurograph, features, shift=0):
     idx_to_edge = dict()
-    n_edges = neurograph.n_mutables()
+    n_edges = neurograph.n_proposals()
     X = np.zeros(((n_edges, 2) + tuple(CHUNK_SIZE)))
     x = np.zeros((n_edges, N_SKEL_FEATURES + N_PROFILE_POINTS))
     y = np.zeros((n_edges))
@@ -445,9 +442,8 @@ def get_multimodal_features(neurograph, features, shift=0):
 
 def get_img_chunks(neurograph, features, shift=0):
     idx_to_edge = dict()
-    n_edges = neurograph.n_mutables()
-    X = np.zeros(((n_edges, 2) + tuple(CHUNK_SIZE)))
-    y = np.zeros((n_edges))
+    X = np.zeros(((neurograph.n_proposals(), 2) + tuple(CHUNK_SIZE)))
+    y = np.zeros((neurograph.n_proposals()))
     for i, edge in enumerate(features["img_chunks"].keys()):
         idx_to_edge[i + shift] = edge
         X[i, :] = features["img_chunks"][edge]

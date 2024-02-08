@@ -67,7 +67,7 @@ def run_evaluation(neurographs, blocks, pred_edges):
         # Compute accuracy
         overall_stats_i = get_stats(
             neurographs[block_id],
-            neurographs[block_id].mutable_edges,
+            neurographs[block_id].proposals,
             pred_edges[block_id],
         )
 

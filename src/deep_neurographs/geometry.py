@@ -187,8 +187,8 @@ def optimize_simple_alignment(neurograph, img, edge, depth=15):
 
     """
     i, j = tuple(edge)
-    branch_i = neurograph.get_branch(i)
-    branch_j = neurograph.get_branch(j)
+    branch_i = neurograph.get_branches(i)[0]
+    branch_j = neurograph.get_branches(j)[0]
     d_i, d_j, _ = align(neurograph, img, branch_i, branch_j, depth)
     return branch_i[d_i], branch_j[d_j]
 
@@ -216,7 +216,7 @@ def optimize_complex_alignment(neurograph, img, edge, depth=15):
 
     """
     i, j = tuple(edge)
-    branch = neurograph.get_branch(i if neurograph.is_leaf(i) else j)
+    branch = neurograph.get_branches(i if neurograph.is_leaf(i) else j)[0]
     branches = neurograph.get_branches(j if neurograph.is_leaf(i) else i)
     d1, e1, val_1 = align(neurograph, img, branch, branches[0], depth)
     d2, e2, val_2 = align(neurograph, img, branch, branches[1], depth)
