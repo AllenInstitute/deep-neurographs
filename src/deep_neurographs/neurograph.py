@@ -116,9 +116,10 @@ class NeuroGraph(nx.Graph):
             node_ids[i] = cur_id
             self.add_node(
                 node_ids[i],
-                xyz=nodes[key][i]["xyz"],
+                proposals=set(),
                 radius=nodes[key][i]["radius"],
                 swc_id=swc_id,
+                xyz=nodes[key][i]["xyz"],
             )
             if key == "leafs":
                 self.leafs.add(cur_id)
@@ -173,6 +174,8 @@ class NeuroGraph(nx.Graph):
                 # Add edge
                 edge = frozenset((leaf, node))
                 self.proposals[edge] = {"xyz": np.array([xyz_leaf, xyz])}
+                self.nodes[node]["proposals"].add(leaf)
+                self.nodes[leaf]["proposals"].add(node)
 
         # Check whether to optimization proposals
         if optimize:
@@ -264,9 +267,10 @@ class NeuroGraph(nx.Graph):
         new_node = len(self.nodes) + 1
         self.add_node(
             new_node,
-            xyz=tuple(attrs["xyz"][idx]),
+            proposals=set(),
             radius=attrs["radius"][idx],
             swc_id=attrs["swc_id"],
+            xyz=tuple(attrs["xyz"][idx]),
         )
         self.__add_edge((i, new_node), attrs, np.arange(0, idx + 1))
         self.__add_edge(

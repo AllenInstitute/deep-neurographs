@@ -81,7 +81,6 @@ def build_neurograph_from_gcs_zips(
     img_path=None,
     min_size=MIN_SIZE,
     n_proposals_per_leaf=N_PROPOSALS_PER_LEAF,
-    search_radius=SEARCH_RADIUS,
     prune=PRUNE,
     prune_depth=PRUNE_DEPTH,
     optimize_proposals=OPTIMIZE_PROPOSALS,
@@ -106,9 +105,6 @@ def build_neurograph_from_gcs_zips(
     n_proposals_per_leaf : int, optional
         Number of edge proposals generated from each leaf node in an swc file.
         The default is the global variable "N_PROPOSALS_PER_LEAF".
-    search_radius : float, optional
-        Maximum Euclidean length of an edge proposal. The default is the
-        global variable "SEARCH_RADIUS".
     prune : bool, optional
         Indication of whether to prune short branches. The default is the
         global variable "PRUNE".
@@ -151,19 +147,6 @@ def build_neurograph_from_gcs_zips(
     )
     t, unit = utils.time_writer(time() - t0)
     print(f"Module Runtime(): {round(t, 4)} {unit} \n")
-
-    # Generate proposals
-    if search_radius > 0:
-        print("Generate Edge Proposals...")
-        t0 = time()
-        neurograph.generate_proposals(
-            search_radius, n_proposals_per_leaf=n_proposals_per_leaf
-        )
-        t, unit = utils.time_writer(time() - t0)
-        print(
-            "# proposals:",
-            utils.reformat_number(len(neurograph.mutable_edges)),
-        )
 
     t, unit = utils.time_writer(time() - total_runtime)
     print(f"Total Runtime: {round(t, 4)} {unit}")
