@@ -1,3 +1,11 @@
+"""
+Created on Sat Nov 15 9:00:00 2023
+
+@author: Anna Grim
+@email: anna.grim@alleninstitute.org
+
+"""
+
 import heapq
 from copy import deepcopy
 
@@ -81,11 +89,40 @@ def compute_normal(xyz):
 
 
 def get_midpoint(xyz_1, xyz_2):
+    """
+    Computes the midpoint between "xyz_1" and "xyz_2".
+
+    Parameters
+    ----------
+    xyz_1 : numpy.ndarray
+        n-dimensional coordinate.
+    xyz_2 : numpy.ndarray
+        n-dimensional coordinate.
+    """
     return np.mean([xyz_1, xyz_2], axis=0)
 
 
 # Smoothing
 def smooth_branch(xyz, s=None):
+    """
+    Smooths a Nx3 array of points by fitting a cubic spline. The points are
+    assumed to be continuous and the curve that they form does not have any
+    branching points.
+
+    Parameters
+    ----------
+    xyz : numpy.ndarray
+        Array of xyz coordinates to be smoothed.
+    s : float
+        A parameter that controls the smoothness of the spline, where 
+        "s" \in [0, N]. Note that the larger "s", the smoother the spline.
+
+    Returns
+    -------
+    xyz : numpy.ndarray
+        Smoothed points.
+
+    """
     if xyz.shape[0] > 8:
         t = np.linspace(0, 1, xyz.shape[0])
         spline_x, spline_y, spline_z = fit_spline(xyz, s=s)
@@ -94,6 +131,26 @@ def smooth_branch(xyz, s=None):
 
 
 def fit_spline(xyz, s=None):
+    """
+    Fits a cubic spline to an array containing xyz coordinates.
+
+    Parameters
+    ----------
+    xyz : numpy.ndarray
+        Array of xyz coordinates to be smoothed.
+    s : float, optional
+        A parameter that controls the smoothness of the spline.
+
+    Returns
+    -------
+    spline_x : UnivariateSpline
+        Spline fit to x-coordinates of "xyz".
+    spline_y : UnivariateSpline
+        Spline fit to the y-coordinates of "xyz".
+    spline_z : UnivariateSpline
+        Spline fit to the z-coordinates of "xyz".
+
+    """
     s = xyz.shape[0] / 5 if not s else xyz.shape[0] / s
     t = np.linspace(0, 1, xyz.shape[0])
     spline_x = UnivariateSpline(t, xyz[:, 0], s=s, k=3)
@@ -103,8 +160,8 @@ def fit_spline(xyz, s=None):
 
 
 def sample_path(path, n_points):
-    t = np.linspace(0, 1, n_points)
     if len(path) > 5:
+        t = np.linspace(0, 1, n_points)
         spline_x, spline_y, spline_z = fit_spline(path, s=10)
         path = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
     else:

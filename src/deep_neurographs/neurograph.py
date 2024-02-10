@@ -338,7 +338,6 @@ class NeuroGraph(nx.Graph):
     def get_branches(self, i, key="xyz"):
         branches = []
         for j in self.neighbors(i):
-            self.edges[edge]["xyz"] = np.array([xyz_1, xyz_2])
             branches.append(self.orient_edge((i, j), i, key=key))
         return branches
 
