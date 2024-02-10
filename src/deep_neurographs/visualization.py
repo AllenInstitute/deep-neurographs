@@ -70,13 +70,13 @@ def visualize_subset(
     line_width=5,
     proposal_subset=False,
     target_graph=None,
-    title=""
+    title="",
 ):
     # Plot graph
     data = plot_edges(graph, graph.edges, color="black")
     data.append(plot_nodes(graph))
     if proposal_subset:
-       data.extend(plot_proposals(graph, edges, line_width=line_width))
+        data.extend(plot_proposals(graph, edges, line_width=line_width))
     else:
         data.extend(plot_edges(graph, edges, line_width=line_width))
 

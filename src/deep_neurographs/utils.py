@@ -432,7 +432,8 @@ def write_txt(path, contents):
 # --- coordinate conversions ---
 def img_to_patch(xyz, patch_centroid, patch_dims):
     half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
-    return np.round(xyz - patch_centroid + half_patch_dims).astype(int)
+    patch_coord = xyz - patch_centroid + half_patch_dims
+    return tuple(patch_coord.astype(int))
 
 
 def patch_to_img(xyz, patch_centroid, patch_dims):
