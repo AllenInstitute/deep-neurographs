@@ -146,9 +146,12 @@ class NeuroGraph(nx.Graph):
         """
         self.init_kdtree()
         self.proposals = dict()
+        existing_connections = dict() # key: swc_id, values: {other swc_id: node}
         for leaf in self.leafs:
             if not self.is_contained(leaf):
                 continue
+
+            leaf_swc_id = self.nodes[leaf]["swc_id"]
             xyz_leaf = self.nodes[leaf]["xyz"]
             proposals = self.__get_proposals(
                 leaf, xyz_leaf, n_proposals_per_leaf, radius
@@ -157,6 +160,22 @@ class NeuroGraph(nx.Graph):
                 # Extract info on proposal
                 (i, j) = self.xyz_to_edge[xyz]
                 attrs = self.get_edge_data(i, j)
+                
+                # Check for existing connection btw components
+                swc_id = self.nodes[i]["swc_id"]
+                if swc_id in existing_connections.keys():
+                    if leaf_swc_id in existing_connections[swc_id].keys():
+                        edge = existing_connections[swc_id][leaf_swc_id]
+                        len1 = self.node_xyz_dist(leaf, xyz)
+                        len2 = self.proposal_length(edge)
+                        if len1 < len2:
+                            print("Removing proposal:", edge)
+                            node1, node2 = tuple(edge)
+                            self.nodes[node1]["proposals"].remove(node2)
+                            self.nodes[node2]["proposals"].remove(node1)
+                            del self.proposals[edge]
+                        else:
+                            continue
 
                 # Get connecting node
                 d1 = check_dists(xyz_leaf, xyz, self.nodes[i]["xyz"], radius)
@@ -176,6 +195,16 @@ class NeuroGraph(nx.Graph):
                 self.proposals[edge] = {"xyz": np.array([xyz_leaf, xyz])}
                 self.nodes[node]["proposals"].add(leaf)
                 self.nodes[leaf]["proposals"].add(node)
+
+                if leaf_swc_id in existing_connections.keys():
+                    existing_connections[leaf_swc_id][swc_id] = edge
+                else:
+                    existing_connections[leaf_swc_id] = {swc_id: edge}
+
+                if swc_id in existing_connections.keys():
+                    existing_connections[swc_id][leaf_swc_id] = edge
+                else:
+                    existing_connections[swc_id] = {leaf_swc_id: edge}
 
         # Check whether to optimization proposals
         if optimize:
@@ -514,6 +543,9 @@ class NeuroGraph(nx.Graph):
         xyz_1, xyz_2 = tuple(self.proposals[edge]["xyz"])
         return get_dist(xyz_1, xyz_2, metric=metric)
 
+    def node_xyz_dist(self, node, xyz):
+        return get_dist(xyz, self.nodes[node]["xyz"])
+        
     def get_projection(self, xyz):
         _, idx = self.kdtree.query(xyz, k=1)
         proj_xyz = tuple(self.kdtree.data[idx])
