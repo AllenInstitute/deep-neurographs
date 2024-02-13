@@ -215,13 +215,13 @@ def read_xyz(xyz, offset=[0, 0, 0]):
     return tuple([float(xyz[i]) + offset[i] for i in range(3)])
 
 
-def write(path, contents):
+def write(path, contents, color=None):
     if type(contents) is list:
-        write_list(path, contents)
+        write_list(path, contents, color=color)
     elif type(contents) is dict:
-        write_dict(path, contents)
+        write_dict(path, contents, color=color)
     elif type(contents) is nx.Graph:
-        write_graph(path, contents)
+        write_graph(path, contents, color=color)
     else:
         assert True, "Unable to write {} to swc".format(type(contents))
 
@@ -251,34 +251,20 @@ def write_list(path, entry_list, color=None):
             f.write("# id, type, z, y, x, r, pid")
         f.write("\n")
         for i, entry in enumerate(entry_list):
-            for x in entry:
-                f.write(str(x) + " ")
+            for item in entry:
+                f.write(str(item) + " ")
             f.write("\n")
 
 
 def write_dict(path, swc_dict, color=None):
-    with open(path, "w") as f:
-        if color is not None:
-            f.write("# COLOR" + color)
-        else:
-            f.write("# id, type, x, y, z, r, pid")
-        f.write("\n")
-        shift = 1 if swc_dict["id"][0] == 0 else 0
-        first = True
-        for i in swc_dict["id"]:
-            f.write(str(i + shift) + " " + str(2) + " ")
-            for j in range(3):
-                f.write(str(swc_dict["xyz"][i][j]) + " ")
-            pid = -1 if first else swc_dict["pid"][i] + shift
-            f.write(str(swc_dict["radius"][i]) + " ")
-            f.write(str(pid) + " ")
-            f.write("\n")
-            first = False
+    graph, _ = to_graph(swc_dict, set_attrs=True)
+    return write_graph(path, graph, color=color)
 
 
-def write_graph(path, graph):
+def write_graph(path, graph, color=None):
     """
-    Makes a list of entries to be written in an swc file.
+    Makes a list of entries to be written in an swc file. This routine assumes
+    that "graph" has a single connected components.
 
     Parameters
     ----------
@@ -293,17 +279,27 @@ def write_graph(path, graph):
         List of swc file entries to be written.
 
     """
-    # loop through connected components
-
     reindex = dict()
-    for i, j in graph.edges:
+    for i, j in nx.dfs_edges(graph):
+        # Initialize entry list
         if len(reindex) < 1:
-            entry, reindex = make_entry(graph, i, -1, reindex)
+            r = set_radius(graph, i)
+            entry, reindex = make_entry(graph, i, -1, r, reindex)
             entry_list = [entry]
-        entry, reindex = make_entry(graph, j, reindex[i], reindex)
-        entry_list.append(entry)
-    return entry_list
 
+        # Add entry
+        r = set_radius(graph, j)
+        entry, reindex = make_entry(graph, j, reindex[i], r, reindex)
+        entry_list.append(entry)
+    write_list(path, entry_list)
+    print("finished")
+
+    
+def set_radius(graph, i):
+    try:
+        return graph[i]["radius"]
+    except:
+        return 2
 
 def make_entry(graph, i, parent, r, reindex):
     """
@@ -326,7 +322,7 @@ def make_entry(graph, i, parent, r, reindex):
     reindex[i] = len(reindex) + 1
     r = graph.nodes[i]["radius"]
     x, y, z = tuple(map(str, graph.nodes[i]["xyz"]))
-    return [x, y, z, r, parent], reindex
+    return [reindex[i], 2, x, y, z, r, parent], reindex
 
 
 # -- Conversions --
