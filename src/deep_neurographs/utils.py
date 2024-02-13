@@ -429,33 +429,6 @@ def write_txt(path, contents):
     f.close()
 
 
-# --- coordinate conversions ---
-def img_to_patch(xyz, patch_centroid, patch_dims):
-    half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
-    patch_coord = xyz - patch_centroid + half_patch_dims
-    return tuple(patch_coord.astype(int))
-
-
-def patch_to_img(xyz, patch_centroid, patch_dims):
-    half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
-    return np.round(xyz + patch_centroid - half_patch_dims).astype(int)
-
-
-def to_world(xyz, shift=[0, 0, 0]):
-    return tuple([xyz[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
-
-
-def to_img(xyz):
-    return (xyz / ANISOTROPY).astype(int)
-
-
-def apply_anisotropy(xyz, return_int=False):
-    if return_int:
-        return
-    else:
-        return xyz / ANISOTROPY
-
-
 # --- math utils ---
 def get_avg_std(data, weights=None):
     avg = np.average(data, weights=weights)
@@ -477,7 +450,7 @@ def get_img_bbox(origin, shape):
     """
     if origin and shape:
         origin = np.array(origin)
-        shape = np.array(shape)  # for i in [2, 1, 0]])
+        shape = np.array(shape)
         return {"min": origin, "max": origin + shape}
     else:
         return None

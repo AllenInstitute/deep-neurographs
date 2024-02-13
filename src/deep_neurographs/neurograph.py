@@ -169,7 +169,6 @@ class NeuroGraph(nx.Graph):
                         len1 = self.node_xyz_dist(leaf, xyz)
                         len2 = self.proposal_length(edge)
                         if len1 < len2:
-                            print("Removing proposal:", edge)
                             node1, node2 = tuple(edge)
                             self.nodes[node1]["proposals"].remove(node2)
                             self.nodes[node2]["proposals"].remove(node1)
