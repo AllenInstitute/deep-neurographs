@@ -46,7 +46,10 @@ def process_gsc_zip(bucket, zip_path, min_size=0):
         for thread in as_completed(threads):
             swc_id, result = thread.result()
             if len(result["id"]) > min_size:
-                swc_dicts[swc_id] = result
+                try:
+                    swc_dicts[swc_id] = result
+                except Exception as err:
+                    print(f"{swc_id} - {err}=, {type(err)}=")
     return swc_dicts
 
 
@@ -292,7 +295,6 @@ def write_graph(path, graph, color=None):
         entry, reindex = make_entry(graph, j, reindex[i], r, reindex)
         entry_list.append(entry)
     write_list(path, entry_list)
-    print("finished")
 
     
 def set_radius(graph, i):
@@ -300,6 +302,7 @@ def set_radius(graph, i):
         return graph[i]["radius"]
     except:
         return 2
+
 
 def make_entry(graph, i, parent, r, reindex):
     """
