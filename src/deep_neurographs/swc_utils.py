@@ -303,6 +303,7 @@ def set_radius(graph, i):
     except:
         return 2
 
+
 def make_entry(graph, i, parent, r, reindex):
     """
     Makes an entry to be written in an swc file.
