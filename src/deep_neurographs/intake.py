@@ -23,6 +23,7 @@ N_PROPOSALS_PER_LEAF = 3
 OPTIMIZE_PROPOSALS = False
 OPTIMIZATION_DEPTH = 15
 PRUNE = True
+PRUNE_CONNECTORS = False
 PRUNE_DEPTH = 16
 SEARCH_RADIUS = 10
 MIN_SIZE = 35
@@ -40,6 +41,7 @@ def build_neurograph_from_local(
     n_proposals_per_leaf=N_PROPOSALS_PER_LEAF,
     progress_bar=False,
     prune=PRUNE,
+    prune_connectors=PRUNE_CONNECTORS,
     prune_depth=PRUNE_DEPTH,
     optimize_proposals=OPTIMIZE_PROPOSALS,
     optimization_depth=OPTIMIZATION_DEPTH,
@@ -60,6 +62,7 @@ def build_neurograph_from_local(
         swc_paths=paths,
         progress_bar=progress_bar,
         prune=prune,
+        prune_connectors=prune_connectors,
         prune_depth=prune_depth,
         smooth=smooth,
     )
@@ -82,6 +85,7 @@ def build_neurograph_from_gcs_zips(
     min_size=MIN_SIZE,
     n_proposals_per_leaf=N_PROPOSALS_PER_LEAF,
     prune=PRUNE,
+    prune_connectors=PRUNE_CONNECTORS,
     prune_depth=PRUNE_DEPTH,
     optimize_proposals=OPTIMIZE_PROPOSALS,
     optimization_depth=OPTIMIZATION_DEPTH,
@@ -142,6 +146,7 @@ def build_neurograph_from_gcs_zips(
         swc_dicts,
         img_path=img_path,
         prune=prune,
+        prune_connectors=prune_connectors,
         prune_depth=prune_depth,
         smooth=smooth,
     )
@@ -209,6 +214,7 @@ def build_neurograph(
     swc_paths=None,
     progress_bar=True,
     prune=PRUNE,
+    prune_connectors=PRUNE_CONNECTORS,
     prune_depth=PRUNE_DEPTH,
     smooth=SMOOTH,
 ):
@@ -221,6 +227,7 @@ def build_neurograph(
         swc_dicts,
         progress_bar=progress_bar,
         prune=prune,
+        prune_connectors=prune_connectors,
         prune_depth=prune_depth,
         smooth=smooth,
     )
@@ -253,6 +260,7 @@ def get_irreducibles(
     swc_dicts,
     progress_bar=True,
     prune=PRUNE,
+    prune_connectors=PRUNE_CONNECTORS,
     prune_depth=PRUNE_DEPTH,
     smooth=SMOOTH,
 ):
@@ -260,7 +268,6 @@ def get_irreducibles(
     chunk_size = max(int(n_components * 0.02), 1)
     with ProcessPoolExecutor() as executor:
         # Assign Processes
-        i = 0
         processes = [None] * n_components
         while swc_dicts:
             key, swc_dict = swc_dicts.popitem()
@@ -269,10 +276,10 @@ def get_irreducibles(
                 swc_dict,
                 key,
                 prune,
+                prune_connectors,
                 prune_depth,
                 smooth,
             )
-            i += 1
 
         # Store results
         t0, t1 = utils.init_timers()

@@ -23,6 +23,30 @@ from deep_neurographs import utils
 
 # -- io utils --
 def process_local_paths(paths, min_size, img_bbox=None):
+    """
+    Iterates over a list of paths to swc files and calls a routine that builds
+    a dictionary where the keys are swc attributes (i.e. id, xyz, radius, pid)
+    and values are the corresponding contents within the swc file.
+
+    Parameters
+    ----------
+    paths : list[str]
+        List of paths to swc files to be parsed.
+    min_size : int
+        Threshold on the number of nodes contained in an swc file. Only swc
+        files with more than "min_size" nodes are stored in "swc_dicts".
+    img_bbox : dict, optional
+        Dictionary with the keys "min" and "max" which specify a bounding box
+        in the image. Only swc files with at least one node contained in
+        "img_bbox" are stored in "swc_dicts". The default is None.
+
+    Returns
+    -------
+    swc_dicts : dict
+        Dictionary where the keys are swc attributes (i.e. id, xyz, radius,
+        pid) and values are the corresponding contents within the swc file.
+
+    """
     swc_dicts = dict()
     for path in paths:
         swc_id, swc_dict = parse_local_swc(
@@ -62,7 +86,9 @@ def parse_local_swc(path, img_bbox=None, min_size=0):
         swc_dict = fast_parse(contents)
     else:
         swc_dict = {"id": [-1]}
-    return utils.get_swc_id(path), swc_dict
+    swc_id = utils.get_swc_id(path)
+    swc_dict[swc_id] = swc_id
+    return swc_id, swc_dict
 
 
 def parse_gcs_zip(zip_file, path, min_size=0):
@@ -89,8 +115,8 @@ def parse(contents, img_bbox):
     ...
 
     """
-    contents, offset = get_contents(contents)
     min_id = np.inf
+    contents, offset = get_contents(contents)
     swc_dict = {"id": [], "radius": [], "pid": [], "xyz": []}
     for line in contents:
         parts = line.split()
@@ -296,12 +322,13 @@ def write_graph(path, graph, color=None):
         entry_list.append(entry)
     write_list(path, entry_list)
 
-    
+
 def set_radius(graph, i):
     try:
         return graph[i]["radius"]
     except:
         return 2
+
 
 def make_entry(graph, i, parent, r, reindex):
     """
@@ -353,32 +380,6 @@ def __add_attributes(swc_dict, graph):
 
 
 # -- miscellaneous --
-def smooth(swc_dict):
-    if len(swc_dict["xyz"]) > 10:
-        xyz = np.array(swc_dict["xyz"])
-        graph = to_graph(swc_dict)
-        leafs, junctions = gutils.get_irreducible_nodes(graph)
-        if len(junctions) == 0:
-            xyz = geometry.smooth_branch(xyz)
-        else:
-            idxs = []
-            root = None
-            for i, j in nx.dfs_edges(graph, source=leafs[0]):
-                # Check start of path is valid
-                if root is None:
-                    root = i
-                    idxs = [i]
-
-                # Check whether to end path
-                idxs.append(j)
-                if j in leafs + junctions:
-                    root = None
-                    if len(idxs) > 10:
-                        xyz = upd_edge(xyz, idxs)
-        swc_dict["xyz"] = [tuple(xyz_i) for xyz_i in xyz]
-    return swc_dict
-
-
 def upd_edge(xyz, idxs):
     idxs = np.array(idxs)
     xyz[idxs] = geometry.smooth_branch(xyz[idxs], s=10)

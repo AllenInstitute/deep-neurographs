@@ -69,6 +69,11 @@ def generate_features(
         vector and the numerical vector.
 
     """
+    # Initialize proposals
+    if proposals is None:
+        proposals = neurograph.get_proposals()
+
+    # Generate features
     features = {
         "skel": generate_skel_features(neurograph, proposals=proposals)
     }
@@ -115,7 +120,7 @@ def generate_img_chunks(
         Dictonary such that each pair is the edge id and image chunk.
 
     """
-    if neurograph.bbox:
+    if False: #neurograph.bbox:
         return generate_img_chunks_via_superchunk(
             neurograph, img_path, labels_path, proposals=proposals
         )
@@ -228,7 +233,7 @@ def get_img_chunks(img, labels, coord_0, coord_1, thread_id=None):
 
 
 def generate_img_profiles(neurograph, path, proposals=None):
-    if neurograph.bbox:
+    if False: #neurograph.bbox:
         return generate_img_profiles_via_superchunk(
             neurograph, path, proposals=proposals
         )
