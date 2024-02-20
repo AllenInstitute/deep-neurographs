@@ -322,7 +322,11 @@ def write_graph(path, graph, color=None):
         entry_list.append(entry)
     write_list(path, entry_list)
 
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 754df329a1f4edeeb692a4c21289dc6653e46249
 def set_radius(graph, i):
     try:
         return graph[i]["radius"]
