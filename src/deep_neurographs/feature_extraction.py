@@ -23,7 +23,6 @@ import numpy as np
 import tensorstore as ts
 
 from deep_neurographs import geometry
-from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 
 CHUNK_SIZE = [64, 64, 64]
@@ -74,15 +73,10 @@ def generate_features(
         proposals = neurograph.get_proposals()
 
     # Generate features
-    features = {
-        "skel": generate_skel_features(neurograph, proposals)
-    }
+    features = {"skel": generate_skel_features(neurograph, proposals)}
     if model_type in ["ConvNet", "MultiModalNet"]:
         features["img_chunks"], features["img_profile"] = generate_img_chunks(
-            neurograph,
-            proposals,
-            img_path,
-            labels_path,
+            neurograph, proposals, img_path, labels_path
         )
     if model_type in ["AdaBoost", "RandomForest", "FeedForwardNet"]:
         features["img_profile"] = generate_img_profiles(
@@ -171,7 +165,7 @@ def get_img_chunks(img, labels, coord_0, coord_1, thread_id=None):
 
 
 def generate_img_profiles(neurograph, proposals, path):
-    if False: #neurograph.bbox:
+    if False:  # neurograph.bbox:
         return generate_img_profiles_via_superchunk(
             neurograph, proposals, path
         )

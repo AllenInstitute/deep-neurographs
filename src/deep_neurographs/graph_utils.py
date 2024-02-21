@@ -32,11 +32,7 @@ from deep_neurographs.neurograph import NeuroGraph
 
 
 def get_irreducibles(
-    swc_dict,
-    prune=True,
-    prune_connectors=False,
-    depth=16,
-    smooth=True
+    swc_dict, prune=True, prune_connectors=False, depth=16, smooth=True
 ):
     """
     Gets irreducible components of the graph stored in "swc_dict" by building
@@ -120,7 +116,7 @@ def __get_irreducibles(graph, swc_dict, smooth):
         "leafs": leafs,
         "junctions": junctions,
         "edges": edges,
-        "swc_id": swc_id
+        "swc_id": swc_id,
     }
     return irreducibles
 
@@ -210,8 +206,8 @@ def inspect_branch(graph, leaf, depth):
 
 def prune_short_connectors(graph, connector_dist=8):
     """ "
-    Prunes shorts paths (i.e. connectors) between junctions nodes and the nbhd about the
-    junctions.
+    Prunes shorts paths (i.e. connectors) between junctions nodes and the nbhd
+    about the junctions.
 
     Parameters
     ----------
@@ -546,8 +542,7 @@ def creates_cycle(graph, edge):
         graph.remove_edges_from([edge])
         return False
 
-    
+
 def sub_neurograph(neurograph, nodes):
     sub_neurograph = NeuroGraph()
     subgraph = neurograph.subgraph(nodes)
-    

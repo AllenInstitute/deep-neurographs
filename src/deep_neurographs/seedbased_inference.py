@@ -9,12 +9,14 @@ inference.
 
 """
 
+from copy import deepcopy
+from random import sample
+
 import fastremap
 import networkx as nx
-from copy import deepcopy
-from deep_neurographs.neurograph import NeuroGraph
+
 from deep_neurographs import utils
-from random import sample
+from deep_neurographs.neurograph import NeuroGraph
 
 CHUNK_SHAPE = (512, 512, 512)
 
@@ -24,7 +26,7 @@ def build_from_soma(
 ):
     swc_ids = get_swc_ids(labels_path, chunk_origin, chunk_shape)
     seed_neurograph = build_seed_neurograph(neurograph, swc_ids)
-    
+
     # loop
     pass
 
@@ -70,11 +72,15 @@ def expand_boundary(neurograph, pred_neurograph, component):
             if swc_id not in pred_neurograph.swc_ids:
                 c = get_component(neurograph, j)
                 pred_neurograph.add_swc_id(swc_id)
-                pred_neurograph = ingest_subgraph(neurograph, pred_neurograph, c)
+                pred_neurograph = ingest_subgraph(
+                    neurograph, pred_neurograph, c
+                )
                 bdd.append(c)
 
-             # Add proposal to graph
-            pred_neurograph.proposals[edge] = deepcopy(neurograph.proposals[edge])
+            # Add proposal to graph
+            pred_neurograph.proposals[edge] = deepcopy(
+                neurograph.proposals[edge]
+            )
             pred_neurograph.nodes[i]["proposals"].add(j)
             pred_neurograph.nodes[j]["proposals"].add(i)
 

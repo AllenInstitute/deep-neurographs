@@ -136,7 +136,9 @@ def build_neurograph_from_gcs_zips(
     # Process swc files
     print("Process swc files...")
     total_runtime, t0 = utils.init_timers()
-    swc_dicts = download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy)
+    swc_dicts = download_gcs_zips(
+        bucket_name, cloud_path, min_size, anisotropy
+    )
     t, unit = utils.time_writer(time() - t0)
     print(f"\nModule Runtime: {round(t, 4)} {unit} \n")
 
