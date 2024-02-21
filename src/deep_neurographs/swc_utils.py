@@ -42,23 +42,24 @@ def process_local_paths(paths, min_size, img_bbox=None):
 
     Returns
     -------
-    swc_dicts : dict
-        Dictionary where the keys are swc attributes (i.e. id, xyz, radius,
-        pid) and values are the corresponding contents within the swc file.
+    swc_dicts : list
+        List of dictionaries where the keys are swc attributes (i.e. id, xyz,
+        radius, pid) and values are the corresponding contents within the swc
+        file.
 
     """
-    swc_dicts = dict()
+    swc_dicts = []
     for path in paths:
-        swc_id, swc_dict = parse_local_swc(
+        swc_dict = parse_local_swc(
             path, img_bbox=img_bbox, min_size=min_size
         )
         if len(swc_dict["id"]) > min_size:
-            swc_dicts[swc_id] = swc_dict
+            swc_dicts.append(swc_dict)
     return swc_dicts
 
 
 def process_gsc_zip(bucket, zip_path, min_size=0):
-    swc_dicts = dict()
+    swc_dicts = []
     zip_blob = bucket.blob(zip_path)
     zip_content = zip_blob.download_as_bytes()
     with ZipFile(BytesIO(zip_content)) as zip_file:
@@ -68,16 +69,14 @@ def process_gsc_zip(bucket, zip_path, min_size=0):
                 for path in utils.list_files_in_gcs_zip(zip_content)
             ]
         for thread in as_completed(threads):
-            swc_id, result = thread.result()
+            result = thread.result()
             if len(result["id"]) > min_size:
-                try:
-                    swc_dicts[swc_id] = result
-                except Exception as err:
-                    print(f"{swc_id} - {err}=, {type(err)}=")
+                swc_dicts.append(result)
     return swc_dicts
 
 
 def parse_local_swc(path, img_bbox=None, min_size=0):
+    # Parse contents
     contents = read_from_local(path)
     parse_bool = len(contents) > min_size
     if parse_bool and img_bbox:
@@ -86,16 +85,23 @@ def parse_local_swc(path, img_bbox=None, min_size=0):
         swc_dict = fast_parse(contents)
     else:
         swc_dict = {"id": [-1]}
+
+    # Store id
     swc_id = utils.get_swc_id(path)
-    swc_dict[swc_id] = swc_id
-    return swc_id, swc_dict
+    swc_dict["swc_id"] = swc_id
+    return swc_dict
 
 
 def parse_gcs_zip(zip_file, path, min_size=0):
+    # Parse contents
     contents = read_from_gcs_zip(zip_file, path)
     parse_bool = len(contents) > min_size
     swc_dict = fast_parse(contents) if parse_bool else {"id": [-1]}
-    return utils.get_swc_id(path), swc_dict
+
+    # Store id
+    swc_id = utils.get_swc_id(path)
+    swc_dict["swc_id"] = swc_id
+    return swc_dict
 
 
 def parse(contents, img_bbox):
@@ -322,11 +328,7 @@ def write_graph(path, graph, color=None):
         entry_list.append(entry)
     write_list(path, entry_list)
 
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 754df329a1f4edeeb692a4c21289dc6653e46249
 def set_radius(graph, i):
     try:
         return graph[i]["radius"]
