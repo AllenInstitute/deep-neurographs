@@ -91,7 +91,6 @@ class NeuroGraph(nx.Graph):
 
     def add_component(self, irreducibles):
         # Nodes
-        self.add_swc_id(swc_id)
         node_ids = dict()
         cur_id = len(self.nodes) + 1
         swc_id = irreducibles["swc_id"]
@@ -101,6 +100,7 @@ class NeuroGraph(nx.Graph):
         node_ids, cur_id = self.__add_nodes(
             irreducibles, "junctions", node_ids, cur_id, swc_id
         )
+        self.add_swc_id(swc_id)
 
         # Add edges
         for edge, values in irreducibles["edges"].items():
