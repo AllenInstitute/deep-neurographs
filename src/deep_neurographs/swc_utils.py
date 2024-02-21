@@ -58,13 +58,8 @@ def process_local_paths(paths, min_size, img_bbox=None):
     return swc_dicts
 
 
-<<<<<<< HEAD
 def process_gsc_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     swc_dicts = dict()
-=======
-def process_gsc_zip(bucket, zip_path, min_size=0):
-    swc_dicts = []
->>>>>>> main
     zip_blob = bucket.blob(zip_path)
     zip_content = zip_blob.download_as_bytes()
     with ZipFile(BytesIO(zip_content)) as zip_file:
@@ -97,7 +92,6 @@ def parse_local_swc(path, img_bbox=None, min_size=0):
     return swc_dict
 
 
-<<<<<<< HEAD
 def parse_gcs_zip(zip_file, path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     contents = read_from_gcs_zip(zip_file, path)
     parse_bool = len(contents) > min_size
@@ -106,18 +100,6 @@ def parse_gcs_zip(zip_file, path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     else:
         swc_dict = {"id": [-1]}
     return utils.get_swc_id(path), swc_dict
-=======
-def parse_gcs_zip(zip_file, path, min_size=0):
-    # Parse contents
-    contents = read_from_gcs_zip(zip_file, path)
-    parse_bool = len(contents) > min_size
-    swc_dict = fast_parse(contents) if parse_bool else {"id": [-1]}
-
-    # Store id
-    swc_id = utils.get_swc_id(path)
-    swc_dict["swc_id"] = swc_id
-    return swc_dict
->>>>>>> main
 
 
 def parse(contents, img_bbox, anisotropy=[1.0, 1.0, 1.0]):
