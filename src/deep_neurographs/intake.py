@@ -81,6 +81,7 @@ def build_neurograph_from_local(
 def build_neurograph_from_gcs_zips(
     bucket_name,
     cloud_path,
+    anisotropy=[1.0, 1.0, 1.0],
     img_path=None,
     min_size=MIN_SIZE,
     n_proposals_per_leaf=N_PROPOSALS_PER_LEAF,
@@ -135,7 +136,7 @@ def build_neurograph_from_gcs_zips(
     # Process swc files
     print("Process swc files...")
     total_runtime, t0 = utils.init_timers()
-    swc_dicts = download_gcs_zips(bucket_name, cloud_path, min_size)
+    swc_dicts = download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy)
     t, unit = utils.time_writer(time() - t0)
     print(f"\nModule Runtime: {round(t, 4)} {unit} \n")
 
@@ -160,7 +161,7 @@ def build_neurograph_from_gcs_zips(
 
 
 # -- Read swc files --
-def download_gcs_zips(bucket_name, cloud_path, min_size):
+def download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy):
     """
     Downloads swc files from zips stored in a GCS bucket.
 
@@ -190,7 +191,11 @@ def download_gcs_zips(bucket_name, cloud_path, min_size):
     t0, t1 = utils.init_timers()
     swc_dicts = dict()
     for i, path in enumerate(zip_paths):
-        swc_dicts.update(process_gsc_zip(bucket, path, min_size=min_size))
+        swc_dicts.update(
+            process_gsc_zip(
+                bucket, path, anisotropy=anisotropy, min_size=min_size
+            )
+        )
         if i > cnt * chunk_size:
             cnt, t1 = report_progress(
                 i, len(zip_paths), chunk_size, cnt, t0, t1

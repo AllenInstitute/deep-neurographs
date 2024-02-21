@@ -58,14 +58,19 @@ def process_local_paths(paths, min_size, img_bbox=None):
     return swc_dicts
 
 
+<<<<<<< HEAD
+def process_gsc_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
+    swc_dicts = dict()
+=======
 def process_gsc_zip(bucket, zip_path, min_size=0):
     swc_dicts = []
+>>>>>>> main
     zip_blob = bucket.blob(zip_path)
     zip_content = zip_blob.download_as_bytes()
     with ZipFile(BytesIO(zip_content)) as zip_file:
         with ThreadPoolExecutor() as executor:
             threads = [
-                executor.submit(parse_gcs_zip, zip_file, path, min_size)
+                executor.submit(parse_gcs_zip, zip_file, path, anisotropy, min_size)
                 for path in utils.list_files_in_gcs_zip(zip_content)
             ]
         for thread in as_completed(threads):
@@ -92,6 +97,16 @@ def parse_local_swc(path, img_bbox=None, min_size=0):
     return swc_dict
 
 
+<<<<<<< HEAD
+def parse_gcs_zip(zip_file, path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
+    contents = read_from_gcs_zip(zip_file, path)
+    parse_bool = len(contents) > min_size
+    if parse_bool:
+        swc_dict = fast_parse(contents, anisotropy=anisotropy)
+    else:
+        swc_dict = {"id": [-1]}
+    return utils.get_swc_id(path), swc_dict
+=======
 def parse_gcs_zip(zip_file, path, min_size=0):
     # Parse contents
     contents = read_from_gcs_zip(zip_file, path)
@@ -102,9 +117,10 @@ def parse_gcs_zip(zip_file, path, min_size=0):
     swc_id = utils.get_swc_id(path)
     swc_dict["swc_id"] = swc_id
     return swc_dict
+>>>>>>> main
 
 
-def parse(contents, img_bbox):
+def parse(contents, img_bbox, anisotropy=[1.0, 1.0, 1.0]):
     """
     Parses an swc file to extract the contents which is stored in a dict. Note
     that node_ids from swc are refactored to index from 0 to n-1 where n is
@@ -126,7 +142,7 @@ def parse(contents, img_bbox):
     swc_dict = {"id": [], "radius": [], "pid": [], "xyz": []}
     for line in contents:
         parts = line.split()
-        xyz = read_xyz(parts[2:5], offset=offset)
+        xyz = read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
         if img_bbox:
             img_coord = utils.to_img(np.array(xyz))
             if not utils.is_contained(img_bbox, img_coord, buffer=8):
@@ -148,7 +164,7 @@ def parse(contents, img_bbox):
     return swc_dict if len(swc_dict["id"]) > 1 else {"id": [-1]}
 
 
-def fast_parse(contents):
+def fast_parse(contents, anisotropy=[1.0, 1.0, 1.0]):
     """
     Parses an swc file to extract the contents which is stored in a dict. Note
     that node_ids from swc are refactored to index from 0 to n-1 where n is
@@ -178,7 +194,9 @@ def fast_parse(contents):
         swc_dict["id"][i] = parts[0]
         swc_dict["radius"][i] = parts[-2]
         swc_dict["pid"][i] = parts[-1]
-        swc_dict["xyz"][i] = read_xyz(parts[2:5], offset=offset)
+        swc_dict["xyz"][i] = read_xyz(
+            parts[2:5], anisotropy=anisotropy, offset=offset
+        )
 
     # Reindex from zero
     min_id = np.min(swc_dict["id"])
@@ -231,14 +249,14 @@ def read_from_gcs_zip(zip_file, path):
         return text_file.read().decode("utf-8").splitlines()
 
 
-def read_xyz(xyz, offset=[0, 0, 0]):
+def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
     """
-    Reads the (z,y,x) coordinates from an swc file, then reverses and scales
-    them.
+    Reads the (x,y,z)) coordinates from an swc file, then shift and scales
+    them if application.
 
     Parameters
     ----------
-    zyx : str
+    xyz : str
         (z,y,x) coordinates.
 
     Returns
@@ -247,7 +265,8 @@ def read_xyz(xyz, offset=[0, 0, 0]):
         The (x,y,z) coordinates from an swc file.
 
     """
-    return tuple([float(xyz[i]) + offset[i] for i in range(3)])
+    xyz = [float(xyz[i]) + offset[i] for i in range(3)]
+    return tuple([xyz[i] * anisotropy[i] for i in range(3)])
 
 
 def write(path, contents, color=None):

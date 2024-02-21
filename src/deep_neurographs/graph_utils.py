@@ -28,6 +28,7 @@ import networkx as nx
 import numpy as np
 
 from deep_neurographs import geometry, swc_utils, utils
+from deep_neurographs.neurograph import NeuroGraph
 
 
 def get_irreducibles(
@@ -544,3 +545,9 @@ def creates_cycle(graph, edge):
     except:
         graph.remove_edges_from([edge])
         return False
+
+    
+def sub_neurograph(neurograph, nodes):
+    sub_neurograph = NeuroGraph()
+    subgraph = neurograph.subgraph(nodes)
+    

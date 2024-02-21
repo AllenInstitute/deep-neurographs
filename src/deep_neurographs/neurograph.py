@@ -40,6 +40,7 @@ class NeuroGraph(nx.Graph):
         self.img_path = img_path
         self.label_mask = label_mask
         self.swc_paths = swc_paths
+        self.swc_ids = set()
 
         # Initialize node and edge sets
         self.leafs = set()
@@ -85,8 +86,12 @@ class NeuroGraph(nx.Graph):
         self.densegraph = DenseGraph(self.swc_paths)
 
     # --- Add nodes or edges ---
+    def add_swc_id(self, swc_id):
+        self.swc_ids.add(swc_id)
+
     def add_component(self, irreducibles):
         # Nodes
+        self.add_swc_id(swc_id)
         node_ids = dict()
         cur_id = len(self.nodes) + 1
         swc_id = irreducibles["swc_id"]
@@ -136,6 +141,7 @@ class NeuroGraph(nx.Graph):
         n_proposals_per_leaf=3,
         optimize=False,
         optimization_depth=10,
+        restrict=True,
     ):
         """
         Generates edges for the graph.
@@ -166,7 +172,7 @@ class NeuroGraph(nx.Graph):
 
                 # Check for existing connection btw components
                 swc_id = self.nodes[i]["swc_id"]
-                if swc_id in existing_connections.keys():
+                if swc_id in existing_connections.keys() and restrict:
                     if leaf_swc_id in existing_connections[swc_id].keys():
                         edge = existing_connections[swc_id][leaf_swc_id]
                         len1 = self.node_xyz_dist(leaf, xyz)
@@ -193,7 +199,7 @@ class NeuroGraph(nx.Graph):
                     node = self.split_edge((i, j), attrs, idxs[0])
 
                 # Add edge
-                edge = frozenset((leaf, node))
+                edge = frozenset({leaf, node})
                 self.proposals[edge] = {"xyz": np.array([xyz_leaf, xyz])}
                 self.nodes[node]["proposals"].add(leaf)
                 self.nodes[leaf]["proposals"].add(node)
@@ -373,7 +379,7 @@ class NeuroGraph(nx.Graph):
         return branches
 
     def orient_edge(self, edge, i, key="xyz"):
-        if (self.edges[edge]["xyz"][0, :] == self.nodes[i]["xyz"]).all():
+        if (self.edges[edge][key][0] == self.nodes[i][key]).all():
             return self.edges[edge][key]
         else:
             return np.flip(self.edges[edge][key], axis=0)
@@ -537,6 +543,9 @@ class NeuroGraph(nx.Graph):
 
     def get_proposals(self):
         return list(self.proposals.keys())
+
+    def remove_proposal(self, edge):
+        del self.proposals[edge]
 
     def proposal_xyz(self, edge):
         return tuple(self.proposals[edge]["xyz"])
