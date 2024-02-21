@@ -150,7 +150,7 @@ def plot(data, title):
     fig.show()
 
 
-def subplot(data_1, data_2, title):
+def subplot(data_1, data_2, title=""):
     fig = make_subplots(
         rows=1, cols=2, specs=[[{"type": "scene"}, {"type": "scene"}]]
     )

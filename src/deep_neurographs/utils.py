@@ -449,13 +449,6 @@ def to_img(xyz):
     return (xyz / ANISOTROPY).astype(int)
 
 
-def apply_anisotropy(xyz, return_int=False):
-    if return_int:
-        return
-    else:
-        return xyz / ANISOTROPY
-
-
 # --- math utils ---
 def get_avg_std(data, weights=None):
     avg = np.average(data, weights=weights)

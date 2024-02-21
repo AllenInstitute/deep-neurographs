@@ -246,7 +246,7 @@ def generate_img_profiles_via_multithreads(neurograph, path, proposals=None):
         # Assign threads
         threads = [None] * len(proposals)
         for i, edge in enumerate(proposals):
-            xyz_0, xyz_1 = gutils.get_edge_attr(neurograph, edge, "xyz")
+            xyz_0, xyz_1 = neurograph.proposal_xyz(edge)
             coord_0 = utils.to_img(xyz_0)
             coord_1 = utils.to_img(xyz_1)
             line = geometry.make_line(coord_0, coord_1, N_PROFILE_POINTS)
