@@ -15,7 +15,6 @@ import os
 import shutil
 from copy import deepcopy
 from io import BytesIO
-from skimage.color import label2rgb
 from time import time
 from zipfile import ZipFile
 
@@ -23,6 +22,7 @@ import numpy as np
 import psutil
 import tensorstore as ts
 import zarr
+from skimage.color import label2rgb
 
 ANISOTROPY = np.array([0.748, 0.748, 1.0])
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
@@ -304,13 +304,9 @@ def open_tensorstore(path, driver):
     return arr
 
 
-"""
-def read_img_chunk(img, xyz, shape):
-    start, end = get_start_end(xyz, shape, from_center=from_center)
-    return img[
-        start[2]: end[2], start[1]: end[1], start[0]: end[0]
-    ].transpose(2, 1, 0)
-"""
+def read_tensorstore(arr, xyz, shape, from_center=True):
+    chunk = get_chunk(arr, xyz, shape, from_center=from_center)
+    return chunk.read().result()
 
 
 def get_chunk(arr, xyz, shape, from_center=True):
@@ -318,11 +314,6 @@ def get_chunk(arr, xyz, shape, from_center=True):
     return deepcopy(
         arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
     )
-
-
-def read_tensorstore(arr, xyz, shape, from_center=True):
-    chunk = get_chunk(arr, xyz, shape, from_center=from_center)
-    return chunk.read().result()
 
 
 def get_start_end(xyz, shape, from_center=True):
@@ -470,7 +461,7 @@ def get_img_bbox(origin, shape):
     """
     if origin and shape:
         origin = np.array(origin)
-        shape = np.array(shape)  # for i in [2, 1, 0]])
+        shape = np.array(shape)
         return {"min": origin, "max": origin + shape}
     else:
         return None

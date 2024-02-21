@@ -89,11 +89,12 @@ class NeuroGraph(nx.Graph):
     def add_swc_id(self, swc_id):
         self.swc_ids.add(swc_id)
 
-    def add_component(self, irreducibles, swc_id):
+    def add_component(self, irreducibles):
         # Nodes
         self.add_swc_id(swc_id)
         node_ids = dict()
         cur_id = len(self.nodes) + 1
+        swc_id = irreducibles["swc_id"]
         node_ids, cur_id = self.__add_nodes(
             irreducibles, "leafs", node_ids, cur_id, swc_id
         )
@@ -152,9 +153,11 @@ class NeuroGraph(nx.Graph):
         """
         self.init_kdtree()
         self.proposals = dict()
-        existing_connections = dict() # key: swc_id, values: {other swc_id: node}
+        existing_connections = (
+            dict()
+        )  # key: swc_id, values: {other swc_id: node}
         for leaf in self.leafs:
-            if not self.is_contained(leaf):
+            if not self.is_contained(leaf, buffer=36):
                 continue
 
             leaf_swc_id = self.nodes[leaf]["swc_id"]
@@ -166,7 +169,7 @@ class NeuroGraph(nx.Graph):
                 # Extract info on proposal
                 (i, j) = self.xyz_to_edge[xyz]
                 attrs = self.get_edge_data(i, j)
-                
+
                 # Check for existing connection btw components
                 swc_id = self.nodes[i]["swc_id"]
                 if swc_id in existing_connections.keys() and restrict:
@@ -185,10 +188,10 @@ class NeuroGraph(nx.Graph):
                 # Get connecting node
                 d1 = check_dists(xyz_leaf, xyz, self.nodes[i]["xyz"], radius)
                 d2 = check_dists(xyz_leaf, xyz, self.nodes[j]["xyz"], radius)
-                if d1 and self.is_contained(i):
+                if d1 and self.is_contained(i, buffer=36):
                     xyz = deepcopy(self.nodes[i]["xyz"])
                     node = i
-                elif d2 and self.is_contained(j):
+                elif d2 and self.is_contained(j, buffer=36):
                     xyz = deepcopy(self.nodes[j]["xyz"])
                     node = j
                 else:
@@ -539,7 +542,7 @@ class NeuroGraph(nx.Graph):
         return len(self.proposals)
 
     def get_proposals(self):
-        return self.proposals.keys()
+        return list(self.proposals.keys())
 
     def remove_proposal(self, edge):
         del self.proposals[edge]
@@ -553,7 +556,7 @@ class NeuroGraph(nx.Graph):
 
     def node_xyz_dist(self, node, xyz):
         return get_dist(xyz, self.nodes[node]["xyz"])
-        
+
     def get_projection(self, xyz):
         _, idx = self.kdtree.query(xyz, k=1)
         proj_xyz = tuple(self.kdtree.data[idx])

@@ -23,18 +23,48 @@ from deep_neurographs import utils
 
 # -- io utils --
 def process_local_paths(paths, min_size, img_bbox=None):
-    swc_dicts = dict()
+    """
+    Iterates over a list of paths to swc files and calls a routine that builds
+    a dictionary where the keys are swc attributes (i.e. id, xyz, radius, pid)
+    and values are the corresponding contents within the swc file.
+
+    Parameters
+    ----------
+    paths : list[str]
+        List of paths to swc files to be parsed.
+    min_size : int
+        Threshold on the number of nodes contained in an swc file. Only swc
+        files with more than "min_size" nodes are stored in "swc_dicts".
+    img_bbox : dict, optional
+        Dictionary with the keys "min" and "max" which specify a bounding box
+        in the image. Only swc files with at least one node contained in
+        "img_bbox" are stored in "swc_dicts". The default is None.
+
+    Returns
+    -------
+    swc_dicts : list
+        List of dictionaries where the keys are swc attributes (i.e. id, xyz,
+        radius, pid) and values are the corresponding contents within the swc
+        file.
+
+    """
+    swc_dicts = []
     for path in paths:
-        swc_id, swc_dict = parse_local_swc(
+        swc_dict = parse_local_swc(
             path, img_bbox=img_bbox, min_size=min_size
         )
         if len(swc_dict["id"]) > min_size:
-            swc_dicts[swc_id] = swc_dict
+            swc_dicts.append(swc_dict)
     return swc_dicts
 
 
+<<<<<<< HEAD
 def process_gsc_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     swc_dicts = dict()
+=======
+def process_gsc_zip(bucket, zip_path, min_size=0):
+    swc_dicts = []
+>>>>>>> main
     zip_blob = bucket.blob(zip_path)
     zip_content = zip_blob.download_as_bytes()
     with ZipFile(BytesIO(zip_content)) as zip_file:
@@ -44,13 +74,14 @@ def process_gsc_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
                 for path in utils.list_files_in_gcs_zip(zip_content)
             ]
         for thread in as_completed(threads):
-            swc_id, result = thread.result()
+            result = thread.result()
             if len(result["id"]) > min_size:
-                swc_dicts[swc_id] = result
+                swc_dicts.append(result)
     return swc_dicts
 
 
 def parse_local_swc(path, img_bbox=None, min_size=0):
+    # Parse contents
     contents = read_from_local(path)
     parse_bool = len(contents) > min_size
     if parse_bool and img_bbox:
@@ -59,9 +90,14 @@ def parse_local_swc(path, img_bbox=None, min_size=0):
         swc_dict = fast_parse(contents)
     else:
         swc_dict = {"id": [-1]}
-    return utils.get_swc_id(path), swc_dict
+
+    # Store id
+    swc_id = utils.get_swc_id(path)
+    swc_dict["swc_id"] = swc_id
+    return swc_dict
 
 
+<<<<<<< HEAD
 def parse_gcs_zip(zip_file, path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     contents = read_from_gcs_zip(zip_file, path)
     parse_bool = len(contents) > min_size
@@ -70,6 +106,18 @@ def parse_gcs_zip(zip_file, path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     else:
         swc_dict = {"id": [-1]}
     return utils.get_swc_id(path), swc_dict
+=======
+def parse_gcs_zip(zip_file, path, min_size=0):
+    # Parse contents
+    contents = read_from_gcs_zip(zip_file, path)
+    parse_bool = len(contents) > min_size
+    swc_dict = fast_parse(contents) if parse_bool else {"id": [-1]}
+
+    # Store id
+    swc_id = utils.get_swc_id(path)
+    swc_dict["swc_id"] = swc_id
+    return swc_dict
+>>>>>>> main
 
 
 def parse(contents, img_bbox, anisotropy=[1.0, 1.0, 1.0]):
@@ -89,8 +137,8 @@ def parse(contents, img_bbox, anisotropy=[1.0, 1.0, 1.0]):
     ...
 
     """
-    contents, offset = get_contents(contents)
     min_id = np.inf
+    contents, offset = get_contents(contents)
     swc_dict = {"id": [], "radius": [], "pid": [], "xyz": []}
     for line in contents:
         parts = line.split()
@@ -221,13 +269,13 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
     return tuple([xyz[i] * anisotropy[i] for i in range(3)])
 
 
-def write(path, contents):
+def write(path, contents, color=None):
     if type(contents) is list:
-        write_list(path, contents)
+        write_list(path, contents, color=color)
     elif type(contents) is dict:
-        write_dict(path, contents)
+        write_dict(path, contents, color=color)
     elif type(contents) is nx.Graph:
-        write_graph(path, contents)
+        write_graph(path, contents, color=color)
     else:
         assert True, "Unable to write {} to swc".format(type(contents))
 
@@ -257,34 +305,20 @@ def write_list(path, entry_list, color=None):
             f.write("# id, type, z, y, x, r, pid")
         f.write("\n")
         for i, entry in enumerate(entry_list):
-            for x in entry:
-                f.write(str(x) + " ")
+            for item in entry:
+                f.write(str(item) + " ")
             f.write("\n")
 
 
 def write_dict(path, swc_dict, color=None):
-    with open(path, "w") as f:
-        if color is not None:
-            f.write("# COLOR" + color)
-        else:
-            f.write("# id, type, x, y, z, r, pid")
-        f.write("\n")
-        shift = 1 if swc_dict["id"][0] == 0 else 0
-        first = True
-        for i in swc_dict["id"]:
-            f.write(str(i + shift) + " " + str(2) + " ")
-            for j in range(3):
-                f.write(str(swc_dict["xyz"][i][j]) + " ")
-            pid = -1 if first else swc_dict["pid"][i] + shift
-            f.write(str(swc_dict["radius"][i]) + " ")
-            f.write(str(pid) + " ")
-            f.write("\n")
-            first = False
+    graph, _ = to_graph(swc_dict, set_attrs=True)
+    return write_graph(path, graph, color=color)
 
 
-def write_graph(path, graph):
+def write_graph(path, graph, color=None):
     """
-    Makes a list of entries to be written in an swc file.
+    Makes a list of entries to be written in an swc file. This routine assumes
+    that "graph" has a single connected components.
 
     Parameters
     ----------
@@ -299,16 +333,26 @@ def write_graph(path, graph):
         List of swc file entries to be written.
 
     """
-    # loop through connected components
-
     reindex = dict()
-    for i, j in graph.edges:
+    for i, j in nx.dfs_edges(graph):
+        # Initialize entry list
         if len(reindex) < 1:
-            entry, reindex = make_entry(graph, i, -1, reindex)
+            r = set_radius(graph, i)
+            entry, reindex = make_entry(graph, i, -1, r, reindex)
             entry_list = [entry]
-        entry, reindex = make_entry(graph, j, reindex[i], reindex)
+
+        # Add entry
+        r = set_radius(graph, j)
+        entry, reindex = make_entry(graph, j, reindex[i], r, reindex)
         entry_list.append(entry)
-    return entry_list
+    write_list(path, entry_list)
+
+
+def set_radius(graph, i):
+    try:
+        return graph[i]["radius"]
+    except:
+        return 2
 
 
 def make_entry(graph, i, parent, r, reindex):
@@ -332,7 +376,7 @@ def make_entry(graph, i, parent, r, reindex):
     reindex[i] = len(reindex) + 1
     r = graph.nodes[i]["radius"]
     x, y, z = tuple(map(str, graph.nodes[i]["xyz"]))
-    return [x, y, z, r, parent], reindex
+    return [reindex[i], 2, x, y, z, r, parent], reindex
 
 
 # -- Conversions --
@@ -361,32 +405,6 @@ def __add_attributes(swc_dict, graph):
 
 
 # -- miscellaneous --
-def smooth(swc_dict):
-    if len(swc_dict["xyz"]) > 10:
-        xyz = np.array(swc_dict["xyz"])
-        graph = to_graph(swc_dict)
-        leafs, junctions = gutils.get_irreducible_nodes(graph)
-        if len(junctions) == 0:
-            xyz = geometry.smooth_branch(xyz)
-        else:
-            idxs = []
-            root = None
-            for i, j in nx.dfs_edges(graph, source=leafs[0]):
-                # Check start of path is valid
-                if root is None:
-                    root = i
-                    idxs = [i]
-
-                # Check whether to end path
-                idxs.append(j)
-                if j in leafs + junctions:
-                    root = None
-                    if len(idxs) > 10:
-                        xyz = upd_edge(xyz, idxs)
-        swc_dict["xyz"] = [tuple(xyz_i) for xyz_i in xyz]
-    return swc_dict
-
-
 def upd_edge(xyz, idxs):
     idxs = np.array(idxs)
     xyz[idxs] = geometry.smooth_branch(xyz[idxs], s=10)

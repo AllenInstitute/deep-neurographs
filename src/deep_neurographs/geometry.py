@@ -30,7 +30,7 @@ def get_directional(
         elif branch.shape[0] <= d:
             xyz = deepcopy(branch)
         else:
-            xyz = deepcopy(branch[d: window + d, :])
+            xyz = deepcopy(branch[d : window + d, :])
         directionals.append(compute_tangent(xyz))
 
     # Determine best
@@ -114,8 +114,8 @@ def smooth_branch(xyz, s=None):
     xyz : numpy.ndarray
         Array of xyz coordinates to be smoothed.
     s : float
-        A parameter that controls the smoothness of the spline, where 
-        "s" \in [0, N]. Note that the larger "s", the smoother the spline.
+        A parameter that controls the smoothness of the spline, where
+        "s" in [0, N]. Note that the larger "s", the smoother the spline.
 
     Returns
     -------

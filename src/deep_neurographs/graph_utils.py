@@ -15,10 +15,10 @@ Leaf: a node with degree 1.
 
 Junction: a node with degree > 2.
 
-Irreducibles: the irreducibles of a graph G=(V,E) consists of 1) leaf nodes
-V_l, 2) junction nodes, and 3) edges connecting (1) and (2).
+Irreducibles: the irreducibles of a graph consists of 1) leaf nodes,
+2) junction nodes, and 3) edges connecting (1) and (2).
 
-Branch: the sequence of nodes between two irreducible nodes.
+Branch: a sequence of nodes between two irreducible nodes.
 
 """
 
@@ -31,19 +31,23 @@ from deep_neurographs import geometry, swc_utils, utils
 from deep_neurographs.neurograph import NeuroGraph
 
 
-def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
+def get_irreducibles(
+    swc_dict,
+    prune=True,
+    prune_connectors=False,
+    depth=16,
+    smooth=True
+):
     """
-    Gets irreducible components of the graph stored in "swc_dict". The
-    irreducible components consist of the leaf and junction nodes along with
-    the edges among this set of nodes.
+    Gets irreducible components of the graph stored in "swc_dict" by building
+    the graph store in the swc_dict and parsing it. In addition, this function
+    also calls routines prunes spurious branches and short connecting branches
+    (i.e. possible merge mistakes).
 
     Parameters
     ----------
     swc_dict : dict
         Contents of an swc file.
-    swc_id : str, optional
-        Filename of swc which is used to run this routine with
-        multiprocessing. The default is None.
     prune : bool, optional
         Indication of whether to prune short branches. The default is True.
     depth : int, optional
@@ -60,22 +64,35 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
         all irreducibles from the graph of that type.
 
     """
-    # Build dense graph
+    # Prune short branches and connectors
     swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
-    dense_graph = swc_utils.to_graph(swc_dict)
+    graph, _ = swc_utils.to_graph(swc_dict, set_attrs=True)
     if prune:
-        dense_graph = prune_short_branches(dense_graph, depth)
+        graph = prune_short_branches(graph, depth)
+    if prune_connectors:
+        graph, connector_centroids = prune_short_connectors(graph, depth)
 
+    # Extract irreducibles
+    irreducibles = []
+    for node_subset in nx.connected_components(graph):
+        subgraph = graph.subgraph(node_subset)
+        irreducibles_i = __get_irreducibles(subgraph, swc_dict, smooth)
+        if irreducibles_i:
+            irreducibles.append(irreducibles_i)
+    return irreducibles
+
+
+def __get_irreducibles(graph, swc_dict, smooth):
     # Extract nodes
-    leafs, junctions = get_irreducible_nodes(dense_graph)
+    leafs, junctions = get_irreducible_nodes(graph)
     if len(leafs) == 0:
-        return False, None
+        return False
 
     # Extract edges
     edges = dict()
     nbs = dict()
     root = None
-    for (i, j) in nx.dfs_edges(dense_graph, source=sample(leafs, 1)[0]):
+    for (i, j) in nx.dfs_edges(graph, source=sample(leafs, 1)[0]):
         # Check if start of path is valid
         if root is None:
             root = i
@@ -96,10 +113,16 @@ def get_irreducibles(swc_dict, swc_id=None, prune=True, depth=16, smooth=True):
             root = None
 
     # Output
+    swc_id = swc_dict["swc_id"]
     leafs = set_node_attrs(swc_dict, leafs)
     junctions = set_node_attrs(swc_dict, junctions)
-    irreducibles = {"leafs": leafs, "junctions": junctions, "edges": edges}
-    return swc_id, irreducibles
+    irreducibles = {
+        "leafs": leafs,
+        "junctions": junctions,
+        "edges": edges,
+        "swc_id": swc_id
+    }
+    return irreducibles
 
 
 def get_irreducible_nodes(graph):
@@ -129,6 +152,7 @@ def get_irreducible_nodes(graph):
     return leafs, junctions
 
 
+# --- edit graph ---
 def prune_short_branches(graph, depth):
     """
     Prunes all short branches from "graph". A short branch is a path between a
@@ -182,6 +206,53 @@ def inspect_branch(graph, leaf, depth):
         elif graph.degree(j) == 2:
             path.append(j)
     return []
+
+
+def prune_short_connectors(graph, connector_dist=8):
+    """ "
+    Prunes shorts paths (i.e. connectors) between junctions nodes and the nbhd about the
+    junctions.
+
+    Parameters
+    ----------
+    graph : netowrkx.graph
+        Graph to be inspected.
+    connector_dist : int
+        Upper bound on the distance that defines a connector path to be pruned.
+
+    Returns
+    -------
+    graph : list[tuple]
+        Graph with connectors pruned
+    pruned_centroids : list[np.ndarray]
+        List of xyz coordinates of centroids of connectors
+
+    """
+    junctions = [j for j in graph.nodes if graph.degree[j] > 2]
+    pruned_centroids = []
+    pruned_nodes = set()
+    while len(junctions):
+        # Search nbhd
+        j = junctions.pop()
+        junction_nbs = []
+        for _, i in nx.dfs_edges(graph, source=j, depth_limit=connector_dist):
+            if graph.degree[i] > 2 and i != j:
+                junction_nbs.append(i)
+
+        # Store nodes to be pruned
+        for nb in junction_nbs:
+            connector = list(nx.shortest_path(graph, source=j, target=nb))
+            nbhd = set(nx.dfs_tree(graph, source=nb, depth_limit=5))
+            centroid = connector[len(connector) // 2]
+            pruned_nodes.update(nbhd.union(set(connector)))
+            pruned_centroids.append(graph.nodes[centroid]["xyz"])
+
+        if len(junction_nbs) > 0:
+            nbhd = set(nx.dfs_tree(graph, source=j, depth_limit=8))
+            pruned_nodes.update(nbhd)
+
+    graph.remove_nodes_from(list(pruned_nodes))
+    return graph, pruned_centroids
 
 
 def get_leafs(graph):

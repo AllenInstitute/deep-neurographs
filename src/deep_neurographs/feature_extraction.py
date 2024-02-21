@@ -69,28 +69,30 @@ def generate_features(
         vector and the numerical vector.
 
     """
+    # Initialize proposals
+    if proposals is None:
+        proposals = neurograph.get_proposals()
+
+    # Generate features
     features = {
-        "skel": generate_skel_features(neurograph, proposals=proposals)
+        "skel": generate_skel_features(neurograph, proposals)
     }
     if model_type in ["ConvNet", "MultiModalNet"]:
         features["img_chunks"], features["img_profile"] = generate_img_chunks(
             neurograph,
+            proposals,
             img_path,
             labels_path,
-            model_type=model_type,
-            proposals=proposals,
         )
     if model_type in ["AdaBoost", "RandomForest", "FeedForwardNet"]:
         features["img_profile"] = generate_img_profiles(
-            neurograph, img_path, proposals=proposals
+            neurograph, proposals, img_path
         )
     return features
 
 
 # -- Edge feature extraction --
-def generate_img_chunks(
-    neurograph, img_path, labels_path, model_type=None, proposals=None
-):
+def generate_img_chunks(neurograph, proposals, img_path, labels_path):
     """
     Generates an image chunk for each edge proposal such that the centroid of
     the image chunk is the midpoint of the edge proposal. Image chunks contain
@@ -115,65 +117,6 @@ def generate_img_chunks(
         Dictonary such that each pair is the edge id and image chunk.
 
     """
-    if neurograph.bbox:
-        return generate_img_chunks_via_superchunk(
-            neurograph, img_path, labels_path, proposals=proposals
-        )
-    else:
-        return generate_img_chunks_via_multithreads(
-            neurograph, img_path, labels_path, proposals=proposals
-        )
-
-
-def generate_img_chunks_via_superchunk(
-    neurograph, img_path, labels_path, proposals=None
-):
-    """
-    Generates an image chunk for each edge proposal such that the centroid of
-    the image chunk is the midpoint of the edge proposal. Image chunks contain
-    two channels: raw image and predicted segmentation.
-
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        NeuroGraph generated from a directory of swcs generated from a
-        predicted segmentation.
-    img_path : str
-        Path to raw image.
-    labels_path : str
-        Path to predicted segmentation.
-    proposals : list[frozenset], optional
-        List of edge proposals for which features will be generated. The
-        default is None.
-
-    Returns
-    -------
-    features : dict
-        Dictonary such that each pair is the edge id and image chunk.
-
-    """
-    chunk_features = dict()
-    profile_features = dict()
-    img, labels = utils.get_superchunks(
-        img_path,
-        labels_path,
-        neurograph.origin,
-        neurograph.shape,
-        from_center=False,
-    )
-    for edge in neurograph.proposals:
-        xyz_0, xyz_1 = neurograph.proposal_xyz(edge)
-        coord_0 = utils.to_img(xyz_0) - neurograph.origin
-        coord_1 = utils.to_img(xyz_1) - neurograph.origin
-        chunks, profile = get_img_chunks(img, labels, coord_0, coord_1)
-        chunk_features[edge] = chunks
-        profile_features[edge] = profile
-    return chunk_features, profile_features
-
-
-def generate_img_chunks_via_multithreads(
-    neurograph, img_path, labels_path, proposals=None
-):
     driver = "n5" if ".n5" in img_path else "zarr"
     img = utils.open_tensorstore(img_path, driver)
     labels = utils.open_tensorstore(labels_path, "neuroglancer_precomputed")
@@ -227,18 +170,18 @@ def get_img_chunks(img, labels, coord_0, coord_1, thread_id=None):
         return chunk, profile
 
 
-def generate_img_profiles(neurograph, path, proposals=None):
-    if neurograph.bbox:
+def generate_img_profiles(neurograph, proposals, path):
+    if False: #neurograph.bbox:
         return generate_img_profiles_via_superchunk(
-            neurograph, path, proposals=proposals
+            neurograph, proposals, path
         )
     else:
         return generate_img_profiles_via_multithreads(
-            neurograph, path, proposals=proposals
+            neurograph, proposals, path
         )
 
 
-def generate_img_profiles_via_multithreads(neurograph, path, proposals=None):
+def generate_img_profiles_via_multithreads(neurograph, proposals, path):
     profile_features = dict()
     driver = "n5" if ".n5" in path else "zarr"
     img = utils.open_tensorstore(path, driver)
@@ -259,7 +202,7 @@ def generate_img_profiles_via_multithreads(neurograph, path, proposals=None):
     return profile_features
 
 
-def generate_img_profiles_via_superchunk(neurograph, path, proposals=None):
+def generate_img_profiles_via_superchunk(neurograph, proposals, path):
     """
     Generates an image intensity profile along each edge proposal by reading
     a single superchunk from cloud that contains all proposals.
@@ -297,9 +240,9 @@ def generate_img_profiles_via_superchunk(neurograph, path, proposals=None):
     return features
 
 
-def generate_skel_features(neurograph, proposals=None):
+def generate_skel_features(neurograph, proposals):
     features = dict()
-    for edge in neurograph.proposals:
+    for edge in proposals:
         i, j = tuple(edge)
         features[edge] = np.concatenate(
             (

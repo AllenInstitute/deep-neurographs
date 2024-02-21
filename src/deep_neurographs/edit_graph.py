@@ -18,7 +18,7 @@ def prune_spurious_paths(graph, min_branch_length=16):
     graph : networkx.graph
         Graph to be pruned.
     min_branch_length : int, optional
-        Upper bound on short branch length to be pruned. The default is 10.
+        Upper bound on short branch length to be pruned. The default is 16.
 
     Returns
     -------
@@ -49,86 +49,53 @@ def prune_spurious_paths(graph, min_branch_length=16):
     return graph
 
 
-def detect_short_connectors(graph, min_connector_length):
+def prune_short_connectors(graph, connector_dist=8):
     """ "
-    Detects shorts paths between branches (i.e. paths that connect branches).
+    Prunes shorts paths (i.e. connectors) between junctions nodes and the nbhd about the
+    junctions.
 
     Parameters
     ----------
     graph : netowrkx.graph
         Graph to be inspected.
-    min_connector_length : int
-        Upper bound on short paths that connect branches.
+    connector_dist : int
+        Upper bound on the distance that defines a connector path to be pruned.
 
     Returns
     -------
-    remove_edges : list[tuple]
-        List of edges to be removed.
-    remove_nodes : list[int]
-        List of nodes to be removed.
+    graph : list[tuple]
+        Graph with connectors pruned
+    pruned_centroids : list[np.ndarray]
+        List of xyz coordinates of centroids of connectors
 
     """
-    leaf_nodes = [i for i in graph.nodes if graph.degree[i] == 1]
-    dfs_edges = list(nx.dfs_edges(graph, leaf_nodes[0]))
-    remove_nodes = []
-    remove_edges = []
-    flag_junction = False
-    path_length = 0
-    for (i, j) in dfs_edges:
-        # Check for junction
-        if graph.degree[i] > 2:
-            flag_junction = True
-            path_length = 1
-            cur_branch = [(i, j)]
-        elif flag_junction:
-            path_length += 1
-            cur_branch.append((i, j))
+    junctions = [j for j in graph.nodes if graph.degree[j] > 2]
+    pruned_centroids = []
+    pruned_nodes = set()
+    while len(junctions):
+        # Search nbhd
+        j = junctions.pop()
+        junction_nbs = []
+        for _, i in nx.dfs_edges(graph, source=j, depth_limit=connector_dist):
+            if graph.degree[i] > 2 and i != j:
+                junction_nbs.append(i)
 
-        # Check whether to reset
-        if graph.degree[j] == 1:
-            flag_junction = False
-            cur_branch = list()
-        elif graph.degree[j] > 2 and flag_junction:
-            if path_length < min_connector_length:
-                remove_edges.extend(cur_branch)
-                remove_nodes.extend(graph.neighbors(cur_branch[0][0]))
-                remove_nodes.extend(graph.neighbors(j))
-                cur_branch = list()
-    return remove_edges, remove_nodes
+        # Store nodes to be pruned
+        print("# junction nbs:", len(junction_nbs))
+        for nb in junction_nbs:
+            connector = list(nx.shortest_path(graph, source=j, target=nb))
+            nbhd = set(nx.dfs_tree(graph, source=nb, depth_limit=5))
+            centroid = connector[len(connector) // 2]
+            pruned_nodes.update(nbhd.union(set(connector)))
+            pruned_centroids.append(graph.nodes[centroid]["xyz"])
 
+        if len(junction_nbs) > 0:
+            nbhd = set(nx.dfs_tree(graph, source=j, depth_limit=8))
+            pruned_nodes.update(nbhd)
+        break
 
-def prune_short_connectors(list_of_graphs, min_connector_length=10):
-    """
-    Prunes short connecting paths on graph in "list_of_graphs".
-
-    Parameters
-    ----------
-    list_of_graphs : list[networkx.graph]
-        List of graphs such that short connecting paths will be pruned on
-        each graph.
-    min_connector_length : int, optional
-        Upper bound on short paths that connect branches. The default is 10.
-
-    Returns
-    -------
-    upd : list[networkx.graph]
-        List of graphs with short connecting paths pruned.
-
-    """
-    upd = []
-    for graph in list_of_graphs:
-        pruned_graph = prune_spurious_paths(graph)
-        if pruned_graph.number_of_nodes() > 3:
-            remove_edges, remove_nodes = detect_short_connectors(
-                pruned_graph, min_connector_length
-            )
-            graph.remove_edges_from(remove_edges)
-            graph.remove_nodes_from(remove_nodes)
-            for g in nx.connected_components(graph):
-                subgraph = graph.subgraph(g).copy()
-                if subgraph.number_of_nodes() > 10:
-                    upd.append(subgraph)
-    return upd
+    graph.remove_nodes_from(list(pruned_nodes))
+    return graph, pruned_centroids
 
 
 def break_crossovers(list_of_graphs, depth=10):
@@ -184,7 +151,7 @@ def detect_crossovers(graph, depth):
     """
     cnt = 0
     prune_nodes = []
-    junctions = [j for j in graph.nodes() if graph.degree(j) > 2]
+    junctions = [j for j in graph.nodes if graph.degree(j) > 2]
     for j in junctions:
         # Explore node
         upd = False
