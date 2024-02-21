@@ -64,10 +64,11 @@ class DenseGraph:
         self.graphs = dict()
         for path in swc_paths:
             # Construct Graph
-            swc_id, swc_dict = swc_utils.parse_local_swc(path)
+            swc_dict = swc_utils.parse_local_swc(path)
             graph, xyz_to_node = swc_utils.to_graph(swc_dict, set_attrs=True)
 
             # Store
+            swc_id = swc_dict["swc_id"]
             if type(swc_dict["xyz"]) == np.ndarray:
                 swc_dict["xyz"] = utils.numpy_to_hashable(swc_dict["xyz"])
             xyz_to_id = dict(zip_broadcast(swc_dict["xyz"], swc_id))

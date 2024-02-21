@@ -245,8 +245,8 @@ def build_neurograph(
     chunk_size = max(int(n_components * 0.05), 1)
     cnt, i = 1, 0
     while len(irreducibles):
-        key, irreducible_set = irreducibles.popitem()
-        neurograph.add_component(irreducible_set, key)
+        irreducible_set = irreducibles.pop()
+        neurograph.add_component(irreducible_set)
         if i > cnt * chunk_size and progress_bar:
             cnt, t1 = report_progress(i, n_components, chunk_size, cnt, t0, t1)
         i += 1
@@ -269,29 +269,29 @@ def get_irreducibles(
     with ProcessPoolExecutor() as executor:
         # Assign Processes
         processes = [None] * n_components
+        i = 0
         while swc_dicts:
-            key, swc_dict = swc_dicts.popitem()
+            swc_dict = swc_dicts.pop()
             processes[i] = executor.submit(
                 gutils.get_irreducibles,
                 swc_dict,
-                key,
                 prune,
                 prune_connectors,
                 prune_depth,
                 smooth,
             )
+            i += 1
 
         # Store results
         t0, t1 = utils.init_timers()
-        irreducibles = dict()
+        irreducibles = []
         n_nodes, n_edges = 0, 0
         progress_cnt = 1
         for i, process in enumerate(as_completed(processes)):
-            process_id, result = process.result()
-            if process_id:
-                irreducibles[process_id] = result
-                n_nodes += len(result["leafs"]) + len(result["junctions"])
-                n_edges += len(result["edges"])
+            result = process.result()
+            irreducibles.extend(result)
+            n_nodes += count_nodes(result)
+            n_edges += count_edges(result)
             if i > progress_cnt * chunk_size and progress_bar:
                 progress_cnt, t1 = report_progress(
                     i, n_components, chunk_size, progress_cnt, t0, t1
@@ -300,6 +300,21 @@ def get_irreducibles(
         t, unit = utils.time_writer(time() - t0)
         print("\n" + f"get_irreducibles(): {round(t, 4)} {unit}")
     return irreducibles, n_nodes, n_edges
+
+
+def count_nodes(irreducibles):
+    n_nodes = 0
+    for irreducibles_i in irreducibles:
+        n_nodes += len(irreducibles_i["leafs"])
+        n_nodes += len(irreducibles_i["junctions"])
+    return n_nodes
+
+
+def count_edges(irreducibles):
+    n_edges = 0
+    for irreducibles_i in irreducibles:
+        n_edges += len(irreducibles_i["edges"])
+    return n_edges
 
 
 # -- Utils --

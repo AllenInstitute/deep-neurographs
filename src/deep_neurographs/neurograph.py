@@ -85,10 +85,11 @@ class NeuroGraph(nx.Graph):
         self.densegraph = DenseGraph(self.swc_paths)
 
     # --- Add nodes or edges ---
-    def add_component(self, irreducibles, swc_id):
+    def add_component(self, irreducibles):
         # Nodes
         node_ids = dict()
         cur_id = len(self.nodes) + 1
+        swc_id = irreducibles["swc_id"]
         node_ids, cur_id = self.__add_nodes(
             irreducibles, "leafs", node_ids, cur_id, swc_id
         )
