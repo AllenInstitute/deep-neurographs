@@ -50,9 +50,7 @@ def process_local_paths(paths, min_size, img_bbox=None):
     """
     swc_dicts = []
     for path in paths:
-        swc_dict = parse_local_swc(
-            path, img_bbox=img_bbox, min_size=min_size
-        )
+        swc_dict = parse_local_swc(path, img_bbox=img_bbox, min_size=min_size)
         if len(swc_dict["id"]) > min_size:
             swc_dicts.append(swc_dict)
     return swc_dicts
@@ -65,7 +63,9 @@ def process_gsc_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     with ZipFile(BytesIO(zip_content)) as zip_file:
         with ThreadPoolExecutor() as executor:
             threads = [
-                executor.submit(parse_gcs_zip, zip_file, path, anisotropy, min_size)
+                executor.submit(
+                    parse_gcs_zip, zip_file, path, anisotropy, min_size
+                )
                 for path in utils.list_files_in_gcs_zip(zip_content)
             ]
         for thread in as_completed(threads):
