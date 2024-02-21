@@ -189,9 +189,9 @@ def download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy):
     # Parse
     cnt = 1
     t0, t1 = utils.init_timers()
-    swc_dicts = dict()
+    swc_dicts = []
     for i, path in enumerate(zip_paths):
-        swc_dicts.update(
+        swc_dicts.extend(
             process_gsc_zip(
                 bucket, path, anisotropy=anisotropy, min_size=min_size
             )
