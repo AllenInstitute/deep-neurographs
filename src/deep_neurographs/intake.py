@@ -22,7 +22,7 @@ from deep_neurographs.swc_utils import process_gsc_zip, process_local_paths
 N_PROPOSALS_PER_LEAF = 3
 OPTIMIZE_PROPOSALS = False
 OPTIMIZATION_DEPTH = 15
-PRUNE = True
+PRUNE_SPURIOUS = True
 PRUNE_CONNECTORS = False
 PRUNE_DEPTH = 16
 SEARCH_RADIUS = 10
@@ -40,7 +40,7 @@ def build_neurograph_from_local(
     min_size=MIN_SIZE,
     n_proposals_per_leaf=N_PROPOSALS_PER_LEAF,
     progress_bar=False,
-    prune=PRUNE,
+    prune_spurious=PRUNE_SPURIOUS,
     prune_connectors=PRUNE_CONNECTORS,
     prune_depth=PRUNE_DEPTH,
     optimize_proposals=OPTIMIZE_PROPOSALS,
@@ -52,7 +52,9 @@ def build_neurograph_from_local(
     assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
     img_bbox = utils.get_img_bbox(img_patch_origin, img_patch_shape)
     paths = get_paths(swc_dir) if swc_dir else swc_paths
-    swc_dicts = process_local_paths(paths, min_size, img_bbox=img_bbox)
+    swc_dicts = process_local_paths(
+        paths, min_size=min_size, img_bbox=img_bbox
+    )
 
     # Build neurograph
     neurograph = build_neurograph(
@@ -61,7 +63,7 @@ def build_neurograph_from_local(
         img_path=img_path,
         swc_paths=paths,
         progress_bar=progress_bar,
-        prune=prune,
+        prune_spurious=prune_spurious,
         prune_connectors=prune_connectors,
         prune_depth=prune_depth,
         smooth=smooth,
@@ -85,7 +87,7 @@ def build_neurograph_from_gcs_zips(
     img_path=None,
     min_size=MIN_SIZE,
     n_proposals_per_leaf=N_PROPOSALS_PER_LEAF,
-    prune=PRUNE,
+    prune_spurious=PRUNE_SPURIOUS,
     prune_connectors=PRUNE_CONNECTORS,
     prune_depth=PRUNE_DEPTH,
     optimize_proposals=OPTIMIZE_PROPOSALS,
@@ -110,9 +112,9 @@ def build_neurograph_from_gcs_zips(
     n_proposals_per_leaf : int, optional
         Number of edge proposals generated from each leaf node in an swc file.
         The default is the global variable "N_PROPOSALS_PER_LEAF".
-    prune : bool, optional
-        Indication of whether to prune short branches. The default is the
-        global variable "PRUNE".
+    prune_spurious : bool, optional
+        Indication of whether to prune short branches (i.e spurious branches).
+        The default is the global variable "PRUNE".
     prune_depth : int, optional
         Branches less than "prune_depth" microns are pruned if "prune" is
         True. The default is the global variable "PRUNE_DEPTH".
@@ -148,7 +150,7 @@ def build_neurograph_from_gcs_zips(
     neurograph = build_neurograph(
         swc_dicts,
         img_path=img_path,
-        prune=prune,
+        prune_spurious=prune_spurious,
         prune_connectors=prune_connectors,
         prune_depth=prune_depth,
         smooth=smooth,
@@ -220,7 +222,7 @@ def build_neurograph(
     img_path=None,
     swc_paths=None,
     progress_bar=True,
-    prune=PRUNE,
+    prune_spurious=PRUNE_SPURIOUS,
     prune_connectors=PRUNE_CONNECTORS,
     prune_depth=PRUNE_DEPTH,
     smooth=SMOOTH,
@@ -233,7 +235,7 @@ def build_neurograph(
     irreducibles, n_nodes, n_edges = get_irreducibles(
         swc_dicts,
         progress_bar=progress_bar,
-        prune=prune,
+        prune_spurious=prune_spurious,
         prune_connectors=prune_connectors,
         prune_depth=prune_depth,
         smooth=smooth,
@@ -266,7 +268,7 @@ def build_neurograph(
 def get_irreducibles(
     swc_dicts,
     progress_bar=True,
-    prune=PRUNE,
+    prune_spurious=PRUNE_SPURIOUS,
     prune_connectors=PRUNE_CONNECTORS,
     prune_depth=PRUNE_DEPTH,
     smooth=SMOOTH,
@@ -282,8 +284,8 @@ def get_irreducibles(
             processes[i] = executor.submit(
                 gutils.get_irreducibles,
                 swc_dict,
-                prune,
                 prune_connectors,
+                prune_spurious,
                 prune_depth,
                 smooth,
             )
@@ -291,14 +293,16 @@ def get_irreducibles(
 
         # Store results
         t0, t1 = utils.init_timers()
-        irreducibles = []
         n_nodes, n_edges = 0, 0
         progress_cnt = 1
+        irreducibles = []
+        connector_centroids = []
         for i, process in enumerate(as_completed(processes)):
-            result = process.result()
-            irreducibles.extend(result)
-            n_nodes += count_nodes(result)
-            n_edges += count_edges(result)
+            irreducibles_i, connector_centroids_i = process.result()
+            irreducibles.extend(irreducibles_i)
+            connector_centroids.extend(connector_centroids_i)
+            n_nodes += count_nodes(irreducibles_i)
+            n_edges += count_edges(irreducibles_i)
             if i > progress_cnt * chunk_size and progress_bar:
                 progress_cnt, t1 = report_progress(
                     i, n_components, chunk_size, progress_cnt, t0, t1
