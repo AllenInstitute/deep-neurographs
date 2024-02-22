@@ -586,3 +586,4 @@ def get_leafs(graph):
         Leaf nodes "graph".
     """
     return [i for i in graph.nodes if graph.degree[i] == 1]
+
