@@ -32,20 +32,24 @@ from deep_neurographs.neurograph import NeuroGraph
 
 
 def get_irreducibles(
-    swc_dict, prune=True, prune_connectors=False, depth=16, smooth=True
+    swc_dict, prune_connectors=False, prune_spurious=True, depth=16, smooth=True
 ):
     """
     Gets irreducible components of the graph stored in "swc_dict" by building
     the graph store in the swc_dict and parsing it. In addition, this function
-    also calls routines prunes spurious branches and short connecting branches
-    (i.e. possible merge mistakes).
+    also calls routines prunes spurious branches and short paths connecting
+    branches (i.e. possible merge mistakes).
 
     Parameters
     ----------
     swc_dict : dict
         Contents of an swc file.
-    prune : bool, optional
-        Indication of whether to prune short branches. The default is True.
+    prune_connectors : bool, optional
+        Indication of whether to prune short paths connecting branches.
+        The default is False.
+    prune_spurious : bool, optional
+        Indication of whether to prune short branches (i.e. spurious branhces).
+        The default is True.
     depth : int, optional
         Path length that determines whether a branch is short. The default is
         16.
@@ -54,28 +58,69 @@ def get_irreducibles(
 
     Returns
     -------
-    dict
-        Irreducibles stored in a dictionary where key-values are type of
+    list
+        List of irreducibles stored in a dictionary where key-values are type of
         irreducible (i.e. leaf, junction, or edge) and corresponding set of
         all irreducibles from the graph of that type.
 
     """
-    # Prune short branches and connectors
+    # Build dense graph
     swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
     graph, _ = swc_utils.to_graph(swc_dict, set_attrs=True)
-    if prune:
-        graph = prune_short_branches(graph, depth)
-    if prune_connectors:
-        graph, connector_centroids = prune_short_connectors(graph, depth)
+    graph, connector_centroids = prune_branches(
+        graph,
+        depth=depth,
+        prune_connectors=prune_connectors,
+        prune_spurious=prune_spurious,
+    )
 
     # Extract irreducibles
     irreducibles = []
     for node_subset in nx.connected_components(graph):
-        subgraph = graph.subgraph(node_subset)
-        irreducibles_i = __get_irreducibles(subgraph, swc_dict, smooth)
-        if irreducibles_i:
-            irreducibles.append(irreducibles_i)
-    return irreducibles
+        if len(node_subset) > depth:
+            subgraph = graph.subgraph(node_subset)
+            irreducibles_i = __get_irreducibles(subgraph, swc_dict, smooth)
+            if irreducibles_i:
+                irreducibles.append(irreducibles_i)
+
+    return irreducibles, connector_centroids
+
+
+def prune_branches(
+    graph, depth=16, prune_connectors=False, prune_spurious=True
+):
+    """
+    Prunes spurious branches and short paths connecting branches
+    (i.e. possible merge mistakes).
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be pruned.
+    prune_connectors : bool, optional
+        Indication of whether to prune short paths connecting branches.
+        The default is False.
+    prune_spurious : bool, optional
+        Indication of whether to prune short branches (i.e. spurious
+        branches). The default is True
+
+    Returns
+    -------
+    graph : networkx.Graph
+        Pruned graph.
+    connector_centroids : list[numpy.ndarray]
+        List of xyz coordinates of the centerpoint of the connector path.
+
+    """
+    # Prune spurious branches
+    if prune_spurious or prune_connectors:
+        graph = prune_short_branches(graph, depth)
+
+    # Prune connectors
+    connector_centroids = []
+    if prune_connectors:
+        graph, connector_centroids = prune_short_connectors(graph, 2 * depth)
+    return graph, connector_centroids
 
 
 def __get_irreducibles(graph, swc_dict, smooth):
@@ -249,23 +294,6 @@ def prune_short_connectors(graph, connector_dist=8):
 
     graph.remove_nodes_from(list(pruned_nodes))
     return graph, pruned_centroids
-
-
-def get_leafs(graph):
-    """
-    Gets leaf nodes of "graph".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched
-
-    Returns
-    -------
-    list
-        Leaf nodes "graph".
-    """
-    return [i for i in graph.nodes if graph.degree[i] == 1]
 
 
 def __smooth_branch(swc_dict, attrs, edges, nbs, root, j):
@@ -543,6 +571,18 @@ def creates_cycle(graph, edge):
         return False
 
 
-def sub_neurograph(neurograph, nodes):
-    sub_neurograph = NeuroGraph()
-    subgraph = neurograph.subgraph(nodes)
+def get_leafs(graph):
+    """
+    Gets leaf nodes of "graph".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched
+
+    Returns
+    -------
+    list
+        Leaf nodes "graph".
+    """
+    return [i for i in graph.nodes if graph.degree[i] == 1]
