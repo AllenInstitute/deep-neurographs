@@ -473,7 +473,10 @@ def get_swc_id(path):
 
     """
     filename = path.split("/")[-1]
-    return filename.replace(".0.swc", "")
+    if ".0.swc" in filename:
+        return filename.replace(".0.swc", "")
+    else:
+        return filename.replace(".swc", "")
 
 
 def get_img_mip(img, axis=0):
