@@ -22,7 +22,7 @@ from deep_neurographs import utils
 
 
 # -- io utils --
-def process_local_paths(paths, min_size=0, img_bbox=None):
+def process_local_paths(paths, anisotropy=[1.0, 1.0, 1.0], min_size=0, img_bbox=None):
     """
     Iterates over a list of paths to swc files and calls a routine that builds
     a dictionary where the keys are swc attributes (i.e. id, xyz, radius, pid)
@@ -51,7 +51,9 @@ def process_local_paths(paths, min_size=0, img_bbox=None):
     """
     swc_dicts = []
     for path in paths:
-        swc_dict = parse_local_swc(path, img_bbox=img_bbox, min_size=min_size)
+        swc_dict = parse_local_swc(
+            path, anisotropy=anisotropy, img_bbox=img_bbox, min_size=min_size
+        )
         if len(swc_dict["id"]) > min_size:
             swc_dicts.append(swc_dict)
     return swc_dicts
@@ -76,14 +78,14 @@ def process_gsc_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     return swc_dicts
 
 
-def parse_local_swc(path, img_bbox=None, min_size=0):
+def parse_local_swc(path, anisotropy=[1.0, 1.0, 1.0], img_bbox=None, min_size=0):
     # Parse contents
     contents = read_from_local(path)
     parse_bool = len(contents) > min_size
     if parse_bool and img_bbox:
-        swc_dict = parse(contents, img_bbox)
+        swc_dict = parse(contents, img_bbox, anisotropy=anisotropy)
     elif parse_bool:
-        swc_dict = fast_parse(contents)
+        swc_dict = fast_parse(contents, anisotropy=anisotropy)
     else:
         swc_dict = {"id": [-1]}
 
