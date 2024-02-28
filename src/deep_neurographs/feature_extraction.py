@@ -75,6 +75,8 @@ def generate_features(
     # Generate features
     features = {"skel": generate_skel_features(neurograph, proposals)}
     if model_type in ["ConvNet", "MultiModalNet"]:
+        msg = "Must provide img_path and label_path for model_type!"
+        assert img_path and labels_path, msg
         features["img_chunks"], features["img_profile"] = generate_img_chunks(
             neurograph, proposals, img_path, labels_path
         )
@@ -122,7 +124,7 @@ def generate_img_chunks(neurograph, proposals, img_path, labels_path):
             coord_0 = utils.to_img(xyz_0)
             coord_1 = utils.to_img(xyz_1)
             threads[t] = executor.submit(
-                get_img_chunks, img, labels, coord_0, coord_1, edge
+                get_img_chunk, img, labels, coord_0, coord_1, edge
             )
 
         # Save result
@@ -135,7 +137,7 @@ def generate_img_chunks(neurograph, proposals, img_path, labels_path):
     return chunks, profiles
 
 
-def get_img_chunks(img, labels, coord_0, coord_1, thread_id=None):
+def get_img_chunk(img, labels, coord_0, coord_1, thread_id=None):
     # Extract chunks
     midpoint = geometry.get_midpoint(coord_0, coord_1).astype(int)
     if type(img) == ts.TensorStore:

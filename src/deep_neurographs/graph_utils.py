@@ -277,7 +277,7 @@ def prune_short_connectors(graph, connector_dist=8):
         j = junctions.pop()
         junction_nbs = []
         for _, i in nx.dfs_edges(graph, source=j, depth_limit=connector_dist):
-            if graph.degree[i] > 2 and i != j:
+            if i in junctions:
                 junction_nbs.append(i)
 
         # Store nodes to be pruned
@@ -285,6 +285,7 @@ def prune_short_connectors(graph, connector_dist=8):
             connector = list(nx.shortest_path(graph, source=j, target=nb))
             nbhd = set(nx.dfs_tree(graph, source=nb, depth_limit=5))
             centroid = connector[len(connector) // 2]
+
             pruned_nodes.update(nbhd.union(set(connector)))
             pruned_centroids.append(graph.nodes[centroid]["xyz"])
 

@@ -32,6 +32,7 @@ SMOOTH = True
 
 # --- Build graph wrappers ---
 def build_neurograph_from_local(
+    anisotropy=[1.0, 1.0, 1.0],
     swc_dir=None,
     swc_paths=None,
     img_patch_origin=None,
@@ -53,7 +54,7 @@ def build_neurograph_from_local(
     img_bbox = utils.get_img_bbox(img_patch_origin, img_patch_shape)
     paths = get_paths(swc_dir) if swc_dir else swc_paths
     swc_dicts = process_local_paths(
-        paths, min_size=min_size, img_bbox=img_bbox
+        paths, anisotropy=anisotropy, min_size=min_size, img_bbox=img_bbox
     )
 
     # Build neurograph
