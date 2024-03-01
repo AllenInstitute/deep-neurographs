@@ -367,6 +367,60 @@ def make_entry(graph, i, parent, r, reindex):
     return [reindex[i], 2, x, y, z, r, parent], reindex
 
 
+def save_edge(path, xyz_1, xyz_2, color=None, radius=8):
+    """
+    Writes an swc file.
+
+    Parameters
+    ----------
+    path : str
+        Path on local machine that swc file will be written to.
+    entry_list : list[list]
+        List of entries that will be written to an swc file.
+    color : str, optional
+        Color of nodes. The default is None.
+
+    Returns
+    -------
+    None.
+
+    """
+    with open(path, "w") as f:
+        # Preamble
+        if color is not None:
+            f.write("# COLOR " + color)
+        else:
+            f.write("# id, type, z, y, x, r, pid")
+        f.write("\n")
+
+        # Entries
+        f.write(make_edge_entry(1, -1, xyz_1, radius=radius))
+        f.write("\n")
+        f.write(make_edge_entry(2, 1, xyz_2, radius=radius))
+
+
+def make_edge_entry(node_id, parent_id, xyz, radius=8):
+    """
+    Makes an entry to be written in an swc file.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph that "i" and "parent" belong to.
+    i : int
+        Node that entry corresponds to.
+    parent : int
+         Parent of node "i".
+    anisotropy : list[float]
+        Image to real-world coordinates scaling factors for (x, y, z) that is
+        applied to swc files.
+
+    """
+    x, y, z = tuple(xyz)
+    entry = f"{node_id} 2 {x} {y} {z} {radius} {parent_id}"
+    return entry
+
+
 # -- Conversions --
 def to_graph(swc_dict, graph_id=None, set_attrs=False):
     graph = nx.Graph(graph_id=graph_id)

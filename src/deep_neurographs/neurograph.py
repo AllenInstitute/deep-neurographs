@@ -33,7 +33,7 @@ class NeuroGraph(nx.Graph):
     """
 
     def __init__(
-        self, img_bbox=None, swc_paths=None, img_path=None, label_mask=None
+        self, img_bbox=None, swc_paths=None, img_path=None, label_mask=None, train_model=False
     ):
         super(NeuroGraph, self).__init__()
         # Initialize paths
@@ -184,6 +184,12 @@ class NeuroGraph(nx.Graph):
                             del self.proposals[edge]
                         else:
                             continue
+
+                # Check if proposal is connected to double
+                leaf_component = gutils.get_component(self, leaf)
+                component = gutils.get_component(self, xyz)
+                if geometry_utils.is_double(leaf_component, component, leaf):
+                    continue
 
                 # Get connecting node
                 d1 = check_dists(xyz_leaf, xyz, self.nodes[i]["xyz"], radius)
@@ -405,9 +411,9 @@ class NeuroGraph(nx.Graph):
                     target_neurograph,
                     pred_graph,
                     edge,
-                    dist=7,
+                    dist=3,
                     ratio=0.7,
-                    exclude=10,
+                    exclude=2,
                 )
                 if add_bool:
                     pred_graph.add_edges_from([edge])
@@ -423,13 +429,17 @@ class NeuroGraph(nx.Graph):
                 target_neurograph,
                 pred_graph,
                 edge,
-                dist=8,
-                ratio=0.5,
-                exclude=10,
+                dist=5,
+                ratio=0.6,
+                exclude=2,
             )
             if add_bool:
                 pred_graph.add_edges_from([edge])
                 self.target_edges.add(edge)
+
+        # Report % positive examples
+        n_positives = len(self.target_edges)
+        print("% positive examples:", n_positives / len(self.proposals))
 
     def filter_infeasible(self, target_neurograph):
         proposals = list()

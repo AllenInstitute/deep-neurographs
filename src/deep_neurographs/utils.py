@@ -394,6 +394,11 @@ def read_txt(path):
         return f.read()
 
 
+def parse_metadata(path):
+    metadata = read_json(path)
+    return metadata["chunk_origin"], metadata["chunk_shape"]
+
+
 def write_json(path, contents):
     """
     Writes "contents" to a .json file at "path".

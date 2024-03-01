@@ -354,11 +354,13 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
             X = deepcopy(X_i)
             y = deepcopy(y_i)
             if model_type == "MultiModalNet":
+                print("if")
                 x = deepcopy(x_i)
         else:
             X = np.concatenate((X, X_i), axis=0)
             y = np.concatenate((y, y_i), axis=0)
             if model_type == "MultiModalNet":
+                print("else")
                 x = np.concatenate((x, x_i), axis=0)
 
         # Update dicts

@@ -38,14 +38,10 @@ def build_neurograph_from_local(
     img_patch_shape=None,
     img_path=None,
     min_size=MIN_SIZE,
-    n_proposals_per_leaf=N_PROPOSALS_PER_LEAF,
     progress_bar=False,
     prune_spurious=PRUNE_SPURIOUS,
     prune_connectors=PRUNE_CONNECTORS,
     prune_depth=PRUNE_DEPTH,
-    optimize_proposals=OPTIMIZE_PROPOSALS,
-    optimization_depth=OPTIMIZATION_DEPTH,
-    search_radius=SEARCH_RADIUS,
     smooth=SMOOTH,
 ):
     # Process swc files
@@ -69,14 +65,6 @@ def build_neurograph_from_local(
         smooth=smooth,
     )
 
-    # Generate proposals
-    if search_radius > 0:
-        neurograph.generate_proposals(
-            search_radius,
-            n_proposals_per_leaf=n_proposals_per_leaf,
-            optimize=optimize_proposals,
-            optimization_depth=optimization_depth,
-        )
     return neurograph
 
 
