@@ -28,11 +28,14 @@ import networkx as nx
 import numpy as np
 
 from deep_neurographs import geometry, swc_utils, utils
-from deep_neurographs.neurograph import NeuroGraph
 
 
 def get_irreducibles(
-    swc_dict, prune_connectors=False, prune_spurious=True, depth=16, smooth=True
+    swc_dict,
+    prune_connectors=False,
+    prune_spurious=True,
+    depth=16,
+    smooth=True,
 ):
     """
     Gets irreducible components of the graph stored in "swc_dict" by building
@@ -59,8 +62,8 @@ def get_irreducibles(
     Returns
     -------
     list
-        List of irreducibles stored in a dictionary where key-values are type of
-        irreducible (i.e. leaf, junction, or edge) and corresponding set of
+        List of irreducibles stored in a dictionary where key-values are type
+        of irreducible (i.e. leaf, junction, or edge) and corresponding set of
         all irreducibles from the graph of that type.
 
     """
@@ -588,3 +591,7 @@ def get_leafs(graph):
     """
     return [i for i in graph.nodes if graph.degree[i] == 1]
 
+
+def sample_singleton(graph):
+    nodes = list(graph.nodes)
+    return sample(nodes, 1)[0]

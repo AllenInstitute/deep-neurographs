@@ -17,12 +17,13 @@ import networkx as nx
 import numpy as np
 
 from deep_neurographs import geometry
-from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 
 
 # -- io utils --
-def process_local_paths(paths, anisotropy=[1.0, 1.0, 1.0], min_size=0, img_bbox=None):
+def process_local_paths(
+    paths, anisotropy=[1.0, 1.0, 1.0], min_size=0, img_bbox=None
+):
     """
     Iterates over a list of paths to swc files and calls a routine that builds
     a dictionary where the keys are swc attributes (i.e. id, xyz, radius, pid)
@@ -78,7 +79,9 @@ def process_gsc_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     return swc_dicts
 
 
-def parse_local_swc(path, anisotropy=[1.0, 1.0, 1.0], img_bbox=None, min_size=0):
+def parse_local_swc(
+    path, anisotropy=[1.0, 1.0, 1.0], img_bbox=None, min_size=0
+):
     # Parse contents
     contents = read_from_local(path)
     parse_bool = len(contents) > min_size

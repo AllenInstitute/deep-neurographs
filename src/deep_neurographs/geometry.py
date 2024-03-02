@@ -6,7 +6,6 @@ Created on Sat Nov 15 9:00:00 2023
 
 """
 
-import heapq
 from copy import deepcopy
 
 import numpy as np
