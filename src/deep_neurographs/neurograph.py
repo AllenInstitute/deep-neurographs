@@ -21,6 +21,7 @@ from deep_neurographs import utils
 from deep_neurographs.densegraph import DenseGraph
 from deep_neurographs.geometry import check_dists
 from deep_neurographs.geometry import dist as get_dist
+from deep_neurographs.groundtruth_generation import init_targets
 
 SUPPORTED_LABEL_MASK_TYPES = [dict, np.array, ts.TensorStore]
 
@@ -33,7 +34,12 @@ class NeuroGraph(nx.Graph):
     """
 
     def __init__(
-        self, img_bbox=None, swc_paths=None, img_path=None, label_mask=None, train_model=False
+        self,
+        img_bbox=None,
+        swc_paths=None,
+        img_path=None,
+        label_mask=None,
+        train_model=False,
     ):
         super(NeuroGraph, self).__init__()
         # Initialize paths
@@ -83,7 +89,7 @@ class NeuroGraph(nx.Graph):
         return edges
 
     def init_densegraph(self):
-        self.densegraph = DenseGraph(self.swc_paths)
+        return DenseGraph(self.swc_paths)
 
     # --- Add nodes or edges ---
     def add_swc_id(self, swc_id):
@@ -134,7 +140,7 @@ class NeuroGraph(nx.Graph):
             cur_id += 1
         return node_ids, cur_id
 
-    # --- Proposal Generation ---
+    # --- Proposal and Ground Truth Generation ---
     def generate_proposals(
         self,
         radius,
@@ -186,10 +192,12 @@ class NeuroGraph(nx.Graph):
                             continue
 
                 # Check if proposal is connected to double
+                """
                 leaf_component = gutils.get_component(self, leaf)
                 component = gutils.get_component(self, xyz)
                 if geometry_utils.is_double(leaf_component, component, leaf):
                     continue
+                """
 
                 # Get connecting node
                 d1 = check_dists(xyz_leaf, xyz, self.nodes[i]["xyz"], radius)
@@ -252,7 +260,7 @@ class NeuroGraph(nx.Graph):
         best_xyz = dict()
         best_dist = dict()
         query_swc_id = self.nodes[query_id]["swc_id"]
-        for xyz in self._query_kdtree(query_xyz, radius):
+        for xyz in self.query_kdtree(query_xyz, radius):
             # Check whether xyz is contained
             if not self.is_contained(xyz, buffer=36):
                 continue
@@ -268,9 +276,11 @@ class NeuroGraph(nx.Graph):
                 elif d < best_dist[swc_id]:
                     best_xyz[swc_id] = tuple(xyz)
                     best_dist[swc_id] = d
-        return self._get_best_edges(best_dist, best_xyz, n_proposals_per_leaf)
+        return self.get_best_proposals(
+            best_dist, best_xyz, n_proposals_per_leaf
+        )
 
-    def _get_best_edges(self, dists, xyz, n_proposals_per_leaf):
+    def get_best_proposals(self, dists, xyz, n_proposals_per_leaf):
         """
         Gets the at most "n_proposals_per_leaf" nodes that are closest to
         "xyz".
@@ -332,41 +342,9 @@ class NeuroGraph(nx.Graph):
         for xyz in attrs["xyz"][idxs]:
             self.xyz_to_edge[tuple(xyz)] = edge
 
-    def init_kdtree(self):
-        """
-        Builds a KD-Tree from the (x,y,z) coordinates of the subnodes of
-        each connected component in the graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        if not self.kdtree:
-            self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
-
-    def _query_kdtree(self, query, d):
-        """
-        Parameters
-        ----------
-        query : int
-            Node id.
-        d : float
-            Distance from query that is searched.
-
-        Returns
-        -------
-        generator[tuple]
-            Generator that generates the xyz coordinates cooresponding to all
-            nodes within a distance of "d" from "query".
-
-        """
-        idxs = self.kdtree.query_ball_point(query, d, return_sorted=True)
-        return self.kdtree.data[idxs]
+    def init_targets(self, target_neurograph):
+        target_neurograph.init_kdtree()
+        self.target_edges = init_targets(target_neurograph, self)
 
     # --- Optimize Proposals ---
     def run_optimization(self):
@@ -390,119 +368,48 @@ class NeuroGraph(nx.Graph):
         else:
             return np.flip(self.edges[edge][key], axis=0)
 
-    # --- Ground Truth Generation ---
-    def init_targets(self, target_neurograph):
-        # Initializations
-        msg = "Provide swc_dir/swc_paths to initialize target edges!"
-        assert target_neurograph.swc_paths, msg
-        pred_graph = self.copy_graph()
-        target_neurograph.init_densegraph()
-        target_neurograph.init_kdtree()
-        self.target_edges = set()
+    # -- kdtree --
+    def init_kdtree(self):
+        """
+        Builds a KD-Tree from the (x,y,z) coordinates of the subnodes of
+        each connected component in the graph.
 
-        # Add best simple edges
-        remaining_proposals = []
-        proposals = self.filter_infeasible(target_neurograph)
-        dists = [self.proposal_length(edge) for edge in proposals]
-        for idx in np.argsort(dists):
-            edge = proposals[idx]
-            if self.is_simple(edge):
-                add_bool = self.is_target(
-                    target_neurograph,
-                    pred_graph,
-                    edge,
-                    dist=3,
-                    ratio=0.7,
-                    exclude=2,
-                )
-                if add_bool:
-                    pred_graph.add_edges_from([edge])
-                    self.target_edges.add(edge)
-                    continue
-            remaining_proposals.append(edge)
+        Parameters
+        ----------
+        None
 
-        # Check remaining proposals
-        dists = [self.proposal_length(edge) for edge in remaining_proposals]
-        for idx in np.argsort(dists):
-            edge = remaining_proposals[idx]
-            add_bool = self.is_target(
-                target_neurograph,
-                pred_graph,
-                edge,
-                dist=5,
-                ratio=0.6,
-                exclude=2,
-            )
-            if add_bool:
-                pred_graph.add_edges_from([edge])
-                self.target_edges.add(edge)
+        Returns
+        -------
+        None
 
-        # Report % positive examples
-        n_positives = len(self.target_edges)
-        print("% positive examples:", n_positives / len(self.proposals))
+        """
+        if not self.kdtree:
+            self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
 
-    def filter_infeasible(self, target_neurograph):
-        proposals = list()
-        for edge in self.proposals:
-            i, j = tuple(edge)
-            xyz_i = self.nodes[i]["xyz"]
-            xyz_j = self.nodes[j]["xyz"]
-            if target_neurograph.is_feasible(xyz_i, xyz_j):
-                proposals.append(edge)
-        return proposals
+    def query_kdtree(self, xyz, d):
+        """
+        Parameters
+        ----------
+        xyz : int
+            Node id.
+        d : float
+            Distance from "xyz" that is searched.
 
-    def is_feasible(self, xyz_1, xyz_2):
-        # Check if edges are identical
-        edge_1 = self.xyz_to_edge[self.get_projection(xyz_1)[0]]
-        edge_2 = self.xyz_to_edge[self.get_projection(xyz_2)[0]]
-        if edge_1 == edge_2:
-            return True
+        Returns
+        -------
+        generator[tuple]
+            Generator that generates the xyz coordinates cooresponding to all
+            nodes within a distance of "d" from "xyz".
 
-        # Check if edges are adjacent
-        i, j = tuple(edge_1)
-        k, l = tuple(edge_2)
-        bool_i = self.is_nb(i, k) or self.is_nb(i, l)
-        bool_j = self.is_nb(j, k) or self.is_nb(j, l)
-        if bool_i or bool_j:
-            return True
+        """
+        idxs = self.kdtree.query_ball_point(xyz, d, return_sorted=True)
+        return self.kdtree.data[idxs]
 
-        # Not feasible
-        return False
+    def get_projection(self, xyz):
+        _, idx = self.kdtree.query(xyz, k=1)
+        return tuple(self.kdtree.data[idx])
 
-    def is_target(
-        self, target_graph, pred_graph, edge, dist=5, ratio=0.5, exclude=10
-    ):
-        # Check for cycle
-        if gutils.creates_cycle(pred_graph, tuple(edge)):
-            return False
-
-        # Check projection distance
-        xyz_i = self.proposals[edge]["xyz"][0]
-        xyz_j = self.proposals[edge]["xyz"][-1]
-        _, d_i = target_graph.get_projection(xyz_i)
-        _, d_j = target_graph.get_projection(xyz_j)
-        if d_i > dist or d_j > dist:
-            return False
-
-        # Check alignment
-        aligned = target_graph.densegraph.is_aligned(
-            xyz_i, xyz_j, ratio_threshold=ratio, exclude=exclude
-        )
-        return True if aligned else False
-
-    # --- Generate reconstructions post-inference
-    def get_reconstruction(self, proposals, upd_self=False):
-        reconstruction = self.copy_graph(add_attrs=True)
-        for edge in proposals:
-            i, j = tuple(edge)
-            r_i = self.nodes[i]["radius"]
-            r_j = self.nodes[j]["radius"]
-            reconstruction.add_edge(
-                i, j, xyz=self.proposals[i, j]["xyz"], radius=[r_i, r_j]
-            )
-        return reconstruction
-
-    # --- Utils ---
+    # --- utils ---
     def n_nodes(self):
         """
         Computes number of nodes in the graph.
@@ -560,18 +467,12 @@ class NeuroGraph(nx.Graph):
     def proposal_xyz(self, edge):
         return tuple(self.proposals[edge]["xyz"])
 
-    def proposal_length(self, edge, metric="l2"):
-        xyz_1, xyz_2 = tuple(self.proposals[edge]["xyz"])
-        return get_dist(xyz_1, xyz_2, metric=metric)
+    def proposal_length(self, edge):
+        i, j = tuple(edge)
+        return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
     def node_xyz_dist(self, node, xyz):
         return get_dist(xyz, self.nodes[node]["xyz"])
-
-    def get_projection(self, xyz):
-        _, idx = self.kdtree.query(xyz, k=1)
-        proj_xyz = tuple(self.kdtree.data[idx])
-        proj_dist = get_dist(proj_xyz, xyz)
-        return proj_xyz, proj_dist
 
     def is_nb(self, i, j):
         return True if i in self.neighbors(j) else False
@@ -615,3 +516,14 @@ class NeuroGraph(nx.Graph):
             coord = utils.img_to_patch(img_coord, midpoint, chunk_size)
             patch_coords.append(coord)
         return patch_coords
+
+    def get_reconstruction(self, proposals, upd_self=False):
+        reconstruction = self.copy_graph(add_attrs=True)
+        for edge in proposals:
+            i, j = tuple(edge)
+            r_i = self.nodes[i]["radius"]
+            r_j = self.nodes[j]["radius"]
+            reconstruction.add_edge(
+                i, j, xyz=self.proposals[i, j]["xyz"], radius=[r_i, r_j]
+            )
+        return reconstruction

@@ -22,8 +22,7 @@ from random import sample
 import numpy as np
 import tensorstore as ts
 
-from deep_neurographs import geometry
-from deep_neurographs import utils
+from deep_neurographs import geometry, utils
 
 CHUNK_SIZE = [64, 64, 64]
 WINDOW = [5, 5, 5]

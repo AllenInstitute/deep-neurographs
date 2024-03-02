@@ -258,7 +258,8 @@ class LitNeuralNet(pl.LightningModule):
         X = self.get_example(batch, "inputs")
         y = self.get_example(batch, "labels")
         y_hat = self.net(X)
-        loss = F.binary_cross_entropy_with_logits(y_hat, y, pos_weight=torch.tensor([0.8]).cuda())
+        loss = F.binary_cross_entropy_with_logits(y_hat, y)
+        # pos_weight=torch.tensor([0.8]).cuda())
         self.log("train_loss", loss)
         self.compute_stats(y_hat, y, prefix="train_")
         return loss

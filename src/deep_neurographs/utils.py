@@ -449,11 +449,6 @@ def write_txt(path, contents):
     f.close()
 
 
-def parse_metadata(path):
-    metadata = read_json(path)
-    return metadata["chunk_origin"], metadata["chunk_shape"]
-
-
 # --- coordinate conversions ---
 def img_to_patch(xyz, patch_centroid, patch_dims):
     half_patch_dims = [patch_dims[i] // 2 for i in range(3)]

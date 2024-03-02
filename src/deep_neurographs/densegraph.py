@@ -182,7 +182,9 @@ class DenseGraph:
             )
         return path_length
 
-    def is_aligned(self, xyz_1, xyz_2, ratio_threshold=0.5, exclude=10.0):
+    def is_proposal_aligned(
+        self, xyz_1, xyz_2, ratio_threshold=0.5, exclude=10.0
+    ):
         """
         Determines whether the edge proposal corresponding to "xyz_1" and
         "xyz_2" is aligned to the ground truth. This is determined by checking
