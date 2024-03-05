@@ -260,7 +260,7 @@ class LitNeuralNet(pl.LightningModule):
         X = self.get_example(batch, "inputs")
         y = self.get_example(batch, "labels")
         y_hat = self.net(X)
-        
+
         loss = self.criterion(y_hat, y)
         self.log("train_loss", loss)
         self.compute_stats(y_hat, y, prefix="train_")
