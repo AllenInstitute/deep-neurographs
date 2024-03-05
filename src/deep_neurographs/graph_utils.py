@@ -623,5 +623,47 @@ def get_leafs(graph):
 
 
 def sample_singleton(graph):
+    """
+    Samples a single node from a graph.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be sampled from.
+
+    Returns
+    -------
+    int
+        Node.
+
+    """
     nodes = list(graph.nodes)
     return sample(nodes, 1)[0]
+
+
+def get_component(graph, root):
+    """
+    Gets the connected component corresponding to "root" from "graph".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+    root : int
+        Node that breadth-first search starts from.
+
+    Returns
+    -------
+    set[int]
+        Set of nodes in the connected component corresponding to "root".
+
+    """
+    queue = [root]
+    component = set()
+    while len(queue):
+        i = queue.pop()
+        component.add(i)
+        for j in [j for j in graph.neighbors(i) if j not in component]:
+            if (i, j) in graph.edges:
+                queue.append(j)
+    return component

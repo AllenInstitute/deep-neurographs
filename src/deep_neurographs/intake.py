@@ -19,6 +19,7 @@ from deep_neurographs import utils
 from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.swc_utils import process_gsc_zip, process_local_paths
 
+
 # Graph construction
 MIN_SIZE = 35
 SMOOTH = True

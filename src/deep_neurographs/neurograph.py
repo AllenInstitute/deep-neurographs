@@ -8,8 +8,6 @@ Implementation of subclass of Networkx.Graph called "NeuroGraph".
 
 """
 
-from copy import deepcopy
-
 import networkx as nx
 import numpy as np
 import tensorstore as ts
@@ -144,6 +142,7 @@ class NeuroGraph(nx.Graph):
     def generate_proposals(
         self,
         radius,
+        filter_doubles=False,
         n_proposals_per_leaf=3,
         optimize=False,
         optimization_depth=10,
@@ -159,25 +158,36 @@ class NeuroGraph(nx.Graph):
         """
         self.init_kdtree()
         self.proposals = dict()
-        existing_connections = (
-            dict()
-        )  # key: swc_id, values: {other swc_id: node}
+        existing_connections = dict()
+        checked_if_double = set()
         for leaf in self.leafs:
+            # Check if leaf is contained in bbox (if applicable)
             if not self.is_contained(leaf, buffer=36):
                 continue
 
+            # Extract info on leaf
             leaf_swc_id = self.nodes[leaf]["swc_id"]
             xyz_leaf = self.nodes[leaf]["xyz"]
             proposals = self.__get_proposals(
                 leaf, xyz_leaf, n_proposals_per_leaf, radius
             )
+            if leaf_swc_id not in checked_if_double and filter_doubles:
+                if self.is_double(leaf):
+                    checked_if_double.add(leaf_swc_id)
+                    continue
+
+            # Check proposals
             for xyz in proposals:
                 # Extract info on proposal
                 (i, j) = self.xyz_to_edge[xyz]
                 attrs = self.get_edge_data(i, j)
+                swc_id = self.nodes[i]["swc_id"]
+                if swc_id not in checked_if_double and filter_doubles:
+                    if self.is_double(i):
+                        checked_if_double.add(swc_id)
+                        continue
 
                 # Check for existing connection btw components
-                swc_id = self.nodes[i]["swc_id"]
                 if swc_id in existing_connections.keys() and restrict:
                     if leaf_swc_id in existing_connections[swc_id].keys():
                         edge = existing_connections[swc_id][leaf_swc_id]
@@ -191,33 +201,16 @@ class NeuroGraph(nx.Graph):
                         else:
                             continue
 
-                # Check if proposal is connected to double
-                """
-                leaf_component = gutils.get_component(self, leaf)
-                component = gutils.get_component(self, xyz)
-                if geometry_utils.is_double(leaf_component, component, leaf):
-                    continue
-                """
-
-                # Get connecting node
-                d1 = check_dists(xyz_leaf, xyz, self.nodes[i]["xyz"], radius)
-                d2 = check_dists(xyz_leaf, xyz, self.nodes[j]["xyz"], radius)
-                if d1 and self.is_contained(i, buffer=36):
-                    xyz = deepcopy(self.nodes[i]["xyz"])
-                    node = i
-                elif d2 and self.is_contained(j, buffer=36):
-                    xyz = deepcopy(self.nodes[j]["xyz"])
-                    node = j
-                else:
-                    idxs = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0]
-                    node = self.split_edge((i, j), attrs, idxs[0])
-
                 # Add edge
+                node, xyz = self.__get_connecting_node(
+                    xyz_leaf, xyz, (i, j), attrs, radius
+                )
                 edge = frozenset({leaf, node})
                 self.proposals[edge] = {"xyz": np.array([xyz_leaf, xyz])}
                 self.nodes[node]["proposals"].add(leaf)
                 self.nodes[leaf]["proposals"].add(node)
 
+                # Update existing connections
                 if leaf_swc_id in existing_connections.keys():
                     existing_connections[leaf_swc_id][swc_id] = edge
                 else:
@@ -341,6 +334,19 @@ class NeuroGraph(nx.Graph):
         )
         for xyz in attrs["xyz"][idxs]:
             self.xyz_to_edge[tuple(xyz)] = edge
+
+    def __get_connecting_node(self, xyz_leaf, xyz_edge, edge, attrs, radius):
+        i, j = tuple(edge)
+        d_i = check_dists(xyz_leaf, xyz_edge, self.nodes[i]["xyz"], radius)
+        d_j = check_dists(xyz_leaf, xyz_edge, self.nodes[j]["xyz"], radius)
+        if d_i and self.is_contained(i, buffer=36):
+            return i, self.nodes[i]["xyz"]
+        elif d_j and self.is_contained(j, buffer=36):
+            return j, self.nodes[j]["xyz"]
+        else:
+            idxs = np.where(np.all(attrs["xyz"] == xyz_edge, axis=1))[0]
+            node = self.split_edge((i, j), attrs, idxs[0])
+            return node, xyz_edge
 
     def init_targets(self, target_neurograph):
         target_neurograph.init_kdtree()
@@ -527,3 +533,49 @@ class NeuroGraph(nx.Graph):
                 i, j, xyz=self.proposals[i, j]["xyz"], radius=[r_i, r_j]
             )
         return reconstruction
+
+    def is_double(self, root):
+        """
+        Determines whether the connected component corresponding to "root" is
+        a double of another connected component.
+
+        Paramters
+        ---------
+        root : int
+            Node of connected component to be evaluated.
+
+        Returns
+        -------
+        bool
+            Indication of whether connected component is a double.
+
+        """
+        # Find near components
+        swc_id = self.nodes[root]["swc_id"]
+        hits = dict() # near components
+        for i in gutils.get_component(self, root):
+            for j in self.query_kdtree(self.nodes[i]["xyz"], 6):
+                swc_id_j = self.nodes[j]["swc_id"]
+                if swc_id_j != swc_id:
+                    hits = utils.append_dict_value(hits, swc_id, j)
+                    break
+
+        # Parse queried components
+        swc_id_j, best_vote_cnt = find_best(hits)
+        if swc_id_j is not None:
+            print(swc_id_j, best_vote_cnt)
+
+        return False
+
+
+# -- utils --
+def find_best(my_dict):
+    best_key = None
+    best_vote_cnt = 0
+    if len(my_dict) > 0:
+        for key, values in my_dict.items():
+            vote_cnt = len(values)
+            if vote_cnt > best_vote_cnt:
+                best_key = key
+                best_vote_cnt = vote_cnt
+    return best_key, best_vote_cnt

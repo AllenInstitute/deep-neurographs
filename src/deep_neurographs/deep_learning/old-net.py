@@ -120,10 +120,10 @@ if __name__ == "__main__":
         os.path.dirname(os.path.realpath(__file__)), '..', 'data', 'Planetoid'
     )
     dataset = Planetoid(path, name='Cora', transform=transform)
-    
-    # After applying the `RandomLinkSplit` transform, the data is transformed from
-    # a data object to a list of tuples (train_data, val_data, test_data), with
-    # each element representing the corresponding split.
+
+    # After applying the `RandomLinkSplit` transform, the data is transformed
+    # from a data object to list of tuples (train_data, val_data, test_data),
+    # with each element representing the corresponding split.
     train_data, val_data, test_data = dataset[0]
     print(train_data)
 

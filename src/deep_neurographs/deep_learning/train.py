@@ -14,7 +14,6 @@ from random import sample
 import lightning.pytorch as pl
 import numpy as np
 import torch
-import torch.nn.functional as F
 import torch.utils.data as torch_data
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.profilers import PyTorchProfiler
@@ -33,7 +32,6 @@ from deep_neurographs.deep_learning import models
 from deep_neurographs.deep_learning import loss
 
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
-
 
 BATCH_SIZE = 32
 NUM_WORKERS = 0
@@ -246,7 +244,7 @@ class LitNeuralNet(pl.LightningModule):
         super().__init__()
         self.criterion = loss.DiceLoss()
         self.net = net
-        self.lr = lr 
+        self.lr = lr
 
     def forward(self, batch):
         x = self.get_example(batch, "inputs")

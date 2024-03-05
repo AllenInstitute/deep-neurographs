@@ -16,6 +16,7 @@ import fastremap
 import networkx as nx
 
 from deep_neurographs import utils
+from deep_neurographs import graph_utils as gutils
 from deep_neurographs.neurograph import NeuroGraph
 
 CHUNK_SHAPE = (512, 512, 512)
@@ -70,7 +71,7 @@ def expand_boundary(neurograph, pred_neurograph, component):
 
             # Add component to graph
             if swc_id not in pred_neurograph.swc_ids:
-                c = get_component(neurograph, j)
+                c = gutils.get_component(neurograph, j)
                 pred_neurograph.add_swc_id(swc_id)
                 pred_neurograph = ingest_subgraph(
                     neurograph, pred_neurograph, c
@@ -85,18 +86,6 @@ def expand_boundary(neurograph, pred_neurograph, component):
             pred_neurograph.nodes[j]["proposals"].add(i)
 
     return pred_neurograph, bdd
-
-
-def get_component(neurograph, seed):
-    queue = [seed]
-    visited = set()
-    while len(queue):
-        i = queue.pop()
-        visited.add(i)
-        for j in [j for j in neurograph.neighbors(i) if j not in visited]:
-            if (i, j) in neurograph.edges:
-                queue.append(j)
-    return visited
 
 
 def ingest_subgraph(neurograph_1, neurograph_2, node_subset):
