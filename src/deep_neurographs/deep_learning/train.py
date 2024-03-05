@@ -14,7 +14,6 @@ from random import sample
 import lightning.pytorch as pl
 import numpy as np
 import torch
-import torch.nn.functional as F
 import torch.utils.data as torch_data
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.profilers import PyTorchProfiler
@@ -29,8 +28,7 @@ from torcheval.metrics.functional import (
 
 from deep_neurographs import feature_extraction as extracter
 from deep_neurographs.deep_learning import datasets as ds
-from deep_neurographs.deep_learning import models
-from deep_neurographs.deep_learning import loss
+from deep_neurographs.deep_learning import loss, models
 
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
@@ -128,7 +126,7 @@ def evaluate_model():
     pass
 
 
-def get_model(model_type, data=None):
+def get_model(model_type, data=None, n_estimators=100):
     """
     Gets classification model to be fit.
 
@@ -152,7 +150,7 @@ def get_model(model_type, data=None):
     if model_type == "AdaBoost":
         return AdaBoostClassifier()
     elif model_type == "RandomForest":
-        return RandomForestClassifier()
+        return RandomForestClassifier(n_estimators=n_estimators)
     elif model_type == "FeedForwardNet":
         n_features = extracter.count_features(model_type)
         net = models.FeedForwardNet(n_features)
@@ -246,7 +244,7 @@ class LitNeuralNet(pl.LightningModule):
         super().__init__()
         self.criterion = loss.DiceLoss()
         self.net = net
-        self.lr = lr 
+        self.lr = lr
 
     def forward(self, batch):
         x = self.get_example(batch, "inputs")

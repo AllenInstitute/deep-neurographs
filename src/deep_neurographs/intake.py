@@ -33,6 +33,7 @@ OPTIMIZE_PROPOSALS = False
 OPTIMIZATION_DEPTH = 15
 SEARCH_RADIUS = 10
 
+
 # --- Build graph wrappers ---
 def build_neurograph_from_local(
     anisotropy=[1.0, 1.0, 1.0],
