@@ -30,6 +30,7 @@ from torcheval.metrics.functional import (
 from deep_neurographs import feature_extraction as extracter
 from deep_neurographs.deep_learning import datasets as ds
 from deep_neurographs.deep_learning import models
+from deep_neurographs.deep_learning import loss
 
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
@@ -201,7 +202,7 @@ def train_network(
         accelerator="gpu",
         callbacks=[ckpt_callback],
         devices=1,
-        enable_model_summary=True,
+        enable_model_summary=False,
         enable_progress_bar=False,
         logger=logger,
         log_every_n_steps=1,
@@ -243,8 +244,9 @@ def eval_network(X, model):
 class LitNeuralNet(pl.LightningModule):
     def __init__(self, net=None, lr=1e-3):
         super().__init__()
+        self.criterion = loss.DiceLoss()
         self.net = net
-        self.lr = lr
+        self.lr = lr 
 
     def forward(self, batch):
         x = self.get_example(batch, "inputs")
@@ -258,8 +260,8 @@ class LitNeuralNet(pl.LightningModule):
         X = self.get_example(batch, "inputs")
         y = self.get_example(batch, "labels")
         y_hat = self.net(X)
-        loss = F.binary_cross_entropy_with_logits(y_hat, y)
-        # pos_weight=torch.tensor([0.8]).cuda())
+        
+        loss = self.criterion(y_hat, y)
         self.log("train_loss", loss)
         self.compute_stats(y_hat, y, prefix="train_")
         return loss

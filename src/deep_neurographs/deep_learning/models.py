@@ -34,9 +34,10 @@ class FeedForwardNet(nn.Module):
 
         """
         nn.Module.__init__(self)
-        self.fc1 = self._init_fc_layer(num_features, num_features // 2)
-        self.fc2 = self._init_fc_layer(num_features // 2, num_features // 2)
-        self.output = nn.Linear(num_features // 2, 1)
+        self.fc1 = self._init_fc_layer(num_features, num_features)
+        self.fc2 = self._init_fc_layer(num_features, num_features // 2)
+        self.fc3 = self._init_fc_layer(num_features // 2, num_features // 4)
+        self.output = nn.Linear(num_features // 4, 1)
 
     def _init_fc_layer(self, D_in, D_out):
         """
@@ -56,7 +57,7 @@ class FeedForwardNet(nn.Module):
 
         """
         fc_layer = nn.Sequential(
-            nn.Linear(D_in, D_out), nn.LeakyReLU(), nn.Dropout(p=0.25)
+            nn.Linear(D_in, D_out), nn.LeakyReLU(), nn.Dropout(p=0.2)
         )
         return fc_layer
 
@@ -77,6 +78,7 @@ class FeedForwardNet(nn.Module):
         """
         x = self.fc1(x)
         x = self.fc2(x)
+        x = self.fc3(x)
         x = self.output(x)
         return x
 

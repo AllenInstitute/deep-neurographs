@@ -19,16 +19,19 @@ from deep_neurographs import utils
 from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.swc_utils import process_gsc_zip, process_local_paths
 
+# Graph construction
+MIN_SIZE = 35
+SMOOTH = True
+PRUNE_CONNECTORS = False
+PRUNE_SPURIOUS = True
+PRUNE_DEPTH = 16
+CONNECTOR_LENGTH = 16
+
+# Proposal generation
 N_PROPOSALS_PER_LEAF = 3
 OPTIMIZE_PROPOSALS = False
 OPTIMIZATION_DEPTH = 15
-PRUNE_SPURIOUS = True
-PRUNE_CONNECTORS = False
-PRUNE_DEPTH = 16
 SEARCH_RADIUS = 10
-MIN_SIZE = 35
-SMOOTH = True
-
 
 # --- Build graph wrappers ---
 def build_neurograph_from_local(
@@ -40,8 +43,9 @@ def build_neurograph_from_local(
     img_path=None,
     min_size=MIN_SIZE,
     progress_bar=False,
-    prune_spurious=PRUNE_SPURIOUS,
     prune_connectors=PRUNE_CONNECTORS,
+    prune_spurious=PRUNE_SPURIOUS,
+    connector_length=CONNECTOR_LENGTH,
     prune_depth=PRUNE_DEPTH,
     smooth=SMOOTH,
 ):
@@ -60,8 +64,9 @@ def build_neurograph_from_local(
         img_path=img_path,
         swc_paths=paths,
         progress_bar=progress_bar,
-        prune_spurious=prune_spurious,
         prune_connectors=prune_connectors,
+        prune_spurious=prune_spurious,
+        connector_length=connector_length,
         prune_depth=prune_depth,
         smooth=smooth,
     )
@@ -76,8 +81,9 @@ def build_neurograph_from_gcs_zips(
     img_path=None,
     min_size=MIN_SIZE,
     n_proposals_per_leaf=N_PROPOSALS_PER_LEAF,
-    prune_spurious=PRUNE_SPURIOUS,
     prune_connectors=PRUNE_CONNECTORS,
+    prune_spurious=PRUNE_SPURIOUS,
+    connector_length=CONNECTOR_LENGTH,
     prune_depth=PRUNE_DEPTH,
     optimize_proposals=OPTIMIZE_PROPOSALS,
     optimization_depth=OPTIMIZATION_DEPTH,
@@ -101,9 +107,13 @@ def build_neurograph_from_gcs_zips(
     n_proposals_per_leaf : int, optional
         Number of edge proposals generated from each leaf node in an swc file.
         The default is the global variable "N_PROPOSALS_PER_LEAF".
+    prune_connectors : bool, optional
+        ...
     prune_spurious : bool, optional
         Indication of whether to prune short branches (i.e spurious branches).
         The default is the global variable "PRUNE".
+    connector_length : int, optional
+        ...
     prune_depth : int, optional
         Branches less than "prune_depth" microns are pruned if "prune" is
         True. The default is the global variable "PRUNE_DEPTH".
@@ -139,8 +149,9 @@ def build_neurograph_from_gcs_zips(
     neurograph = build_neurograph(
         swc_dicts,
         img_path=img_path,
-        prune_spurious=prune_spurious,
         prune_connectors=prune_connectors,
+        prune_spurious=prune_spurious,
+        connector_length=connector_length,
         prune_depth=prune_depth,
         smooth=smooth,
     )
@@ -211,8 +222,9 @@ def build_neurograph(
     img_path=None,
     swc_paths=None,
     progress_bar=True,
-    prune_spurious=PRUNE_SPURIOUS,
     prune_connectors=PRUNE_CONNECTORS,
+    prune_spurious=PRUNE_SPURIOUS,
+    connector_length=CONNECTOR_LENGTH,
     prune_depth=PRUNE_DEPTH,
     smooth=SMOOTH,
 ):
@@ -224,8 +236,9 @@ def build_neurograph(
     irreducibles, n_nodes, n_edges = get_irreducibles(
         swc_dicts,
         progress_bar=progress_bar,
-        prune_spurious=prune_spurious,
         prune_connectors=prune_connectors,
+        prune_spurious=prune_spurious,
+        connector_length=connector_length,
         prune_depth=prune_depth,
         smooth=smooth,
     )
@@ -257,8 +270,9 @@ def build_neurograph(
 def get_irreducibles(
     swc_dicts,
     progress_bar=True,
-    prune_spurious=PRUNE_SPURIOUS,
     prune_connectors=PRUNE_CONNECTORS,
+    prune_spurious=PRUNE_SPURIOUS,
+    connector_length=CONNECTOR_LENGTH,
     prune_depth=PRUNE_DEPTH,
     smooth=SMOOTH,
 ):

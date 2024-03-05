@@ -34,7 +34,8 @@ def get_irreducibles(
     swc_dict,
     prune_connectors=False,
     prune_spurious=True,
-    depth=16,
+    connector_length=8,
+    prune_depth=16,
     smooth=True,
 ):
     """
@@ -53,7 +54,7 @@ def get_irreducibles(
     prune_spurious : bool, optional
         Indication of whether to prune short branches (i.e. spurious branhces).
         The default is True.
-    depth : int, optional
+    prune_depth : int, optional
         Path length that determines whether a branch is short. The default is
         16.
     smooth : bool, optional
@@ -72,15 +73,16 @@ def get_irreducibles(
     graph, _ = swc_utils.to_graph(swc_dict, set_attrs=True)
     graph, connector_centroids = prune_branches(
         graph,
-        depth=depth,
         prune_connectors=prune_connectors,
         prune_spurious=prune_spurious,
+        connector_length=connector_length,
+        prune_depth=prune_depth,
     )
 
     # Extract irreducibles
     irreducibles = []
     for node_subset in nx.connected_components(graph):
-        if len(node_subset) > depth:
+        if len(node_subset) > prune_depth:
             subgraph = graph.subgraph(node_subset)
             irreducibles_i = __get_irreducibles(subgraph, swc_dict, smooth)
             if irreducibles_i:
@@ -90,7 +92,11 @@ def get_irreducibles(
 
 
 def prune_branches(
-    graph, depth=16, prune_connectors=False, prune_spurious=True
+    graph,
+    prune_connectors=False,
+    prune_spurious=True,
+    connector_length=8,
+    prune_depth=16,
 ):
     """
     Prunes spurious branches and short paths connecting branches
@@ -117,13 +123,13 @@ def prune_branches(
     """
     # Prune spurious branches
     if prune_spurious or prune_connectors:
-        graph = prune_short_branches(graph, depth)
+        graph = prune_short_branches(graph, prune_depth)
 
     # Prune connectors
-    connector_centroids = []
+    connector_xyz = []
     if prune_connectors:
-        graph, connector_centroids = prune_short_connectors(graph, 2 * depth)
-    return graph, connector_centroids
+        graph, connector_xyz = prune_short_connectors(graph, connector_length)
+    return graph, connector_xyz
 
 
 def __get_irreducibles(graph, swc_dict, smooth):
@@ -252,7 +258,7 @@ def inspect_branch(graph, leaf, depth):
     return []
 
 
-def prune_short_connectors(graph, connector_dist=8):
+def prune_short_connectors(graph, length=8):
     """ "
     Prunes shorts paths (i.e. connectors) between junctions nodes and the nbhd
     about the junctions.
@@ -261,7 +267,7 @@ def prune_short_connectors(graph, connector_dist=8):
     ----------
     graph : netowrkx.graph
         Graph to be inspected.
-    connector_dist : int
+    length : int
         Upper bound on the distance that defines a connector path to be pruned.
 
     Returns
@@ -279,7 +285,7 @@ def prune_short_connectors(graph, connector_dist=8):
         # Search nbhd
         j = junctions.pop()
         junction_nbs = []
-        for _, i in nx.dfs_edges(graph, source=j, depth_limit=connector_dist):
+        for _, i in nx.dfs_edges(graph, source=j, depth_limit=length):
             if i in junctions:
                 junction_nbs.append(i)
 
@@ -288,16 +294,40 @@ def prune_short_connectors(graph, connector_dist=8):
             connector = list(nx.shortest_path(graph, source=j, target=nb))
             nbhd = set(nx.dfs_tree(graph, source=nb, depth_limit=5))
             centroid = connector[len(connector) // 2]
-
-            pruned_nodes.update(nbhd.union(set(connector)))
-            pruned_centroids.append(graph.nodes[centroid]["xyz"])
+            if not ignore_connector(graph, centroid, 16 + length // 2):
+                pruned_nodes.update(nbhd.union(set(connector)))
+                pruned_centroids.append(graph.nodes[centroid]["xyz"])
 
         if len(junction_nbs) > 0:
-            nbhd = set(nx.dfs_tree(graph, source=j, depth_limit=8))
+            nbhd = set(nx.dfs_tree(graph, source=j, depth_limit=5))
             pruned_nodes.update(nbhd)
 
     graph.remove_nodes_from(list(pruned_nodes))
     return graph, pruned_centroids
+
+
+def ignore_connector(graph, root, depth):
+    """
+    Determines whether the connector is in a region with lots of branching.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+    root : int
+        Midpoint of connector.
+
+    Returns
+    -------
+    bool
+        Indication of whether connector is in a region with lots of branching.
+
+    """
+    n_branching_points = 0
+    for i in nx.dfs_tree(graph, source=root, depth_limit=depth):
+        if graph.degree[i] > 2:
+            n_branching_points += 1
+    return True if n_branching_points > 2 else False
 
 
 def __smooth_branch(swc_dict, attrs, edges, nbs, root, j):
