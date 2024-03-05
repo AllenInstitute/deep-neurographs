@@ -32,7 +32,6 @@ from deep_neurographs.deep_learning import loss, models
 
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
-
 BATCH_SIZE = 32
 NUM_WORKERS = 0
 SHUFFLE = True

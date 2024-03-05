@@ -10,8 +10,8 @@ class DiceLoss(nn.Module):
         inputs = F.sigmoid(inputs)
         inputs = inputs.view(-1)
         targets = targets.view(-1)
-        intersection = (inputs * targets).sum()
-        dice = (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)
+        intersection = 2.0 * (inputs * targets).sum()
+        dice = (intersection + smooth)/(inputs.sum() + targets.sum() + smooth)
         return 1 - dice
 
 
@@ -26,7 +26,7 @@ class DiceBCELoss(nn.Module):
         targets = targets.view(-1)
 
         # Compute loss
-        intersection = (inputs * targets).sum()
-        dice_loss = 1 - (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)
+        intersection = 2.0 * (inputs * targets).sum()
+        dice = (intersection + smooth)/(inputs.sum() + targets.sum() + smooth)
         bce = F.binary_cross_entropy(inputs, targets, reduction='mean')
-        return bce + dice_loss
+        return bce + (1 - dice)
