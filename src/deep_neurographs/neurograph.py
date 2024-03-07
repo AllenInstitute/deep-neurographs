@@ -11,6 +11,7 @@ Implementation of subclass of Networkx.Graph called "NeuroGraph".
 import networkx as nx
 import numpy as np
 import tensorstore as ts
+from random import sample
 from scipy.spatial import KDTree
 
 from deep_neurographs import geometry
@@ -159,14 +160,22 @@ class NeuroGraph(nx.Graph):
         self.init_kdtree()
         self.proposals = dict()
         existing_connections = dict()
-        checked_if_double = set()
+        doubles = set()
+        not_doubles = set()
         for leaf in self.leafs:
             # Check if leaf is contained in bbox (if applicable)
             if not self.is_contained(leaf, buffer=36):
                 continue
 
-            # Extract info on leaf
+            # Check if leaf is double (if applicable)
             leaf_swc_id = self.nodes[leaf]["swc_id"]
+            doubles, not_doubles = self.upd_doubles(
+                leaf, doubles, not_doubles, filter_doubles
+            )
+            if leaf_swc_id in doubles:
+                continue
+
+            # Check proposals
             xyz_leaf = self.nodes[leaf]["xyz"]
             proposals = self.__get_proposals(
                 leaf, xyz_leaf, n_proposals_per_leaf, radius
@@ -182,10 +191,13 @@ class NeuroGraph(nx.Graph):
                 (i, j) = self.xyz_to_edge[xyz]
                 attrs = self.get_edge_data(i, j)
                 swc_id = self.nodes[i]["swc_id"]
-                if swc_id not in checked_if_double and filter_doubles:
-                    if self.is_double(i):
-                        checked_if_double.add(swc_id)
-                        continue
+
+                # Check if double
+                doubles, not_doubles = self.upd_doubles(
+                    i, doubles, not_doubles, filter_doubles
+                    )
+                if swc_id in doubles:
+                    continue
 
                 # Check for existing connection btw components
                 if swc_id in existing_connections.keys() and restrict:
@@ -220,6 +232,8 @@ class NeuroGraph(nx.Graph):
                     existing_connections[swc_id][leaf_swc_id] = edge
                 else:
                     existing_connections[swc_id] = {leaf_swc_id: edge}
+
+        print("# doubles:", len(doubles))
 
         # Check whether to optimization proposals
         if optimize:
@@ -534,7 +548,17 @@ class NeuroGraph(nx.Graph):
             )
         return reconstruction
 
-    def is_double(self, root):
+    def upd_doubles(self, i, doubles, not_doubles, filter_doubles):
+        if filter_doubles:
+            swc_id_i = self.nodes[i]["swc_id"]
+            if swc_id_i not in doubles.union(not_doubles):
+                if self.is_double(i):
+                    doubles.add(swc_id_i)
+                else:
+                    not_doubles.add(swc_id_i)
+        return doubles, not_doubles
+
+    def is_double(self, i):
         """
         Determines whether the connected component corresponding to "root" is
         a double of another connected component.
@@ -550,23 +574,57 @@ class NeuroGraph(nx.Graph):
             Indication of whether connected component is a double.
 
         """
-        # Find near components
-        swc_id = self.nodes[root]["swc_id"]
-        hits = dict() # near components
-        for i in gutils.get_component(self, root):
-            for j in self.query_kdtree(self.nodes[i]["xyz"], 6):
-                swc_id_j = self.nodes[j]["swc_id"]
-                if swc_id_j != swc_id:
-                    hits = utils.append_dict_value(hits, swc_id, j)
-                    break
+        nb = list(self.neighbors(i))[0]
+        if self.degree[i] == 1 and self.degree[nb] == 1:
+            # Find near components
+            swc_id_i = self.nodes[i]["swc_id"]
+            hits = dict() # near components
+            segment_i = self.get_branches(i)[0]
+            for xyz_i in segment_i:
+                for xyz_j in self.query_kdtree(xyz_i, 8):
+                    swc_id_j, node = self.xyz_to_swc(xyz_j)
+                    if swc_id_i != swc_id_j:
+                        hits = utils.append_dict_value(hits, swc_id_j, node)
+                        break
 
-        # Parse queried components
-        swc_id_j, best_vote_cnt = find_best(hits)
-        if swc_id_j is not None:
-            print(swc_id_j, best_vote_cnt)
-
+            # Parse queried components
+            swc_id_j, n_close = find_best(hits)
+            percent_close = n_close / len(segment_i)
+            if swc_id_j is not None and percent_close > 0.5:
+                j = sample(hits[swc_id_j], 1)[0]
+                length_i = len(segment_i)
+                length_j = self.component_cardinality(j)
+                if length_i / length_j < 0.5:
+                    #print("swc_id_i:", swc_id_i)
+                    #print("swc_id_j:", swc_id_j)
+                    #print("% branch hit:", percent_close)
+                    #print("length ratio:", length_i / length_j)
+                    #print("double:", swc_id_i)
+                    #print("")
+                    return True
         return False
 
+    def xyz_to_swc(self, xyz):
+        edge = self.xyz_to_edge[tuple(xyz)]
+        i, j = tuple(edge)
+        return self.edges[edge]["swc_id"], i
+
+    def component_cardinality(self, root):
+        cardinality = 0
+        queue = [(-1, root)]
+        visited = set()
+        while len(queue):
+            # Visit
+            i, j = queue.pop()
+            visited.add(frozenset((i, j)))
+            if i != -1:
+                cardinality = len(self.edges[i, j]["xyz"])
+
+            # Add neighbors
+            for k in self.neighbors(j):
+                if frozenset((j, k)) not in visited:
+                    queue.append((j, k))
+        return cardinality
 
 # -- utils --
 def find_best(my_dict):
