@@ -180,6 +180,12 @@ class NeuroGraph(nx.Graph):
             proposals = self.__get_proposals(
                 leaf, xyz_leaf, n_proposals_per_leaf, radius
             )
+            if leaf_swc_id not in checked_if_double and filter_doubles:
+                if self.is_double(leaf):
+                    checked_if_double.add(leaf_swc_id)
+                    continue
+
+            # Check proposals
             for xyz in proposals:
                 # Extract info on proposal
                 (i, j) = self.xyz_to_edge[xyz]
@@ -619,7 +625,6 @@ class NeuroGraph(nx.Graph):
                 if frozenset((j, k)) not in visited:
                     queue.append((j, k))
         return cardinality
-
 
 # -- utils --
 def find_best(my_dict):
