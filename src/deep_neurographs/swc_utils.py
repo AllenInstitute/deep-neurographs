@@ -50,6 +50,7 @@ def process_local_paths(
         file.
 
     """
+    valid_paths = []
     swc_dicts = []
     for path in paths:
         swc_dict = parse_local_swc(
@@ -57,7 +58,8 @@ def process_local_paths(
         )
         if len(swc_dict["id"]) > min_size:
             swc_dicts.append(swc_dict)
-    return swc_dicts
+            valid_paths.append(path)
+    return swc_dicts, valid_paths
 
 
 def process_gsc_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
@@ -154,7 +156,7 @@ def parse(contents, img_bbox, anisotropy=[1.0, 1.0, 1.0]):
         swc_dict["radius"] = np.array(swc_dict["radius"])
         swc_dict["xyz"] = np.array(swc_dict["xyz"])
 
-    return swc_dict if len(swc_dict["id"]) > 1 else {"id": [-1]}
+    return swc_dict
 
 
 def fast_parse(contents, anisotropy=[1.0, 1.0, 1.0]):

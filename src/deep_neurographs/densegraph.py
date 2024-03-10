@@ -69,6 +69,7 @@ class DenseGraph:
 
             # Store
             swc_id = swc_dict["swc_id"]
+            print(swc_id, path)
             if type(swc_dict["xyz"]) == np.ndarray:
                 swc_dict["xyz"] = utils.numpy_to_hashable(swc_dict["xyz"])
             xyz_to_id = dict(zip_broadcast(swc_dict["xyz"], swc_id))

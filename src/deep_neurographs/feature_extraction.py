@@ -27,7 +27,7 @@ from deep_neurographs import geometry, utils
 CHUNK_SIZE = [64, 64, 64]
 WINDOW = [5, 5, 5]
 N_PROFILE_POINTS = 10
-N_SKEL_FEATURES = 18
+N_SKEL_FEATURES = 19
 SUPPORTED_MODELS = [
     "AdaBoost",
     "RandomForest",
@@ -238,6 +238,7 @@ def generate_img_profiles_via_superchunk(neurograph, proposals, path):
 def generate_skel_features(neurograph, proposals):
     features = dict()
     for edge in proposals:
+        #print("Proposals:", edge)
         i, j = tuple(edge)
         features[edge] = np.concatenate(
             (
@@ -246,33 +247,31 @@ def generate_skel_features(neurograph, proposals):
                 neurograph.degree[j],
                 get_radii(neurograph, edge),
                 get_avg_radii(neurograph, edge),
-                get_avg_branch_lens(neurograph, edge),
                 get_directionals(neurograph, edge, 8),
                 get_directionals(neurograph, edge, 16),
                 get_directionals(neurograph, edge, 32),
+                get_directionals(neurograph, edge, 64),
             ),
             axis=None,
         )
+        #print("")
     return features
 
 
-def get_directionals(neurograph, edge, window):
+def get_directionals(neurograph, edge, window_size):
     # Compute tangent vectors
     i, j = tuple(edge)
     edge_direction = geometry.compute_tangent(
         neurograph.proposals[edge]["xyz"]
     )
-    direction_i = geometry.get_directional(
-        neurograph, i, edge_direction, window=window
-    )
-    direction_j = geometry.get_directional(
-        neurograph, j, edge_direction, window=window
-    )
+    direction_i = geometry.get_directional(neurograph, i, window_size)
+    direction_j = geometry.get_directional(neurograph, j, window_size)
 
     # Compute features
     inner_product_1 = abs(np.dot(edge_direction, direction_i))
     inner_product_2 = abs(np.dot(edge_direction, direction_j))
     inner_product_3 = np.dot(direction_i, direction_j)
+
     return np.array([inner_product_1, inner_product_2, inner_product_3])
 
 
@@ -327,6 +326,8 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
     # Initialize
     X = None
     y = None
+    
+    
     block_to_idxs = dict()
     idx_to_edge = dict()
 
@@ -457,6 +458,7 @@ def combine_features(features):
             if combined[edge] is None:
                 combined[edge] = deepcopy(features[key][edge])
             else:
+                continue
                 combined[edge] = np.concatenate(
                     (combined[edge], features[key][edge])
                 )

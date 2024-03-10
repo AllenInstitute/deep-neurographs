@@ -77,7 +77,7 @@ def get_kfolds(filenames, k):
 
 # -- Training --
 def fit_model(
-    model_type, X, y, lr=1e-3, logger=False, max_epochs=50, profile=False
+    model_type, X, y, lr=1e-3, logger=False, max_epochs=50, n_estimators=100, profile=False
 ):
     """
     Fits a model to a training dataset.
@@ -116,7 +116,7 @@ def fit_model(
             net, dataset, logger=logger, lr=lr, max_epochs=max_epochs
         )
     else:
-        model = get_model(model_type)
+        model = get_model(model_type, n_estimators=n_estimators)
         model.fit(X, y)
     return model
 

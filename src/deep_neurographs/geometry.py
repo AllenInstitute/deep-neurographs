@@ -18,32 +18,26 @@ from deep_neurographs import utils
 
 
 # Directional Vectors
-def get_directional(
-    neurograph, i, proposal_tangent, window=5, n_svd_points=10
-):
-    directionals = []
-    d = n_svd_points
-    for branch in neurograph.get_branches(i):
-        if branch.shape[0] >= window + d:
-            xyz = deepcopy(branch[d:, :])
-        elif branch.shape[0] <= d:
-            xyz = deepcopy(branch)
-        else:
-            xyz = deepcopy(branch[d: window + d, :])
-        directionals.append(compute_tangent(xyz))
-
-    # Determine best
-    max_dot_prod = 0
-    arg_max = -1
-    for k in range(len(directionals)):
-        dot_prod = abs(np.dot(proposal_tangent, directionals[k]))
-        if dot_prod >= max_dot_prod:
-            max_dot_prod = dot_prod
-            arg_max = k
-
-    return directionals[arg_max]
+def get_directional(neurograph, i, window_size):
+    branches = neurograph.get_branches(i)
+    if len(branches) == 1:
+        return compute_tangent(get_sub_branch(branches[0], window_size))
+    elif len(branches) == 2:
+        branch_1 = get_sub_branch(branches[0], window_size)
+        branch_2 = get_sub_branch(branches[1], window_size)
+        branch =  np.concatenate((branch_1, branch_2))
+        return compute_tangent(branch)
+    else:
+        return np.array([0, 0, 0])
 
 
+def get_sub_branch(branch, window_size):
+    if branch.shape[0] < window_size:
+        return branch
+    else:
+        return branch[0:window_size, :]
+
+                
 def compute_svd(xyz):
     """
     Compute singular value decomposition (svd) of an NxD array where N is the
@@ -75,7 +69,6 @@ def compute_tangent(xyz):
     if xyz.shape[0] == 2:
         tangent = (xyz[1] - xyz[0]) / dist(xyz[1], xyz[0])
     else:
-        xyz = smooth_branch(xyz, s=10)
         U, S, VT = compute_svd(xyz)
         tangent = VT[0]
     return tangent / np.linalg.norm(tangent)
@@ -161,7 +154,7 @@ def fit_spline(xyz, s=None):
 def sample_path(path, n_points):
     if len(path) > 5:
         t = np.linspace(0, 1, n_points)
-        spline_x, spline_y, spline_z = fit_spline(path, s=10)
+        spline_x, spline_y, spline_z = fit_spline(path)
         path = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
     else:
         path = make_line(path[0], path[-1], 10)

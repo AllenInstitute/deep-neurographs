@@ -82,8 +82,8 @@ def visualize_subset(
 
     # Add target graph (if applicable)
     if target_graph:
-        edges = target_graph.edges
-        data.extend(plot_edges(target_graph, edges, color="blue"))
+        cc = visualize_connected_components(target_graph, return_data=True)
+        data.extend(cc)
     plot(data, title)
 
 

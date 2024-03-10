@@ -558,3 +558,15 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
+
+
+def find_best(my_dict):
+    best_key = None
+    best_vote_cnt = 0
+    if len(my_dict) > 0:
+        for key, values in my_dict.items():
+            vote_cnt = len(values)
+            if vote_cnt > best_vote_cnt:
+                best_key = key
+                best_vote_cnt = vote_cnt
+    return best_key, best_vote_cnt

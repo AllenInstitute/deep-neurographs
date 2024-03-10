@@ -386,13 +386,14 @@ def upd_xyz(swc_dict, attrs, edges, nbs, i, endpoint):
         Updated with new xyz coordinates.
 
     """
+    idx = swc_dict["idx"][i]
     if i in nbs.keys():
         for j in nbs[i]:
             key = (i, j) if (i, j) in edges.keys() else (j, i)
             edges = upd_endpoint_xyz(
-                edges, key, swc_dict["xyz"][i], attrs["xyz"][endpoint]
+                edges, key, swc_dict["xyz"][idx], attrs["xyz"][endpoint]
             )
-    swc_dict["xyz"][i] = attrs["xyz"][endpoint]
+    swc_dict["xyz"][idx] = attrs["xyz"][endpoint]
     return swc_dict, edges
 
 

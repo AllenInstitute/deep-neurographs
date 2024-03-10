@@ -144,7 +144,7 @@ class NeuroGraph(nx.Graph):
         self,
         radius,
         filter_doubles=False,
-        n_proposals_per_leaf=3,
+        proposals_per_leaf=3,
         optimize=False,
         optimization_depth=10,
         restrict=True,
@@ -177,16 +177,8 @@ class NeuroGraph(nx.Graph):
 
             # Check proposals
             xyz_leaf = self.nodes[leaf]["xyz"]
-            proposals = self.__get_proposals(
-                leaf, xyz_leaf, n_proposals_per_leaf, radius
-            )
-            if leaf_swc_id not in checked_if_double and filter_doubles:
-                if self.is_double(leaf):
-                    checked_if_double.add(leaf_swc_id)
-                    continue
-
-            # Check proposals
-            for xyz in proposals:
+            self.set_proposals_per_leaf(proposals_per_leaf)
+            for xyz in self.__get_proposals(leaf, xyz_leaf, radius):
                 # Extract info on proposal
                 (i, j) = self.xyz_to_edge[xyz]
                 attrs = self.get_edge_data(i, j)
@@ -199,7 +191,12 @@ class NeuroGraph(nx.Graph):
                 if swc_id in doubles:
                     continue
 
-                # Check for existing connection btw components
+                # Check connection
+                node, xyz = self.__get_connecting_node(
+                    xyz_leaf, xyz, (i, j), attrs, radius
+                )
+                if self.degree[node] >= 3:
+                    continue
                 if swc_id in existing_connections.keys() and restrict:
                     if leaf_swc_id in existing_connections[swc_id].keys():
                         edge = existing_connections[swc_id][leaf_swc_id]
@@ -214,34 +211,34 @@ class NeuroGraph(nx.Graph):
                             continue
 
                 # Add edge
-                node, xyz = self.__get_connecting_node(
-                    xyz_leaf, xyz, (i, j), attrs, radius
-                )
-                edge = frozenset({leaf, node})
-                self.proposals[edge] = {"xyz": np.array([xyz_leaf, xyz])}
-                self.nodes[node]["proposals"].add(leaf)
-                self.nodes[leaf]["proposals"].add(node)
+                if self.degree[node] < 3:
+                    edge = frozenset({leaf, node})
+                    self.proposals[edge] = {"xyz": np.array([xyz_leaf, xyz])}
+                    self.nodes[node]["proposals"].add(leaf)
+                    self.nodes[leaf]["proposals"].add(node)
 
-                # Update existing connections
-                if leaf_swc_id in existing_connections.keys():
-                    existing_connections[leaf_swc_id][swc_id] = edge
-                else:
-                    existing_connections[leaf_swc_id] = {swc_id: edge}
+                    # Update existing connections
+                    if leaf_swc_id in existing_connections.keys():
+                        existing_connections[leaf_swc_id][swc_id] = edge
+                    else:
+                        existing_connections[leaf_swc_id] = {swc_id: edge}
 
-                if swc_id in existing_connections.keys():
-                    existing_connections[swc_id][leaf_swc_id] = edge
-                else:
-                    existing_connections[swc_id] = {leaf_swc_id: edge}
+                    if swc_id in existing_connections.keys():
+                        existing_connections[swc_id][leaf_swc_id] = edge
+                    else:
+                        existing_connections[swc_id] = {leaf_swc_id: edge}
 
-        print("# doubles:", len(doubles))
+        #print("# doubles:", len(doubles))
 
-        # Check whether to optimization proposals
+        # Finish
+        self.filter_nodes()
         if optimize:
             self.run_optimization()
 
-    def __get_proposals(
-        self, query_id, query_xyz, n_proposals_per_leaf, radius
-    ):
+    def set_proposals_per_leaf(self, proposals_per_leaf):
+        self.proposals_per_leaf = proposals_per_leaf
+
+    def __get_proposals(self, query_id, query_xyz, radius):
         """
         Generates edge proposals for node "query_id" by finding points on
         distinct connected components near "query_xyz".
@@ -252,16 +249,13 @@ class NeuroGraph(nx.Graph):
             Node id of the query node.
         query_xyz : tuple[float]
             (x,y,z) coordinates of the query node.
-        n_proposals_per_leaf : int
-            Number of proposals generated from node "query_id".
         radius : float
             Maximum Euclidean length of edge proposal.
 
         Returns
         -------
         list
-            List of "n_proposals_per_leaf" best edge proposals generated from
-            "query_node".
+            List of best edge proposals generated from "query_node".
 
         """
         best_xyz = dict()
@@ -283,19 +277,17 @@ class NeuroGraph(nx.Graph):
                 elif d < best_dist[swc_id]:
                     best_xyz[swc_id] = tuple(xyz)
                     best_dist[swc_id] = d
-        return self.get_best_proposals(
-            best_dist, best_xyz, n_proposals_per_leaf
-        )
+        return self.get_best_proposals(best_dist, best_xyz)
 
-    def get_best_proposals(self, dists, xyz, n_proposals_per_leaf):
+    def get_best_proposals(self, dists, xyz):
         """
-        Gets the at most "n_proposals_per_leaf" nodes that are closest to
+        Gets the at most "self.proposals_per_leaf" nodes that are closest to
         "xyz".
 
         """
-        if len(dists.keys()) > n_proposals_per_leaf:
+        if len(dists.keys()) > self.proposals_per_leaf:
             keys = sorted(dists, key=dists.__getitem__)
-            return [xyz[key] for key in keys[0:n_proposals_per_leaf]]
+            return [xyz[key] for key in keys[0:self.proposals_per_leaf]]
         else:
             return list(xyz.values())
 
@@ -582,13 +574,13 @@ class NeuroGraph(nx.Graph):
             segment_i = self.get_branches(i)[0]
             for xyz_i in segment_i:
                 for xyz_j in self.query_kdtree(xyz_i, 8):
-                    swc_id_j, node = self.xyz_to_swc(xyz_j)
+                    swc_id_j, node = self.xyz_to_swc(xyz_j, return_node=True)
                     if swc_id_i != swc_id_j:
                         hits = utils.append_dict_value(hits, swc_id_j, node)
                         break
 
             # Parse queried components
-            swc_id_j, n_close = find_best(hits)
+            swc_id_j, n_close = utils.find_best(hits)
             percent_close = n_close / len(segment_i)
             if swc_id_j is not None and percent_close > 0.5:
                 j = sample(hits[swc_id_j], 1)[0]
@@ -604,10 +596,13 @@ class NeuroGraph(nx.Graph):
                     return True
         return False
 
-    def xyz_to_swc(self, xyz):
+    def xyz_to_swc(self, xyz, return_node=False):
         edge = self.xyz_to_edge[tuple(xyz)]
         i, j = tuple(edge)
-        return self.edges[edge]["swc_id"], i
+        if return_node:
+            return self.edges[edge]["swc_id"], i
+        else:
+            return self.edges[edge]["swc_id"]
 
     def component_cardinality(self, root):
         cardinality = 0
@@ -626,14 +621,29 @@ class NeuroGraph(nx.Graph):
                     queue.append((j, k))
         return cardinality
 
-# -- utils --
-def find_best(my_dict):
-    best_key = None
-    best_vote_cnt = 0
-    if len(my_dict) > 0:
-        for key, values in my_dict.items():
-            vote_cnt = len(values)
-            if vote_cnt > best_vote_cnt:
-                best_key = key
-                best_vote_cnt = vote_cnt
-    return best_key, best_vote_cnt
+    def filter_nodes(self):
+        # Find nodes to filter
+        ingest_nodes = set()
+        for i in [i for i in self.nodes if self.degree[i] == 2]:
+            if len(self.nodes[i]["proposals"]) == 0:
+                ingest_nodes.add(i)
+
+        # Ingest nodes to be filtered
+        for i in ingest_nodes:
+            nbs = list(self.neighbors(i))
+            self.merge_edges(i, nbs[0], nbs[1])
+
+    def merge_edges(self, i, nb_1, nb_2):
+        # Get attributes
+        xyz = self.get_branches(i, key="xyz")
+        radius = self.get_branches(i, key="radius")
+
+        # Edit graph
+        self.remove_node(i)
+        self.add_edge(
+            nb_1,
+            nb_2,
+            xyz=np.vstack([np.flip(xyz[1], axis=0), xyz[0][1:, :]]),
+            radius=np.concatenate((radius[0], np.flip(radius[1]))),
+            swc_id=self.nodes[nb_1]["swc_id"]
+        )
