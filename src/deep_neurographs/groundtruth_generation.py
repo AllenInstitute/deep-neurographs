@@ -9,8 +9,12 @@ should be accepted or rejected).
 
 """
 
+import networkx as nx
 import numpy as np
+from copy import deepcopy
+from random import sample
 
+from deep_neurographs import utils
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs.geometry import dist as get_dist
 
@@ -28,28 +32,35 @@ def init_targets(target_neurograph, pred_neurograph):
         if not gutils.creates_cycle(groundtruth_graph, tuple(edge)):
             groundtruth_graph.add_edges_from([edge])
             target_edges.add(edge)
-
-    # Report % positive examples
-    print("% accepts:", len(target_edges) / len(pred_neurograph.proposals))
     return target_edges
 
 
 def get_valid_proposals(target_neurograph, pred_neurograph):
     # Detect components unaligned to ground truth
     invalid = set()
-    pred_densegraph = pred_neurograph.init_densegraph()
-    for swc_id, graph in pred_densegraph.graphs.items():
-        if not is_component_aligned(target_neurograph, graph):
-            invalid.add(swc_id)
+    pred_to_target = dict()
+    for node_subset in nx.connected_components(pred_neurograph):
+        node = sample(list(node_subset), 1)[0]
+        pred_swc_id = pred_neurograph.nodes[node]["swc_id"]
+        aligned_bool, target_swc_id = is_component_aligned(
+            target_neurograph, pred_neurograph, node_subset
+        )
+        if not aligned_bool:
+            node = sample(list(node_subset), 1)[0]
+            invalid.add(pred_swc_id)
+        else:
+            pred_to_target[pred_swc_id] = target_swc_id
 
     # Find valid proposals
     valid_proposals = list()
     for edge in pred_neurograph.proposals:
-        # Check whether aligned to a target component
+        # Check whether aligned to some/same target component
         i, j = tuple(edge)
-        invalid_i = pred_neurograph.nodes[i]["swc_id"] in invalid
-        invalid_j = pred_neurograph.nodes[j]["swc_id"] in invalid
-        if invalid_i or invalid_j:
+        swc_id_i = pred_neurograph.nodes[i]["swc_id"]
+        swc_id_j = pred_neurograph.nodes[j]["swc_id"]
+        if swc_id_i in invalid or swc_id_j in invalid:
+            continue
+        elif pred_to_target[swc_id_i] != pred_to_target[swc_id_j]:
             continue
 
         # Check whether aligned to same/adjacent target edges
@@ -61,11 +72,11 @@ def get_valid_proposals(target_neurograph, pred_neurograph):
     return valid_proposals
 
 
-def is_component_aligned(target_neurograph, graph):
+def is_component_aligned(target_neurograph, pred_neurograph, component):
     """
     Determines whether the connected component defined by "node_subset" is
-    close to a component in "target_densegraph". This routine iterates over
-    "node_subset" and projects each node onto "target_densegraph", then
+    close to a component in "target_neurograph". This routine iterates over
+    "node_subset" and projects each node onto "target_neurograph", then
     computes the projection distance. If (on average) each node in
     "node_subset" is less 3.5 microns from a component in the ground truth,
     then "node_subset" is aligned.
@@ -74,8 +85,8 @@ def is_component_aligned(target_neurograph, graph):
     ----------
     target_neurograph : NeuroGraph
         Graph that was generated using the ground truth swc files.
-    graph : networkx.Graph
-        Graph that corresponds to some swc file from the prediction.
+    component : ...
+        ...
 
     Returns
     -------
@@ -85,15 +96,31 @@ def is_component_aligned(target_neurograph, graph):
 
     """
     # Compute projection distances
-    dists = np.zeros((len(graph.nodes)))
-    for idx, i in enumerate(graph.nodes):
-        xyz = graph.nodes[i]["xyz"]
-        hat_xyz = target_neurograph.get_projection(xyz)
-        dists[idx] = get_dist(hat_xyz, xyz)
+    cardinality = 0
+    dists = dict()
+    for edge in pred_neurograph.subgraph(component).edges:
+        for xyz in pred_neurograph.edges[edge]["xyz"]:
+            cardinality += 1
+            hat_xyz = target_neurograph.get_projection(tuple(xyz))
+            d = get_dist(hat_xyz, xyz)
+
+            target_swc_id = target_neurograph.xyz_to_swc(hat_xyz)
+            dists = utils.append_dict_value(dists, target_swc_id, d)
 
     # Determine whether aligned
-    idxs = dists < np.percentile(dists, 90)
-    return False if np.mean(dists[idxs]) > 4 else True
+    if not is_merged(dists):
+        target_swc_id, n_votes = utils.find_best(dists)
+        if np.mean(dists[target_swc_id]) < 5 and n_votes / cardinality > 0.5:
+            return True, target_swc_id
+    return False, None
+
+
+def is_merged(dists):
+    close_components = []
+    for key in dists.keys():
+        if np.mean(dists[key]) < 5 and len(dists[key]) > 16:
+            close_components.append((key, len(dists[key]), np.mean(dists[key])))
+    return False if len(close_components) <= 1 else True
 
 
 def is_mutually_aligned(target_neurograph, branches_i, branches_j):
