@@ -351,9 +351,7 @@ def dist(v_1, v_2, metric="l2"):
 
 def check_dists(xyz_1, xyz_2, xyz_3, radius):
     """
-    Checks whether distance between "xyz_1", "xyz_3" and "xyz_2", "xyz_3" is
-    sufficiently small. Routine is used during edge proposal generation to
-    determine whether to create new vertex at "xyz_2" or draw proposal between
+    Determine whether to create new vertex at "xyz_2" or draw proposal between
     "xyz_1" and existing node at "xyz_3".
 
     Parameters
@@ -375,7 +373,7 @@ def check_dists(xyz_1, xyz_2, xyz_3, radius):
 
     """
     d_1 = dist(xyz_1, xyz_3) < radius
-    d_2 = dist(xyz_2, xyz_3) < 5
+    d_2 = dist(xyz_2, xyz_3) < 10
     return True if d_1 and d_2 else False
 
 

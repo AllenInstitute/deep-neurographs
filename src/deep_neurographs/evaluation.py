@@ -58,6 +58,7 @@ def run_evaluation(neurographs, blocks, pred_edges):
         metrics contained in this dictionary are identical to "METRICS_LIST"].
 
     """
+    avg_wgts = {"Overall": [], "Simple": [], "Complex": []}
     stats = {
         "Overall": init_stats(),
         "Simple": init_stats(),
@@ -84,12 +85,15 @@ def run_evaluation(neurographs, blocks, pred_edges):
         )
 
         # Store results
+        avg_wgts["Overall"].append(len(neurographs[block_id].proposals))
+        avg_wgts["Simple"].append(len(neurographs[block_id].get_simple_proposals()))
+        avg_wgts["Complex"].append(len(neurographs[block_id].get_complex_proposals()))
         for metric in METRICS_LIST:
             stats["Overall"][metric].append(overall_stats_i[metric])
             stats["Simple"][metric].append(simple_stats_i[metric])
             stats["Complex"][metric].append(complex_stats_i[metric])
 
-    return stats
+    return stats, avg_wgts
 
 
 def get_predictions(idxs, idx_to_edge, y_pred):

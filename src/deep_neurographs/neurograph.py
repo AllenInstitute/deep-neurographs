@@ -7,7 +7,7 @@ Created on Sat July 15 9:00:00 2023
 Implementation of subclass of Networkx.Graph called "NeuroGraph".
 
 """
-
+import os
 import networkx as nx
 import numpy as np
 import tensorstore as ts
@@ -16,8 +16,8 @@ from scipy.spatial import KDTree
 
 from deep_neurographs import geometry
 from deep_neurographs import graph_utils as gutils
+from deep_neurographs import swc_utils
 from deep_neurographs import utils
-from deep_neurographs.densegraph import DenseGraph
 from deep_neurographs.geometry import check_dists
 from deep_neurographs.geometry import dist as get_dist
 from deep_neurographs.groundtruth_generation import init_targets
@@ -86,9 +86,6 @@ class NeuroGraph(nx.Graph):
             if edge not in self.proposals:
                 edges.append(edge)
         return edges
-
-    def init_densegraph(self):
-        return DenseGraph(self.swc_paths)
 
     # --- Add nodes or edges ---
     def add_swc_id(self, swc_id):
@@ -586,7 +583,7 @@ class NeuroGraph(nx.Graph):
                 j = sample(hits[swc_id_j], 1)[0]
                 length_i = len(segment_i)
                 length_j = self.component_cardinality(j)
-                if length_i / length_j < 0.5:
+                if length_i / length_j < 0.6:
                     #print("swc_id_i:", swc_id_i)
                     #print("swc_id_j:", swc_id_j)
                     #print("% branch hit:", percent_close)
@@ -631,9 +628,9 @@ class NeuroGraph(nx.Graph):
         # Ingest nodes to be filtered
         for i in ingest_nodes:
             nbs = list(self.neighbors(i))
-            self.merge_edges(i, nbs[0], nbs[1])
+            self.absorb_node(i, nbs[0], nbs[1])
 
-    def merge_edges(self, i, nb_1, nb_2):
+    def absorb_node(self, i, nb_1, nb_2):
         # Get attributes
         xyz = self.get_branches(i, key="xyz")
         radius = self.get_branches(i, key="radius")
@@ -647,3 +644,59 @@ class NeuroGraph(nx.Graph):
             radius=np.concatenate((radius[0], np.flip(radius[1]))),
             swc_id=self.nodes[nb_1]["swc_id"]
         )
+     
+    def merge_proposal(self, edge):
+        # Attributes
+        i, j = tuple(edge)
+        xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
+        radius = np.array([self.nodes[i]["radius"], self.nodes[j]["radius"]])
+
+        # Add
+        self.add_edge(
+            i,
+            j,
+            xyz=xyz,
+            radius=radius,
+            swc_id="merged",
+        )
+        del self.proposals[edge]
+
+    def to_swc(self, path):
+        for i, component in enumerate(nx.connected_components(self)):
+            component_path = os.path.join(path, f"neuron-{i}.swc")
+            self.component_to_swc(component_path, component)
+
+    def component_to_swc(self, path, component):
+        node_to_idx = dict()
+        entry_list = []
+        for i, j in nx.dfs_edges(self.subgraph(component)):
+            # Initialize
+            if len(entry_list) == 0:
+                x, y, z = tuple(self.nodes[i]["xyz"])
+                r = self.nodes[j]["radius"]
+                entry_list.append([1, 2, x, y, z, r, -1])
+                node_to_idx[i] = 1
+
+            # Create entry
+            parent = node_to_idx[i]
+            entry_list = self.branch_to_entries(entry_list, i, j , parent)
+            node_to_idx[j] = len(entry_list)
+        swc_utils.write(path, entry_list)
+
+    def branch_to_entries(self, entry_list, i, j, parent):
+        # Orient branch
+        branch_xyz = self.edges[i, j]["xyz"]
+        branch_radius = self.edges[i, j]["radius"]
+        if (branch_xyz[0] != self.nodes[i]["xyz"]).any():
+            branch_xyz = np.flip(branch_xyz, axis=0)
+            branch_radius = np.flip(branch_radius, axis=0)
+
+        # Make entries
+        for k in range(1, len(branch_xyz)):
+            x, y, z = tuple(branch_xyz[k])
+            r = branch_radius[k]
+            node_id = len(entry_list) + 1
+            parent = len(entry_list) if k > 1 else parent
+            entry_list.append([node_id, 2, x+1, y, z, r, parent])
+        return entry_list
+            

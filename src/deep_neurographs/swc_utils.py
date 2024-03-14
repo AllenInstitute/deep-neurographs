@@ -177,7 +177,6 @@ def fast_parse(contents, anisotropy=[1.0, 1.0, 1.0]):
 
     """
     contents, offset = get_contents(contents)
-    min_id = np.inf
     swc_dict = {
         "id": np.zeros((len(contents)), dtype=np.int32),
         "radius": np.zeros((len(contents)), dtype=np.float32),
@@ -194,9 +193,9 @@ def fast_parse(contents, anisotropy=[1.0, 1.0, 1.0]):
         )
 
     # Reindex from zero
-    min_id = np.min(swc_dict["id"])
-    swc_dict["id"] -= min_id
-    swc_dict["pid"] -= min_id
+    #min_id = np.min(swc_dict["id"])
+    #swc_dict["id"] -= min_id
+    #swc_dict["pid"] -= min_id
     swc_dict["radius"] /= 1000.0
     return swc_dict
 
@@ -341,7 +340,6 @@ def write_graph(path, graph, color=None):
         entry, reindex = make_entry(graph, j, reindex[i], r, reindex)
         entry_list.append(entry)
     write_list(path, entry_list)
-
 
 def set_radius(graph, i):
     try:

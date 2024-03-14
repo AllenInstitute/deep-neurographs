@@ -16,7 +16,6 @@ import numpy as np
 import torch
 import torch.utils.data as torch_data
 from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning.pytorch.profilers import PyTorchProfiler
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from torch.nn.functional import sigmoid
 from torch.utils.data import DataLoader
@@ -77,7 +76,7 @@ def get_kfolds(filenames, k):
 
 # -- Training --
 def fit_model(
-    model_type, X, y, lr=1e-3, logger=False, max_epochs=50, n_estimators=100, profile=False
+    model_type, X, y, augmentation=False, lr=1e-3, logger=False, max_epochs=50, n_estimators=100
 ):
     """
     Fits a model to a training dataset.
@@ -101,9 +100,6 @@ def fit_model(
     max_epochs : int, optional
         Maximum number of epochs used to train neural network. The default is
         50.
-    profile : bool, optional
-        Indication of whether to profile runtime of training neural network.
-        The default is False.
 
     Returns
     -------
@@ -111,7 +107,7 @@ def fit_model(
     """
     if model_type in ["FeedForwardNet", "ConvNet", "MultiModalNet"]:
         data = {"inputs": X, "labels": y}
-        net, dataset = get_model(model_type, data=data)
+        net, dataset = get_model(model_type, augmentation=augmentation, data=data)
         model = train_network(
             net, dataset, logger=logger, lr=lr, max_epochs=max_epochs
         )
@@ -125,7 +121,7 @@ def evaluate_model():
     pass
 
 
-def get_model(model_type, data=None, n_estimators=100):
+def get_model(model_type, augmentation=False, data=None, n_estimators=100):
     """
     Gets classification model to be fit.
 
@@ -153,7 +149,7 @@ def get_model(model_type, data=None, n_estimators=100):
     elif model_type == "FeedForwardNet":
         n_features = extracter.count_features(model_type)
         net = models.FeedForwardNet(n_features)
-        dataset = ds.ProposalDataset(data["inputs"], data["labels"])
+        dataset = ds.ProposalDataset(data["inputs"], data["labels"], transform=augmentation)
     elif model_type == "ConvNet":
         net = models.ConvNet()
         models.init_weights(net)
@@ -171,7 +167,7 @@ def get_model(model_type, data=None, n_estimators=100):
 
 
 def train_network(
-    net, dataset, logger=False, lr=1e-3, max_epochs=50, profile=False
+    net, dataset, logger=False, lr=1e-3, max_epochs=50
 ):
     # Load data
     train_set, valid_set = random_split(dataset)
@@ -192,7 +188,6 @@ def train_network(
     # Configure trainer
     model = LitNeuralNet(net=net, lr=lr)
     ckpt_callback = ModelCheckpoint(save_top_k=1, monitor="val_f1", mode="max")
-    profiler = PyTorchProfiler() if profile else None
 
     # Fit model
     trainer = pl.Trainer(
@@ -204,7 +199,6 @@ def train_network(
         logger=logger,
         log_every_n_steps=1,
         max_epochs=max_epochs,
-        profiler=profiler,
     )
     trainer.fit(model, train_loader, valid_loader)
 

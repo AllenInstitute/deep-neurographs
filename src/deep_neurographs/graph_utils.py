@@ -146,7 +146,7 @@ def __get_irreducibles(graph, swc_dict, smooth):
         # Check if start of path is valid
         if root is None:
             root = i
-            attrs = init_edge_attrs(swc_dict, i)
+            attrs = init_edge_attrs(swc_dict, root)
 
         # Visit j
         attrs = upd_edge_attrs(swc_dict, attrs, j)
@@ -447,6 +447,8 @@ def init_edge_attrs(swc_dict, i):
         Edge attribute dictionary.
 
     """
+    swc_id = swc_dict["swc_id"]
+    assert i in swc_dict["idx"].keys(), f"{swc_id} - {i}"
     j = swc_dict["idx"][i]
     return {"radius": [swc_dict["radius"][j]], "xyz": [swc_dict["xyz"][j]]}
 
@@ -470,6 +472,8 @@ def upd_edge_attrs(swc_dict, attrs, i):
         Edge attribute dictionary.
 
     """
+    swc_id = swc_dict["swc_id"]
+    assert i != -1, f"{swc_id} - {i}"
     j = swc_dict["idx"][i]
     attrs["radius"].append(swc_dict["radius"][j])
     attrs["xyz"].append(swc_dict["xyz"][j])
