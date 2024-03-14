@@ -447,7 +447,7 @@ def count_features(model_type):
 
     """
     if model_type != "ConvNet":
-        return N_SKEL_FEATURES + N_PROFILE_POINTS
+        return N_SKEL_FEATURES + N_PROFILE_POINTS + 2
 
 
 def combine_features(features):
@@ -458,8 +458,7 @@ def combine_features(features):
             if combined[edge] is None:
                 combined[edge] = deepcopy(features[key][edge])
             else:
-                continue
-                combined[edge] = np.concatenate(
-                    (combined[edge], features[key][edge])
-                )
+                combined[edge] = np.append(combined[edge], np.mean(features[key][edge]))
+                combined[edge] = np.append(combined[edge], np.std(features[key][edge]))
+                combined[edge] = np.concatenate((combined[edge], features[key][edge]))
     return combined

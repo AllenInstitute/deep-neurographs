@@ -38,18 +38,13 @@ def init_targets(target_neurograph, pred_neurograph):
 def get_valid_proposals(target_neurograph, pred_neurograph):
     # Detect components unaligned to ground truth
     invalid = set()
-    pred_to_target = dict()
-    for node_subset in nx.connected_components(pred_neurograph):
-        node = sample(list(node_subset), 1)[0]
-        pred_swc_id = pred_neurograph.nodes[node]["swc_id"]
-        aligned_bool, target_swc_id = is_component_aligned(
-            target_neurograph, pred_neurograph, node_subset
+    for component in nx.connected_components(pred_neurograph):
+        aligned_bool = is_component_aligned(
+            target_neurograph, pred_neurograph, component
         )
         if not aligned_bool:
-            node = sample(list(node_subset), 1)[0]
-            invalid.add(pred_swc_id)
-        else:
-            pred_to_target[pred_swc_id] = target_swc_id
+            i = sample(list(component), 1)[0]
+            invalid.add(pred_neurograph.nodes[i]["swc_id"])
 
     # Find valid proposals
     valid_proposals = list()
@@ -59,8 +54,6 @@ def get_valid_proposals(target_neurograph, pred_neurograph):
         swc_id_i = pred_neurograph.nodes[i]["swc_id"]
         swc_id_j = pred_neurograph.nodes[j]["swc_id"]
         if swc_id_i in invalid or swc_id_j in invalid:
-            continue
-        elif pred_to_target[swc_id_i] != pred_to_target[swc_id_j]:
             continue
 
         # Check whether aligned to same/adjacent target edges
@@ -95,32 +88,12 @@ def is_component_aligned(target_neurograph, pred_neurograph, component):
         component in "self".
 
     """
-    # Compute projection distances
-    cardinality = 0
-    dists = dict()
+    dists = []
     for edge in pred_neurograph.subgraph(component).edges:
         for xyz in pred_neurograph.edges[edge]["xyz"]:
-            cardinality += 1
             hat_xyz = target_neurograph.get_projection(tuple(xyz))
-            d = get_dist(hat_xyz, xyz)
-
-            target_swc_id = target_neurograph.xyz_to_swc(hat_xyz)
-            dists = utils.append_dict_value(dists, target_swc_id, d)
-
-    # Determine whether aligned
-    if not is_merged(dists):
-        target_swc_id, n_votes = utils.find_best(dists)
-        if np.mean(dists[target_swc_id]) < 5 and n_votes / cardinality > 0.5:
-            return True, target_swc_id
-    return False, None
-
-
-def is_merged(dists):
-    close_components = []
-    for key in dists.keys():
-        if np.mean(dists[key]) < 5 and len(dists[key]) > 16:
-            close_components.append((key, len(dists[key]), np.mean(dists[key])))
-    return False if len(close_components) <= 1 else True
+            dists.append(get_dist(hat_xyz, xyz))
+    return True if np.mean(dists) < 5 else False
 
 
 def is_mutually_aligned(target_neurograph, branches_i, branches_j):
@@ -136,6 +109,9 @@ def is_mutually_aligned(target_neurograph, branches_i, branches_j):
     else:
         return False
 
+
+def is_proposal_aligned(target_neurograph, pred_neurograph, edge):
+    pass
 
 def is_adjacent(neurograph, edge_i, edge_j):
     """
