@@ -24,6 +24,7 @@ import tensorstore as ts
 
 from deep_neurographs import geometry, utils
 
+
 CHUNK_SIZE = [64, 64, 64]
 WINDOW = [5, 5, 5]
 N_PROFILE_POINTS = 10
@@ -254,7 +255,6 @@ def generate_skel_features(neurograph, proposals):
             ),
             axis=None,
         )
-        #print("")
     return features
 
 
@@ -326,8 +326,7 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
     # Initialize
     X = None
     y = None
-    
-    
+
     block_to_idxs = dict()
     idx_to_edge = dict()
 

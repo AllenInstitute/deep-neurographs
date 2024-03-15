@@ -75,9 +75,12 @@ def process_gsc_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
                 for path in utils.list_files_in_gcs_zip(zip_content)
             ]
         for thread in as_completed(threads):
-            result = thread.result()
-            if len(result["id"]) > min_size:
-                swc_dicts.append(result)
+            try:
+                result = thread.result()
+                if len(result["id"]) > min_size:
+                    swc_dicts.append(result)
+            except:
+                pass
     return swc_dicts
 
 

@@ -502,11 +502,7 @@ def get_swc_id(path):
 
     """
     filename = path.split("/")[-1]
-    if ".0.swc" in filename:
-        return filename.replace(".0.swc", "")
-    else:
-        return filename.replace(".swc", "")
-
+    return filename.split(".")[0]
 
 def get_img_mip(img, axis=0):
     return np.max(img, axis=axis)
