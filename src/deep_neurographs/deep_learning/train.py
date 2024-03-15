@@ -14,6 +14,7 @@ from random import sample
 import lightning.pytorch as pl
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.utils.data as torch_data
 from lightning.pytorch.callbacks import ModelCheckpoint
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
@@ -28,11 +29,11 @@ from torcheval.metrics.functional import (
 from deep_neurographs import feature_extraction as extracter
 from deep_neurographs.deep_learning import datasets as ds
 from deep_neurographs.deep_learning import loss, models
+#from deep_neurographs.deep_learning.datasets import ConvNet, FeedForwardNet, MultiModalNet
 
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
 BATCH_SIZE = 32
-NUM_WORKERS = 0
 SHUFFLE = True
 SUPPORTED_MODELS = [
     "AdaBoost",
@@ -63,18 +64,38 @@ def get_kfolds(filenames, k):
     """
     folds = []
     samples = set(filenames)
-    num_samples = int(np.floor(len(filenames) / k))
-    assert num_samples > 0, "Sample size is too small for {}-folds".format(k)
+    n_samples = int(np.floor(len(filenames) / k))
+    assert n_samples > 0, "Sample size is too small for {}-folds".format(k)
     for i in range(k):
-        samples_i = sample(samples, num_samples)
+        samples_i = sample(samples, n_samples)
         samples = samples.difference(samples_i)
         folds.append(samples_i)
-        if num_samples > len(samples):
+        if n_samples > len(samples):
             break
     return folds
 
 
 # -- Training --
+def run_on_blocks(neurographs, features, dataset, model, block_ids=None):
+    # Set model_type
+    if type(model) == FeedForwardNet:
+        model_type = "FeedForwardNet"
+    elif type(model) == ConvNet:
+        model_type = "ConvNet"
+    elif type(model) == MultiModalNet:
+        model_type = "MultiModalNet"
+    else:
+        print("Input model instead of model_type")
+
+    # Initialize data
+    X_train, y_train, _, _ = extracter.get_feature_matrix(
+        neurographs,
+        features,
+        model_type,
+        block_ids=train_blocks,
+    )
+
+
 def fit_model(
     model_type, X, y, augmentation=False, lr=1e-3, logger=False, max_epochs=50, n_estimators=100
 ):
@@ -108,17 +129,13 @@ def fit_model(
     if model_type in ["FeedForwardNet", "ConvNet", "MultiModalNet"]:
         data = {"inputs": X, "labels": y}
         net, dataset = get_model(model_type, augmentation=augmentation, data=data)
-        model = train_network(
+        model = fit_network(
             net, dataset, logger=logger, lr=lr, max_epochs=max_epochs
         )
     else:
         model = get_model(model_type, n_estimators=n_estimators)
         model.fit(X, y)
     return model
-
-
-def evaluate_model():
-    pass
 
 
 def get_model(model_type, augmentation=False, data=None, n_estimators=100):
@@ -166,24 +183,16 @@ def get_model(model_type, augmentation=False, data=None, n_estimators=100):
     return net, dataset
 
 
-def train_network(
+def fit_network(
     net, dataset, logger=False, lr=1e-3, max_epochs=50
 ):
     # Load data
     train_set, valid_set = random_split(dataset)
-    train_loader = DataLoader(
-        train_set,
-        num_workers=NUM_WORKERS,
+    train_loader = DataLoader(train_set,
         batch_size=BATCH_SIZE,
-        pin_memory=True,
         shuffle=SHUFFLE,
     )
-    valid_loader = DataLoader(
-        valid_set,
-        batch_size=BATCH_SIZE,
-        num_workers=NUM_WORKERS,
-        pin_memory=True,
-    )
+    valid_loader = DataLoader(valid_set, batch_size=BATCH_SIZE)
 
     # Configure trainer
     model = LitNeuralNet(net=net, lr=lr)
@@ -208,7 +217,7 @@ def train_network(
     return model
 
 
-def random_split(train_set, train_ratio=0.85):
+def random_split(train_set, train_ratio=0.8):
     train_set_size = int(len(train_set) * train_ratio)
     valid_set_size = len(train_set) - train_set_size
     return torch_data.random_split(train_set, [train_set_size, valid_set_size])
@@ -235,7 +244,7 @@ def eval_network(X, model):
 class LitNeuralNet(pl.LightningModule):
     def __init__(self, net=None, lr=1e-3):
         super().__init__()
-        self.criterion = loss.DiceLoss()
+        self.criterion = nn.BCEWithLogitsLoss()
         self.net = net
         self.lr = lr
 

@@ -10,6 +10,7 @@ Evaluates performance of edge classifiation model.
 import numpy as np
 
 METRICS_LIST = [
+    "accuracy",
     "precision",
     "recall",
     "f1",
@@ -141,10 +142,11 @@ def get_stats(neurograph, proposals, pred_edges):
         "METRICS_LIST".
 
     """
-    tp, fp, p, r, f1 = get_accuracy(neurograph, proposals, pred_edges)
+    tp, fp, a, p, r, f1 = get_accuracy(neurograph, proposals, pred_edges)
     stats = {
         "# splits fixed": tp,
         "# merges created": fp,
+        "accuracy": a,
         "precision": p,
         "recall": r,
         "f1": f1,
@@ -181,11 +183,12 @@ def get_accuracy(neurograph, proposals, pred_edges):
         F1-score.
 
     """
-    tp, fp, fn = get_accuracy_counts(neurograph, proposals, pred_edges)
+    tp, tn, fp, fn = get_accuracy_counts(neurograph, proposals, pred_edges)
+    a = (tp + tn) / len(proposals) if len(proposals) else 1
     p = 1 if tp + fp == 0 else tp / (tp + fp)
     r = 1 if tp + fn == 0 else tp / (tp + fn)
     f1 = (2 * r * p) / max(r + p, 1e-3)
-    return tp, fp, p, r, f1
+    return tp, fp, a, p, r, f1
 
 
 def get_accuracy_counts(neurograph, proposals, pred_edges):
@@ -213,6 +216,7 @@ def get_accuracy_counts(neurograph, proposals, pred_edges):
 
     """
     tp = 0
+    tn = 0
     fp = 0
     fn = 0
     for edge in proposals:
@@ -221,6 +225,9 @@ def get_accuracy_counts(neurograph, proposals, pred_edges):
                 tp += 1
             else:
                 fn += 1
-        elif edge in pred_edges:
-            fp += 1
-    return tp, fp, fn
+        else:
+            if edge in pred_edges:
+                fp += 1
+            else:
+                tn += 1
+    return tp, tn, fp, fn
