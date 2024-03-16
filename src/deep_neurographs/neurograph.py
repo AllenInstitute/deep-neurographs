@@ -128,7 +128,7 @@ class NeuroGraph(nx.Graph):
                 self.junctions.add(cur_id)
             cur_id += 1
         return node_ids, cur_id
-
+        
     # --- Proposal and Ground Truth Generation ---
     def generate_proposals(
         self,
