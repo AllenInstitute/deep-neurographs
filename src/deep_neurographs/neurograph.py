@@ -72,20 +72,12 @@ class NeuroGraph(nx.Graph):
         graph = nx.Graph()
         graph.add_nodes_from(self.nodes(data=add_attrs))
         if add_attrs:
-            for edge in self.get_edges_temp():
+            for edge in self.edges:
                 i, j = tuple(edge)
                 graph.add_edge(i, j, **self.get_edge_data(i, j))
         else:
-            graph.add_edges_from(self.get_edges_temp())
+            graph.add_edges_from(self.edges)
         return graph
-
-    def get_edges_temp(self):
-        edges = []
-        for edge in self.edges:
-            edge = frozenset(edge)
-            if edge not in self.proposals:
-                edges.append(edge)
-        return edges
 
     # --- Add nodes or edges ---
     def add_swc_id(self, swc_id):
@@ -107,17 +99,18 @@ class NeuroGraph(nx.Graph):
         # Add edges
         for edge, values in irreducibles["edges"].items():
             i, j = edge
-            self.add_edge(
-                node_ids[i],
-                node_ids[j],
-                radius=values["radius"],
-                xyz=values["xyz"],
-                swc_id=swc_id,
-            )
-            edge = (node_ids[i], node_ids[j])
-            for xyz in values["xyz"][::2]:
-                self.xyz_to_edge[tuple(xyz)] = edge
-            self.xyz_to_edge[tuple(values["xyz"][-1])] = edge
+            if self.branch_contained(values["xyz"]):
+                self.add_edge(
+                    node_ids[i],
+                    node_ids[j],
+                    radius=values["radius"],
+                    xyz=values["xyz"],
+                    swc_id=swc_id,
+                )
+                edge = (node_ids[i], node_ids[j])
+                for xyz in values["xyz"][::2]:
+                    self.xyz_to_edge[tuple(xyz)] = edge
+                self.xyz_to_edge[tuple(values["xyz"][-1])] = edge
 
     def __add_nodes(self, nodes, key, node_ids, cur_id, swc_id):
         for i in nodes[key].keys():
@@ -135,7 +128,7 @@ class NeuroGraph(nx.Graph):
                 self.junctions.add(cur_id)
             cur_id += 1
         return node_ids, cur_id
-
+        
     # --- Proposal and Ground Truth Generation ---
     def generate_proposals(
         self,
@@ -493,6 +486,12 @@ class NeuroGraph(nx.Graph):
         else:
             return True
 
+    def branch_contained(self, xyz_list):
+        if self.bbox:
+            return all([self.is_contained(xyz, buffer=-32) for xyz in xyz_list])
+        else:
+            return True
+
     def to_img(self, node_or_xyz, shift=False):
         shift = self.origin if shift else np.zeros((3))
         if type(node_or_xyz) == int:
@@ -630,6 +629,17 @@ class NeuroGraph(nx.Graph):
             nbs = list(self.neighbors(i))
             self.absorb_node(i, nbs[0], nbs[1])
 
+    def delete_isolated(self):
+        delete_nodes = set()
+        for i in self.nodes:
+            if self.degree[i] == 0:
+                delete_nodes.add(i)
+                if i in self.leafs:
+                    self.leafs.remove(i)
+                elif i in self.junctions:
+                    self.junctions.remove(i)
+        self.remove_nodes_from(delete_nodes)
+        
     def absorb_node(self, i, nb_1, nb_2):
         # Get attributes
         xyz = self.get_branches(i, key="xyz")
@@ -663,7 +673,9 @@ class NeuroGraph(nx.Graph):
 
     def to_swc(self, path):
         for i, component in enumerate(nx.connected_components(self)):
-            component_path = os.path.join(path, f"neuron-{i}.swc")
+            node = sample(component, 1)[0]
+            swc_id = self.nodes[node]["swc_id"]
+            component_path = os.path.join(path, f"{swc_id}.swc")
             self.component_to_swc(component_path, component)
 
     def component_to_swc(self, path, component):

@@ -476,7 +476,7 @@ def get_avg_std(data, weights=None):
     return avg, math.sqrt(var)
 
 
-def is_contained(bbox, xyz, buffer=5):
+def is_contained(bbox, xyz, buffer=0):
     above = any(xyz > bbox["max"] - buffer)
     below = any(xyz < bbox["min"] + buffer)
     return False if above or below else True

@@ -32,9 +32,9 @@ def build_from_soma(
     pass
 
 
-def get_swc_ids(path, xyz, chunk_shape):
+def get_swc_ids(path, xyz, chunk_shape, from_center=True):
     img = utils.open_tensorstore(path, "neuroglancer_precomputed")
-    img = utils.read_tensorstore(img, xyz, chunk_shape)
+    img = utils.read_tensorstore(img, xyz, chunk_shape, from_center=from_center)
     return set(fastremap.unique(img).astype(int))
 
 

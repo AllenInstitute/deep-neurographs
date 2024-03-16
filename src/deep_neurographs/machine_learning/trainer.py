@@ -27,9 +27,9 @@ from torcheval.metrics.functional import (
 )
 
 from deep_neurographs import feature_extraction as extracter
-from deep_neurographs.deep_learning import datasets as ds
-from deep_neurographs.deep_learning import loss, models
-#from deep_neurographs.deep_learning.datasets import ConvNet, FeedForwardNet, MultiModalNet
+from deep_neurographs.machine_learning import datasets as ds
+from deep_neurographs.machine_learning import loss, models, ml_utils
+#from deep_neurographs.deep_learning.models import ConvNet, FeedForwardNet, MultiModalNet
 
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
@@ -44,55 +44,19 @@ SUPPORTED_MODELS = [
 ]
 
 
-# -- Cross Validation --
-def get_kfolds(filenames, k):
-    """
-    Partitions "filenames" into k-folds to perform cross validation.
-
-    Parameters
-    ----------
-    filenames : list[str]
-        List of filenames of samples for training.
-    k : int
-        Number of folds to be used in k-fold cross validation.
-
-    Returns
-    -------
-    folds : list[list[str]]
-        Partition of "filesnames" into k-folds.
-
-    """
-    folds = []
-    samples = set(filenames)
-    n_samples = int(np.floor(len(filenames) / k))
-    assert n_samples > 0, "Sample size is too small for {}-folds".format(k)
-    for i in range(k):
-        samples_i = sample(samples, n_samples)
-        samples = samples.difference(samples_i)
-        folds.append(samples_i)
-        if n_samples > len(samples):
-            break
-    return folds
-
-
 # -- Training --
-def run_on_blocks(neurographs, features, dataset, model, block_ids=None):
-    # Set model_type
-    if type(model) == FeedForwardNet:
-        model_type = "FeedForwardNet"
-    elif type(model) == ConvNet:
-        model_type = "ConvNet"
-    elif type(model) == MultiModalNet:
-        model_type = "MultiModalNet"
-    else:
-        print("Input model instead of model_type")
+def run(neurographs, features, model, block_ids=None):
+    i
 
+
+def run_on_blocks(neurographs, features, model, block_ids):
     # Initialize data
+    model_type = ml_utils.get_model_type(model)
     X_train, y_train, _, _ = extracter.get_feature_matrix(
         neurographs,
         features,
         model_type,
-        block_ids=train_blocks,
+        block_ids=block_ids,
     )
 
 
