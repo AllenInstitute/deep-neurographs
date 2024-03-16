@@ -8,10 +8,20 @@ Helper routines for training machine learning models.
 
 """
 
-import numpy as np
 from random import sample
-from deep_neurographs.machine_learning.models import ConvNet, FeedForwardNet, MultiModalNet
+
+import numpy as np
+
 from deep_neurographs import feature_extraction as extracter
+from deep_neurographs.machine_learning.datasets import (
+    ImgProposalDataset,
+    ProposalDataset,
+)
+from deep_neurographs.machine_learning.models import (
+    ConvNet,
+    FeedForwardNet,
+    MultiModalNet,
+)
 
 SUPPORTED_MODELS = [
     "AdaBoost",
@@ -81,35 +91,40 @@ def init_model(model_type):
         return MultiModalNet(n_features)
 
 
-def init_dataloader(model_type, augmentation=False):
+def init_dataset(inputs, targets, model_type, transform):
     """
     Gets classification model to be fit.
 
     Parameters
     ----------
+    inputs : ...
+        ...
+    targets : ...
+        ...
     model_type : str
-        Indication of type of model. Options are "AdaBoost",
-        "RandomForest", "FeedForwardNet", "ConvNet", and
-        "MultiModalNet".
-    data : dict, optional
-        Training data used to fit model. This dictionary must contain the keys
-        "inputs" and "labels" which correspond to the feature matrix and
-        target labels to be learned. The default is None.
-
+        Type of machine learning model, see "SUPPORTED_MODEL_TYPES" for
+        options.
+    transform : bool
+        Indication of whether to apply data augmentation
+    
     Returns
     -------
     ...
 
     """
     if model_type == "FeedForwardNet":
-        dataset = ds.ProposalDataset(data["inputs"], data["labels"], transform=augmentation)
+        return ProposalDataset(inputs, targets, transform=transform)
     elif model_type == "ConvNet":
-        dataset = ds.ImgProposalDataset(
-            data["inputs"], data["labels"], transform=True
-        )
+        return ImgProposalDataset(inputs, targets, transform=transform)
     elif model_type == "MultiModalNet":
-        models.init_weights(net)
-        dataset = ds.MultiModalDataset(
-            data["inputs"], data["labels"], transform=True
-        )
-    return net, dataset
+        return MultiModalDataset(inputs, targets, transform=transform)
+    else:
+        return {"inputs": inputs, "targets": targets}
+
+
+def get_dataset(neurographs, features, model, block_ids, transform=False):
+    model_type = ml_utils.get_model_type(model)
+    inputs, targets, _, _ = extracter.get_feature_matrix(
+        neurographs, features, model_type, block_ids=block_ids
+    )
+    return init_dataset(inputs, targets, model_type, transform)

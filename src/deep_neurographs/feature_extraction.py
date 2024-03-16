@@ -24,7 +24,6 @@ import tensorstore as ts
 
 from deep_neurographs import geometry, utils
 
-
 CHUNK_SIZE = [64, 64, 64]
 WINDOW = [5, 5, 5]
 N_PROFILE_POINTS = 10
@@ -239,7 +238,7 @@ def generate_img_profiles_via_superchunk(neurograph, proposals, path):
 def generate_skel_features(neurograph, proposals):
     features = dict()
     for edge in proposals:
-        #print("Proposals:", edge)
+        # print("Proposals:", edge)
         i, j = tuple(edge)
         features[edge] = np.concatenate(
             (
@@ -457,7 +456,13 @@ def combine_features(features):
             if combined[edge] is None:
                 combined[edge] = deepcopy(features[key][edge])
             else:
-                combined[edge] = np.append(combined[edge], np.mean(features[key][edge]))
-                combined[edge] = np.append(combined[edge], np.std(features[key][edge]))
-                combined[edge] = np.concatenate((combined[edge], features[key][edge]))
+                combined[edge] = np.append(
+                    combined[edge], np.mean(features[key][edge])
+                )
+                combined[edge] = np.append(
+                    combined[edge], np.std(features[key][edge])
+                )
+                combined[edge] = np.concatenate(
+                    (combined[edge], features[key][edge])
+                )
     return combined

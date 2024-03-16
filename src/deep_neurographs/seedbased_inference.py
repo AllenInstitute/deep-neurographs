@@ -15,8 +15,8 @@ from random import sample
 import fastremap
 import networkx as nx
 
-from deep_neurographs import utils
 from deep_neurographs import graph_utils as gutils
+from deep_neurographs import utils
 from deep_neurographs.neurograph import NeuroGraph
 
 CHUNK_SHAPE = (512, 512, 512)
@@ -34,7 +34,9 @@ def build_from_soma(
 
 def get_swc_ids(path, xyz, chunk_shape, from_center=True):
     img = utils.open_tensorstore(path, "neuroglancer_precomputed")
-    img = utils.read_tensorstore(img, xyz, chunk_shape, from_center=from_center)
+    img = utils.read_tensorstore(
+        img, xyz, chunk_shape, from_center=from_center
+    )
     return set(fastremap.unique(img).astype(int))
 
 

@@ -336,7 +336,7 @@ def read_tensorstore(arr, xyz, shape, from_center=True):
 def get_chunk(arr, xyz, shape, from_center=True):
     start, end = get_start_end(xyz, shape, from_center=from_center)
     return deepcopy(
-        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+        arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
     )
 
 
@@ -503,6 +503,7 @@ def get_swc_id(path):
     """
     filename = path.split("/")[-1]
     return filename.split(".")[0]
+
 
 def get_img_mip(img, axis=0):
     return np.max(img, axis=axis)
