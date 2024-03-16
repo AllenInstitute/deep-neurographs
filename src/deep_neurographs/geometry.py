@@ -25,7 +25,7 @@ def get_directional(neurograph, i, window_size):
     elif len(branches) == 2:
         branch_1 = get_sub_branch(branches[0], window_size)
         branch_2 = get_sub_branch(branches[1], window_size)
-        branch =  np.concatenate((branch_1, branch_2))
+        branch = np.concatenate((branch_1, branch_2))
         return compute_tangent(branch)
     else:
         return np.array([0, 0, 0])
@@ -37,7 +37,7 @@ def get_sub_branch(branch, window_size):
     else:
         return branch[0:window_size, :]
 
-                
+
 def compute_svd(xyz):
     """
     Compute singular value decomposition (svd) of an NxD array where N is the
@@ -179,7 +179,7 @@ def get_profile(img, xyz_arr, process_id=None, window=[5, 5, 5]):
 def fill_path(img, path, val=-1):
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
-        img[x - 1: x + 2, y - 1: y + 2, z - 1: z + 2] = val
+        img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
     return img
 
 

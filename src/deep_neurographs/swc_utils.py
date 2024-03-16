@@ -16,8 +16,7 @@ from zipfile import ZipFile
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry
-from deep_neurographs import utils
+from deep_neurographs import geometry, utils
 
 
 # -- io utils --
@@ -276,6 +275,7 @@ def write_graph(path, graph, color=None):
         entry, reindex = make_entry(graph, j, reindex[i], r, reindex)
         entry_list.append(entry)
     write_list(path, entry_list)
+
 
 def set_radius(graph, i):
     try:

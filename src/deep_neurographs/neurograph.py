@@ -8,16 +8,16 @@ Implementation of subclass of Networkx.Graph called "NeuroGraph".
 
 """
 import os
+from random import sample
+
 import networkx as nx
 import numpy as np
 import tensorstore as ts
-from random import sample
 from scipy.spatial import KDTree
 
 from deep_neurographs import geometry
 from deep_neurographs import graph_utils as gutils
-from deep_neurographs import swc_utils
-from deep_neurographs import utils
+from deep_neurographs import swc_utils, utils
 from deep_neurographs.geometry import check_dists
 from deep_neurographs.geometry import dist as get_dist
 from deep_neurographs.groundtruth_generation import init_targets
@@ -128,7 +128,7 @@ class NeuroGraph(nx.Graph):
                 self.junctions.add(cur_id)
             cur_id += 1
         return node_ids, cur_id
-        
+
     # --- Proposal and Ground Truth Generation ---
     def generate_proposals(
         self,
@@ -177,7 +177,7 @@ class NeuroGraph(nx.Graph):
                 # Check if double
                 doubles, not_doubles = self.upd_doubles(
                     i, doubles, not_doubles, filter_doubles
-                    )
+                )
                 if swc_id in doubles:
                     continue
 
@@ -218,7 +218,7 @@ class NeuroGraph(nx.Graph):
                     else:
                         existing_connections[swc_id] = {leaf_swc_id: edge}
 
-        #print("# doubles:", len(doubles))
+        # print("# doubles:", len(doubles))
 
         # Finish
         self.filter_nodes()
@@ -277,7 +277,7 @@ class NeuroGraph(nx.Graph):
         """
         if len(dists.keys()) > self.proposals_per_leaf:
             keys = sorted(dists, key=dists.__getitem__)
-            return [xyz[key] for key in keys[0:self.proposals_per_leaf]]
+            return [xyz[key] for key in keys[0 : self.proposals_per_leaf]]
         else:
             return list(xyz.values())
 
@@ -488,7 +488,9 @@ class NeuroGraph(nx.Graph):
 
     def branch_contained(self, xyz_list):
         if self.bbox:
-            return all([self.is_contained(xyz, buffer=-32) for xyz in xyz_list])
+            return all(
+                [self.is_contained(xyz, buffer=-32) for xyz in xyz_list]
+            )
         else:
             return True
 
@@ -566,7 +568,7 @@ class NeuroGraph(nx.Graph):
         if self.degree[i] == 1 and self.degree[nb] == 1:
             # Find near components
             swc_id_i = self.nodes[i]["swc_id"]
-            hits = dict() # near components
+            hits = dict()  # near components
             segment_i = self.get_branches(i)[0]
             for xyz_i in segment_i:
                 for xyz_j in self.query_kdtree(xyz_i, 8):
@@ -583,12 +585,12 @@ class NeuroGraph(nx.Graph):
                 length_i = len(segment_i)
                 length_j = self.component_cardinality(j)
                 if length_i / length_j < 0.6:
-                    #print("swc_id_i:", swc_id_i)
-                    #print("swc_id_j:", swc_id_j)
-                    #print("% branch hit:", percent_close)
-                    #print("length ratio:", length_i / length_j)
-                    #print("double:", swc_id_i)
-                    #print("")
+                    # print("swc_id_i:", swc_id_i)
+                    # print("swc_id_j:", swc_id_j)
+                    # print("% branch hit:", percent_close)
+                    # print("length ratio:", length_i / length_j)
+                    # print("double:", swc_id_i)
+                    # print("")
                     return True
         return False
 
@@ -639,7 +641,7 @@ class NeuroGraph(nx.Graph):
                 elif i in self.junctions:
                     self.junctions.remove(i)
         self.remove_nodes_from(delete_nodes)
-        
+
     def absorb_node(self, i, nb_1, nb_2):
         # Get attributes
         xyz = self.get_branches(i, key="xyz")
@@ -652,9 +654,9 @@ class NeuroGraph(nx.Graph):
             nb_2,
             xyz=np.vstack([np.flip(xyz[1], axis=0), xyz[0][1:, :]]),
             radius=np.concatenate((radius[0], np.flip(radius[1]))),
-            swc_id=self.nodes[nb_1]["swc_id"]
+            swc_id=self.nodes[nb_1]["swc_id"],
         )
-     
+
     def merge_proposal(self, edge):
         # Attributes
         i, j = tuple(edge)
@@ -662,13 +664,7 @@ class NeuroGraph(nx.Graph):
         radius = np.array([self.nodes[i]["radius"], self.nodes[j]["radius"]])
 
         # Add
-        self.add_edge(
-            i,
-            j,
-            xyz=xyz,
-            radius=radius,
-            swc_id="merged",
-        )
+        self.add_edge(i, j, xyz=xyz, radius=radius, swc_id="merged")
         del self.proposals[edge]
 
     def to_swc(self, path):
@@ -691,7 +687,7 @@ class NeuroGraph(nx.Graph):
 
             # Create entry
             parent = node_to_idx[i]
-            entry_list = self.branch_to_entries(entry_list, i, j , parent)
+            entry_list = self.branch_to_entries(entry_list, i, j, parent)
             node_to_idx[j] = len(entry_list)
         swc_utils.write(path, entry_list)
 
@@ -709,6 +705,5 @@ class NeuroGraph(nx.Graph):
             r = branch_radius[k]
             node_id = len(entry_list) + 1
             parent = len(entry_list) if k > 1 else parent
-            entry_list.append([node_id, 2, x+1, y, z, r, parent])
+            entry_list.append([node_id, 2, x + 1, y, z, r, parent])
         return entry_list
-            

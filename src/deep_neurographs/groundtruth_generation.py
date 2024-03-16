@@ -9,13 +9,14 @@ should be accepted or rejected).
 
 """
 
-import networkx as nx
-import numpy as np
 from copy import deepcopy
 from random import sample
 
-from deep_neurographs import utils
+import networkx as nx
+import numpy as np
+
 from deep_neurographs import graph_utils as gutils
+from deep_neurographs import utils
 from deep_neurographs.geometry import dist as get_dist
 
 
@@ -112,6 +113,7 @@ def is_mutually_aligned(target_neurograph, branches_i, branches_j):
 
 def is_proposal_aligned(target_neurograph, pred_neurograph, edge):
     pass
+
 
 def is_adjacent(neurograph, edge_i, edge_j):
     """

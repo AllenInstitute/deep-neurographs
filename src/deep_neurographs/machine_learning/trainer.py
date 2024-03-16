@@ -27,9 +27,7 @@ from torcheval.metrics.functional import (
 )
 
 from deep_neurographs import feature_extraction as extracter
-from deep_neurographs.machine_learning import datasets as ds
-from deep_neurographs.machine_learning import loss, models, ml_utils
-#from deep_neurographs.deep_learning.models import ConvNet, FeedForwardNet, MultiModalNet
+from deep_neurographs.machine_learning import loss, ml_utils, models
 
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
@@ -44,38 +42,23 @@ SUPPORTED_MODELS = [
 ]
 
 
-# -- Training --
-def run(neurographs, features, model, block_ids=None):
-    i
+def fit_model(model, dataset):
+    model.fit(dataset["inputs"], dataset["target"])
+    return model
 
 
-def run_on_blocks(neurographs, features, model, block_ids):
-    # Initialize data
-    model_type = ml_utils.get_model_type(model)
-    X_train, y_train, _, _ = extracter.get_feature_matrix(
-        neurographs,
-        features,
-        model_type,
-        block_ids=block_ids,
-    )
-
-
-def fit_model(
-    model_type, X, y, augmentation=False, lr=1e-3, logger=False, max_epochs=50, n_estimators=100
+def fit_network(
+    model, dataset, batch_size=BATCH_SIZE, logger=False, lr=1e-3, max_epochs=50
 ):
     """
-    Fits a model to a training dataset.
+    Fits a neural network to a dataset.
 
     Parameters
     ----------
-    model_type : str
-        Indication of type of model. Options are "AdaBoost",
-        "RandomForest", "FeedForwardNet", "ConvNet", and
-        "MultiModalNet".
-    X : numpy.ndarray
-        Feature matrix.
-    y : numpy.ndarray
-        Labels to be learned.
+    model : ...
+        ...
+    dataset : ...
+        ...
     lr : float, optional
         Learning rate to be used if model is a neural network. The default is
         1e-3.
@@ -90,80 +73,17 @@ def fit_model(
     -------
     ...
     """
-    if model_type in ["FeedForwardNet", "ConvNet", "MultiModalNet"]:
-        data = {"inputs": X, "labels": y}
-        net, dataset = get_model(model_type, augmentation=augmentation, data=data)
-        model = fit_network(
-            net, dataset, logger=logger, lr=lr, max_epochs=max_epochs
-        )
-    else:
-        model = get_model(model_type, n_estimators=n_estimators)
-        model.fit(X, y)
-    return model
-
-
-def get_model(model_type, augmentation=False, data=None, n_estimators=100):
-    """
-    Gets classification model to be fit.
-
-    Parameters
-    ----------
-    model_type : str
-        Indication of type of model. Options are "AdaBoost",
-        "RandomForest", "FeedForwardNet", "ConvNet", and
-        "MultiModalNet".
-    data : dict, optional
-        Training data used to fit model. This dictionary must contain the keys
-        "inputs" and "labels" which correspond to the feature matrix and
-        target labels to be learned. The default is None.
-
-    Returns
-    -------
-    ...
-
-    """
-    assert model_type in SUPPORTED_MODELS
-    if model_type == "AdaBoost":
-        return AdaBoostClassifier()
-    elif model_type == "RandomForest":
-        return RandomForestClassifier(n_estimators=n_estimators)
-    elif model_type == "FeedForwardNet":
-        n_features = extracter.count_features(model_type)
-        net = models.FeedForwardNet(n_features)
-        dataset = ds.ProposalDataset(data["inputs"], data["labels"], transform=augmentation)
-    elif model_type == "ConvNet":
-        net = models.ConvNet()
-        models.init_weights(net)
-        dataset = ds.ImgProposalDataset(
-            data["inputs"], data["labels"], transform=True
-        )
-    elif model_type == "MultiModalNet":
-        n_features = extracter.count_features(model_type)
-        net = models.MultiModalNet(n_features)
-        models.init_weights(net)
-        dataset = ds.MultiModalDataset(
-            data["inputs"], data["labels"], transform=True
-        )
-    return net, dataset
-
-
-def fit_network(
-    net, dataset, logger=False, lr=1e-3, max_epochs=50
-):
     # Load data
     train_set, valid_set = random_split(dataset)
-    train_loader = DataLoader(train_set,
-        batch_size=BATCH_SIZE,
-        shuffle=SHUFFLE,
-    )
-    valid_loader = DataLoader(valid_set, batch_size=BATCH_SIZE)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid_set, batch_size=batch_size)
 
     # Configure trainer
-    model = LitNeuralNet(net=net, lr=lr)
+    model = LitNeuralNet(net=model, lr=lr)
     ckpt_callback = ModelCheckpoint(save_top_k=1, monitor="val_f1", mode="max")
 
     # Fit model
-    trainer = pl.Trainer(
+    pylightning_trainer = pl.Trainer(
         accelerator="gpu",
         callbacks=[ckpt_callback],
         devices=1,
@@ -173,7 +93,7 @@ def fit_network(
         log_every_n_steps=1,
         max_epochs=max_epochs,
     )
-    trainer.fit(model, train_loader, valid_loader)
+    pylightning_trainer.fit(model, train_loader, valid_loader)
 
     # Return best model
     ckpt = torch.load(ckpt_callback.best_model_path)
