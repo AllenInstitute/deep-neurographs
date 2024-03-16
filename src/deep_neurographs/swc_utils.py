@@ -53,62 +53,45 @@ def process_local_paths(
     valid_paths = []
     swc_dicts = []
     for path in paths:
-        swc_dict = parse_local_swc(
-            path, anisotropy=anisotropy, img_bbox=img_bbox, min_size=min_size
-        )
-        if len(swc_dict["id"]) > min_size:
+        # Read contents
+        contents = read_from_local(path)
+        if len(contents) > min_size:
+            swc_dict = parse(contents, anisotropy=anisotropy)
+            swc_dict["swc_id"] = utils.get_swc_id(path)
             swc_dicts.append(swc_dict)
             valid_paths.append(path)
     return swc_dicts, valid_paths
 
 
 def process_gsc_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
-    swc_dicts = []
-    zip_blob = bucket.blob(zip_path)
-    zip_content = zip_blob.download_as_bytes()
+    zip_content = bucket.blob(zip_path).download_as_bytes()
     with ZipFile(BytesIO(zip_content)) as zip_file:
         with ThreadPoolExecutor() as executor:
+            # Assign threads
             threads = [
                 executor.submit(
                     parse_gcs_zip, zip_file, path, anisotropy, min_size
                 )
                 for path in utils.list_files_in_gcs_zip(zip_content)
             ]
-        for thread in as_completed(threads):
-            try:
-                result = thread.result()
-                if len(result["id"]) > min_size:
-                    swc_dicts.append(result)
-            except:
-                pass
+
+            # Process results
+            swc_dicts = []
+            for thread in as_completed(threads):
+                try:
+                    result = thread.result()
+                    if len(result["id"]) > min_size:
+                        swc_dicts.append(result)
+                except:
+                    pass
     return swc_dicts
-
-
-def parse_local_swc(
-    path, anisotropy=[1.0, 1.0, 1.0], img_bbox=None, min_size=0
-):
-    # Parse contents
-    contents = read_from_local(path)
-    parse_bool = len(contents) > min_size
-    if parse_bool and img_bbox:
-        swc_dict = parse(contents, img_bbox, anisotropy=anisotropy)
-    elif parse_bool:
-        swc_dict = fast_parse(contents, anisotropy=anisotropy)
-    else:
-        swc_dict = {"id": [-1]}
-
-    # Store id
-    swc_id = utils.get_swc_id(path)
-    swc_dict["swc_id"] = swc_id
-    return swc_dict
 
 
 def parse_gcs_zip(zip_file, path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     # Parse contents
     contents = read_from_gcs_zip(zip_file, path)
-    parse_bool = len(contents) > min_size
-    if parse_bool:
-        swc_dict = fast_parse(contents, anisotropy=anisotropy)
+    if len(contents) > min_size:
+        swc_dict = parse(contents, anisotropy=anisotropy)
     else:
         swc_dict = {"id": [-1]}
 
@@ -118,51 +101,7 @@ def parse_gcs_zip(zip_file, path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     return swc_dict
 
 
-def parse(contents, img_bbox, anisotropy=[1.0, 1.0, 1.0]):
-    """
-    Parses an swc file to extract the contents which is stored in a dict. Note
-    that node_ids from swc are refactored to index from 0 to n-1 where n is
-    the number of entries in the swc file.
-
-    Parameters
-    ----------
-    path : str
-        Path to an swc file.
-    ...
-
-    Returns
-    -------
-    ...
-
-    """
-    min_id = np.inf
-    contents, offset = get_contents(contents)
-    swc_dict = {"id": [], "radius": [], "pid": [], "xyz": []}
-    for line in contents:
-        parts = line.split()
-        xyz = read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
-        if img_bbox:
-            img_coord = utils.to_img(np.array(xyz))
-            if not utils.is_contained(img_bbox, img_coord, buffer=8):
-                break
-        swc_dict["id"].append(int(parts[0]))
-        swc_dict["radius"].append(float(parts[-2]))
-        swc_dict["pid"].append(int(parts[-1]))
-        swc_dict["xyz"].append(xyz)
-        if swc_dict["id"][-1] < min_id:
-            min_id = swc_dict["id"][-1]
-
-    # Reindex from zero and reformat
-    if len(swc_dict["id"]) > 0:
-        swc_dict["id"] = np.array(swc_dict["id"], dtype=int) - min_id
-        swc_dict["pid"] = np.array(swc_dict["pid"], dtype=int) - min_id
-        swc_dict["radius"] = np.array(swc_dict["radius"])
-        swc_dict["xyz"] = np.array(swc_dict["xyz"])
-
-    return swc_dict
-
-
-def fast_parse(contents, anisotropy=[1.0, 1.0, 1.0]):
+def parse(contents, anisotropy=[1.0, 1.0, 1.0]):
     """
     Parses an swc file to extract the contents which is stored in a dict. Note
     that node_ids from swc are refactored to index from 0 to n-1 where n is
@@ -194,12 +133,6 @@ def fast_parse(contents, anisotropy=[1.0, 1.0, 1.0]):
         swc_dict["xyz"][i] = read_xyz(
             parts[2:5], anisotropy=anisotropy, offset=offset
         )
-
-    # Reindex from zero
-    #min_id = np.min(swc_dict["id"])
-    #swc_dict["id"] -= min_id
-    #swc_dict["pid"] -= min_id
-    swc_dict["radius"] /= 1000.0
     return swc_dict
 
 

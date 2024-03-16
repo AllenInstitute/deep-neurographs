@@ -113,7 +113,7 @@ class ImgProposalDataset(Dataset):
         """
         self.inputs = inputs.astype(np.float32)
         self.labels = reformat(labels)
-        self.transform = Augmentator() if transform else None
+        self.transform = AugmentImages() if transform else None
 
     def __len__(self):
         """
@@ -186,7 +186,7 @@ class MultiModalDataset(Dataset):
         self.img_inputs = inputs["imgs"].astype(np.float32)
         self.feature_inputs = inputs["features"].astype(np.float32)
         self.labels = reformat(labels)
-        self.transform = Augmentator() if transform else None
+        self.transform = AugmentImages() if transform else None
 
     def __len__(self):
         """
@@ -227,8 +227,8 @@ class MultiModalDataset(Dataset):
         return {"inputs": inputs, "labels": self.labels[idx]}
 
 
-# Miscellaneous
-class Augmentator:
+# Augmentation
+class AugmentImages:
     """
     Applies augmentation to an image chunk.
 
@@ -236,7 +236,7 @@ class Augmentator:
 
     def __init__(self):
         """
-        Constructs an Augmentator object.
+        Constructs an AugmentImages object.
 
         Parameters
         ----------
@@ -276,6 +276,7 @@ class Augmentator:
         return self.transform(arr)
 
 
+# -- utils --
 def reformat(arr):
     """
     Reformats a label vector for training by adding a dimension and casting it

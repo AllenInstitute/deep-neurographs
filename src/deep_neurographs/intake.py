@@ -72,6 +72,11 @@ def build_neurograph_from_local(
         prune_depth=prune_depth,
         smooth=smooth,
     )
+    
+    # Delete nodes outside bbox
+    if img_bbox:
+        neurograph.delete_isolated()
+
     return neurograph
 
 
@@ -185,11 +190,9 @@ def download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy):
 
     """
     # Initializations
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
+    bucket = storage.Client().bucket(bucket_name)
     zip_paths = utils.list_gcs_filenames(bucket, cloud_path, ".zip")
     chunk_size = int(len(zip_paths) * 0.02)
-    print(f"# zip files: {len(zip_paths)}")
 
     # Parse
     cnt = 1
