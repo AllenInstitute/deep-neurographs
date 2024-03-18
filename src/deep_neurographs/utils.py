@@ -482,6 +482,10 @@ def is_contained(bbox, xyz, buffer=0):
     return False if above or below else True
 
 
+def is_list_contained(bbox, xyz_list):
+    return any([is_contained(bbox, to_img(xyz)) for xyz in xyz_list])
+
+
 # --- miscellaneous ---
 def get_img_bbox(origin, shape):
     """

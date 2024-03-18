@@ -62,21 +62,8 @@ def get_kfolds(filenames, k):
     return folds
 
 
-def get_model_type(model):
-    # Set model_type
-    assert model in SUPPORTED_MODELS, "Model not supported!"
-    if type(model) == FeedForwardNet:
-        return "FeedForwardNet"
-    elif type(model) == ConvNet:
-        return "ConvNet"
-    elif type(model) == MultiModalNet:
-        return "MultiModalNet"
-    else:
-        print("Input model instead of model_type")
-
-
 def init_model(model_type):
-    assert model_type in SUPPORTED_MODELS, "Model not supported!"
+    assert model_type in SUPPORTED_MODELS, f"{model_type} not supported!"
     if model_type == "AdaBoost":
         return AdaBoostClassifier()
     elif model_type == "RandomForest":
@@ -91,7 +78,7 @@ def init_model(model_type):
         return MultiModalNet(n_features)
 
 
-def init_dataset(inputs, targets, model_type, transform):
+def get_dataset(inputs, targets, model_type, transform):
     """
     Gets classification model to be fit.
 
@@ -122,9 +109,14 @@ def init_dataset(inputs, targets, model_type, transform):
         return {"inputs": inputs, "targets": targets}
 
 
-def get_dataset(neurographs, features, model, block_ids, transform=False):
-    model_type = ml_utils.get_model_type(model)
-    inputs, targets, _, _ = extracter.get_feature_matrix(
+def init_dataset(neurographs, features, model_type, block_ids, transform=False):
+    inputs, targets, block_to_idx, idx_to_edge = extracter.get_feature_matrix(
         neurographs, features, model_type, block_ids=block_ids
     )
-    return init_dataset(inputs, targets, model_type, transform)
+    dataset = {
+        "dataset": get_dataset(inputs, targets, model_type, transform),
+        "block_to_idxs": block_to_idx,
+        "idx_to_edge": idx_to_edge,
+    }
+    return dataset
+

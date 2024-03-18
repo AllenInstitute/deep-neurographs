@@ -82,6 +82,9 @@ class FeedForwardNet(nn.Module):
         x = self.output(x)
         return x
 
+    def model_type(self):
+        return "FeedForwardNet"
+
 
 class ConvNet(nn.Module):
     """
@@ -161,6 +164,9 @@ class ConvNet(nn.Module):
         x = self.conv2(x)
         x = self.output(vectorize(x))
         return x
+
+    def model_type(self):
+        return "ConvNet"
 
 
 class MultiModalNet(nn.Module):
@@ -274,6 +280,9 @@ class MultiModalNet(nn.Module):
         x = torch.cat((x0, x1), axis=1)
         x = self.output(x)
         return x
+
+    def model_type(self):
+        return "MultiModalNet"
 
 
 def init_weights(net):

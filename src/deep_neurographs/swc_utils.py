@@ -82,7 +82,7 @@ def process_gsc_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
                     if len(result["id"]) > min_size:
                         swc_dicts.append(result)
                 except:
-                    pass
+                    None
     return swc_dicts
 
 
