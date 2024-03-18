@@ -105,11 +105,11 @@ class NeuroGraph(nx.Graph):
                 self.xyz_to_edge[tuple(xyz)] = (ids[i], ids[j])
             self.xyz_to_edge[tuple(attrs["xyz"][-1])] = (ids[i], ids[j])
 
-    def __add_nodes(self, nodes, key, ids, cur_id):
+    def __add_nodes(self, nodes, key, node_ids, cur_id):
         for i in nodes[key].keys():
-            ids[i] = cur_id
+            node_ids[i] = cur_id
             self.add_node(
-                ids[i],
+                node_ids[i],
                 proposals=set(),
                 radius=nodes[key][i]["radius"],
                 swc_id=nodes["swc_id"],
@@ -120,7 +120,7 @@ class NeuroGraph(nx.Graph):
             else:
                 self.junctions.add(cur_id)
             cur_id += 1
-        return ids, cur_id
+        return node_ids, cur_id
 
     # --- Proposal and Ground Truth Generation ---
     def generate_proposals(

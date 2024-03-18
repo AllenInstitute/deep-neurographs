@@ -93,6 +93,7 @@ def get_dataset(inputs, targets, model_type, transform):
         options.
     transform : bool
         Indication of whether to apply data augmentation
+    
     Returns
     -------
     ...
