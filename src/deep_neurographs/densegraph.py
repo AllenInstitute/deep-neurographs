@@ -10,10 +10,10 @@ graph and each node in this graph.
 """
 
 import os
-import networkx as nx
-import numpy as np
 from random import sample
 from time import time
+
+import networkx as nx
 
 from deep_neurographs import swc_utils, utils
 
@@ -75,7 +75,7 @@ class DenseGraph:
             graph, _ = swc_utils.to_graph(swc_dict, set_attrs=True)
             graph = add_swc_id(graph, swc_id)
             self.graph = nx.disjoint_union(self.graph, graph)
-            
+
             # Report progress
             if i > cnt * chunk_size:
                 cnt, t1 = report_progress(
@@ -111,11 +111,12 @@ class DenseGraph:
 
         swc_utils.write(path, entry_list)
 
-    
+
 def add_swc_id(graph, swc_id):
     for i in graph.nodes:
         graph.nodes[i]["swc_id"] = swc_id
     return graph
+
 
 def report_progress(current, total, chunk_size, cnt, t0, t1):
     eta = get_eta(current, total, chunk_size, t1)

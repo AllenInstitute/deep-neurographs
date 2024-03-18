@@ -281,6 +281,7 @@ def build_neurograph(
         print("# connected components:", utils.reformat_number(n_components))
     irreducibles, n_nodes, n_edges = get_irreducibles(
         swc_dicts,
+        bbox=img_bbox,
         progress_bar=progress_bar,
         prune_connectors=prune_connectors,
         prune_spurious=prune_spurious,
@@ -315,6 +316,7 @@ def build_neurograph(
 
 def get_irreducibles(
     swc_dicts,
+    bbox=None,
     progress_bar=True,
     prune_connectors=PRUNE_CONNECTORS,
     prune_spurious=PRUNE_SPURIOUS,
@@ -333,6 +335,7 @@ def get_irreducibles(
             processes[i] = executor.submit(
                 gutils.get_irreducibles,
                 swc_dict,
+                bbox,
                 prune_connectors,
                 prune_spurious,
                 connector_length,
