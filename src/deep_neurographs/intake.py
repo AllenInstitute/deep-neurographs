@@ -130,7 +130,6 @@ def build_neurograph_from_local(
         prune_depth=prune_depth,
         smooth=smooth,
     )
-
     return neurograph
 
 

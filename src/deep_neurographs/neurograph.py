@@ -699,4 +699,5 @@ class NeuroGraph(nx.Graph):
             node_id = len(entry_list) + 1
             parent = len(entry_list) if k > 1 else parent
             entry_list.append([node_id, 2, x, y, z, r, parent])
+
         return entry_list
