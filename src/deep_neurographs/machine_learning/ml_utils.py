@@ -16,6 +16,7 @@ from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from deep_neurographs import feature_extraction as extracter
 from deep_neurographs.machine_learning.datasets import (
     ImgProposalDataset,
+    MultiModalDataset,
     ProposalDataset,
 )
 from deep_neurographs.machine_learning.models import (

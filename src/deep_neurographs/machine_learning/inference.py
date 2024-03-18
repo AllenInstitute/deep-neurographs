@@ -23,10 +23,8 @@ def predict(dataset, model, model_type):
         for batch in dataloader:
             with torch.no_grad():
                 x_i = batch["inputs"]
-                y_i = batch["targets"]
                 y_pred_i = sigmoid(model(x_i))
             y_pred.extend(np.array(y_pred_i).tolist())
-            #print((np.sum((np.array(y_pred_i) > 0.5) == (np.array(y_i) > 0))) / len(y_i))
     else:
         y_pred = model.predict_proba(dataset["inputs"])[:, 1]
     return np.array(y_pred)

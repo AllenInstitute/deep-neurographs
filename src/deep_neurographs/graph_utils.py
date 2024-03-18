@@ -32,6 +32,7 @@ from deep_neurographs import geometry, swc_utils, utils
 
 def get_irreducibles(
     swc_dict,
+    bbox=None,
     prune_connectors=False,
     prune_spurious=True,
     connector_length=8,
@@ -71,6 +72,7 @@ def get_irreducibles(
     # Build dense graph
     swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
     graph, _ = swc_utils.to_graph(swc_dict, set_attrs=True)
+    graph = trim_branches(graph, bbox)
     graph, connector_centroids = prune_branches(
         graph,
         prune_connectors=prune_connectors,
@@ -89,6 +91,17 @@ def get_irreducibles(
                 irreducibles.append(irreducibles_i)
 
     return irreducibles, connector_centroids
+
+
+def trim_branches(graph, bbox):
+    if bbox:
+        delete_nodes = set()
+        for i in graph.nodes:
+            xyz = utils.to_img(graph.nodes[i]["xyz"])
+            if not utils.is_contained(bbox, xyz):
+                delete_nodes.add(i)
+        graph.remove_nodes_from(delete_nodes)
+    return graph
 
 
 def prune_branches(
