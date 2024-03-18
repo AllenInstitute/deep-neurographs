@@ -143,7 +143,7 @@ def fit_spline(xyz, s=None):
         Spline fit to the z-coordinates of "xyz".
 
     """
-    s = xyz.shape[0] / 5 if not s else xyz.shape[0] / s
+    s = xyz.shape[0] / 10 if not s else xyz.shape[0] / s
     t = np.linspace(0, 1, xyz.shape[0])
     spline_x = UnivariateSpline(t, xyz[:, 0], s=s, k=3)
     spline_y = UnivariateSpline(t, xyz[:, 1], s=s, k=3)

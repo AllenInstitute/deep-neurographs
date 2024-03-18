@@ -50,6 +50,57 @@ def build_neurograph_from_local(
     prune_depth=PRUNE_DEPTH,
     smooth=SMOOTH,
 ):
+    """
+    Builds a neurograph from swc files on the local machine.
+
+    Parameters
+    ----------
+    anisotropy : list[float], optional
+        Scaling factors applied to xyz coordinates to account for anisotropy
+        of microscope. The default is [1.0, 1.0, 1.0].
+    swc_dir : str, optional
+        Path to a directory containing swc files. The default is None.
+    swc_paths : list[str], optional
+        List of paths to swc files. The default is None.
+    image_patch_origin : list[float], optional
+        An xyz coordinate in the image which is the upper, left, front corner
+        of am image patch that contains the swc files. The default is None.
+    image_patch_shape : list[float], optional
+        The xyz dimensions of the bounding box which contains the swc files.
+        The default is None.
+    img_path : str, optional
+        Path to image which is assumed to be stored in a Google Bucket. The
+        default is None.
+    min_size : int, optional
+        Minimum cardinality of swc files that are stored in NeuroGraph. The
+        default is the global variable "MIN_SIZE".
+    progress_bar : bool, optional
+        Indication of whether to print out a progress bar during build. The
+        default is False.
+    prune_connectors : bool, optional
+        Indication of whether to prune connectors (see graph_utils.py), sites
+        that are likely to be false merges. The default is the global variable
+        "PRUNE_CONNECTORS".
+    prune_spurious : bool, optional
+        Indication of whether to prune spurious branches, these are short
+        branches which are an artifical from skeletonization. The default is
+        the global variable "PRUNE_SPURIOUS".
+    connector_length : int, optional
+        Maximum length of connecting paths pruned (see graph_utils.py). The
+        default is the global variable "CONNECTOR_LENGTH".
+    prune_depth : int, optional
+        Branches less than "prune_depth" microns are pruned if "prune" is
+        True. The default is the global variable "PRUNE_DEPTH".
+    smooth : bool, optional
+        Indication of whether to smooth branches from swc files. The default
+        is the global variable "SMOOTH".
+
+    Returns
+    -------
+    neurograph : NeuroGraph
+        Neurograph generated from zips of swc files stored on local machine.
+
+    """
     # Process swc files
     assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
     img_bbox = utils.get_img_bbox(img_patch_origin, img_patch_shape)
@@ -57,6 +108,14 @@ def build_neurograph_from_local(
     swc_dicts, paths = process_local_paths(
         paths, anisotropy=anisotropy, min_size=min_size, img_bbox=img_bbox
     )
+
+    # Filter swc_dicts
+    if img_bbox:
+        filtered_swc_dicts = []
+        for swc_dict in swc_dicts:
+            if utils.is_list_contained(img_bbox, swc_dict["xyz"]):
+                filtered_swc_dicts.append(swc_dict)
+        swc_dicts = filtered_swc_dicts
 
     # Build neurograph
     neurograph = build_neurograph(
@@ -72,10 +131,6 @@ def build_neurograph_from_local(
         smooth=smooth,
     )
 
-    # Delete nodes outside bbox
-    if img_bbox:
-        neurograph.delete_isolated()
-
     return neurograph
 
 
@@ -85,13 +140,10 @@ def build_neurograph_from_gcs_zips(
     anisotropy=[1.0, 1.0, 1.0],
     img_path=None,
     min_size=MIN_SIZE,
-    n_proposals_per_leaf=N_PROPOSALS_PER_LEAF,
     prune_connectors=PRUNE_CONNECTORS,
     prune_spurious=PRUNE_SPURIOUS,
     connector_length=CONNECTOR_LENGTH,
     prune_depth=PRUNE_DEPTH,
-    optimize_proposals=OPTIMIZE_PROPOSALS,
-    optimization_depth=OPTIMIZATION_DEPTH,
     smooth=SMOOTH,
 ):
     """
@@ -103,32 +155,29 @@ def build_neurograph_from_gcs_zips(
         Name of GCS bucket where zips are stored.
     cloud_path : str
         Path within GCS bucket to directory containing zips.
+    anisotropy : list[float], optional
+        Scaling factors applied to xyz coordinates to account for anisotropy
+        of microscope. The default is [1.0, 1.0, 1.0].
     img_path : str, optional
         Path to image stored GCS Bucket that swc files were generated from.
         The default is None.
     min_size : int, optional
-        Minimum path length of swc files which are stored. The default is the
-        global variable "MIN_SIZE".
-    n_proposals_per_leaf : int, optional
-        Number of edge proposals generated from each leaf node in an swc file.
-        The default is the global variable "N_PROPOSALS_PER_LEAF".
+        Minimum cardinality of swc files that are stored in NeuroGraph. The
+        default is the global variable "MIN_SIZE".
     prune_connectors : bool, optional
-        ...
+        Indication of whether to prune connectors (see graph_utils.py), sites
+        that are likely to be false merges. The default is the global variable
+        "PRUNE_CONNECTORS".
     prune_spurious : bool, optional
-        Indication of whether to prune short branches (i.e spurious branches).
-        The default is the global variable "PRUNE".
+        Indication of whether to prune spurious branches, these are short
+        branches which are an artifical from skeletonization. The default is
+        the global variable "PRUNE_SPURIOUS".
     connector_length : int, optional
-        ...
+        Maximum length of connecting paths pruned (see graph_utils.py). The
+        default is the global variable "CONNECTOR_LENGTH".
     prune_depth : int, optional
         Branches less than "prune_depth" microns are pruned if "prune" is
         True. The default is the global variable "PRUNE_DEPTH".
-    optimize_proposals : bool, optional
-        Indication of whether to optimize alignment of edge proposals to image
-        signal. The default is the global variable "OPTIMIZE_PROPOSALS".
-    optimization_depth : int, optional
-        Distance from each edge proposal end point that is search during
-        alignment optimization. The default is the global variable
-        "OPTIMIZATION_DEPTH".
     smooth : bool, optional
         Indication of whether to smooth branches from swc files. The default
         is the global variable "SMOOTH".
@@ -181,7 +230,10 @@ def download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy):
     cloud_path : str
         Path within GCS bucket to directory containing zips.
     min_size : int
-        Minimum path length of swc files which are stored.
+        Minimum cardinality of swc files that are stored in NeuroGraph.
+    anisotropy : list[float]
+        Scaling factors applied to xyz coordinates to account for anisotropy
+        of microscope.
 
     Returns
     -------
@@ -208,14 +260,6 @@ def download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy):
                 i, len(zip_paths), chunk_size, cnt, t0, t1
             )
     return swc_dicts
-
-
-def count_files_in_zips(bucket, zip_paths):
-    file_cnt = 0
-    for zip_path in zip_paths:
-        zip_content = bucket.blob(zip_path).download_as_bytes()
-        file_cnt += len(utils.list_files_in_gcs_zip(zip_content))
-    return file_cnt
 
 
 # -- Build neurograph ---
@@ -292,6 +336,7 @@ def get_irreducibles(
                 swc_dict,
                 prune_connectors,
                 prune_spurious,
+                connector_length,
                 prune_depth,
                 smooth,
             )

@@ -21,7 +21,7 @@ class ProposalDataset(Dataset):
 
     """
 
-    def __init__(self, inputs, labels, search_radius=10, transform=False):
+    def __init__(self, inputs, targets, search_radius=10, transform=False):
         """
         Constructs ProposalDataset object.
 
@@ -30,7 +30,7 @@ class ProposalDataset(Dataset):
         inputs : np.array
             Feature matrix where each row corresponds to the feature vector of
             an edge proposal.
-        labels : np.array
+        targets : np.array
             Binary vector where each entry indicates whether an edge proposal
             should be added or omitted from a reconstruction.
 
@@ -40,7 +40,7 @@ class ProposalDataset(Dataset):
 
         """
         self.inputs = inputs.astype(np.float32)
-        self.labels = reformat(labels)
+        self.targets = reformat(targets)
         self.search_radius = search_radius
         self.transform = transform
 
@@ -58,7 +58,7 @@ class ProposalDataset(Dataset):
             Number of examples in dataset.
 
         """
-        return len(self.labels)
+        return len(self.targets)
 
     def __getitem__(self, idx):
         """
@@ -79,7 +79,7 @@ class ProposalDataset(Dataset):
         if self.transform:
             if inputs_i[0] > self.search_radius or np.random.random() > 0.75:
                 inputs_i[0] = abs(np.random.normal(0, 5, 1))
-        return {"inputs": inputs_i, "labels": self.labels[idx]}
+        return {"inputs": inputs_i, "targets": self.targets[idx]}
 
 
 class ImgProposalDataset(Dataset):
@@ -89,7 +89,7 @@ class ImgProposalDataset(Dataset):
 
     """
 
-    def __init__(self, inputs, labels, transform=True):
+    def __init__(self, inputs, targets, transform=True):
         """
         Constructs ImgProposalDataset object.
 
@@ -99,7 +99,7 @@ class ImgProposalDataset(Dataset):
             Feature tensor where each submatrix corresponds to an image chunk
             that contains an edge proposal. Note that the midpoint of the edge
             proposal is the center point of the chunk.
-        labels : np.array
+        targets : np.array
             Binary vector where each entry indicates whether an edge proposal
             should be added or omitted from a reconstruction.
         transform : bool, optional
@@ -112,7 +112,7 @@ class ImgProposalDataset(Dataset):
 
         """
         self.inputs = inputs.astype(np.float32)
-        self.labels = reformat(labels)
+        self.targets = reformat(targets)
         self.transform = AugmentImages() if transform else None
 
     def __len__(self):
@@ -129,7 +129,7 @@ class ImgProposalDataset(Dataset):
             Number of examples in dataset.
 
         """
-        return len(self.labels)
+        return len(self.targets)
 
     def __getitem__(self, idx):
         """
@@ -150,7 +150,7 @@ class ImgProposalDataset(Dataset):
             inputs = self.transform.run(self.inputs[idx])
         else:
             inputs = self.inputs[idx]
-        return {"inputs": inputs, "labels": self.labels[idx]}
+        return {"inputs": inputs, "targets": self.targets[idx]}
 
 
 class MultiModalDataset(Dataset):
@@ -160,7 +160,7 @@ class MultiModalDataset(Dataset):
 
     """
 
-    def __init__(self, inputs, labels, transform=True):
+    def __init__(self, inputs, targets, transform=True):
         """
         Constructs MultiModalDataset object.
 
@@ -171,7 +171,7 @@ class MultiModalDataset(Dataset):
             corresponding value. The keys of this dictionary are (1) "imgs" and
             (2) "features" which correspond to a (1) feature tensor containing
             image chunks and (2) feature vector.
-        labels : np.array
+        targets : np.array
             Binary vector where each entry indicates whether an edge proposal
             should be added or omitted from a reconstruction.
         transform : bool, optional
@@ -185,7 +185,7 @@ class MultiModalDataset(Dataset):
         """
         self.img_inputs = inputs["imgs"].astype(np.float32)
         self.feature_inputs = inputs["features"].astype(np.float32)
-        self.labels = reformat(labels)
+        self.targets = reformat(targets)
         self.transform = AugmentImages() if transform else None
 
     def __len__(self):
@@ -202,7 +202,7 @@ class MultiModalDataset(Dataset):
             Number of examples in dataset.
 
         """
-        return len(self.labels)
+        return len(self.targets)
 
     def __getitem__(self, idx):
         """
@@ -224,7 +224,7 @@ class MultiModalDataset(Dataset):
         else:
             img_inputs = self.img_inputs[idx]
         inputs = [self.feature_inputs[idx], img_inputs]
-        return {"inputs": inputs, "labels": self.labels[idx]}
+        return {"inputs": inputs, "targets": self.targets[idx]}
 
 
 # Augmentation

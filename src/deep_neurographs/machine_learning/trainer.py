@@ -43,11 +43,13 @@ SUPPORTED_MODELS = [
 
 
 def fit_model(model, dataset):
-    model.fit(dataset["inputs"], dataset["target"])
+    inputs = dataset["dataset"]["inputs"]
+    target = dataset["dataset"]["target"]
+    model.fit(inputs, dataset["target"])
     return model
 
 
-def fit_network(
+def fit_deep_model(
     model, dataset, batch_size=BATCH_SIZE, logger=False, lr=1e-3, max_epochs=50
 ):
     """
@@ -74,12 +76,13 @@ def fit_network(
     ...
     """
     # Load data
+    dataset = dataset["dataset"]
     train_set, valid_set = random_split(dataset)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     valid_loader = DataLoader(valid_set, batch_size=batch_size)
 
     # Configure trainer
-    model = LitNeuralNet(net=model, lr=lr)
+    lit_model = LitModel(model=model, lr=lr)
     ckpt_callback = ModelCheckpoint(save_top_k=1, monitor="val_f1", mode="max")
 
     # Fit model
@@ -93,12 +96,12 @@ def fit_network(
         log_every_n_steps=1,
         max_epochs=max_epochs,
     )
-    pylightning_trainer.fit(model, train_loader, valid_loader)
+    pylightning_trainer.fit(lit_model, train_loader, valid_loader)
 
     # Return best model
     ckpt = torch.load(ckpt_callback.best_model_path)
-    model.net.load_state_dict(ckpt["state_dict"])
-    return model
+    lit_model.model.load_state_dict(ckpt["state_dict"])
+    return lit_model.model
 
 
 def random_split(train_set, train_ratio=0.8):
@@ -107,34 +110,17 @@ def random_split(train_set, train_ratio=0.8):
     return torch_data.random_split(train_set, [train_set_size, valid_set_size])
 
 
-def eval_network(X, model):
-    # Prep data
-    if type(X) == dict:
-        X = [
-            torch.tensor(X["features"], dtype=torch.float32),
-            torch.tensor(X["imgs"], dtype=torch.float32),
-        ]
-    else:
-        X = torch.tensor(X, dtype=torch.float32)
-
-    # Run model
-    model.eval()
-    with torch.no_grad():
-        y_pred = sigmoid(model.net(X))
-    return np.array(y_pred)
-
-
 # -- Lightning Module --
-class LitNeuralNet(pl.LightningModule):
-    def __init__(self, net=None, lr=1e-3):
+class LitModel(pl.LightningModule):
+    def __init__(self, model=None, lr=1e-3):
         super().__init__()
         self.criterion = nn.BCEWithLogitsLoss()
-        self.net = net
+        self.model = model
         self.lr = lr
 
     def forward(self, batch):
         x = self.get_example(batch, "inputs")
-        return self.net(x)
+        return self.model(x)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -142,8 +128,8 @@ class LitNeuralNet(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         X = self.get_example(batch, "inputs")
-        y = self.get_example(batch, "labels")
-        y_hat = self.net(X)
+        y = self.get_example(batch, "targets")
+        y_hat = self.model(X)
 
         loss = self.criterion(y_hat, y)
         self.log("train_loss", loss)
@@ -152,8 +138,8 @@ class LitNeuralNet(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         X = self.get_example(batch, "inputs")
-        y = self.get_example(batch, "labels")
-        y_hat = self.net(X)
+        y = self.get_example(batch, "targets")
+        y_hat = self.model(X)
         self.compute_stats(y_hat, y, prefix="val_")
 
     def compute_stats(self, y_hat, y, prefix=""):
@@ -167,4 +153,4 @@ class LitNeuralNet(pl.LightningModule):
         return batch[key]
 
     def state_dict(self, destination=None, prefix="", keep_vars=False):
-        return self.net.state_dict(destination, prefix + "", keep_vars)
+        return self.model.state_dict(destination, prefix + "", keep_vars)
