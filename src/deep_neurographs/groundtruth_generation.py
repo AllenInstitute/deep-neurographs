@@ -9,14 +9,12 @@ should be accepted or rejected).
 
 """
 
-from copy import deepcopy
 from random import sample
 
 import networkx as nx
 import numpy as np
 
 from deep_neurographs import graph_utils as gutils
-from deep_neurographs import utils
 from deep_neurographs.geometry import dist as get_dist
 
 
@@ -94,7 +92,9 @@ def is_component_aligned(target_neurograph, pred_neurograph, component):
         for xyz in pred_neurograph.edges[edge]["xyz"]:
             hat_xyz = target_neurograph.get_projection(tuple(xyz))
             dists.append(get_dist(hat_xyz, xyz))
-    return True if np.mean(dists) < 5 else False
+    dists = np.array(dists)
+    aligned_score = np.mean(dists[dists < np.percentile(dists, 90)])
+    return True if aligned_score < 5 else False
 
 
 def is_mutually_aligned(target_neurograph, branches_i, branches_j):

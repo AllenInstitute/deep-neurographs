@@ -9,15 +9,12 @@ Routines for training models that classify edge proposals.
 """
 
 import logging
-from random import sample
 
 import lightning.pytorch as pl
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.utils.data as torch_data
 from lightning.pytorch.callbacks import ModelCheckpoint
-from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from torch.nn.functional import sigmoid
 from torch.utils.data import DataLoader
 from torcheval.metrics.functional import (
@@ -25,9 +22,6 @@ from torcheval.metrics.functional import (
     binary_precision,
     binary_recall,
 )
-
-from deep_neurographs import feature_extraction as extracter
-from deep_neurographs.machine_learning import loss, ml_utils, models
 
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
@@ -44,8 +38,8 @@ SUPPORTED_MODELS = [
 
 def fit_model(model, dataset):
     inputs = dataset["dataset"]["inputs"]
-    target = dataset["dataset"]["target"]
-    model.fit(inputs, dataset["target"])
+    targets = dataset["dataset"]["targets"]
+    model.fit(inputs, targets)
     return model
 
 
