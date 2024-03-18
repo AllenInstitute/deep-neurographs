@@ -88,7 +88,9 @@ class NeuroGraph(nx.Graph):
         ids = dict()
         cur_id = len(self.nodes) + 1
         ids, cur_id = self.__add_nodes(component_dict, "leafs", ids, cur_id)
-        ids, cur_id = self.__add_nodes(component_dict, "junctions", ids, cur_id)
+        ids, cur_id = self.__add_nodes(
+            component_dict, "junctions", ids, cur_id
+        )
         self.add_swc_id(component_dict["swc_id"])
 
         # Add edges
@@ -674,7 +676,7 @@ class NeuroGraph(nx.Graph):
             # Initialize
             if len(entry_list) == 0:
                 x, y, z = tuple(self.nodes[i]["xyz"])
-                r = self.nodes[j]["radius"]
+                r = self.nodes[i]["radius"]
                 entry_list.append([1, 2, x, y, z, r, -1])
                 node_to_idx[i] = 1
 

@@ -11,6 +11,7 @@ Helper routines for training machine learning models.
 from random import sample
 
 import numpy as np
+from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 
 from deep_neurographs import feature_extraction as extracter
 from deep_neurographs.machine_learning.datasets import (
@@ -93,7 +94,7 @@ def get_dataset(inputs, targets, model_type, transform):
         options.
     transform : bool
         Indication of whether to apply data augmentation
-    
+
     Returns
     -------
     ...
@@ -109,7 +110,9 @@ def get_dataset(inputs, targets, model_type, transform):
         return {"inputs": inputs, "targets": targets}
 
 
-def init_dataset(neurographs, features, model_type, block_ids, transform=False):
+def init_dataset(
+    neurographs, features, model_type, block_ids, transform=False
+):
     inputs, targets, block_to_idx, idx_to_edge = extracter.get_feature_matrix(
         neurographs, features, model_type, block_ids=block_ids
     )
@@ -119,4 +122,3 @@ def init_dataset(neurographs, features, model_type, block_ids, transform=False):
         "idx_to_edge": idx_to_edge,
     }
     return dataset
-

@@ -8,8 +8,8 @@ Routines for running inference on models that classify edge proposals.
 
 """
 
-import torch
 import numpy as np
+import torch
 from torch.nn.functional import sigmoid
 from torch.utils.data import DataLoader
 
@@ -25,8 +25,8 @@ def predict(dataset, model, model_type):
                 x_i = batch["inputs"]
                 y_i = batch["targets"]
                 y_pred_i = sigmoid(model(x_i))
-                y_pred.extend(np.array(y_pred_i).tolist())
-                print(((np.array(y_pred_i) > 0.5) == y_i) / len(y_i))
+            y_pred.extend(np.array(y_pred_i).tolist())
+            #print((np.sum((np.array(y_pred_i) > 0.5) == (np.array(y_i) > 0))) / len(y_i))
     else:
-        model.predict_proba(dataset["inputs"])[:, 1]
+        y_pred = model.predict_proba(dataset["inputs"])[:, 1]
     return np.array(y_pred)
