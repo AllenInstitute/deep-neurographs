@@ -10,6 +10,7 @@ Evaluates performance of edge classifiation model.
 import numpy as np
 
 METRICS_LIST = [
+    "accuracy_dif",
     "accuracy",
     "precision",
     "recall",
@@ -146,10 +147,13 @@ def get_stats(neurograph, proposals, pred_edges):
         "METRICS_LIST".
 
     """
+    n_pos = len([e for e in proposals if e in neurograph.target_edges])
+    a_baseline = n_pos / (len(proposals) if len(proposals) > 0 else 1)
     tp, fp, a, p, r, f1 = get_accuracy(neurograph, proposals, pred_edges)
     stats = {
         "# splits fixed": tp,
         "# merges created": fp,
+        "accuracy_dif": a - a_baseline,
         "accuracy": a,
         "precision": p,
         "recall": r,

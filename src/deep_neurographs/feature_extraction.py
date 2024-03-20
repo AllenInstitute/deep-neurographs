@@ -345,7 +345,7 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
                 neurographs[block_id], features[block_id], shift=idx_shift
             )
         else:
-            X_i, y_i, idx_to_edge_i = get_feature_vectors(
+            X_i, y_i, idxs_i, idx_to_edge_i = get_feature_vectors(
                 neurographs[block_id], features[block_id], shift=idx_shift
             )
 
@@ -354,18 +354,15 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
             X = deepcopy(X_i)
             y = deepcopy(y_i)
             if model_type == "MultiModalNet":
-                print("if")
                 x = deepcopy(x_i)
         else:
             X = np.concatenate((X, X_i), axis=0)
             y = np.concatenate((y, y_i), axis=0)
             if model_type == "MultiModalNet":
-                print("else")
                 x = np.concatenate((x, x_i), axis=0)
 
         # Update dicts
-        idxs = set(np.arange(idx_shift, idx_shift + len(idx_to_edge_i)))
-        block_to_idxs[block_id] = idxs
+        block_to_idxs[block_id] = idxs_i
         idx_to_edge.update(idx_to_edge_i)
 
     if model_type == "MultiModalNet":
@@ -391,13 +388,15 @@ def get_feature_vectors(neurograph, features, shift=0):
 
     # Build
     idx_to_edge = dict()
+    idxs = set()
     X = np.zeros((neurograph.n_proposals(), len(features[key])))
     y = np.zeros((neurograph.n_proposals()))
     for i, edge in enumerate(features.keys()):
-        idx_to_edge[i + shift] = edge
         X[i, :] = features[edge]
         y[i] = 1 if edge in neurograph.target_edges else 0
-    return X, y, idx_to_edge
+        idxs.add(i + shift)
+        idx_to_edge[i + shift] = edge
+    return X, y, idxs, idx_to_edge
 
 
 def get_multimodal_features(neurograph, features, shift=0):

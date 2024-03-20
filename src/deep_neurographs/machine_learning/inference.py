@@ -15,16 +15,27 @@ from torch.utils.data import DataLoader
 
 
 def predict(dataset, model, model_type):
-    dataset = dataset["dataset"]
+    accuracy = []
+    accuracy_baseline = []
+    data = dataset["dataset"]
     if "Net" in model_type:
         model.eval()
-        dataloader = DataLoader(dataset, batch_size=16, shuffle=False)
-        y_pred = []
-        for batch in dataloader:
+        hat_y = []
+        for batch in DataLoader(data, batch_size=32, shuffle=False):
+            # Run model
             with torch.no_grad():
                 x_i = batch["inputs"]
-                y_pred_i = sigmoid(model(x_i))
-            y_pred.extend(np.array(y_pred_i).tolist())
+                hat_y_i = sigmoid(model(x_i))
+
+            # Postprocess
+            hat_y_i = np.array(hat_y_i)
+            y_i = np.array(batch["targets"])
+            hat_y.extend(hat_y_i.tolist())
+            accuracy_baseline.extend((y_i > 0).tolist())
+            accuracy.extend(((hat_y_i > 0.5) == (y_i > 0)).tolist())
+        accuracy = np.mean(accuracy)
+        accuracy_baseline = np.sum(accuracy_baseline) / len(accuracy_baseline)
+        print("Accuracy +/-:", accuracy - accuracy_baseline)
     else:
-        y_pred = model.predict_proba(dataset["inputs"])[:, 1]
-    return np.array(y_pred)
+        hat_y = model.predict_proba(data["inputs"])[:, 1]
+    return np.array(hat_y)

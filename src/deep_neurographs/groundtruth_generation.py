@@ -14,9 +14,10 @@ from random import sample
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import graph_utils as gutils
+from deep_neurographs import graph_utils as gutils, geometry
 from deep_neurographs.geometry import dist as get_dist
 
+site = np.array([22086.158, 10681.918,  9549.215])
 
 def init_targets(target_neurograph, pred_neurograph):
     # Initializations
@@ -58,6 +59,7 @@ def get_valid_proposals(target_neurograph, pred_neurograph):
         # Check whether aligned to same/adjacent target edges
         branches_i = pred_neurograph.get_branches(i)
         branches_j = pred_neurograph.get_branches(j)
+
         if is_mutually_aligned(target_neurograph, branches_i, branches_j):
             valid_proposals.append(edge)
 
@@ -94,7 +96,7 @@ def is_component_aligned(target_neurograph, pred_neurograph, component):
             dists.append(get_dist(hat_xyz, xyz))
     dists = np.array(dists)
     aligned_score = np.mean(dists[dists < np.percentile(dists, 90)])
-    return True if aligned_score < 5 else False
+    return True if aligned_score < 6 else False
 
 
 def is_mutually_aligned(target_neurograph, branches_i, branches_j):
@@ -104,8 +106,8 @@ def is_mutually_aligned(target_neurograph, branches_i, branches_j):
 
     # Check if edges either identical or adjacent
     identical = hat_edge_i == hat_edge_j
-    adjacent = is_adjacent(target_neurograph, hat_edge_i, hat_edge_j)
-    if identical or adjacent:
+    adjacent = is_adjacent(target_neurograph, hat_edge_i, hat_edge_j)    
+    if identical:
         return True
     else:
         return False
@@ -137,7 +139,7 @@ def is_adjacent(neurograph, edge_i, edge_j):
     """
     for i in edge_i:
         for j in edge_j:
-            if neurograph.is_nb(i, j):
+            if i == j:
                 return True
     return False
 
