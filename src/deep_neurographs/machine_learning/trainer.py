@@ -93,6 +93,7 @@ def fit_deep_model(
     pylightning_trainer.fit(lit_model, train_loader, valid_loader)
 
     # Return best model
+    print(ckpt_callback.best_model_path)
     ckpt = torch.load(ckpt_callback.best_model_path)
     lit_model.model.load_state_dict(ckpt["state_dict"])
     return lit_model.model
@@ -134,6 +135,7 @@ class LitModel(pl.LightningModule):
         X = self.get_example(batch, "inputs")
         y = self.get_example(batch, "targets")
         y_hat = self.model(X)
+        self.log("val_loss", self.criterion(y_hat, y))
         self.compute_stats(y_hat, y, prefix="val_")
 
     def compute_stats(self, y_hat, y, prefix=""):

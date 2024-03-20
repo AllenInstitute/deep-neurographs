@@ -182,36 +182,28 @@ class NeuroGraph(nx.Graph):
                 )
                 if self.degree[node] >= 3:
                     continue
-                if swc_id in existing_connections.keys() and restrict:
-                    if leaf_swc_id in existing_connections[swc_id].keys():
-                        edge = existing_connections[swc_id][leaf_swc_id]
-                        len1 = self.node_xyz_dist(leaf, xyz)
-                        len2 = self.proposal_length(edge)
-                        if len1 < len2:
-                            node1, node2 = tuple(edge)
-                            self.nodes[node1]["proposals"].remove(node2)
-                            self.nodes[node2]["proposals"].remove(node1)
-                            del self.proposals[edge]
-                        else:
-                            continue
+                    
+                pair_id = frozenset((swc_id, leaf_swc_id))
+                if pair_id in existing_connections.keys() and restrict:
+                    edge = existing_connections[pair_id]
+                    len1 = self.node_xyz_dist(leaf, xyz)
+                    len2 = self.proposal_length(edge)
+                    if len1 < len2:
+                        node1, node2 = tuple(edge)
+                        self.nodes[node1]["proposals"].discard(node2)
+                        self.nodes[node2]["proposals"].discard(node1)
+                        del self.proposals[edge]
+                        del existing_connections[pair_id]
+                    else:
+                        continue
 
-                # Add edge
-                if self.degree[node] < 3:
+                # Add proposal
+                if self.degree[node] < 2:
                     edge = frozenset({leaf, node})
-                    self.proposals[edge] = {"xyz": np.array([xyz_leaf, xyz])}
                     self.nodes[node]["proposals"].add(leaf)
                     self.nodes[leaf]["proposals"].add(node)
-
-                    # Update existing connections
-                    if leaf_swc_id in existing_connections.keys():
-                        existing_connections[leaf_swc_id][swc_id] = edge
-                    else:
-                        existing_connections[leaf_swc_id] = {swc_id: edge}
-
-                    if swc_id in existing_connections.keys():
-                        existing_connections[swc_id][leaf_swc_id] = edge
-                    else:
-                        existing_connections[swc_id] = {leaf_swc_id: edge}
+                    self.proposals[edge] = {"xyz": np.array([xyz_leaf, xyz])}
+                    existing_connections[pair_id] = edge
 
         # print("# doubles:", len(doubles))
 
