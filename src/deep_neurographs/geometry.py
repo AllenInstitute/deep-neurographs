@@ -177,7 +177,7 @@ def get_profile(img, xyz_arr, process_id=None, window=[5, 5, 5]):
 def fill_path(img, path, val=-1):
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
-        img[x - 1: x + 2, y - 1: y + 2, z - 1: z + 2] = val
+        img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
     return img
 
 
@@ -384,3 +384,14 @@ def make_line(xyz_1, xyz_2, n_steps):
 
 def normalize(vec, norm="l2"):
     return vec / abs(dist(np.zeros((3)), vec, metric=norm))
+
+
+def nearest_neighbor(xyz_arr, xyz):
+    min_dist = np.inf
+    idx = None
+    for i, xyz_i in enumerate(xyz_arr):
+        d = dist(xyz, xyz_i)
+        if d < min_dist:
+            min_dist = d
+            idx = i
+    return idx, min_dist

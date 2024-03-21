@@ -15,6 +15,7 @@ import os
 import shutil
 from copy import deepcopy
 from io import BytesIO
+from random import sample
 from time import time
 from zipfile import ZipFile
 
@@ -336,7 +337,7 @@ def read_tensorstore(arr, xyz, shape, from_center=True):
 def get_chunk(arr, xyz, shape, from_center=True):
     start, end = get_start_end(xyz, shape, from_center=from_center)
     return deepcopy(
-        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+        arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
     )
 
 
@@ -484,6 +485,10 @@ def is_contained(bbox, xyz, buffer=0):
 
 def is_list_contained(bbox, xyz_list):
     return any([is_contained(bbox, to_img(xyz)) for xyz in xyz_list])
+
+
+def sample_singleton(my_container):
+    return sample(my_container, 1)[0]
 
 
 # --- miscellaneous ---

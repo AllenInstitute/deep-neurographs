@@ -182,7 +182,7 @@ class NeuroGraph(nx.Graph):
                 )
                 if self.degree[node] >= 3:
                     continue
-                    
+
                 pair_id = frozenset((swc_id, leaf_swc_id))
                 if pair_id in existing_connections.keys() and restrict:
                     edge = existing_connections[pair_id]

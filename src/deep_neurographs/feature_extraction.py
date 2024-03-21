@@ -337,11 +337,11 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
 
         idx_shift = 0 if X is None else X.shape[0]
         if model_type == "MultiModalNet":
-            X_i, x_i, y_i, idx_to_edge_i = get_multimodal_features(
+            X_i, x_i, y_i, idxs_i, idx_to_edge_i = get_multimodal_features(
                 neurographs[block_id], features[block_id], shift=idx_shift
             )
         elif model_type == "ConvNet":
-            X_i, y_i, idx_to_edge_i = stack_img_chunks(
+            X_i, y_i, idxs_i, idx_to_edge_i = stack_img_chunks(
                 neurographs[block_id], features[block_id], shift=idx_shift
             )
         else:
@@ -381,16 +381,15 @@ def __feature_matrix(neurographs, features, model_type):
 
 
 def get_feature_vectors(neurograph, features, shift=0):
-    # Extract info
+    # Initialize
     features = combine_features(features)
-    features.keys()
     key = sample(list(features.keys()), 1)[0]
-
-    # Build
-    idx_to_edge = dict()
-    idxs = set()
     X = np.zeros((neurograph.n_proposals(), len(features[key])))
     y = np.zeros((neurograph.n_proposals()))
+
+    # Build
+    idxs = set()
+    idx_to_edge = dict()
     for i, edge in enumerate(features.keys()):
         X[i, :] = features[edge]
         y[i] = 1 if edge in neurograph.target_edges else 0
@@ -400,30 +399,40 @@ def get_feature_vectors(neurograph, features, shift=0):
 
 
 def get_multimodal_features(neurograph, features, shift=0):
-    idx_to_edge = dict()
+    # Initialize
     n_edges = neurograph.n_proposals()
     X = np.zeros(((n_edges, 2) + tuple(CHUNK_SIZE)))
     x = np.zeros((n_edges, N_SKEL_FEATURES + N_PROFILE_POINTS))
     y = np.zeros((n_edges))
+
+    # Build
+    idxs = set()
+    idx_to_edge = dict()
     for i, edge in enumerate(features["img_chunks"].keys()):
-        idx_to_edge[i + shift] = edge
         X[i, :] = features["img_chunks"][edge]
         x[i, :] = np.concatenate(
             (features["skel"][edge], features["img_profile"][edge])
         )
         y[i] = 1 if edge in neurograph.target_edges else 0
-    return X, x, y, idx_to_edge
+        idxs.add(i + shift)
+        idx_to_edge[i + shift] = edge
+    return X, x, y, idxs, idx_to_edge
 
 
 def stack_img_chunks(neurograph, features, shift=0):
-    idx_to_edge = dict()
+    # Initialize
     X = np.zeros(((neurograph.n_proposals(), 2) + tuple(CHUNK_SIZE)))
     y = np.zeros((neurograph.n_proposals()))
+
+    # Build
+    idxs = set()
+    idx_to_edge = dict()
     for i, edge in enumerate(features["img_chunks"].keys()):
-        idx_to_edge[i + shift] = edge
         X[i, :] = features["img_chunks"][edge]
         y[i] = 1 if edge in neurograph.target_edges else 0
-    return X, y, idx_to_edge
+        idxs.add(i + shift)
+        idx_to_edge[i + shift] = edge
+    return X, y, idxs, idx_to_edge
 
 
 # -- Utils --
@@ -441,7 +450,6 @@ def count_features(model_type):
     -------
     int
         Number of features.
-
     """
     if model_type != "ConvNet":
         return N_SKEL_FEATURES + N_PROFILE_POINTS + 2
