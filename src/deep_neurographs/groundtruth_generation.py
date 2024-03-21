@@ -9,15 +9,14 @@ should be accepted or rejected).
 
 """
 
-from random import sample
-
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import graph_utils as gutils, geometry
+from deep_neurographs import geometry
+from deep_neurographs import graph_utils as gutils
+from deep_neurographs import utils
 from deep_neurographs.geometry import dist as get_dist
 
-site = np.array([22086.158, 10681.918,  9549.215])
 
 def init_targets(target_neurograph, pred_neurograph):
     # Initializations
@@ -37,32 +36,34 @@ def init_targets(target_neurograph, pred_neurograph):
 
 def get_valid_proposals(target_neurograph, pred_neurograph):
     # Detect components unaligned to ground truth
-    invalid = set()
+    invalid_proposals = set()
+    node_to_target = dict()
     for component in nx.connected_components(pred_neurograph):
-        aligned_bool = is_component_aligned(
+        aligned_bool, target_id = is_component_aligned(
             target_neurograph, pred_neurograph, component
         )
         if not aligned_bool:
-            i = sample(list(component), 1)[0]
-            invalid.add(pred_neurograph.nodes[i]["swc_id"])
+            i = utils.sample_singleton(component)
+            invalid_proposals.add(pred_neurograph.nodes[i]["swc_id"])
+        else:
+            node_to_target = upd_dict(node_to_target, component, target_id)
 
-    # Find valid proposals
+    # Check whether aligned to same/adjacent target edges (i.e. valid)
     valid_proposals = list()
     for edge in pred_neurograph.proposals:
-        # Check whether aligned to some/same target component
+        # Filter invalid and proposals btw different components
         i, j = tuple(edge)
-        swc_id_i = pred_neurograph.nodes[i]["swc_id"]
-        swc_id_j = pred_neurograph.nodes[j]["swc_id"]
-        if swc_id_i in invalid or swc_id_j in invalid:
+        invalid_i = pred_neurograph.nodes[i]["swc_id"] in invalid_proposals
+        invalid_j = pred_neurograph.nodes[j]["swc_id"] in invalid_proposals
+        if invalid_i or invalid_j:
+            continue
+        elif node_to_target[i] != node_to_target[j]:
             continue
 
-        # Check whether aligned to same/adjacent target edges
-        branches_i = pred_neurograph.get_branches(i)
-        branches_j = pred_neurograph.get_branches(j)
-
-        if is_mutually_aligned(target_neurograph, branches_i, branches_j):
+        # Check whether proposal is valid
+        target_id = node_to_target[i]
+        if is_valid(target_neurograph, pred_neurograph, target_id, edge):
             valid_proposals.append(edge)
-
     return valid_proposals
 
 
@@ -78,39 +79,101 @@ def is_component_aligned(target_neurograph, pred_neurograph, component):
     Parameters
     ----------
     target_neurograph : NeuroGraph
-        Graph that was generated using the ground truth swc files.
+        Graph built from ground truth swc files.
+    pred_neurograph : NeuroGraph
+        Graph build from predicted swc files.
     component : ...
         ...
 
     Returns
     -------
     bool
-        Indication of whether "node_subset" is aligned to a connected
-        component in "self".
+        Indication of whether "component" is aligned to a connected
+        component in "target_neurograph".
 
     """
-    dists = []
+    # Compute distances
+    dists = dict()
     for edge in pred_neurograph.subgraph(component).edges:
         for xyz in pred_neurograph.edges[edge]["xyz"]:
             hat_xyz = target_neurograph.get_projection(tuple(xyz))
-            dists.append(get_dist(hat_xyz, xyz))
-    dists = np.array(dists)
-    aligned_score = np.mean(dists[dists < np.percentile(dists, 90)])
-    return True if aligned_score < 6 else False
+            hat_swc_id = target_neurograph.xyz_to_swc(hat_xyz)
+            d = get_dist(hat_xyz, xyz)
+            dists = utils.append_dict_value(dists, hat_swc_id, d)
+
+    # Deterine whether aligned
+    hat_swc_id = find_best(dists)
+    dists = np.array(dists[hat_swc_id])
+    aligned_score = np.mean(dists[dists < np.percentile(dists, 95)])
+    return True if aligned_score < 3 else False, hat_swc_id
 
 
-def is_mutually_aligned(target_neurograph, branches_i, branches_j):
+def is_valid(target_neurograph, pred_neurograph, target_id, edge):
+    """
+    Determines whether the proposal connects two branches that correspond to
+    either the same or adjacent branches on the ground truth. If either
+    condition holds, then the proposal is said to be valid.
+
+    Parameters
+    ----------
+    target_neurograph : NeuroGraph
+        Graph built from ground truth swc files.
+    pred_neurograph : NeuroGraph
+        Graph build from predicted swc files.
+    target_id : str
+        ...
+    edge : frozenset
+        Edge proposal to be checked.
+
+    Returns
+    -------
+    bool
+        Indication of whether proposal is valid
+
+    """
     # Find closest edges from target_neurograph
-    hat_edge_i = best_edge_alignment(target_neurograph, branches_i)
-    hat_edge_j = best_edge_alignment(target_neurograph, branches_j)
+    i, j = tuple(edge)
+    hat_edge_i = proj_branch(target_neurograph, pred_neurograph, target_id, i)
+    hat_edge_j = proj_branch(target_neurograph, pred_neurograph, target_id, j)
 
     # Check if edges either identical or adjacent
-    identical = hat_edge_i == hat_edge_j
-    adjacent = is_adjacent(target_neurograph, hat_edge_i, hat_edge_j)    
-    if identical:
+    if hat_edge_i == hat_edge_j:
         return True
+    elif is_adjacent(target_neurograph, hat_edge_i, hat_edge_j):
+        hat_branch_i = target_neurograph.edges[hat_edge_i]["xyz"]
+        hat_branch_j = target_neurograph.edges[hat_edge_j]["xyz"]
+        xyz_i = pred_neurograph.nodes[i]["xyz"]
+        xyz_j = pred_neurograph.nodes[j]["xyz"]
+        if is_adjacent_aligned(hat_branch_i, hat_branch_j, xyz_i, xyz_j):
+            return True
+    return False
+
+
+def proj_branch(target_neurograph, pred_neurograph, target_id, i):
+    # Compute projections
+    hits = dict()
+    for branch in pred_neurograph.get_branches(i):
+        for xyz in branch:
+            hat_xyz = target_neurograph.get_projection(xyz)
+            swc_id = target_neurograph.xyz_to_swc(hat_xyz)
+            if swc_id == target_id:
+                hat_edge = target_neurograph.xyz_to_edge[hat_xyz]
+                hits = utils.append_dict_value(hits, hat_edge, hat_xyz)
+
+    # Determine closest edge
+    min_dist = np.inf
+    best_edge = None
+    xyz_i = pred_neurograph.nodes[i]["xyz"]
+    if len(hits.keys()) > 1:
+        swc_id = pred_neurograph.nodes[i]["swc_id"]
+        for edge in hits.keys():
+            nb, d = geometry.nearest_neighbor(hits[edge], xyz_i)
+            if d < min_dist:
+                min_dist = d
+                best_edge = edge
     else:
-        return False
+        best_edge = list(hits.keys())[0]
+    return best_edge
 
 
 def is_proposal_aligned(target_neurograph, pred_neurograph, edge):
@@ -144,21 +207,13 @@ def is_adjacent(neurograph, edge_i, edge_j):
     return False
 
 
-def best_edge_alignment(target_neurograph, branches):
-    best_edges = dict()
-    for branch in branches:
-        best_edge = __best_edge_alignment(target_neurograph, branch)
-        best_edges = upd_dict_cnts(best_edges, best_edge)
-    return find_best(best_edges)
-
-
-def __best_edge_alignment(target_neurograph, branch):
-    close_edges = dict()
-    for xyz in branch:
-        hat_xyz = target_neurograph.get_projection(xyz)
-        hat_edge = target_neurograph.xyz_to_edge[hat_xyz]
-        close_edges = upd_dict_cnts(close_edges, hat_edge)
-    return find_best(close_edges)
+def is_adjacent_aligned(hat_branch_i, hat_branch_j, xyz_i, xyz_j):
+    hat_branch_i, hat_branch_j = orient_branch(hat_branch_i, hat_branch_j)
+    hat_i, _ = geometry.nearest_neighbor(hat_branch_i, xyz_i)
+    hat_j, _ = geometry.nearest_neighbor(hat_branch_j, xyz_j)
+    hat_path_dist = hat_i + hat_j
+    path_dist = geometry.dist(xyz_i, xyz_j)
+    return True if 2 * path_dist / (path_dist + hat_path_dist) > 0.5 else False
 
 
 # -- utils --
@@ -174,8 +229,47 @@ def find_best(my_dict):
     best_key = None
     best_vote_cnt = 0
     for key in my_dict.keys():
-        vote_cnt = my_dict[key]
+        val_type = type(my_dict[key])
+        vote_cnt = my_dict[key] if val_type == int else len(my_dict[key])
         if vote_cnt > best_vote_cnt:
             best_key = key
             best_vote_cnt = vote_cnt
     return best_key
+
+
+def orient_branch(branch_i, branch_j):
+    """
+    Flips branches so that "all(branch_i[0] == branch_j[0])" is True.
+
+    Parameters
+    ----------
+    branch_i : numpy.ndarray
+        Array containing xyz coordinates corresponding to some edge in a
+        Neurograph.
+    branch_j : numpy.ndarray
+        Array containing xyz coordinates corresponding to some edge in a
+        Neurograph.
+
+    Returns
+    -------
+    branch_i : numpy.ndarray
+        xyz coordinates corresponding to some edge in a Neurograph.
+    branch_j : numpy.ndarray
+        xyz coordinates corresponding to some edge in a Neurograph.
+
+    """
+    # Orient branches
+    if all(branch_i[-1] == branch_j[0]):
+        branch_i = np.flip(branch_i, axis=0)
+    elif all(branch_i[0] == branch_j[-1]):
+        branch_j = np.flip(branch_j, axis=0)
+    elif all(branch_i[-1] == branch_j[-1]):
+        branch_i = np.flip(branch_i, axis=0)
+        branch_j = np.flip(branch_j, axis=0)
+    return branch_i, branch_j
+
+
+def upd_dict(node_to_target_id, nodes, target_id):
+    for node in nodes:
+        node_to_target_id[node] = target_id
+    return node_to_target_id
