@@ -21,7 +21,7 @@ class ProposalDataset(Dataset):
 
     """
 
-    def __init__(self, inputs, targets, search_radius=10, transform=False):
+    def __init__(self, inputs, targets, search_radius=10, transform=False, lengths=[]):
         """
         Constructs ProposalDataset object.
 
@@ -41,7 +41,7 @@ class ProposalDataset(Dataset):
         """
         self.inputs = inputs.astype(np.float32)
         self.targets = reformat(targets)
-        self.search_radius = search_radius
+        self.lengths = lengths
         self.transform = transform
 
     def __len__(self):
@@ -77,8 +77,9 @@ class ProposalDataset(Dataset):
         """
         inputs_i = self.inputs[idx]
         if self.transform:
-            if inputs_i[0] > self.search_radius or np.random.random() > 0.75:
-                inputs_i[0] = abs(np.random.normal(0, 5, 1))
+            if np.random.random() > 0.6:
+                p = 100 * np.random.random()
+                inputs_i[0] = np.percentile(self.lengths, p)
         return {"inputs": inputs_i, "targets": self.targets[idx]}
 
 

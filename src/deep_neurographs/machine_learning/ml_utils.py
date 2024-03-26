@@ -13,7 +13,7 @@ from random import sample
 import numpy as np
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 
-from deep_neurographs import feature_extraction as extracter
+from deep_neurographs.machine_learning import feature_extraction as extracter
 from deep_neurographs.machine_learning.datasets import (
     ImgProposalDataset,
     MultiModalDataset,
@@ -80,7 +80,7 @@ def init_model(model_type):
         return MultiModalNet(n_features)
 
 
-def get_dataset(inputs, targets, model_type, transform):
+def get_dataset(inputs, targets, model_type, transform, lengths):
     """
     Gets classification model to be fit.
 
@@ -102,7 +102,7 @@ def get_dataset(inputs, targets, model_type, transform):
 
     """
     if model_type == "FeedForwardNet":
-        return ProposalDataset(inputs, targets, transform=transform)
+        return ProposalDataset(inputs, targets, transform=transform, lengths=lengths)
     elif model_type == "ConvNet":
         return ImgProposalDataset(inputs, targets, transform=transform)
     elif model_type == "MultiModalNet":
@@ -114,12 +114,26 @@ def get_dataset(inputs, targets, model_type, transform):
 def init_dataset(
     neurographs, features, model_type, block_ids, transform=False
 ):
+    # Extract features
     inputs, targets, block_to_idx, idx_to_edge = extracter.get_feature_matrix(
         neurographs, features, model_type, block_ids=block_ids
     )
+    lens = []
+    if transform:
+        for block_id in block_ids:
+            lens.extend(get_lengths(neurographs[block_id]))
+
     dataset = {
-        "dataset": get_dataset(inputs, targets, model_type, transform),
+        "dataset": get_dataset(inputs, targets, model_type, transform, lens),
         "block_to_idxs": block_to_idx,
         "idx_to_edge": idx_to_edge,
     }
     return dataset
+
+
+def get_lengths(neurograph):
+    lengths = []
+    for edge in neurograph.proposals.keys():
+        lengths.append(neurograph.proposal_length(edge))
+    return lengths
+        

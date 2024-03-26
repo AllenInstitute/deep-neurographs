@@ -100,12 +100,23 @@ def is_component_aligned(target_neurograph, pred_neurograph, component):
             hat_swc_id = target_neurograph.xyz_to_swc(hat_xyz)
             d = get_dist(hat_xyz, xyz)
             dists = utils.append_dict_value(dists, hat_swc_id, d)
+    
+    # Check whether there's a merge
+    hits = []
+    for key in dists.keys():
+        if len(dists[key]) > 8 and np.mean(dists[key]) < 10:
+            hits.append(key)
+    if len(hits) > 1:
+        print(pred_neurograph.edges[edge]["swc_id"])
 
     # Deterine whether aligned
     hat_swc_id = find_best(dists)
     dists = np.array(dists[hat_swc_id])
-    aligned_score = np.mean(dists[dists < np.percentile(dists, 95)])
-    return True if aligned_score < 3 else False, hat_swc_id
+    aligned_score = np.mean(dists[dists < np.percentile(dists, 90)])
+    if aligned_score < 4 and hat_swc_id:
+        return True, hat_swc_id
+    else:
+        return False, None
 
 
 def is_valid(target_neurograph, pred_neurograph, target_id, edge):
@@ -136,10 +147,14 @@ def is_valid(target_neurograph, pred_neurograph, target_id, edge):
     hat_edge_i = proj_branch(target_neurograph, pred_neurograph, target_id, i)
     hat_edge_j = proj_branch(target_neurograph, pred_neurograph, target_id, j)
 
-    # Check if edges either identical or adjacent
-    if hat_edge_i == hat_edge_j:
+    # Check if edges are identical or None
+    if not hat_edge_i or not hat_edge_j:
+        return False
+    elif hat_edge_i == hat_edge_j:
         return True
-    elif is_adjacent(target_neurograph, hat_edge_i, hat_edge_j):
+
+    # Check if edges are adjacent
+    if is_adjacent(target_neurograph, hat_edge_i, hat_edge_j):
         hat_branch_i = target_neurograph.edges[hat_edge_i]["xyz"]
         hat_branch_j = target_neurograph.edges[hat_edge_j]["xyz"]
         xyz_i = pred_neurograph.nodes[i]["xyz"]
@@ -171,7 +186,7 @@ def proj_branch(target_neurograph, pred_neurograph, target_id, i):
             if d < min_dist:
                 min_dist = d
                 best_edge = edge
-    else:
+    elif len(hits.keys()) == 1:
         best_edge = list(hits.keys())[0]
     return best_edge
 

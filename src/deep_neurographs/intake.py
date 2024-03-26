@@ -151,7 +151,7 @@ def build_neurograph_from_gcs_zips(
     Parameters
     ----------
     bucket_name : str
-        Name of GCS bucket where zips are stored.
+        Name of GCS bucket where zips of swc files are stored.
     cloud_path : str
         Path within GCS bucket to directory containing zips.
     anisotropy : list[float], optional

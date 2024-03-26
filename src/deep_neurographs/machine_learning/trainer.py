@@ -44,7 +44,13 @@ def fit_model(model, dataset):
 
 
 def fit_deep_model(
-    model, dataset, batch_size=BATCH_SIZE, logger=False, lr=1e-3, max_epochs=50
+    model,
+    dataset,
+    batch_size=BATCH_SIZE,
+    criterion=None,
+    logger=False,
+    lr=1e-3,
+    max_epochs=1000,
 ):
     """
     Fits a neural network to a dataset.
@@ -76,7 +82,7 @@ def fit_deep_model(
     valid_loader = DataLoader(valid_set, batch_size=batch_size)
 
     # Configure trainer
-    lit_model = LitModel(model=model, lr=lr)
+    lit_model = LitModel(criterion=criterion, model=model, lr=lr)
     ckpt_callback = ModelCheckpoint(save_top_k=1, monitor="val_f1", mode="max")
 
     # Fit model
@@ -107,11 +113,16 @@ def random_split(train_set, train_ratio=0.8):
 
 # -- Lightning Module --
 class LitModel(pl.LightningModule):
-    def __init__(self, model=None, lr=1e-3):
+    def __init__(self, criterion=None, model=None, lr=1e-3):
         super().__init__()
-        self.criterion = nn.BCEWithLogitsLoss()
         self.model = model
         self.lr = lr
+        if criterion:
+            self.criterion = criterion
+        else:
+            pos_weight = torch.tensor([0.75], device=0)
+            self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        
 
     def forward(self, batch):
         x = self.get_example(batch, "inputs")
