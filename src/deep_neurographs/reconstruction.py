@@ -100,5 +100,6 @@ def get_structure_aware_prediction(
     # Add remaining viable edges
     for edge in remaining_proposals:
         if not gutils.creates_cycle(pred_graph, tuple(edge)):
+            pred_graph.add_edges_from([edge])
             positive_predictions.append(edge)
     return positive_predictions

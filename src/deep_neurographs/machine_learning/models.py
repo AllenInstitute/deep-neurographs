@@ -56,7 +56,7 @@ class FeedForwardNet(nn.Module):
 
         """
         fc_layer = nn.Sequential(
-            nn.Linear(D_in, D_out), nn.LeakyReLU(), nn.Dropout(p=0.3)
+            nn.Linear(D_in, D_out), nn.LeakyReLU(), nn.Dropout(p=0.25)
         )
         return fc_layer
 

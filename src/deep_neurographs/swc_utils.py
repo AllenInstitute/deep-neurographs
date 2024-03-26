@@ -127,7 +127,7 @@ def parse(contents, anisotropy=[1.0, 1.0, 1.0]):
     for i, line in enumerate(contents):
         parts = line.split()
         swc_dict["id"][i] = parts[0]
-        swc_dict["radius"][i] = parts[-2]
+        swc_dict["radius"][i] = float(parts[-2])
         swc_dict["pid"][i] = parts[-1]
         swc_dict["xyz"][i] = read_xyz(
             parts[2:5], anisotropy=anisotropy, offset=offset
