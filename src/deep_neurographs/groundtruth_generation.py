@@ -17,6 +17,9 @@ from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 from deep_neurographs.geometry import dist as get_dist
 
+CLOSE_THRESHOLD = 3.5
+MIN_INTERSECTION = 10
+
 
 def init_targets(target_neurograph, pred_neurograph):
     # Initializations
@@ -104,13 +107,15 @@ def is_component_aligned(target_neurograph, pred_neurograph, component):
     # Check whether there's a merge
     hits = []
     for key in dists.keys():
-        if len(dists[key]) > 8 and np.mean(dists[key]) < 10:
+        if len(dists[key]) > 10 and np.mean(dists[key]) < CLOSE_THRESHOLD:
             hits.append(key)
     if len(hits) > 1:
-        print(pred_neurograph.edges[edge]["swc_id"])
+        print("pred_swc_id:", pred_neurograph.edges[edge]["swc_id"])
+        print("target_swc_id:", list(dists.keys()))
+        print("")
 
     # Deterine whether aligned
-    hat_swc_id = find_best(dists)
+    hat_swc_id = utils.find_best(dists)
     dists = np.array(dists[hat_swc_id])
     aligned_score = np.mean(dists[dists < np.percentile(dists, 90)])
     if aligned_score < 4 and hat_swc_id:
@@ -238,18 +243,6 @@ def upd_dict_cnts(my_dict, key):
     else:
         my_dict[key] = 1
     return my_dict
-
-
-def find_best(my_dict):
-    best_key = None
-    best_vote_cnt = 0
-    for key in my_dict.keys():
-        val_type = type(my_dict[key])
-        vote_cnt = my_dict[key] if val_type == int else len(my_dict[key])
-        if vote_cnt > best_vote_cnt:
-            best_key = key
-            best_vote_cnt = vote_cnt
-    return best_key
 
 
 def orient_branch(branch_i, branch_j):

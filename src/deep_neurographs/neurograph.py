@@ -124,6 +124,36 @@ class NeuroGraph(nx.Graph):
             cur_id += 1
         return node_ids, cur_id
 
+    def __add_edge(self, edge, attrs, idxs):
+        self.add_edge(
+            edge[0],
+            edge[1],
+            xyz=attrs["xyz"][idxs],
+            radius=attrs["radius"][idxs],
+            swc_id=attrs["swc_id"],
+        )
+        for xyz in attrs["xyz"][idxs]:
+            self.xyz_to_edge[tuple(xyz)] = edge
+
+    def delete_nbhd(self, xyz, deletion_radius=5):
+        # Add left node
+        edge = self.xyz_to_edge(xyz)
+        attrs = self.get_edge_data(*edge)    
+        idx = nearest_neighbor(self.edges[edge]["xyz"], xyz)
+        left_idx = min(idx - deletion_radius, 1)
+        left_node = self.split_edge(edge, attrs, left_idx)
+
+        # Add right node
+        edge = self.xyz_to_edge(xyz)
+        attrs = self.get_edge_data(*edge)      
+        idx = nearest_neighbor(self.edges[edge]["xyz"], xyz)
+        n_pts = len(self.edges[edge]["xyz"])
+        right_idx = min(idx + deletion_radius, n_pts-2)
+        right_node = self.split_edge(edge, attrs, right_idx)
+
+        self.remove_edge(right_idx, left_idx)
+
+        
     # --- Proposal and Ground Truth Generation ---
     def generate_proposals(
         self,
@@ -307,17 +337,6 @@ class NeuroGraph(nx.Graph):
         )
         return new_node
 
-    def __add_edge(self, edge, attrs, idxs):
-        self.add_edge(
-            edge[0],
-            edge[1],
-            xyz=attrs["xyz"][idxs],
-            radius=attrs["radius"][idxs],
-            swc_id=attrs["swc_id"],
-        )
-        for xyz in attrs["xyz"][idxs]:
-            self.xyz_to_edge[tuple(xyz)] = edge
-
     def __get_connecting_node(self, xyz_leaf, xyz_edge, edge, attrs, radius):
         i, j = tuple(edge)
         d_i = check_dists(xyz_leaf, xyz_edge, self.nodes[i]["xyz"], radius)
@@ -335,7 +354,6 @@ class NeuroGraph(nx.Graph):
         target_neurograph.init_kdtree()
         self.target_edges = init_targets(target_neurograph, self)
 
-    # --- Optimize Proposals ---
     def run_optimization(self):
         driver = "n5" if ".n5" in self.img_path else "zarr"
         img = utils.get_superchunk(
@@ -344,18 +362,6 @@ class NeuroGraph(nx.Graph):
         for edge in self.proposals:
             xyz_1, xyz_2 = geometry.optimize_alignment(self, img, edge)
             self.proposals[edge]["xyz"] = np.array([xyz_1, xyz_2])
-
-    def get_branches(self, i, key="xyz"):
-        branches = []
-        for j in self.neighbors(i):
-            branches.append(self.orient_edge((i, j), i, key=key))
-        return branches
-
-    def orient_edge(self, edge, i, key="xyz"):
-        if (self.edges[edge][key][0] == self.nodes[i][key]).all():
-            return self.edges[edge][key]
-        else:
-            return np.flip(self.edges[edge][key], axis=0)
 
     # -- kdtree --
     def init_kdtree(self):
@@ -459,6 +465,19 @@ class NeuroGraph(nx.Graph):
     def proposal_length(self, edge):
         i, j = tuple(edge)
         return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
+
+    
+    def get_branches(self, i, key="xyz"):
+        branches = []
+        for j in self.neighbors(i):
+            branches.append(self.orient_edge((i, j), i, key=key))
+        return branches
+
+    def orient_edge(self, edge, i, key="xyz"):
+        if (self.edges[edge][key][0] == self.nodes[i][key]).all():
+            return self.edges[edge][key]
+        else:
+            return np.flip(self.edges[edge][key], axis=0)
 
     def node_xyz_dist(self, node, xyz):
         return get_dist(xyz, self.nodes[node]["xyz"])
@@ -617,17 +636,6 @@ class NeuroGraph(nx.Graph):
         for i in ingest_nodes:
             nbs = list(self.neighbors(i))
             self.absorb_node(i, nbs[0], nbs[1])
-
-    def delete_isolated(self):
-        delete_nodes = set()
-        for i in self.nodes:
-            if self.degree[i] == 0:
-                delete_nodes.add(i)
-                if i in self.leafs:
-                    self.leafs.remove(i)
-                elif i in self.junctions:
-                    self.junctions.remove(i)
-        self.remove_nodes_from(delete_nodes)
 
     def absorb_node(self, i, nb_1, nb_2):
         # Get attributes
