@@ -100,6 +100,13 @@ def remove_key(my_dict, key):
     return my_dict
 
 
+def remove_items(my_dict, keys):
+    for key in keys:
+        if key in my_dict.keys():
+            del my_dict[key]
+    return my_dict
+
+
 def append_dict_value(my_dict, key, value):
     """
     Appends "value" to the list stored at "key".
@@ -125,6 +132,32 @@ def append_dict_value(my_dict, key, value):
         my_dict[key] = [value]
     return my_dict
 
+
+def find_best(my_dict):
+    """
+    Given a dictionary where each value is either a list or int (i.e. cnt),
+    finds the key associated with the longest list or largest integer.
+
+    Parameters
+    ----------
+    my_dict : dict
+        Dictionary to be searched.
+
+    Returns
+    -------
+    best_key : hashable data type
+        Key associated with the longest list or largest integer in "my_dict".
+
+    """
+    best_key = None
+    best_vote_cnt = 0
+    for key in my_dict.keys():
+        val_type = type(my_dict[key])
+        vote_cnt = my_dict[key] if val_type == int else len(my_dict[key])
+        if vote_cnt > best_vote_cnt:
+            best_key = key
+            best_vote_cnt = vote_cnt
+    return best_key
 
 # --- os utils ---
 def mkdir(path, delete=False):
@@ -564,15 +597,3 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
-
-
-def find_best(my_dict):
-    best_key = None
-    best_vote_cnt = 0
-    if len(my_dict) > 0:
-        for key, values in my_dict.items():
-            vote_cnt = len(values)
-            if vote_cnt > best_vote_cnt:
-                best_key = key
-                best_vote_cnt = vote_cnt
-    return best_key, best_vote_cnt
