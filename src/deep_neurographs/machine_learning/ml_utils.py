@@ -102,7 +102,9 @@ def get_dataset(inputs, targets, model_type, transform, lengths):
 
     """
     if model_type == "FeedForwardNet":
-        return ProposalDataset(inputs, targets, transform=transform, lengths=lengths)
+        return ProposalDataset(
+            inputs, targets, transform=transform, lengths=lengths
+        )
     elif model_type == "ConvNet":
         return ImgProposalDataset(inputs, targets, transform=transform)
     elif model_type == "MultiModalNet":
@@ -136,4 +138,3 @@ def get_lengths(neurograph):
     for edge in neurograph.proposals.keys():
         lengths.append(neurograph.proposal_length(edge))
     return lengths
-        

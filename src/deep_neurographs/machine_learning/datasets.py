@@ -21,7 +21,9 @@ class ProposalDataset(Dataset):
 
     """
 
-    def __init__(self, inputs, targets, search_radius=10, transform=False, lengths=[]):
+    def __init__(
+        self, inputs, targets, search_radius=10, transform=False, lengths=[]
+    ):
         """
         Constructs ProposalDataset object.
 

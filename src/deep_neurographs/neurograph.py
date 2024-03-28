@@ -135,25 +135,6 @@ class NeuroGraph(nx.Graph):
         for xyz in attrs["xyz"][idxs]:
             self.xyz_to_edge[tuple(xyz)] = edge
 
-    def delete_nbhd(self, xyz, deletion_radius=5):
-        # Add left node
-        edge = self.xyz_to_edge(xyz)
-        attrs = self.get_edge_data(*edge)    
-        idx = nearest_neighbor(self.edges[edge]["xyz"], xyz)
-        left_idx = min(idx - deletion_radius, 1)
-        left_node = self.split_edge(edge, attrs, left_idx)
-
-        # Add right node
-        edge = self.xyz_to_edge(xyz)
-        attrs = self.get_edge_data(*edge)      
-        idx = nearest_neighbor(self.edges[edge]["xyz"], xyz)
-        n_pts = len(self.edges[edge]["xyz"])
-        right_idx = min(idx + deletion_radius, n_pts-2)
-        right_node = self.split_edge(edge, attrs, right_idx)
-
-        self.remove_edge(right_idx, left_idx)
-
-        
     # --- Proposal and Ground Truth Generation ---
     def generate_proposals(
         self,
@@ -466,7 +447,6 @@ class NeuroGraph(nx.Graph):
         i, j = tuple(edge)
         return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
-    
     def get_branches(self, i, key="xyz"):
         branches = []
         for j in self.neighbors(i):

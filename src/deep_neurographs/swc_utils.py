@@ -21,7 +21,7 @@ from deep_neurographs import geometry, utils
 
 # -- io utils --
 def process_local_paths(
-    paths, anisotropy=[1.0, 1.0, 1.0], min_size=0, img_bbox=None
+    paths, anisotropy=[1.0, 1.0, 1.0], min_size=3, img_bbox=None
 ):
     """
     Iterates over a list of paths to swc files and calls a routine that builds
@@ -232,11 +232,10 @@ def write_list(path, entry_list, color=None):
             f.write("# COLOR" + color)
         else:
             f.write("# id, type, z, y, x, r, pid")
-        f.write("\n")
         for i, entry in enumerate(entry_list):
+            f.write("\n")
             for item in entry:
                 f.write(str(item) + " ")
-            f.write("\n")
 
 
 def write_dict(path, swc_dict, color=None):
@@ -262,53 +261,20 @@ def write_graph(path, graph, color=None):
         List of swc file entries to be written.
 
     """
-    reindex = dict()
+    node_to_idx = dict()
     for i, j in nx.dfs_edges(graph):
         # Initialize entry list
-        if len(reindex) < 1:
-            r = set_radius(graph, i)
-            entry, reindex = make_entry(graph, i, -1, r, reindex)
+        if len(node_to_idx) < 1:
+            entry, node_to_idx = make_entry(graph, i, -1, node_to_idx)
             entry_list = [entry]
 
         # Add entry
-        r = set_radius(graph, j)
-        entry, reindex = make_entry(graph, j, reindex[i], r, reindex)
+        entry, node_to_idx = make_entry(graph, j, i, node_to_idx)
         entry_list.append(entry)
     write_list(path, entry_list)
 
 
-def set_radius(graph, i):
-    try:
-        return graph[i]["radius"]
-    except:
-        return 2
-
-
-def make_entry(graph, i, parent, r, reindex):
-    """
-    Makes an entry to be written in an swc file.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph that "i" and "parent" belong to.
-    i : int
-        Node that entry corresponds to.
-    parent : int
-         Parent of node "i".
-    r : float
-        Radius.
-    reindex : dict
-        Converts 'graph node id' to 'swc node id'.
-
-    """
-    reindex[i] = len(reindex) + 1
-    r = graph.nodes[i]["radius"]
-    x, y, z = tuple(map(str, graph.nodes[i]["xyz"]))
-    return [reindex[i], 2, x, y, z, r, parent], reindex
-
-
-def save_edge(path, xyz_1, xyz_2, color=None, radius=8):
+def save_point(path, xyz, color=None):
     """
     Writes an swc file.
 
@@ -335,12 +301,49 @@ def save_edge(path, xyz_1, xyz_2, color=None, radius=8):
         f.write("\n")
 
         # Entries
-        f.write(make_edge_entry(1, -1, xyz_1, radius=radius))
+        f.write(make_simple_entry(1, -1, xyz))
+
+
+def save_edge(path, xyz_1, xyz_2, color=None, radius=6):
+    """
+    Writes an swc file.
+
+    Parameters
+    ----------
+    path : str
+        Path on local machine that swc file will be written to.
+    entry_list : list[list]
+        List of entries to be written to an swc file.
+    color : str, optional
+        Color of nodes. The default is None.
+
+    Returns
+    -------
+    None.
+
+    """
+    with open(path, "w") as f:
+        # Preamble
+        if color is not None:
+            f.write("# COLOR " + color)
+        else:
+            f.write("# id, type, z, y, x, r, pid")
         f.write("\n")
-        f.write(make_edge_entry(2, 1, xyz_2, radius=radius))
+
+        # Entries
+        f.write(make_simple_entry(1, -1, xyz_1, radius=radius))
+        f.write("\n")
+        f.write(make_simple_entry(2, 1, xyz_2, radius=radius))
 
 
-def make_edge_entry(node_id, parent_id, xyz, radius=8):
+def set_radius(graph, i):
+    try:
+        return graph[i]["radius"]
+    except:
+        return 2
+
+
+def make_entry(graph, i, parent, node_to_idx):
     """
     Makes an entry to be written in an swc file.
 
@@ -352,14 +355,40 @@ def make_edge_entry(node_id, parent_id, xyz, radius=8):
         Node that entry corresponds to.
     parent : int
          Parent of node "i".
+    node_to_idx : dict
+        Converts 'graph node id' to 'swc node id'.
+
+    Returns
+    -------
+    ...
+
+    """
+    r = set_radius(graph, i)
+    x, y, z = tuple(graph.nodes[i]["xyz"])
+    node_to_idx[i] = len(node_to_idx) + 1
+    entry = f"{node_to_idx[i]} 2 {x} {y} {z} {r} {node_to_idx[parent]}"
+    return entry, node_to_idx
+
+
+def make_simple_entry(node, parent, xyz, radius=8):
+    """
+    Makes an entry to be written in an swc file.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph that "i" and "parent" belong to.
+    node : int
+        Node that entry corresponds to.
+    parent : int
+         Parent of node "i".
     anisotropy : list[float]
         Image to real-world coordinates scaling factors for (x, y, z) that is
         applied to swc files.
 
     """
     x, y, z = tuple(xyz)
-    entry = f"{node_id} 2 {x} {y} {z} {radius} {parent_id}"
-    return entry
+    return f"{node} 2 {x} {y} {z} {radius} {parent}"
 
 
 # -- Conversions --
