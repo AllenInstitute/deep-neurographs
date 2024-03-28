@@ -122,7 +122,6 @@ class LitModel(pl.LightningModule):
         else:
             pos_weight = torch.tensor([0.75], device=0)
             self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-        
 
     def forward(self, batch):
         x = self.get_example(batch, "inputs")
@@ -146,7 +145,6 @@ class LitModel(pl.LightningModule):
         X = self.get_example(batch, "inputs")
         y = self.get_example(batch, "targets")
         y_hat = self.model(X)
-        self.log("val_loss", self.criterion(y_hat, y))
         self.compute_stats(y_hat, y, prefix="val_")
 
     def compute_stats(self, y_hat, y, prefix=""):

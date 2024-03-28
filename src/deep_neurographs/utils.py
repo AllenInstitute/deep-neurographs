@@ -159,6 +159,7 @@ def find_best(my_dict):
             best_vote_cnt = vote_cnt
     return best_key
 
+
 # --- os utils ---
 def mkdir(path, delete=False):
     """
@@ -481,6 +482,16 @@ def write_txt(path, contents):
     f = open(path, "w")
     f.write(contents)
     f.close()
+
+
+def set_path(dir_name, filename, ext):
+    cnt = 0
+    ext = ext.replace(".", "")
+    path = os.path.join(dir_name, f"{filename}.{ext}")
+    while os.path.exists(path):
+        path = os.path.join(dir_name, f"{filename}.{cnt}.{ext}")
+        cnt += 1
+    return path
 
 
 # --- coordinate conversions ---

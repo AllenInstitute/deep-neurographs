@@ -103,7 +103,7 @@ def is_component_aligned(target_neurograph, pred_neurograph, component):
             hat_swc_id = target_neurograph.xyz_to_swc(hat_xyz)
             d = get_dist(hat_xyz, xyz)
             dists = utils.append_dict_value(dists, hat_swc_id, d)
-    
+
     # Check whether there's a merge
     hits = []
     for key in dists.keys():

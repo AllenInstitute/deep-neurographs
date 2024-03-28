@@ -11,14 +11,16 @@ corresponds to a node in the graph.
 
 import os
 from random import sample
-from scipy.spatial import KDTree
 from time import time
 
 import networkx as nx
+from scipy.spatial import KDTree
 
+from deep_neurographs import graph_utils as gutils
 from deep_neurographs import swc_utils, utils
 
 DELETION_RADIUS = 10
+
 
 class DenseGraph:
     """
@@ -27,7 +29,7 @@ class DenseGraph:
 
     """
 
-    def __init__(self, swc_paths):
+    def __init__(self, swc_paths, img_patch_origin=None, img_patch_shape=None):
         """
         Constructs a DenseGraph object from a directory of swc files.
 
@@ -36,12 +38,14 @@ class DenseGraph:
         swc_paths : list[str]
             List of paths to swc files which are used to construct a hash
             table in which the entries are filename-graph pairs.
+        ...
 
         Returns
         -------
         None
 
         """
+        self.bbox = utils.get_img_bbox(img_patch_origin, img_patch_shape)
         self.init_graphs(swc_paths)
         self.init_kdtree()
 
@@ -65,13 +69,19 @@ class DenseGraph:
         self.xyz_to_swc = dict()
         swc_dicts, _ = swc_utils.process_local_paths(paths)
         for i, swc_dict in enumerate(swc_dicts):
+            # Build graph
             swc_id = swc_dict["swc_id"]
             graph, _ = swc_utils.to_graph(swc_dict, set_attrs=True)
+            if self.bbox:
+                graph = gutils.trim_branches(graph, self.bbox)
+
+            # Store graph
             self.store_xyz(graph, swc_id)
             self.graphs[swc_id] = graph
 
     def store_xyz(self, graph, swc_id):
         for i in graph.nodes:
+            graph.nodes[i]["swc_id"] = swc_id
             self.xyz_to_swc[tuple(graph.nodes[i]["xyz"])] = swc_id
 
     def init_kdtree(self):
@@ -122,4 +132,3 @@ class DenseGraph:
             r = graph.nodes[j]["radius"]
             entry_list.append([node_to_idx[j], 2, x, y, z, r, node_to_idx[i]])
         return entry_list
-        
