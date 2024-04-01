@@ -360,6 +360,10 @@ def open_tensorstore(path, driver):
     ).result()
     if driver == "neuroglancer_precomputed":
         return arr[ts.d["channel"][0]]
+    elif driver == "zarr":
+        arr = arr[0, 0, :, :, :]
+        arr = arr[ts.d[0].transpose[2]]
+        arr = arr[ts.d[0].transpose[1]]
     return arr
 
 
