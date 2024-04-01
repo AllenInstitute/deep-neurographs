@@ -143,6 +143,7 @@ class NeuroGraph(nx.Graph):
 
         """
         self.init_kdtree()
+        self.reset_proposals()
         self.proposals = dict()
         existing_connections = dict()
         doubles = set()
@@ -211,6 +212,10 @@ class NeuroGraph(nx.Graph):
         self.filter_nodes()
         if optimize:
             self.run_optimization()
+
+    def reset_proposals(self):
+        for i in self.nodes:
+            self.nodes[i]["proposals"] = set()
 
     def set_proposals_per_leaf(self, proposals_per_leaf):
         self.proposals_per_leaf = proposals_per_leaf
