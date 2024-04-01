@@ -33,6 +33,7 @@ from deep_neurographs import geometry, swc_utils, utils
 def get_irreducibles(
     swc_dict,
     bbox=None,
+    min_size=0,
     prune_connectors=False,
     prune_spurious=True,
     connector_length=8,
@@ -49,6 +50,11 @@ def get_irreducibles(
     ----------
     swc_dict : dict
         Contents of an swc file.
+    bbox : dict, optional
+        ...
+    min_size : int, optional    
+        Minimum number of nodes in graph to continue processing it after
+        pruning spurious branches. The default is 0.
     prune_connectors : bool, optional
         Indication of whether to prune short paths connecting branches.
         The default is False.
@@ -80,6 +86,8 @@ def get_irreducibles(
         connector_length=connector_length,
         prune_depth=prune_depth,
     )
+    if graph.number_of_nodes() < min_size:
+        return [], []
 
     # Extract irreducibles
     irreducibles = []

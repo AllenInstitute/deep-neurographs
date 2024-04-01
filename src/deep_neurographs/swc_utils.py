@@ -135,8 +135,8 @@ def parse(contents, anisotropy=[1.0, 1.0, 1.0]):
         )
 
     # Check whether radius is in nanometers
-    if swc_dict["radius"][0] < 100:
-        swc_dict["radius"] *= 1000
+    if swc_dict["radius"][0] > 100:
+        swc_dict["radius"] /= 1000
     return swc_dict
 
 

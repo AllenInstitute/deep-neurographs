@@ -38,6 +38,7 @@ class NeuroGraph(nx.Graph):
         swc_paths=None,
         img_path=None,
         label_mask=None,
+        node_spacing=2,
         train_model=False,
     ):
         super(NeuroGraph, self).__init__()
@@ -52,6 +53,7 @@ class NeuroGraph(nx.Graph):
         self.junctions = set()
         self.proposals = dict()
         self.target_edges = set()
+        self.node_spacing = node_spacing
 
         # Initialize data structures for proposals
         self.complex_proposals = set()
@@ -100,10 +102,10 @@ class NeuroGraph(nx.Graph):
                 ids[i],
                 ids[j],
                 radius=attrs["radius"],
-                xyz=attrs["xyz"],
+                xyz=attrs["xyz"][::self.node_spacing],
                 swc_id=component_dict["swc_id"],
             )
-            for xyz in attrs["xyz"][::2]:
+            for xyz in attrs["xyz"][::self.node_spacing]:
                 self.xyz_to_edge[tuple(xyz)] = (ids[i], ids[j])
             self.xyz_to_edge[tuple(attrs["xyz"][-1])] = (ids[i], ids[j])
 
@@ -192,7 +194,7 @@ class NeuroGraph(nx.Graph):
                 node, xyz = self.__get_connecting_node(
                     xyz_leaf, xyz, (i, j), attrs, radius
                 )
-                if self.degree[node] >= 3:
+                if self.degree[node] >= 2:
                     continue
 
                 pair_id = frozenset((swc_id, leaf_swc_id))
@@ -304,6 +306,7 @@ class NeuroGraph(nx.Graph):
             Node ID of node that was created.
 
         """
+        ### BUG: you need to upd self.xyz_to_edge
         # Remove old edge
         (i, j) = edge
         self.remove_edge(i, j)
