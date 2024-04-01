@@ -21,6 +21,7 @@ from deep_neurographs.swc_utils import process_gsc_zip, process_local_paths
 
 # Graph construction
 MIN_SIZE = 35
+NODE_SPACING = 2
 SMOOTH = True
 PRUNE_CONNECTORS = False
 PRUNE_SPURIOUS = True
@@ -37,18 +38,19 @@ SEARCH_RADIUS = 10
 # --- Build graph wrappers ---
 def build_neurograph_from_local(
     anisotropy=[1.0, 1.0, 1.0],
-    swc_dir=None,
-    swc_paths=None,
     img_patch_origin=None,
     img_patch_shape=None,
     img_path=None,
     min_size=MIN_SIZE,
+    node_spacing=NODE_SPACING,
     progress_bar=False,
     prune_connectors=PRUNE_CONNECTORS,
     prune_spurious=PRUNE_SPURIOUS,
     connector_length=CONNECTOR_LENGTH,
     prune_depth=PRUNE_DEPTH,
     smooth=SMOOTH,
+    swc_dir=None,
+    swc_paths=None,
 ):
     """
     Builds a neurograph from swc files on the local machine.
@@ -58,10 +60,6 @@ def build_neurograph_from_local(
     anisotropy : list[float], optional
         Scaling factors applied to xyz coordinates to account for anisotropy
         of microscope. The default is [1.0, 1.0, 1.0].
-    swc_dir : str, optional
-        Path to a directory containing swc files. The default is None.
-    swc_paths : list[str], optional
-        List of paths to swc files. The default is None.
     image_patch_origin : list[float], optional
         An xyz coordinate in the image which is the upper, left, front corner
         of am image patch that contains the swc files. The default is None.
@@ -74,6 +72,9 @@ def build_neurograph_from_local(
     min_size : int, optional
         Minimum cardinality of swc files that are stored in NeuroGraph. The
         default is the global variable "MIN_SIZE".
+    node_spacing : int, optional
+        Spacing (in microns) between nodes. The default is the global variable
+        "NODE_SPACING".
     progress_bar : bool, optional
         Indication of whether to print out a progress bar during build. The
         default is False.
@@ -94,6 +95,10 @@ def build_neurograph_from_local(
     smooth : bool, optional
         Indication of whether to smooth branches from swc files. The default
         is the global variable "SMOOTH".
+    swc_dir : str, optional
+        Path to a directory containing swc files. The default is None.
+    swc_paths : list[str], optional
+        List of paths to swc files. The default is None.
 
     Returns
     -------
@@ -122,13 +127,15 @@ def build_neurograph_from_local(
         swc_dicts,
         img_bbox=img_bbox,
         img_path=img_path,
-        swc_paths=paths,
+        min_size=min_size,
+        node_spacing=node_spacing,
         progress_bar=progress_bar,
         prune_connectors=prune_connectors,
         prune_spurious=prune_spurious,
         connector_length=connector_length,
         prune_depth=prune_depth,
         smooth=smooth,
+        swc_paths=paths,
     )
     return neurograph
 
@@ -139,6 +146,7 @@ def build_neurograph_from_gcs_zips(
     anisotropy=[1.0, 1.0, 1.0],
     img_path=None,
     min_size=MIN_SIZE,
+    node_spacing=NODE_SPACING,
     prune_connectors=PRUNE_CONNECTORS,
     prune_spurious=PRUNE_SPURIOUS,
     connector_length=CONNECTOR_LENGTH,
@@ -163,6 +171,9 @@ def build_neurograph_from_gcs_zips(
     min_size : int, optional
         Minimum cardinality of swc files that are stored in NeuroGraph. The
         default is the global variable "MIN_SIZE".
+    node_spacing : int, optional
+        Spacing (in microns) between nodes. The default is the global variable
+        "NODE_SPACING".
     prune_connectors : bool, optional
         Indication of whether to prune connectors (see graph_utils.py), sites
         that are likely to be false merges. The default is the global variable
@@ -202,6 +213,8 @@ def build_neurograph_from_gcs_zips(
     neurograph = build_neurograph(
         swc_dicts,
         img_path=img_path,
+        min_size=min_size,
+        node_spacing=node_spacing,
         prune_connectors=prune_connectors,
         prune_spurious=prune_spurious,
         connector_length=connector_length,
@@ -266,6 +279,8 @@ def build_neurograph(
     swc_dicts,
     img_bbox=None,
     img_path=None,
+    min_size=MIN_SIZE,
+    node_spacing=NODE_SPACING,
     swc_paths=None,
     progress_bar=True,
     prune_connectors=PRUNE_CONNECTORS,
@@ -282,6 +297,7 @@ def build_neurograph(
     irreducibles, n_nodes, n_edges = get_irreducibles(
         swc_dicts,
         bbox=img_bbox,
+        min_size=min_size,
         progress_bar=progress_bar,
         prune_connectors=prune_connectors,
         prune_spurious=prune_spurious,
@@ -297,7 +313,10 @@ def build_neurograph(
         print("# edges:", utils.reformat_number(n_edges))
 
     neurograph = NeuroGraph(
-        img_bbox=img_bbox, img_path=img_path, swc_paths=swc_paths
+        img_bbox=img_bbox,
+        img_path=img_path,
+        node_spacing=node_spacing,
+        swc_paths=swc_paths,
     )
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_components * 0.05), 1)
@@ -317,6 +336,7 @@ def build_neurograph(
 def get_irreducibles(
     swc_dicts,
     bbox=None,
+    min_size=MIN_SIZE,
     progress_bar=True,
     prune_connectors=PRUNE_CONNECTORS,
     prune_spurious=PRUNE_SPURIOUS,
@@ -328,14 +348,15 @@ def get_irreducibles(
     chunk_size = max(int(n_components * 0.02), 1)
     with ProcessPoolExecutor() as executor:
         # Assign Processes
-        processes = [None] * n_components
         i = 0
+        processes = [None] * n_components
         while swc_dicts:
             swc_dict = swc_dicts.pop()
             processes[i] = executor.submit(
                 gutils.get_irreducibles,
                 swc_dict,
                 bbox,
+                min_size,
                 prune_connectors,
                 prune_spurious,
                 connector_length,
@@ -367,18 +388,17 @@ def get_irreducibles(
 
 
 def count_nodes(irreducibles):
-    n_nodes = 0
-    for irreducibles_i in irreducibles:
-        n_nodes += len(irreducibles_i["leafs"])
-        n_nodes += len(irreducibles_i["junctions"])
-    return n_nodes
+    cnt = 0
+    for irr_i in irreducibles:
+        cnt += len(irr_i["leafs"]) + len(irr_i["junctions"])
+    return cnt
 
 
 def count_edges(irreducibles):
-    n_edges = 0
-    for irreducibles_i in irreducibles:
-        n_edges += len(irreducibles_i["edges"])
-    return n_edges
+    cnt = 0
+    for irr_i in irreducibles:
+        cnt += len(irr_i["edges"])
+    return cnt
 
 
 # -- Utils --
