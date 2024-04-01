@@ -14,13 +14,14 @@ import networkx as nx
 import numpy as np
 import tensorstore as ts
 from scipy.spatial import KDTree
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from deep_neurographs import geometry
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import swc_utils, utils
 from deep_neurographs.geometry import check_dists
 from deep_neurographs.geometry import dist as get_dist
-from deep_neurographs.groundtruth_generation import init_targets
+from deep_neurographs.machine_learning.groundtruth_generation import init_targets
 
 SUPPORTED_LABEL_MASK_TYPES = [dict, np.array, ts.TensorStore]
 
@@ -651,11 +652,15 @@ class NeuroGraph(nx.Graph):
         del self.proposals[edge]
 
     def to_swc(self, path):
-        for i, component in enumerate(nx.connected_components(self)):
-            node = sample(component, 1)[0]
-            swc_id = self.nodes[node]["swc_id"]
-            component_path = os.path.join(path, f"{swc_id}.swc")
-            self.component_to_swc(component_path, component)
+        with ThreadPoolExecutor() as executor:
+            threads = []
+            for i, component in enumerate(nx.connected_components(self)):
+                node = sample(component, 1)[0]
+                swc_id = self.nodes[node]["swc_id"]
+                path_i = os.path.join(path, f"{swc_id}.swc")
+                threads.append(
+                    executor.submit(self.component_to_swc, path_i, component)
+                )
 
     def component_to_swc(self, path, component):
         node_to_idx = dict()
