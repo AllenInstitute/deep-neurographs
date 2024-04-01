@@ -17,22 +17,15 @@ from google.cloud import storage
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 from deep_neurographs.neurograph import NeuroGraph
-from deep_neurographs.swc_utils import process_gsc_zip, process_local_paths
+from deep_neurographs.swc_utils import process_gcs_zip, process_local_paths
 
-# Graph construction
-MIN_SIZE = 35
+MIN_SIZE = 30
 NODE_SPACING = 2
 SMOOTH = True
 PRUNE_CONNECTORS = False
 PRUNE_SPURIOUS = True
-PRUNE_DEPTH = 10
+PRUNE_DEPTH = 16
 CONNECTOR_LENGTH = 16
-
-# Proposal generation
-N_PROPOSALS_PER_LEAF = 3
-OPTIMIZE_PROPOSALS = False
-OPTIMIZATION_DEPTH = 15
-SEARCH_RADIUS = 10
 
 
 # --- Build graph wrappers ---
@@ -142,7 +135,7 @@ def build_neurograph_from_local(
 
 def build_neurograph_from_gcs_zips(
     bucket_name,
-    cloud_path,
+    gcs_path,
     anisotropy=[1.0, 1.0, 1.0],
     img_path=None,
     min_size=MIN_SIZE,
@@ -160,7 +153,7 @@ def build_neurograph_from_gcs_zips(
     ----------
     bucket_name : str
         Name of GCS bucket where zips of swc files are stored.
-    cloud_path : str
+    gcs_path : str
         Path within GCS bucket to directory containing zips.
     anisotropy : list[float], optional
         Scaling factors applied to xyz coordinates to account for anisotropy
@@ -202,7 +195,7 @@ def build_neurograph_from_gcs_zips(
     print("Process swc files...")
     total_runtime, t0 = utils.init_timers()
     swc_dicts = download_gcs_zips(
-        bucket_name, cloud_path, min_size, anisotropy
+        bucket_name, gcs_path, min_size, anisotropy
     )
     t, unit = utils.time_writer(time() - t0)
     print(f"\nModule Runtime: {round(t, 4)} {unit} \n")
@@ -231,7 +224,7 @@ def build_neurograph_from_gcs_zips(
 
 
 # -- Read swc files --
-def download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy):
+def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
     """
     Downloads swc files from zips stored in a GCS bucket.
 
@@ -239,7 +232,7 @@ def download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy):
     ----------
     bucket_name : str
         Name of GCS bucket where zips are stored.
-    cloud_path : str
+    gcs_path : str
         Path within GCS bucket to directory containing zips.
     min_size : int
         Minimum cardinality of swc files that are stored in NeuroGraph.
@@ -254,7 +247,7 @@ def download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy):
     """
     # Initializations
     bucket = storage.Client().bucket(bucket_name)
-    zip_paths = utils.list_gcs_filenames(bucket, cloud_path, ".zip")
+    zip_paths = utils.list_gcs_filenames(bucket, gcs_path, ".zip")
     chunk_size = int(len(zip_paths) * 0.02)
 
     # Parse
@@ -263,7 +256,7 @@ def download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy):
     swc_dicts = []
     for i, path in enumerate(zip_paths):
         swc_dicts.extend(
-            process_gsc_zip(
+            process_gcs_zip(
                 bucket, path, anisotropy=anisotropy, min_size=min_size
             )
         )
@@ -271,6 +264,7 @@ def download_gcs_zips(bucket_name, cloud_path, min_size, anisotropy):
             cnt, t1 = report_progress(
                 i, len(zip_paths), chunk_size, cnt, t0, t1
             )
+            break
     return swc_dicts
 
 
