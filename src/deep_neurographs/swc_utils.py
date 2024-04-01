@@ -117,6 +117,7 @@ def parse(contents, anisotropy=[1.0, 1.0, 1.0]):
     ...
 
     """
+    # Compile swc content
     contents, offset = get_contents(contents)
     swc_dict = {
         "id": np.zeros((len(contents)), dtype=np.int32),
@@ -132,6 +133,10 @@ def parse(contents, anisotropy=[1.0, 1.0, 1.0]):
         swc_dict["xyz"][i] = read_xyz(
             parts[2:5], anisotropy=anisotropy, offset=offset
         )
+
+    # Check whether radius is in nanometers
+    if swc_dict["radius"][0] < 100:
+        swc_dict["radius"] *= 1000
     return swc_dict
 
 
