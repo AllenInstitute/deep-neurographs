@@ -27,8 +27,6 @@ from deep_neurographs import utils
 from deep_neurographs.neurograph import NeuroGraph
 
 
-
-
 def run(
     neurograph,
     model_type,
@@ -97,7 +95,7 @@ def run_without_seeds(
     # --> generate features
     # --> run prediction
     # --> parse predictions and merge proposals
-
+    pass
 
 def build_from_soma(
     neurograph, labels_path, chunk_origin, chunk_shape=CHUNK_SHAPE, n_hops=1

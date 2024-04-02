@@ -263,8 +263,9 @@ def get_directionals(neurograph, edge, window_size):
     edge_direction = geometry.compute_tangent(
         neurograph.proposals[edge]["xyz"]
     )
-    direction_i = geometry.get_directional(neurograph, i, window_size)
-    direction_j = geometry.get_directional(neurograph, j, window_size)
+    origin = neurograph.proposal_midpoint(edge)
+    direction_i = geometry.get_directional(neurograph, i, origin, window_size)
+    direction_j = geometry.get_directional(neurograph, j, origin, window_size)
 
     # Compute features
     inner_product_1 = abs(np.dot(edge_direction, direction_i))

@@ -16,8 +16,9 @@ from deep_neurographs import utils
 
 
 # Directional Vectors
-def get_directional(neurograph, i, window_size):
+def get_directional(neurograph, i, origin, window_size):
     branches = neurograph.get_branches(i)
+    branches = translate_branches(branches, origin)
     if len(branches) == 1:
         return compute_tangent(get_sub_branch(branches[0], window_size))
     elif len(branches) == 2:
@@ -395,3 +396,13 @@ def nearest_neighbor(xyz_arr, xyz):
             min_dist = d
             idx = i
     return idx, min_dist
+
+def translate_branches(branches, shift):
+    for i, branch in enumerate(branches):
+        branches[i] = branch - shift
+    return branches
+
+
+def query_ball(kdtree, xyz, radius):
+    idxs = kdtree.query_ball_point(xyz, radius, return_sorted=True)
+    return kdtree.data[idxs]

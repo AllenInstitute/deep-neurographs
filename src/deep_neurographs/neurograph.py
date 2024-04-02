@@ -330,7 +330,8 @@ class NeuroGraph(nx.Graph):
 
         # Finish
         self.filter_nodes()
-        self.init_proposal_kdtree()
+        self.init_kdtree(node_type="leaf")
+        self.init_kdtree(node_type="proposal")
         if optimize:
             self.run_optimization()
 
@@ -372,38 +373,32 @@ class NeuroGraph(nx.Graph):
             self.proposals[edge]["xyz"] = np.array([xyz_1, xyz_2])
 
     # -- KDTree --
-    def init_kdtree(self):
+    def init_kdtree(self, node_type=None):
         """
         Builds a KD-Tree from the (x,y,z) coordinates of the subnodes of
         each connected component in the graph.
 
         Parameters
         ----------
-        None
+        node_type : None or str, optional
+            Type of node used to build kdtree. The default is None.
 
         Returns
         -------
         None
 
         """
-        self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
+        err_msg = "Invalid node_type in self.query_kdtree!"
+        assert node_type in [None, "proposal", "leaf"], err_msg
+        if node_type == "leaf":
+            xyz_list = [self.nodes[leaf]["xyz"] for leaf in self.leafs]
+            self.leaf_kdtree = KDTree(xyz_list)
+        elif node_type == "proposal":
+            self.proposal_kdtree = KDTree(list(self.xyz_to_proposal.keys()))
+        else:
+            self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
 
-    def init_proposal_kdtree(self):
-        """
-        Builds a KD-Tree from the (x,y,z) coordinates of the proposals.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        self.proposal_kdtree = KDTree(list(self.xyz_to_proposal.keys()))
-
-    def query_kdtree(self, xyz, d):
+    def query_kdtree(self, xyz, d, node_type=None):
         """
         Parameters
         ----------
@@ -419,10 +414,30 @@ class NeuroGraph(nx.Graph):
             nodes within a distance of "d" from "xyz".
 
         """
-        idxs = self.kdtree.query_ball_point(xyz, d, return_sorted=True)
-        return self.kdtree.data[idxs]
+        err_msg = "Invalid node_type in self.query_kdtree!"
+        assert node_type in [None, "leaf", "proposal"], err_msg
+        if node_type == "leaf":
+            return geometry.query_ball(self.leaf_kdtree, xyz, d)
+        elif node_type == "proposal":
+            return geometry.query_ball(self.proposal_kdtree, xyz, d)
+        else:
+            return geometry.query_ball(self.kdtree, xyz, d)
 
     def get_projection(self, xyz):
+        """
+        Gets the xyz coordinates of the nearest neighbor of "xyz".
+
+        Parameters
+        ----------
+        xyz : tuple
+            xyz coordinate to be queried.
+
+        Returns
+        -------
+        tuple
+            xyz coordinate of the nearest neighbor of "xyz". 
+
+        """
         _, idx = self.kdtree.query(xyz, k=1)
         return tuple(self.kdtree.data[idx])
 
@@ -452,11 +467,13 @@ class NeuroGraph(nx.Graph):
     def get_complex_proposals(self):
         return set([e for e in self.get_proposals() if not self.is_simple(e)])
 
-    def get_isolated_proposals(self, radius):
+    def get_isolated_proposals(self, r):
         isolated_proposals = set()
         for edge in self.proposals.keys():
             xyz = self.proposal_midpoint(edge)
-            if len(self.proposal_kdtree.query_ball_point(xyz, radius)) <= 2:
+            nearby_proposals = self.query_kdtree(xyz, r, node_type="proposal")
+            nearby_leafs = self.query_kdtree(xyz, r, node_type="leaf")
+            if len(nearby_proposals) <= 2 and len(nearby_leafs) <= 2:
                 isolated_proposals.add(edge)
         return isolated_proposals
 
