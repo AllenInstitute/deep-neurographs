@@ -264,7 +264,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
             cnt, t1 = report_progress(
                 i, len(zip_paths), chunk_size, cnt, t0, t1
             )
-            break
+
     return swc_dicts
 
 
