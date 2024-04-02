@@ -375,7 +375,7 @@ def read_tensorstore(arr, xyz, shape, from_center=True):
 def get_chunk(arr, xyz, shape, from_center=True):
     start, end = get_start_end(xyz, shape, from_center=from_center)
     return deepcopy(
-        arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
+        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
     )
 
 
@@ -464,14 +464,14 @@ def parse_metadata(path):
 
 def write_json(path, contents):
     """
-    Writes "contents" to a .json file at "path".
+    Writes "contents" to a json file at "path".
 
     Parameters
     ----------
     path : str
         Path that .txt file is written to.
     contents : dict
-        Contents to be written to .txt file.
+        Contents to be written to json file.
 
     Returns
     -------
@@ -483,6 +483,21 @@ def write_json(path, contents):
 
 
 def write_txt(path, contents):
+    """
+    Writes "contents" to a txt file at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path that .txt file is written to.
+    contents : dict
+        Contents to be written to txt file.
+
+    Returns
+    -------
+    None
+
+    """
     f = open(path, "w")
     f.write(contents)
     f.close()

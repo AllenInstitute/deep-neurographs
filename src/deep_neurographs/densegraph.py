@@ -10,8 +10,6 @@ corresponds to a node in the graph.
 """
 
 import os
-from random import sample
-from time import time
 
 import networkx as nx
 from scipy.spatial import KDTree
