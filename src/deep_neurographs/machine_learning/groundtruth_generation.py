@@ -17,7 +17,7 @@ from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 from deep_neurographs.geometry import dist as get_dist
 
-CLOSE_THRESHOLD = 3.5
+ALIGNED_THRESHOLD = 3.5
 MIN_INTERSECTION = 10
 
 
@@ -42,10 +42,10 @@ def get_valid_proposals(target_neurograph, pred_neurograph):
     invalid_proposals = set()
     node_to_target = dict()
     for component in nx.connected_components(pred_neurograph):
-        aligned_bool, target_id = is_component_aligned(
+        aligned, target_id = is_component_aligned(
             target_neurograph, pred_neurograph, component
         )
-        if not aligned_bool:
+        if not aligned:
             i = utils.sample_singleton(component)
             invalid_proposals.add(pred_neurograph.nodes[i]["swc_id"])
         else:
@@ -104,21 +104,12 @@ def is_component_aligned(target_neurograph, pred_neurograph, component):
             d = get_dist(hat_xyz, xyz)
             dists = utils.append_dict_value(dists, hat_swc_id, d)
 
-    # Check whether there's a merge
-    hits = []
-    for key in dists.keys():
-        if len(dists[key]) > 10 and np.mean(dists[key]) < CLOSE_THRESHOLD:
-            hits.append(key)
-    if len(hits) > 1:
-        print("pred_swc_id:", pred_neurograph.edges[edge]["swc_id"])
-        print("target_swc_id:", list(dists.keys()))
-        print("")
-
     # Deterine whether aligned
     hat_swc_id = utils.find_best(dists)
     dists = np.array(dists[hat_swc_id])
-    aligned_score = np.mean(dists[dists < np.percentile(dists, 90)])
-    if aligned_score < 4 and hat_swc_id:
+    intersects = True if len(dists) > MIN_INTERSECTION else False
+    aligned_score = np.mean(dists[dists < np.percentile(dists, 85)])
+    if (aligned_score < ALIGNED_THRESHOLD and hat_swc_id) and intersects:
         return True, hat_swc_id
     else:
         return False, None
@@ -126,9 +117,8 @@ def is_component_aligned(target_neurograph, pred_neurograph, component):
 
 def is_valid(target_neurograph, pred_neurograph, target_id, edge):
     """
-    Determines whether the proposal connects two branches that correspond to
-    either the same or adjacent branches on the ground truth. If either
-    condition holds, then the proposal is said to be valid.
+    Determines whether a proposal is valid, meaning it must be consistent and
+    aligned.
 
     Parameters
     ----------
@@ -137,14 +127,43 @@ def is_valid(target_neurograph, pred_neurograph, target_id, edge):
     pred_neurograph : NeuroGraph
         Graph build from predicted swc files.
     target_id : str
-        ...
+        swc id of target that the proposal "edge" corresponds to.
     edge : frozenset
         Edge proposal to be checked.
 
     Returns
     -------
     bool
-        Indication of whether proposal is valid
+        Indication of whether proposal is consistent
+    """
+    #aligned = is_proposal_aligned(target_neurograph, pred_neurograph, edge)
+    consistent = is_consistent(
+        target_neurograph, pred_neurograph, target_id, edge
+        )
+    return True if consistent else False
+
+
+def is_consistent(target_neurograph, pred_neurograph, target_id, edge):
+    """
+    Determines whether the proposal connects two branches that correspond to
+    either the same or adjacent branches on the ground truth. If either
+    condition holds, then the proposal is said to be consistent.
+
+    Parameters
+    ----------
+    target_neurograph : NeuroGraph
+        Graph built from ground truth swc files.
+    pred_neurograph : NeuroGraph
+        Graph build from predicted swc files.
+    target_id : str
+        swc id of target that the proposal "edge" corresponds to.
+    edge : frozenset
+        Edge proposal to be checked.
+
+    Returns
+    -------
+    bool
+        Indication of whether proposal is consistent
 
     """
     # Find closest edges from target_neurograph
@@ -167,6 +186,15 @@ def is_valid(target_neurograph, pred_neurograph, target_id, edge):
         if is_adjacent_aligned(hat_branch_i, hat_branch_j, xyz_i, xyz_j):
             return True
     return False
+
+
+def is_proposal_aligned(target_neurograph, pred_neurograph, edge):
+    xyz_0, xyz_1 = pred_neurograph.proposal_xyz(edge)
+    proj_dists = []
+    for xyz in geometry.make_line(xyz_0, xyz_1, 10):
+        hat_xyz = target_neurograph.get_projection(tuple(xyz))
+        proj_dists.append(get_dist(hat_xyz, xyz))
+    return True if np.mean(proj_dists) < ALIGNED_THRESHOLD else False
 
 
 def proj_branch(target_neurograph, pred_neurograph, target_id, i):
@@ -194,10 +222,6 @@ def proj_branch(target_neurograph, pred_neurograph, target_id, i):
     elif len(hits.keys()) == 1:
         best_edge = list(hits.keys())[0]
     return best_edge
-
-
-def is_proposal_aligned(target_neurograph, pred_neurograph, edge):
-    pass
 
 
 def is_adjacent(neurograph, edge_i, edge_j):
