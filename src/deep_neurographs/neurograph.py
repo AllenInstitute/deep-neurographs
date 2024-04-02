@@ -22,6 +22,7 @@ from deep_neurographs import swc_utils, utils
 from deep_neurographs.generate_proposals import is_valid
 from deep_neurographs.geometry import check_dists
 from deep_neurographs.geometry import dist as get_dist
+from deep_neurographs.geometry import get_midpoint
 from deep_neurographs.machine_learning.groundtruth_generation import (
     init_targets,
 )
@@ -85,7 +86,7 @@ class NeuroGraph(nx.Graph):
             graph.add_edges_from(self.edges)
         return graph
 
-    # --- Add to graph --
+    # --- Edit Graph --
     def add_component(self, irreducibles):
         """
         Adds a connected component to "self".
@@ -187,6 +188,21 @@ class NeuroGraph(nx.Graph):
         for xyz in attrs["xyz"][idxs]:
             self.xyz_to_edge[tuple(xyz)] = edge
 
+    def absorb_node(self, i, nb_1, nb_2):
+        # Get attributes
+        xyz = self.get_branches(i, key="xyz")
+        radius = self.get_branches(i, key="radius")
+
+        # Edit graph
+        self.remove_node(i)
+        self.add_edge(
+            nb_1,
+            nb_2,
+            xyz=np.vstack([np.flip(xyz[1], axis=0), xyz[0][1:, :]]),
+            radius=np.concatenate((radius[0], np.flip(radius[1]))),
+            swc_id=self.nodes[nb_1]["swc_id"],
+        )
+
     def split_edge(self, edge, attrs, idx):
         """
         Splits "edge" into two distinct edges by making the subnode at "idx" a
@@ -248,11 +264,13 @@ class NeuroGraph(nx.Graph):
         edge = frozenset((i, j))
         self.nodes[i]["proposals"].add(j)
         self.nodes[j]["proposals"].add(i)
+        self.xyz_to_proposal[tuple(self.nodes[i]["xyz"])] = edge
+        self.xyz_to_proposal[tuple(self.nodes[j]["xyz"])] = edge
         self.proposals[edge] = {
             "xyz": np.array([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
         }
 
-    # --- Proposal and Ground Truth Generation ---
+    # --- Proposal Generation ---
     def generate_proposals(
         self,
         radius,
@@ -312,11 +330,13 @@ class NeuroGraph(nx.Graph):
 
         # Finish
         self.filter_nodes()
+        self.init_proposal_kdtree()
         if optimize:
             self.run_optimization()
 
     def reset_proposals(self):
         self.proposals = dict()
+        self.xyz_to_proposal = dict()
         for i in self.nodes:
             self.nodes[i]["proposals"] = set()
 
@@ -351,7 +371,7 @@ class NeuroGraph(nx.Graph):
             xyz_1, xyz_2 = geometry.optimize_alignment(self, img, edge)
             self.proposals[edge]["xyz"] = np.array([xyz_1, xyz_2])
 
-    # -- kdtree --
+    # -- KDTree --
     def init_kdtree(self):
         """
         Builds a KD-Tree from the (x,y,z) coordinates of the subnodes of
@@ -366,8 +386,22 @@ class NeuroGraph(nx.Graph):
         None
 
         """
-        if not self.kdtree:
-            self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
+        self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
+
+    def init_proposal_kdtree(self):
+        """
+        Builds a KD-Tree from the (x,y,z) coordinates of the proposals.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        self.proposal_kdtree = KDTree(list(self.xyz_to_proposal.keys()))
 
     def query_kdtree(self, xyz, d):
         """
@@ -392,7 +426,7 @@ class NeuroGraph(nx.Graph):
         _, idx = self.kdtree.query(xyz, k=1)
         return tuple(self.kdtree.data[idx])
 
-    # --- utils ---
+    # --- Proposal Utils ---
     def n_proposals(self):
         """
         Computes number of edges proposals in the graph.
@@ -412,13 +446,58 @@ class NeuroGraph(nx.Graph):
     def get_proposals(self):
         return list(self.proposals.keys())
 
+    def get_simple_proposals(self):
+        return set([e for e in self.get_proposals() if self.is_simple(e)])
+
+    def get_complex_proposals(self):
+        return set([e for e in self.get_proposals() if not self.is_simple(e)])
+
+    def get_isolated_proposals(self, radius):
+        isolated_proposals = set()
+        for edge in self.proposals.keys():
+            xyz = self.proposal_midpoint(edge)
+            if len(self.proposal_kdtree.query_ball_point(xyz, radius)) <= 2:
+                isolated_proposals.add(edge)
+        return isolated_proposals
+
+    def is_simple(self, edge):
+        i, j = tuple(edge)
+        return True if self.is_leaf(i) and self.is_leaf(j) else False
+
     def proposal_xyz(self, edge):
         return tuple(self.proposals[edge]["xyz"])
 
     def proposal_length(self, edge):
         i, j = tuple(edge)
         return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
+    
+    def proposal_midpoint(self, edge):
+        i, j = tuple(edge) 
+        return get_midpoint(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
+    def merge_proposal(self, edge):
+        # Attributes
+        i, j = tuple(edge)
+        xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
+        radius = np.array([self.nodes[i]["radius"], self.nodes[j]["radius"]])
+
+        # Add
+        self.add_edge(i, j, xyz=xyz, radius=radius, swc_id="merged")
+        del self.proposals[edge]
+        # delete from kdtree
+
+    def remove_nonisolated_proposals(self, radius):
+        isolated_proposals = self.get_isolated_proposals(radius)
+        proposals = self.get_proposals()
+        while len(proposals) > 0:
+            edge = proposals.pop()
+            if edge not in isolated_proposals:
+                i, j = tuple(edge)
+                self.nodes[i]["proposals"].remove(j)
+                self.nodes[j]["proposals"].remove(i)
+                del self.proposals[edge]
+        
+    # --- Utils ---
     def get_branches(self, i, key="xyz"):
         branches = []
         for j in self.neighbors(i):
@@ -463,16 +542,6 @@ class NeuroGraph(nx.Graph):
     def get_edge_attr(self, edge, key):
         xyz_arr = gutils.get_edge_attr(self, edge, key)
         return xyz_arr[0], xyz_arr[-1]
-
-    def get_complex_proposals(self):
-        return set([e for e in self.get_proposals() if not self.is_simple(e)])
-
-    def get_simple_proposals(self):
-        return set([e for e in self.get_proposals() if self.is_simple(e)])
-
-    def is_simple(self, edge):
-        i, j = tuple(edge)
-        return True if self.is_leaf(i) and self.is_leaf(j) else False
 
     def to_patch_coords(self, edge, midpoint, chunk_size):
         patch_coords = []
@@ -581,31 +650,6 @@ class NeuroGraph(nx.Graph):
         for i in ingest_nodes:
             nbs = list(self.neighbors(i))
             self.absorb_node(i, nbs[0], nbs[1])
-
-    def absorb_node(self, i, nb_1, nb_2):
-        # Get attributes
-        xyz = self.get_branches(i, key="xyz")
-        radius = self.get_branches(i, key="radius")
-
-        # Edit graph
-        self.remove_node(i)
-        self.add_edge(
-            nb_1,
-            nb_2,
-            xyz=np.vstack([np.flip(xyz[1], axis=0), xyz[0][1:, :]]),
-            radius=np.concatenate((radius[0], np.flip(radius[1]))),
-            swc_id=self.nodes[nb_1]["swc_id"],
-        )
-
-    def merge_proposal(self, edge):
-        # Attributes
-        i, j = tuple(edge)
-        xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
-        radius = np.array([self.nodes[i]["radius"], self.nodes[j]["radius"]])
-
-        # Add
-        self.add_edge(i, j, xyz=xyz, radius=radius, swc_id="merged")
-        del self.proposals[edge]
 
     def to_swc(self, path):
         with ThreadPoolExecutor() as executor:
