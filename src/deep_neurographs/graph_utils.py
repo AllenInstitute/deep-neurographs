@@ -52,7 +52,7 @@ def get_irreducibles(
         Contents of an swc file.
     bbox : dict, optional
         ...
-    min_size : int, optional    
+    min_size : int, optional
         Minimum number of nodes in graph to continue processing it after
         pruning spurious branches. The default is 0.
     prune_connectors : bool, optional

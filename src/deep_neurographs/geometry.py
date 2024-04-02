@@ -177,7 +177,7 @@ def get_profile(img, xyz_arr, process_id=None, window=[5, 5, 5]):
 def fill_path(img, path, val=-1):
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
-        img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
+        img[x - 1: x + 2, y - 1: y + 2, z - 1: z + 2] = val
     return img
 
 

@@ -8,20 +8,23 @@ Implementation of subclass of Networkx.Graph called "NeuroGraph".
 
 """
 import os
+from concurrent.futures import ThreadPoolExecutor
 from random import sample
 
 import networkx as nx
 import numpy as np
 import tensorstore as ts
 from scipy.spatial import KDTree
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from deep_neurographs import geometry
+from deep_neurographs import generate_proposals, geometry
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import swc_utils, utils
+from deep_neurographs.generate_proposals import is_valid
 from deep_neurographs.geometry import check_dists
 from deep_neurographs.geometry import dist as get_dist
-from deep_neurographs.machine_learning.groundtruth_generation import init_targets
+from deep_neurographs.machine_learning.groundtruth_generation import (
+    init_targets,
+)
 
 SUPPORTED_LABEL_MASK_TYPES = [dict, np.array, ts.TensorStore]
 
@@ -82,210 +85,107 @@ class NeuroGraph(nx.Graph):
             graph.add_edges_from(self.edges)
         return graph
 
-    # --- Add nodes or edges ---
-    def add_swc_id(self, swc_id):
-        self.swc_ids.add(swc_id)
-
-    def add_component(self, component_dict):
-        # Nodes
-        ids = dict()
-        cur_id = len(self.nodes) + 1
-        ids, cur_id = self.__add_nodes(component_dict, "leafs", ids, cur_id)
-        ids, cur_id = self.__add_nodes(
-            component_dict, "junctions", ids, cur_id
-        )
-        self.add_swc_id(component_dict["swc_id"])
-
-        # Add edges
-        for edge, attrs in component_dict["edges"].items():
-            i, j = edge
-            self.add_edge(
-                ids[i],
-                ids[j],
-                radius=attrs["radius"],
-                xyz=attrs["xyz"][::self.node_spacing],
-                swc_id=component_dict["swc_id"],
-            )
-            for xyz in attrs["xyz"][::self.node_spacing]:
-                self.xyz_to_edge[tuple(xyz)] = (ids[i], ids[j])
-            self.xyz_to_edge[tuple(attrs["xyz"][-1])] = (ids[i], ids[j])
-
-    def __add_nodes(self, nodes, key, node_ids, cur_id):
-        for i in nodes[key].keys():
-            node_ids[i] = cur_id
-            self.add_node(
-                node_ids[i],
-                proposals=set(),
-                radius=nodes[key][i]["radius"],
-                swc_id=nodes["swc_id"],
-                xyz=nodes[key][i]["xyz"],
-            )
-            if key == "leafs":
-                self.leafs.add(cur_id)
-            else:
-                self.junctions.add(cur_id)
-            cur_id += 1
-        return node_ids, cur_id
-
-    def __add_edge(self, edge, attrs, idxs):
-        self.add_edge(
-            edge[0],
-            edge[1],
-            xyz=attrs["xyz"][idxs],
-            radius=attrs["radius"][idxs],
-            swc_id=attrs["swc_id"],
-        )
-        for xyz in attrs["xyz"][idxs]:
-            self.xyz_to_edge[tuple(xyz)] = edge
-
-    # --- Proposal and Ground Truth Generation ---
-    def generate_proposals(
-        self,
-        radius,
-        filter_doubles=False,
-        proposals_per_leaf=3,
-        optimize=False,
-        optimization_depth=10,
-        restrict=True,
-    ):
+    # --- Add to graph --
+    def add_component(self, irreducibles):
         """
-        Generates edges for the graph.
+        Adds a connected component to "self".
+
+        Parameters
+        ----------
+        irreducibles : dict
+            Dictionary containing the irreducibles of some connected component
+            being added to "self". This dictionary must contain the keys:
+            'leafs', 'junctions', 'edges', and 'swc_id'.
 
         Returns
         -------
         None
 
         """
-        self.init_kdtree()
-        self.reset_proposals()
-        self.proposals = dict()
-        existing_connections = dict()
-        doubles = set()
-        not_doubles = set()
-        for leaf in self.leafs:
-            # Check if leaf is contained in bbox (if applicable)
-            if not self.is_contained(leaf, buffer=36):
-                continue
+        # Nodes
+        ids = self.__add_nodes(irreducibles, "leafs", dict())
+        ids = self.__add_nodes(irreducibles, "junctions", ids)
 
-            # Check if leaf is double (if applicable)
-            leaf_swc_id = self.nodes[leaf]["swc_id"]
-            doubles, not_doubles = self.upd_doubles(
-                leaf, doubles, not_doubles, filter_doubles
-            )
-            if leaf_swc_id in doubles:
-                continue
+        # Edges
+        swc_id = irreducibles["swc_id"]
+        self.swc_ids.add(swc_id)
+        for (i, j), attrs in irreducibles["edges"].items():
+            edge = (ids[i], ids[j])
+            idxs = np.arange(0, attrs["xyz"].shape[0], self.node_spacing)
+            if idxs[-1] != attrs["xyz"].shape[0] - 1:
+                idxs = np.append(idxs, attrs["xyz"].shape[0] - 1)
+            self.__add_edge(edge, attrs, idxs, swc_id)
 
-            # Check proposals
-            xyz_leaf = self.nodes[leaf]["xyz"]
-            self.set_proposals_per_leaf(proposals_per_leaf)
-            for xyz in self.__get_proposals(leaf, xyz_leaf, radius):
-                # Extract info on proposal
-                (i, j) = self.xyz_to_edge[xyz]
-                attrs = self.get_edge_data(i, j)
-                swc_id = self.nodes[i]["swc_id"]
-
-                # Check if double
-                doubles, not_doubles = self.upd_doubles(
-                    i, doubles, not_doubles, filter_doubles
-                )
-                if swc_id in doubles:
-                    continue
-
-                # Check connection
-                node, xyz = self.__get_connecting_node(
-                    xyz_leaf, xyz, (i, j), attrs, radius
-                )
-                if self.degree[node] >= 2:
-                    continue
-
-                pair_id = frozenset((swc_id, leaf_swc_id))
-                if pair_id in existing_connections.keys() and restrict:
-                    edge = existing_connections[pair_id]
-                    len1 = self.node_xyz_dist(leaf, xyz)
-                    len2 = self.proposal_length(edge)
-                    if len1 < len2:
-                        node1, node2 = tuple(edge)
-                        self.nodes[node1]["proposals"].discard(node2)
-                        self.nodes[node2]["proposals"].discard(node1)
-                        del self.proposals[edge]
-                        del existing_connections[pair_id]
-                    else:
-                        continue
-
-                # Add proposal
-                if self.degree[node] < 2:
-                    edge = frozenset({leaf, node})
-                    self.nodes[node]["proposals"].add(leaf)
-                    self.nodes[leaf]["proposals"].add(node)
-                    self.proposals[edge] = {"xyz": np.array([xyz_leaf, xyz])}
-                    existing_connections[pair_id] = edge
-
-        # print("# doubles:", len(doubles))
-
-        # Finish
-        self.filter_nodes()
-        if optimize:
-            self.run_optimization()
-
-    def reset_proposals(self):
-        for i in self.nodes:
-            self.nodes[i]["proposals"] = set()
-
-    def set_proposals_per_leaf(self, proposals_per_leaf):
-        self.proposals_per_leaf = proposals_per_leaf
-
-    def __get_proposals(self, query_id, query_xyz, radius):
+    def __add_nodes(self, irreducibles, node_type, node_ids):
         """
-        Generates edge proposals for node "query_id" by finding points on
-        distinct connected components near "query_xyz".
+        Adds a set of "node_type" nodes from "irreducibles" to "self".
 
         Parameters
         ----------
-        query_id : int
-            Node id of the query node.
-        query_xyz : tuple[float]
-            (x,y,z) coordinates of the query node.
-        radius : float
-            Maximum Euclidean length of edge proposal.
+        irreducibles : dict
+            Dictionary containing the irreducibles of some connected component
+            being added to "self".
+        node_type : str
+            Type of node being added to "self". This value must be either
+            'leafs' or 'junctions'.
+        node_ids : dict
+            Dictionary containing conversion from a node id in "irreducibles"
+            to the corresponding node id in "self".
 
         Returns
         -------
-        list
-            List of best edge proposals generated from "query_node".
+        node_ids : dict
+            Updated with corresponding node ids that were added in for loop.
 
         """
-        best_xyz = dict()
-        best_dist = dict()
-        query_swc_id = self.nodes[query_id]["swc_id"]
-        for xyz in self.query_kdtree(query_xyz, radius):
-            # Check whether xyz is contained
-            if not self.is_contained(xyz, buffer=36):
-                continue
+        for i in irreducibles[node_type].keys():
+            cur_id = self.number_of_nodes() + 1
+            self.add_node(
+                cur_id,
+                proposals=set(),
+                radius=irreducibles[node_type][i]["radius"],
+                swc_id=irreducibles["swc_id"],
+                xyz=irreducibles[node_type][i]["xyz"],
+            )
+            if node_type == "leafs":
+                self.leafs.add(cur_id)
+            else:
+                self.junctions.add(cur_id)
+            node_ids[i] = cur_id
+        return node_ids
 
-            # Check whether
-            edge = self.xyz_to_edge[tuple(xyz)]
-            swc_id = gutils.get_edge_attr(self, edge, "swc_id")
-            if swc_id != query_swc_id:
-                d = get_dist(xyz, query_xyz)
-                if swc_id not in best_dist.keys():
-                    best_xyz[swc_id] = tuple(xyz)
-                    best_dist[swc_id] = d
-                elif d < best_dist[swc_id]:
-                    best_xyz[swc_id] = tuple(xyz)
-                    best_dist[swc_id] = d
-        return self.get_best_proposals(best_dist, best_xyz)
-
-    def get_best_proposals(self, dists, xyz):
+    def __add_edge(self, edge, attrs, idxs, swc_id):
         """
-        Gets the at most "self.proposals_per_leaf" nodes that are closest to
-        "xyz".
+        Adds an edge to "self".
+
+        Parameters
+        ----------
+        edge : tuple
+            Edge to be added.
+        attrs : dict
+            Dictionary of attributes of "edge" that were obtained from an swc
+            file.
+        idxs : dict
+            Indices of attributes to store in order to reduce the amount of
+            memory required to store "self".
+        swc_id : str
+            swc id corresponding to edge.
+
+        Returns
+        -------
+        None
 
         """
-        if len(dists.keys()) > self.proposals_per_leaf:
-            keys = sorted(dists, key=dists.__getitem__)
-            return [xyz[key] for key in keys[0 : self.proposals_per_leaf]]
-        else:
-            return list(xyz.values())
+        i, j = tuple(edge)
+        self.add_edge(
+            i,
+            j,
+            radius=attrs["radius"][idxs],
+            xyz=attrs["xyz"][idxs],
+            swc_id=swc_id,
+        )
+        for xyz in attrs["xyz"][idxs]:
+            self.xyz_to_edge[tuple(xyz)] = edge
 
     def split_edge(self, edge, attrs, idx):
         """
@@ -307,28 +207,125 @@ class NeuroGraph(nx.Graph):
             Node ID of node that was created.
 
         """
-        ### BUG: you need to upd self.xyz_to_edge
         # Remove old edge
         (i, j) = edge
         self.remove_edge(i, j)
 
-        # Add new node and split edge
-        new_node = len(self.nodes) + 1
+        # Create node
+        node_id = len(self.nodes) + 1
+        swc_id = attrs["swc_id"]
         self.add_node(
-            new_node,
+            node_id,
             proposals=set(),
             radius=attrs["radius"][idx],
-            swc_id=attrs["swc_id"],
+            swc_id=swc_id,
             xyz=tuple(attrs["xyz"][idx]),
         )
-        self.__add_edge((i, new_node), attrs, np.arange(0, idx + 1))
-        self.__add_edge(
-            (new_node, j), attrs, np.arange(idx, len(attrs["xyz"]))
-        )
-        return new_node
 
-    def __get_connecting_node(self, xyz_leaf, xyz_edge, edge, attrs, radius):
+        # Create edges
+        idxs_1 = np.arange(0, idx + 1)
+        idxs_2 = np.arange(idx, len(attrs["xyz"]))
+        self.__add_edge((i, node_id), attrs, idxs_1, swc_id)
+        self.__add_edge((node_id, j), attrs, idxs_2, swc_id)
+        return node_id
+
+    def add_proposal(self, i, j):
+        """
+        Adds proposal between nodes "i" and "j".
+
+        Parameters
+        ----------
+        i : int
+            Node id.
+        j : int
+            Node id
+
+        Returns
+        -------
+        None
+
+        """
+        edge = frozenset((i, j))
+        self.nodes[i]["proposals"].add(j)
+        self.nodes[j]["proposals"].add(i)
+        self.proposals[edge] = {
+            "xyz": np.array([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
+        }
+
+    # --- Proposal and Ground Truth Generation ---
+    def generate_proposals(
+        self,
+        radius,
+        complex_proposals=True,
+        filter_doubles=False,
+        proposals_per_leaf=3,
+        optimize=False,
+        optimization_depth=10,
+    ):
+        """
+        Generates edges for the graph.
+        bug: checking whether generated proposal is a double
+
+        Returns
+        -------
+        None
+
+        """
+        self.init_kdtree()
+        self.doubles = set()
+        self.reset_proposals()
+        self.set_proposals_per_leaf(proposals_per_leaf)
+        existing_connections = dict()
+        for leaf in self.leafs:
+            # Check if leaf is valid
+            swc_id = self.nodes[leaf]["swc_id"]
+            if not is_valid(self, leaf, filter_doubles):
+                continue
+
+            # Check potential proposals
+            xyz_leaf = self.nodes[leaf]["xyz"]
+            for xyz in generate_proposals.run(self, leaf, xyz_leaf, radius):
+                # Get connection
+                (i, j) = self.xyz_to_edge[xyz]
+                node, xyz = self.__get_connection(leaf, xyz, (i, j), radius)
+                if not complex_proposals and self.degree[node] >= 2:
+                    continue
+
+                # Check whether connection exists
+                pair_id = frozenset((swc_id, self.nodes[i]["swc_id"]))
+                if pair_id in existing_connections.keys():
+                    edge = existing_connections[pair_id]
+                    len1 = self.node_xyz_dist(leaf, xyz)
+                    len2 = self.proposal_length(edge)
+                    if len1 < len2:
+                        node1, node2 = tuple(edge)
+                        self.nodes[node1]["proposals"].discard(node2)
+                        self.nodes[node2]["proposals"].discard(node1)
+                        del self.proposals[edge]
+                        del existing_connections[pair_id]
+                    else:
+                        continue
+
+                # Add proposal
+                self.add_proposal(leaf, node)
+                existing_connections[pair_id] = frozenset({leaf, node})
+
+        # Finish
+        self.filter_nodes()
+        if optimize:
+            self.run_optimization()
+
+    def reset_proposals(self):
+        self.proposals = dict()
+        for i in self.nodes:
+            self.nodes[i]["proposals"] = set()
+
+    def set_proposals_per_leaf(self, proposals_per_leaf):
+        self.proposals_per_leaf = proposals_per_leaf
+
+    def __get_connection(self, leaf, xyz_edge, edge, radius):
         i, j = tuple(edge)
+        xyz_leaf = self.nodes[leaf]["xyz"]
         d_i = check_dists(xyz_leaf, xyz_edge, self.nodes[i]["xyz"], radius)
         d_j = check_dists(xyz_leaf, xyz_edge, self.nodes[j]["xyz"], radius)
         if d_i and self.is_contained(i, buffer=36):
@@ -336,6 +333,7 @@ class NeuroGraph(nx.Graph):
         elif d_j and self.is_contained(j, buffer=36):
             return j, self.nodes[j]["xyz"]
         else:
+            attrs = self.get_edge_data(i, j)
             idxs = np.where(np.all(attrs["xyz"] == xyz_edge, axis=1))[0]
             node = self.split_edge((i, j), attrs, idxs[0])
             return node, xyz_edge
@@ -395,38 +393,6 @@ class NeuroGraph(nx.Graph):
         return tuple(self.kdtree.data[idx])
 
     # --- utils ---
-    def n_nodes(self):
-        """
-        Computes number of nodes in the graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        int
-            Number of nodes in the graph.
-
-        """
-        return self.number_of_nodes()
-
-    def n_edges(self):
-        """
-        Computes number of edges in the graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        int
-            Number of edges in the graph.
-
-        """
-        return self.number_of_edges()
-
     def n_proposals(self):
         """
         Computes number of edges proposals in the graph.
@@ -445,9 +411,6 @@ class NeuroGraph(nx.Graph):
 
     def get_proposals(self):
         return list(self.proposals.keys())
-
-    def remove_proposal(self, edge):
-        del self.proposals[edge]
 
     def proposal_xyz(self, edge):
         return tuple(self.proposals[edge]["xyz"])
@@ -470,9 +433,6 @@ class NeuroGraph(nx.Graph):
 
     def node_xyz_dist(self, node, xyz):
         return get_dist(xyz, self.nodes[node]["xyz"])
-
-    def is_nb(self, i, j):
-        return True if i in self.neighbors(j) else False
 
     def is_contained(self, node_or_xyz, buffer=0):
         if self.bbox:
@@ -533,15 +493,11 @@ class NeuroGraph(nx.Graph):
             )
         return reconstruction
 
-    def upd_doubles(self, i, doubles, not_doubles, filter_doubles):
-        if filter_doubles:
-            swc_id_i = self.nodes[i]["swc_id"]
-            if swc_id_i not in doubles.union(not_doubles):
-                if self.is_double(i):
-                    doubles.add(swc_id_i)
-                else:
-                    not_doubles.add(swc_id_i)
-        return doubles, not_doubles
+    def upd_doubles(self, i):
+        swc_id_i = self.nodes[i]["swc_id"]
+        if swc_id_i not in self.doubles:
+            if self.is_double(i):
+                self.doubles.add(swc_id_i)
 
     def is_double(self, i):
         """
