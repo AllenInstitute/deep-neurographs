@@ -97,6 +97,7 @@ def run_without_seeds(
     # --> generate features
     # --> run prediction
     # --> parse predictions and merge proposals
+    pass
 
 
 def build_from_soma(
@@ -104,9 +105,6 @@ def build_from_soma(
 ):
     swc_ids = get_swc_ids(labels_path, chunk_origin, chunk_shape)
     seed_neurograph = build_seed_neurograph(neurograph, swc_ids)
-
-    # loop
-    pass
 
 
 def get_swc_ids(path, xyz, chunk_shape, from_center=True):
