@@ -12,6 +12,7 @@ from random import sample
 
 import joblib
 import numpy as np
+import torch
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 
 from deep_neurographs.machine_learning import feature_extraction as extracter

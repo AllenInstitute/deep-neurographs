@@ -435,7 +435,7 @@ class NeuroGraph(nx.Graph):
         Returns
         -------
         tuple
-            xyz coordinate of the nearest neighbor of "xyz". 
+            xyz coordinate of the nearest neighbor of "xyz".
 
         """
         _, idx = self.kdtree.query(xyz, k=1)

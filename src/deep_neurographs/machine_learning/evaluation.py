@@ -68,22 +68,14 @@ def run_evaluation(neurograph, pred_edges, proposals=None):
         proposals = neurograph.get_proposals()
 
     # Evaluation
-    overall_stats = get_stats(
-        neurograph,
-        proposals,
-        pred_edges,
-    )
+    overall_stats = get_stats(neurograph, proposals, pred_edges)
 
     simple_stats = get_stats(
-        neurograph,
-        neurograph.get_simple_proposals(),
-        pred_edges,
+        neurograph, neurograph.get_simple_proposals(), pred_edges
     )
 
     complex_stats = get_stats(
-        neurograph,
-        neurograph.get_complex_proposals(),
-        pred_edges,
+        neurograph, neurograph.get_complex_proposals(), pred_edges
     )
 
     # Store results
@@ -92,7 +84,7 @@ def run_evaluation(neurograph, pred_edges, proposals=None):
         stats["Simple"][metric].append(simple_stats[metric])
         stats["Complex"][metric].append(complex_stats[metric])
 
-    return stats   
+    return stats
 
 
 def run_evaluation_blocks(neurographs, blocks, pred_edges):

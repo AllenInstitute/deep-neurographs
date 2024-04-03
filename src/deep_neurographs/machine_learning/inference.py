@@ -21,9 +21,9 @@ from torch.utils.data import DataLoader
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import reconstruction as build
 from deep_neurographs import utils
-from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.machine_learning import feature_extraction as extracter
 from deep_neurographs.machine_learning import ml_utils
+from deep_neurographs.neurograph import NeuroGraph
 
 BATCH_SIZE_PROPOSALS = 2000
 CHUNK_SHAPE = (256, 256, 256)
@@ -48,9 +48,9 @@ def run(
             img_path,
             labels_path,
             proposals,
+            seeds,
             batch_size_proposals=batch_size_proposals,
             confidence_threshold=confidence_threshold,
-            seeds=seeds,
         )
     else:
         run_without_seeds(
@@ -113,10 +113,12 @@ def run_without_seeds(
             model_type,
             confidence_threshold=confidence_threshold,
         )
-        preds.extend(preds_i)
 
         # Merge proposals
-    return preds
+        preds.extend(preds_i)
+        neurograph = build.fuse_branches(neurograph, preds_i)
+
+    return neurograph, preds
 
 
 def predict(
@@ -156,6 +158,7 @@ def build_from_soma(
     swc_ids = get_swc_ids(labels_path, chunk_origin, chunk_shape)
     seed_neurograph = build_seed_neurograph(neurograph, swc_ids)
     return seed_neurograph
+
 
 def get_swc_ids(path, xyz, chunk_shape, from_center=True):
     img = utils.open_tensorstore(path, "neuroglancer_precomputed")
