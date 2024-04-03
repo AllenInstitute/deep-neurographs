@@ -136,10 +136,10 @@ def is_valid(target_neurograph, pred_neurograph, target_id, edge):
     bool
         Indication of whether proposal is consistent
     """
-    #aligned = is_proposal_aligned(target_neurograph, pred_neurograph, edge)
+    # aligned = is_proposal_aligned(target_neurograph, pred_neurograph, edge)
     consistent = is_consistent(
         target_neurograph, pred_neurograph, target_id, edge
-        )
+    )
     return True if consistent else False
 
 

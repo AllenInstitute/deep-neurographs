@@ -8,23 +8,25 @@ Routines for running inference on models that classify edge proposals.
 
 """
 
-import numpy as np
-import torch
-from torch.nn.functional import sigmoid
-from torch.utils.data import DataLoader
-
-CHUNK_SHAPE = (512, 512, 512)
-
-
 from copy import deepcopy
 from random import sample
 
 import fastremap
 import networkx as nx
+import numpy as np
+import torch
+from torch.nn.functional import sigmoid
+from torch.utils.data import DataLoader
 
 from deep_neurographs import graph_utils as gutils
+from deep_neurographs import reconstruction as build
 from deep_neurographs import utils
 from deep_neurographs.neurograph import NeuroGraph
+from deep_neurographs.machine_learning import feature_extraction as extracter
+from deep_neurographs.machine_learning import ml_utils
+
+BATCH_SIZE_PROPOSALS = 2000
+CHUNK_SHAPE = (256, 256, 256)
 
 
 def run(
@@ -34,45 +36,44 @@ def run(
     img_path,
     labels_path,
     proposals,
-    batch_size_proposals=2000,
+    batch_size_proposals=BATCH_SIZE_PROPOSALS,
     confidence_threshold=0.7,
-    output_dir=None,
     seeds=None,
 ):
-    model = ml_utils.init_model(model_type, model_path)
     if seeds:
         run_with_seeds(
             neurograph,
-            model,
+            model_path,
             model_type,
             img_path,
             labels_path,
             proposals,
+            batch_size_proposals=batch_size_proposals,
             confidence_threshold=confidence_threshold,
-            output_dir=output_dir,
             seeds=seeds,
         )
     else:
         run_without_seeds(
             neurograph,
-            model,
+            model_path,
             model_type,
             img_path,
             labels_path,
             proposals,
+            batch_size_proposals=batch_size_proposals,
             confidence_threshold=confidence_threshold,
-            output_dir=output_dir,
         )
 
 
 def run_with_seeds(
     neurograph,
-    model,
+    model_path,
     model_type,
     img_path,
     labels_path,
     proposals,
     seeds,
+    batch_size_proposals=BATCH_SIZE_PROPOSALS,
     confidence_threshold=0.7,
     output_dir=None,
 ):
@@ -88,39 +89,65 @@ def run_with_seeds(
 
 def run_without_seeds(
     neurograph,
-    model,
+    model_path,
     model_type,
     img_path,
     labels_path,
     proposals,
+    batch_size_proposals=BATCH_SIZE_PROPOSALS,
     confidence_threshold=0.7,
-    output_dir=None,
 ):
     dists = [neurograph.proposal_length(edge) for edge in proposals]
-    for i, batch in enumerate(utils.get_batch(np.argsort(dists), batch_size)):
-        # Generate features
+    batches = utils.get_batch(np.argsort(dists), batch_size_proposals)
+    model = ml_utils.load_model(model_type, model_path)
+    preds = []
+    for i, batch in enumerate(batches):
+        # Prediction
         proposals_i = [proposals[j] for j in batch]
-        features = extracter.generate_features(
+        preds_i = predict(
             neurograph,
+            img_path,
+            labels_path,
+            proposals_i,
+            model,
             model_type,
-            img_path=img_path,
-            labels_path=labels_path,
-            proposals=proposals_i,
+            confidence_threshold=confidence_threshold,
         )
-        dataset = ml_utils.init_dataset(neurograph, features, model_type)
-
-        # Run model
-        y_pred = predict(dataset, model, model_type)
-        edge_preds = build.get_reconstruction(
-            neurograph,
-            y_pred,
-            dataset["idx_to_edge"],
-            high_threshold=0.95,
-            low_threshold=confidence_threshold,
-        )
+        preds.extend(preds_i)
 
         # Merge proposals
-    # --> parse predictions and merge proposals
+    return preds
+
+
+def predict(
+    neurograph,
+    img_path,
+    labels_path,
+    proposals,
+    model,
+    model_type,
+    confidence_threshold=0.7,
+):
+    # Generate features
+    features = extracter.generate_features(
+        neurograph,
+        model_type,
+        img_path=img_path,
+        labels_path=labels_path,
+        proposals=proposals,
+    )
+    dataset = ml_utils.init_dataset(neurograph, features, model_type)
+
+    # Run model
+    proposal_probs = run_model(dataset, model, model_type)
+    proposal_preds = build.get_reconstruction(
+        neurograph,
+        proposal_probs,
+        dataset["idx_to_edge"],
+        high_threshold=0.95,
+        low_threshold=confidence_threshold,
+    )
+    return proposal_preds
 
 
 def build_from_soma(
@@ -128,7 +155,7 @@ def build_from_soma(
 ):
     swc_ids = get_swc_ids(labels_path, chunk_origin, chunk_shape)
     seed_neurograph = build_seed_neurograph(neurograph, swc_ids)
-
+    return seed_neurograph
 
 def get_swc_ids(path, xyz, chunk_shape, from_center=True):
     img = utils.open_tensorstore(path, "neuroglancer_precomputed")
@@ -205,7 +232,7 @@ def ingest_subgraph(neurograph_1, neurograph_2, node_subset):
     return neurograph_2
 
 
-def predict(dataset, model, model_type):
+def run_model(dataset, model, model_type):
     data = dataset["dataset"]
     if "Net" in model_type:
         model.eval()
