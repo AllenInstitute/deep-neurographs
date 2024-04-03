@@ -106,9 +106,6 @@ def run_without_seeds(
     n_batches = 1 + len(proposals) // BATCH_SIZE_PROPOSALS
     print("# batches:", n_batches)
 
-    # Open Images
-    
-
     # Run
     preds = []
     progress_cnt = 1

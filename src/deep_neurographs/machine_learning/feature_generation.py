@@ -79,7 +79,6 @@ def run(
     # Generate features
     proposals = neurograph.get_proposals() if proposals is None else proposals
     features = {"skel": generate_skel_features(neurograph, proposals)}
-
     if model_type in ["ConvNet", "MultiModalNet"]:
         assert labels_path, "Must provide label_path for model_type!"
         features["img_chunks"], features["img_profile"] = generate_img_chunks(
