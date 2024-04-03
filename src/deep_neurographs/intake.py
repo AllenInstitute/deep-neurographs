@@ -102,7 +102,7 @@ def build_neurograph_from_local(
     # Process swc files
     assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
     img_bbox = utils.get_img_bbox(img_patch_origin, img_patch_shape)
-    paths = get_paths(swc_dir) if swc_dir else swc_paths
+    paths = utils.list_paths(swc_dir, ext=".swc") if swc_dir else swc_paths
     swc_dicts, paths = process_local_paths(
         paths, anisotropy=anisotropy, min_size=min_size, img_bbox=img_bbox
     )
@@ -213,11 +213,9 @@ def build_neurograph_from_gcs_zips(
         smooth=smooth,
     )
     t, unit = utils.time_writer(time() - t0)
+    print(f"Memory Consumption: {round(utils.get_memory_usage(), 4)} GBs")
     print(f"Module Runtime: {round(t, 4)} {unit} \n")
 
-    t, unit = utils.time_writer(time() - total_runtime)
-    print(f"Total Runtime: {round(t, 4)} {unit}")
-    print(f"Memory Consumption: {round(utils.get_memory_usage(), 4)} GBs")
     return neurograph
 
 
@@ -246,7 +244,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
     # Initializations
     bucket = storage.Client().bucket(bucket_name)
     zip_paths = utils.list_gcs_filenames(bucket, gcs_path, ".zip")
-    chunk_size = int(len(zip_paths) * 0.02)
+    chunk_size = int(len(zip_paths) * 0.1)
 
     # Parse
     cnt = 1
@@ -262,6 +260,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
             cnt, t1 = report_progress(
                 i, len(zip_paths), chunk_size, cnt, t0, t1
             )
+            break
 
     return swc_dicts
 
@@ -394,13 +393,6 @@ def count_edges(irreducibles):
 
 
 # -- Utils --
-def get_paths(swc_dir):
-    paths = []
-    for f in utils.listdir(swc_dir, ext=".swc"):
-        paths.append(os.path.join(swc_dir, f))
-    return paths
-
-
 def report_progress(current, total, chunk_size, cnt, t0, t1):
     eta = get_eta(current, total, chunk_size, t1)
     runtime = get_runtime(current, total, chunk_size, t0, t1)

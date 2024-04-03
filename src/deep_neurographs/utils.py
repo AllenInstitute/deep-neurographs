@@ -8,11 +8,11 @@ General helper routines for various tasks.
 
 """
 
-import concurrent.futures
 import json
 import math
 import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from io import BytesIO
 from random import sample
@@ -101,6 +101,22 @@ def remove_key(my_dict, key):
 
 
 def remove_items(my_dict, keys):
+    """
+    Removes dictionary items corresponding to "keys".
+
+    Parameters
+    ----------
+    my_dict : dict
+        Dictionary to be edited.
+    keys : list
+        List of keys to be deleted from "my_dict".
+
+    Returns
+    -------
+    my_dict : dict
+        Updated dictionary with items corresponding to "keys" removed.
+
+    """
     for key in keys:
         if key in my_dict.keys():
             del my_dict[key]
@@ -390,7 +406,7 @@ def get_start_end(xyz, shape, from_center=True):
 
 
 def get_superchunks(img_path, labels_path, xyz, shape, from_center=True):
-    with concurrent.futures.ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor() as executor:
         img_job = executor.submit(
             get_superchunk,
             img_path,
@@ -416,6 +432,62 @@ def get_superchunks(img_path, labels_path, xyz, shape, from_center=True):
 def get_superchunk(path, driver, xyz, shape, from_center=True):
     arr = open_tensorstore(path, driver)
     return read_tensorstore(arr, xyz, shape, from_center=from_center)
+
+
+def read_img_intensities(img, coord_list):
+    """
+    Reads image intensities at the coordinates listed in "xyz_list" from
+    an image stored in a GCS bcuket.
+
+    Parameters
+    ----------
+    img_gcs : tensorstore.TensorStore
+        Image to be read.
+    coord_list : list
+        List of coordinates to be read from "img".
+
+    Returns
+    -------
+    img_intensities : dict
+        Dictionary where keys are coordinateas from "coord_list" and values are
+        the corresponding image intensity value.
+
+    """
+    with ThreadPoolExecutor() as executor:
+        # Assign threads
+        threads = []
+        for coord in coord_list:
+            threads.append(executor.submit(__read_gcs_voxel, img, coord))
+
+        # Store results
+        img_intensities = dict()
+        for thread in as_completed(threads):
+            coord, intensity = thread.result()
+            img_intensities[coord] = intensity
+    return img_intensities
+
+
+def __read_gcs_voxel(img, coord):
+    """
+    Reads intensity at image coordinate "coord" from an image stored in a
+    GCS bucket.
+
+    Parameters
+    ----------
+    img : tensorstore.TensorStore
+        Image on to be read
+    coord : tuple[int]
+        Coordinates that indexes into "img".
+
+    Returns
+    -------
+    coord : tuple[int]
+        Coordinates that indexes into "img".
+    int
+       Image intensity at "coord".
+   
+    """
+    return coord, int(img[coord].read().result())
 
 
 def read_json(path):

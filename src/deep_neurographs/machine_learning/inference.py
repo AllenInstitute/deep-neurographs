@@ -15,6 +15,7 @@ import fastremap
 import networkx as nx
 import numpy as np
 import torch
+from time import time
 from torch.nn.functional import sigmoid
 from torch.utils.data import DataLoader
 
@@ -25,7 +26,7 @@ from deep_neurographs.machine_learning import feature_extraction as extracter
 from deep_neurographs.machine_learning import ml_utils
 from deep_neurographs.neurograph import NeuroGraph
 
-BATCH_SIZE_PROPOSALS = 2000
+BATCH_SIZE_PROPOSALS = 1000
 CHUNK_SHAPE = (256, 256, 256)
 
 
@@ -96,13 +97,23 @@ def run_without_seeds(
     proposals,
     batch_size_proposals=BATCH_SIZE_PROPOSALS,
     confidence_threshold=0.7,
+    progress_bar=True,
 ):
+    # Initializations
     dists = [neurograph.proposal_length(edge) for edge in proposals]
     batches = utils.get_batch(np.argsort(dists), batch_size_proposals)
     model = ml_utils.load_model(model_type, model_path)
+    n_batches = 1 + len(proposals) // BATCH_SIZE_PROPOSALS
+    print("# batches:", n_batches)
+
+    # Run
     preds = []
+    progress_cnt = 1
+    t0, t1 = utils.init_timers()
+    chunk_size = max(int(n_batches * 0.02), 1)
     for i, batch in enumerate(batches):
         # Prediction
+        t2 = time()
         proposals_i = [proposals[j] for j in batch]
         preds_i = predict(
             neurograph,
@@ -115,8 +126,18 @@ def run_without_seeds(
         )
 
         # Merge proposals
+        t2 = time()
         preds.extend(preds_i)
+        stop
         neurograph = build.fuse_branches(neurograph, preds_i)
+        print("fuse_branches():", time() - t2)
+        
+        # Report progress
+        if i > progress_cnt * chunk_size and progress_bar:
+            progress_cnt, t1 = report_progress(
+                i, n_batches, chunk_size, progress_cnt, t0, t1
+            )
+            t0, t1 = utils.init_timers()
 
     return neurograph, preds
 
@@ -131,6 +152,7 @@ def predict(
     confidence_threshold=0.7,
 ):
     # Generate features
+    t3 = time()
     features = extracter.generate_features(
         neurograph,
         model_type,
@@ -139,9 +161,14 @@ def predict(
         proposals=proposals,
     )
     dataset = ml_utils.init_dataset(neurograph, features, model_type)
+    print("   generate_features():", time() - t3)
 
     # Run model
+    t3 = time()
     proposal_probs = run_model(dataset, model, model_type)
+    print("   run_model():", time() - t3)
+    
+    t3 = time()
     proposal_preds = build.get_reconstruction(
         neurograph,
         proposal_probs,
@@ -149,6 +176,7 @@ def predict(
         high_threshold=0.95,
         low_threshold=confidence_threshold,
     )
+    print("   get_reconstruction():", time() - t3)
     return proposal_preds
 
 
@@ -252,3 +280,26 @@ def run_model(dataset, model, model_type):
     else:
         hat_y = model.predict_proba(data["inputs"])[:, 1]
     return np.array(hat_y)
+
+
+# Utils
+def report_progress(current, total, chunk_size, cnt, t0, t1):
+    eta = get_eta(current, total, chunk_size, t1)
+    runtime = get_runtime(current, total, chunk_size, t0, t1)
+    utils.progress_bar(current, total, eta=eta, runtime=runtime)
+    return cnt + 1, time()
+
+
+def get_eta(current, total, chunk_size, t0, return_str=True):
+    chunk_runtime = time() - t0
+    remaining = total - current
+    eta = remaining * (chunk_runtime / chunk_size)
+    t, unit = utils.time_writer(eta)
+    return f"{round(t, 4)} {unit}" if return_str else eta
+
+
+def get_runtime(current, total, chunk_size, t0, t1):
+    eta = get_eta(current, total, chunk_size, t1, return_str=False)
+    total_runtime = time() - t0 + eta
+    t, unit = utils.time_writer(total_runtime)
+    return f"{round(t, 4)} {unit}"
