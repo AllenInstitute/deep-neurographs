@@ -21,12 +21,13 @@ from random import sample
 
 import numpy as np
 import tensorstore as ts
+from time import time
 
 from deep_neurographs import geometry, utils
 
 CHUNK_SIZE = [64, 64, 64]
 WINDOW = [5, 5, 5]
-N_PROFILE_POINTS = 10
+N_PROFILE_PTS = 10
 N_SKEL_FEATURES = 19
 SUPPORTED_MODELS = [
     "AdaBoost",
@@ -72,7 +73,10 @@ def generate_features(
         proposals = neurograph.get_proposals()
 
     # Generate features
+    t0 = time()
     features = {"skel": generate_skel_features(neurograph, proposals)}
+    print("   generate_skel_features():", time() - t0)
+
     if model_type in ["ConvNet", "MultiModalNet"]:
         msg = "Must provide img_path and label_path for model_type!"
         assert img_path and labels_path, msg
@@ -152,7 +156,7 @@ def get_img_chunk(img, labels, coord_0, coord_1, thread_id=None):
     patch_coord_1 = utils.img_to_patch(coord_1, midpoint, CHUNK_SIZE)
 
     # Generate features
-    path = geometry.make_line(patch_coord_0, patch_coord_1, N_PROFILE_POINTS)
+    path = geometry.make_line(patch_coord_0, patch_coord_1, N_PROFILE_PTS)
     profile = geometry.get_profile(img_chunk, path, window=WINDOW)
     labels_chunk[labels_chunk > 0] = 1
     labels_chunk = geometry.fill_path(labels_chunk, path, val=2)
@@ -166,52 +170,19 @@ def get_img_chunk(img, labels, coord_0, coord_1, thread_id=None):
 
 
 def generate_img_profiles(neurograph, proposals, path):
-    if False:  # neurograph.bbox:
-        return generate_img_profiles_via_superchunk(
-            neurograph, proposals, path
-        )
-    else:
-        return generate_img_profiles_via_multithreads(
-            neurograph, proposals, path
-        )
-
-
-def generate_img_profiles_via_multithreads(neurograph, proposals, path):
-    profile_features = dict()
-    driver = "n5" if ".n5" in path else "zarr"
-    img = utils.open_tensorstore(path, driver)
-    with ThreadPoolExecutor() as executor:
-        # Assign threads
-        threads = [None] * len(proposals)
-        for i, edge in enumerate(proposals):
-            xyz_0, xyz_1 = neurograph.proposal_xyz(edge)
-            coord_0 = utils.to_img(xyz_0)
-            coord_1 = utils.to_img(xyz_1)
-            line = geometry.make_line(coord_0, coord_1, N_PROFILE_POINTS)
-            threads[i] = executor.submit(geometry.get_profile, img, line, edge)
-
-        # Store result
-        for thread in as_completed(threads):
-            edge, profile = thread.result()
-            profile_features[edge] = profile
-    return profile_features
-
-
-def generate_img_profiles_via_superchunk(neurograph, proposals, path):
     """
     Generates an image intensity profile along each edge proposal by reading
-    a single superchunk from cloud that contains all proposals.
+    from an image on the cloud.
 
     Parameters
     ----------
     neurograph : NeuroGraph
         NeuroGraph generated from a directory of swcs generated from a
         predicted segmentation.
+    proposals : list[frozenset]
+        List of edge proposals for which features will be generated.
     path : str
-        Path to raw image.
-    proposals : list[frozenset], optional
-        List of edge proposals for which features will be generated. The
-        default is None.
+        Path to image on GCS bucket.
 
     Returns
     -------
@@ -220,25 +191,41 @@ def generate_img_profiles_via_superchunk(neurograph, proposals, path):
         profile.
 
     """
-    features = dict()
-    driver = "n5" if ".n5" in path else "zarr"
-    img = utils.get_superchunk(
-        path, driver, neurograph.origin, neurograph.shape, from_center=False
-    )
-    img = utils.normalize_img(img)
-    for edge in neurograph.proposals:
+    # Generate coordinates to be read
+    coords = set()
+    lines = dict()
+    t0 = time()
+    for i, edge in enumerate(proposals):
         xyz_0, xyz_1 = neurograph.proposal_xyz(edge)
-        coord_0 = utils.to_img(xyz_0) - neurograph.origin
-        coord_1 = utils.to_img(xyz_1) - neurograph.origin
-        path = geometry.make_line(coord_0, coord_1, N_PROFILE_POINTS)
-        features[edge] = geometry.get_profile(img, path, window=WINDOW)
-    return features
+        coord_0 = utils.to_img(xyz_0)
+        coord_1 = utils.to_img(xyz_1)
+        lines[edge] = geometry.make_line(coord_0, coord_1, N_PROFILE_PTS)
+        for coord in lines[edge]:
+            coords.add(tuple(coord))
+    print("   generate_coords():", time() - t0)
+
+    # Read image intensities
+    t0 = time()
+    driver = "n5" if ".n5" in path else "zarr"
+    img = utils.open_tensorstore(path, driver)
+    print("   open_img():", time() - t0)
+
+    t0 = time()
+    img_intensity = utils.read_img_intensities(img, list(coords))
+    print("   read_img_intensities():", time() - t0)
+
+    # Generate intensity profiles
+    t0 = time()
+    profile_features = dict()
+    for edge, line in lines.items():
+        profile_features[edge] = [img_intensity[tuple(xyz)] for xyz in line]
+    print("   generate_profiles():", time() - t0)
+    return profile_features
 
 
 def generate_skel_features(neurograph, proposals):
     features = dict()
     for edge in proposals:
-        # print("Proposals:", edge)
         i, j = tuple(edge)
         features[edge] = np.concatenate(
             (
@@ -403,7 +390,7 @@ def get_multimodal_features(neurograph, features, shift=0):
     # Initialize
     n_edges = neurograph.n_proposals()
     X = np.zeros(((n_edges, 2) + tuple(CHUNK_SIZE)))
-    x = np.zeros((n_edges, N_SKEL_FEATURES + N_PROFILE_POINTS))
+    x = np.zeros((n_edges, N_SKEL_FEATURES + N_PROFILE_PTS))
     y = np.zeros((n_edges))
 
     # Build
@@ -453,7 +440,7 @@ def count_features(model_type):
         Number of features.
     """
     if model_type != "ConvNet":
-        return N_SKEL_FEATURES + N_PROFILE_POINTS + 2
+        return N_SKEL_FEATURES + N_PROFILE_PTS + 2
 
 
 def combine_features(features):
