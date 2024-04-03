@@ -627,3 +627,8 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
+
+
+def get_batch(iterable, batch_size):
+    for start in range(0, len(iterable), batch_size):
+        yield iterable[start:min(start + batch_size, len(iterable))]

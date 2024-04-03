@@ -31,6 +31,7 @@ def run(
     neurograph,
     model_type,
     model_path,
+    img_path,
     labels_path,
     proposals,
     batch_size_proposals=2000,
@@ -38,34 +39,37 @@ def run(
     output_dir=None,
     seeds=None,
 ):
+    model = ml_utils.init_model(model_type, model_path)
     if seeds:
         run_with_seeds(
             neurograph,
+            model,
             model_type,
-            model_path,
+            img_path,
             labels_path,
             proposals,
-            confidence_threshold=0.7,
-            output_dir=None,
-            seeds=None,
+            confidence_threshold=confidence_threshold,
+            output_dir=output_dir,
+            seeds=seeds,
         )
     else:
         run_without_seeds(
             neurograph,
+            model,
             model_type,
-            model_path,
+            img_path,
             labels_path,
             proposals,
-            confidence_threshold=0.7,
-            output_dir=None,
+            confidence_threshold=confidence_threshold,
+            output_dir=output_dir,
         )
-    
 
 
 def run_with_seeds(
     neurograph,
+    model,
     model_type,
-    model_path,
+    img_path,
     labels_path,
     proposals,
     seeds,
@@ -84,18 +88,40 @@ def run_with_seeds(
 
 def run_without_seeds(
     neurograph,
+    model,
     model_type,
-    model_path,
+    img_path,
     labels_path,
     proposals,
     confidence_threshold=0.7,
     output_dir=None,
 ):
-    # form batches of proposals wrt distance
-    # --> generate features
-    # --> run prediction
+    dists = [neurograph.proposal_length(edge) for edge in proposals]
+    for i, batch in enumerate(utils.get_batch(np.argsort(dists), batch_size)):
+        # Generate features
+        proposals_i = [proposals[j] for j in batch]
+        features = extracter.generate_features(
+            neurograph,
+            model_type,
+            img_path=img_path,
+            labels_path=labels_path,
+            proposals=proposals_i,
+        )
+        dataset = ml_utils.init_dataset(neurograph, features, model_type)
+
+        # Run model
+        y_pred = predict(dataset, model, model_type)
+        edge_preds = build.get_reconstruction(
+            neurograph,
+            y_pred,
+            dataset["idx_to_edge"],
+            high_threshold=0.95,
+            low_threshold=confidence_threshold,
+        )
+
+        # Merge proposals
     # --> parse predictions and merge proposals
-    pass
+
 
 def build_from_soma(
     neurograph, labels_path, chunk_origin, chunk_shape=CHUNK_SHAPE, n_hops=1
@@ -180,8 +206,6 @@ def ingest_subgraph(neurograph_1, neurograph_2, node_subset):
 
 
 def predict(dataset, model, model_type):
-    accuracy = []
-    accuracy_baseline = []
     data = dataset["dataset"]
     if "Net" in model_type:
         model.eval()
@@ -194,13 +218,7 @@ def predict(dataset, model, model_type):
 
             # Postprocess
             hat_y_i = np.array(hat_y_i)
-            y_i = np.array(batch["targets"])
             hat_y.extend(hat_y_i.tolist())
-            accuracy_baseline.extend((y_i > 0).tolist())
-            accuracy.extend(((hat_y_i > 0.5) == (y_i > 0)).tolist())
-        accuracy = np.mean(accuracy)
-        accuracy_baseline = np.sum(accuracy_baseline) / len(accuracy_baseline)
-        print("Accuracy +/-:", accuracy - accuracy_baseline)
     else:
         hat_y = model.predict_proba(data["inputs"])[:, 1]
     return np.array(hat_y)
