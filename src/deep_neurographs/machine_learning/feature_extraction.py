@@ -83,7 +83,7 @@ def generate_features(
         features["img_profile"] = generate_img_profiles(
             neurograph, proposals, img_path
         )
-    return features
+    zreturn features
 
 
 # -- Edge feature extraction --
@@ -238,7 +238,6 @@ def generate_img_profiles_via_superchunk(neurograph, proposals, path):
 def generate_skel_features(neurograph, proposals):
     features = dict()
     for edge in proposals:
-        # print("Proposals:", edge)
         i, j = tuple(edge)
         features[edge] = np.concatenate(
             (

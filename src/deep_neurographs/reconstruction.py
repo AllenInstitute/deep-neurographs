@@ -90,8 +90,8 @@ def get_structure_aware_prediction(
     # Add best simple edges
     preds = []
     remaining_proposals = []
-    # dists = [neurograph.proposal_length(edge) for edge in proposals]
-    dists = [probs[edge] for edge in proposals]
+    dists = [neurograph.proposal_length(edge) for edge in proposals]
+    #dists = [probs[edge] for edge in proposals]
     for idx in np.argsort(dists):
         edge = proposals[idx]
         if neurograph.is_simple(edge) and probs[edge] > high_threshold:
