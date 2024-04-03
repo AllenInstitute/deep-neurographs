@@ -375,7 +375,7 @@ def read_tensorstore(arr, xyz, shape, from_center=True):
 def get_chunk(arr, xyz, shape, from_center=True):
     start, end = get_start_end(xyz, shape, from_center=from_center)
     return deepcopy(
-        arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
+        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
     )
 
 
@@ -631,4 +631,4 @@ def time_writer(t, unit="seconds"):
 
 def get_batch(iterable, batch_size):
     for start in range(0, len(iterable), batch_size):
-        yield iterable[start : min(start + batch_size, len(iterable))]
+        yield iterable[start: min(start + batch_size, len(iterable))]

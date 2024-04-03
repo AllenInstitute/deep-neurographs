@@ -74,12 +74,26 @@ class DenseGraph:
                 graph = gutils.trim_branches(graph, self.bbox)
 
             # Store graph
-            self.store_xyz(graph, swc_id)
+            self.store_xyz_swc(graph, swc_id)
             self.graphs[swc_id] = graph
 
-    def store_xyz(self, graph, swc_id):
+    def store_xyz_swc(self, graph, swc_id):
+        """
+        Stores (xyz, swc_id) as an item in the dictionary "self.xyz_to_swc".
+
+        Parameters
+        ----------
+        graph : netowrkx.Graph
+            Graph to parsed.
+        swc_id : str
+            swc_id corresponding to "graph".
+
+        Returns
+        -------
+        None
+
+        """
         for i in graph.nodes:
-            graph.nodes[i]["swc_id"] = swc_id
             self.xyz_to_swc[tuple(graph.nodes[i]["xyz"])] = swc_id
 
     def init_kdtree(self):
