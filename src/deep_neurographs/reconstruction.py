@@ -10,6 +10,7 @@ Created on Sat Dec 12 17:00:00 2023
 
 import os
 from random import sample
+from time import time
 
 import numpy as np
 
@@ -85,14 +86,16 @@ def get_structure_aware_prediction(
 ):
     # Initializations
     proposals = list(probs.keys())
+    t0 = time()
     pred_graph = neurograph.copy_graph()
+    print("   copy_graph():", time() - t0)
 
     # Add best simple edges
+    t0 = time()
     preds = []
     remaining_proposals = []
     # dists = [neurograph.proposal_length(edge) for edge in proposals]
-    dists = [probs[edge] for edge in proposals]
-    for idx in np.argsort(dists):
+    for idx in np.argsort([probs[edge] for edge in proposals]):
         edge = proposals[idx]
         if neurograph.is_simple(edge) and probs[edge] > high_threshold:
             if not gutils.creates_cycle(pred_graph, tuple(edge)):
@@ -100,6 +103,9 @@ def get_structure_aware_prediction(
                 preds.append(edge)
         else:
             remaining_proposals.append(edge)
+
+    print("   check_best():", time() - t0)
+    stop
 
     # Add remaining viable edges
     for edge in remaining_proposals:

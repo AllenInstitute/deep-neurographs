@@ -39,8 +39,8 @@ SUPPORTED_MODELS = [
 
 
 # -- Wrappers --
-def generate_features(
-    neurograph, model_type, img_path=None, labels_path=None, proposals=None
+def run(
+    neurograph, model_type, img_path, labels_path=None, proposals=None
 ):
     """
     Generates feature vectors for every edge proposal in a neurograph.
@@ -53,10 +53,11 @@ def generate_features(
     model_type : str
         Type of model to be trained. Options include: AdaBoost, RandomForest,
         FeedForwardNet, ConvNet, MultiModalNet.
-    img_path : str, optional
-        Path to raw image. The default is None.
+    img_path : str
+        Path to raw image stored in a GCS bucket.
     labels_path : str, optional
-        Path to predicted segmentation. The default is None.
+        Path to predicted segmentation stored in a GCS bucket. The default is
+        None.
     proposals : list[frozenset], optional
         List of edge proposals for which features will be generated. The
         default is None.
@@ -68,30 +69,31 @@ def generate_features(
         vector and the numerical vector.
 
     """
-    # Initialize proposals
-    if proposals is None:
-        proposals = neurograph.get_proposals()
+    # Initializations
+    img_driver = driver = "n5" if ".n5" in img_path else "zarr"
+    img = utils.open_tensorstore(img_path, img_driver)
+    if labels_path:
+        labels_driver = "neuroglancer_precomputed"
+        labels = utils.open_tensorstore(labels_path, labels_driver)
 
     # Generate features
-    t0 = time()
+    proposals = neurograph.get_proposals() if proposals is None else proposals
     features = {"skel": generate_skel_features(neurograph, proposals)}
-    print("   generate_skel_features():", time() - t0)
 
     if model_type in ["ConvNet", "MultiModalNet"]:
-        msg = "Must provide img_path and label_path for model_type!"
-        assert img_path and labels_path, msg
+        assert labels_path, "Must provide label_path for model_type!"
         features["img_chunks"], features["img_profile"] = generate_img_chunks(
-            neurograph, proposals, img_path, labels_path
+            neurograph, proposals, img, labels
         )
     if model_type in ["AdaBoost", "RandomForest", "FeedForwardNet"]:
         features["img_profile"] = generate_img_profiles(
-            neurograph, proposals, img_path
+            neurograph, proposals, img
         )
     return features
 
 
 # -- Edge feature extraction --
-def generate_img_chunks(neurograph, proposals, img_path, labels_path):
+def generate_img_chunks(neurograph, proposals, img, labels):
     """
     Generates an image chunk for each edge proposal such that the centroid of
     the image chunk is the midpoint of the edge proposal. Image chunks contain
@@ -102,10 +104,10 @@ def generate_img_chunks(neurograph, proposals, img_path, labels_path):
     neurograph : NeuroGraph
         NeuroGraph generated from a directory of swcs generated from a
         predicted segmentation.
-    img_path : str
-        Path to raw image.
-    labels_path : str
-        Path to predicted segmentation.
+    img : tensorstore.TensorStore
+        Image stored in a GCS bucket.
+    labels : tensorstore.TensorStore
+        Predicted segmentation mask stored in a GCS bucket.
     proposals : list[frozenset], optional
         List of edge proposals for which features will be generated. The
         default is None.
@@ -116,9 +118,6 @@ def generate_img_chunks(neurograph, proposals, img_path, labels_path):
         Dictonary such that each pair is the edge id and image chunk.
 
     """
-    driver = "n5" if ".n5" in img_path else "zarr"
-    img = utils.open_tensorstore(img_path, driver)
-    labels = utils.open_tensorstore(labels_path, "neuroglancer_precomputed")
     with ThreadPoolExecutor() as executor:
         # Assign Threads
         threads = [None] * len(proposals)
@@ -169,7 +168,7 @@ def get_img_chunk(img, labels, coord_0, coord_1, thread_id=None):
         return chunk, profile
 
 
-def generate_img_profiles(neurograph, proposals, path):
+def generate_img_profiles(neurograph, proposals, img):
     """
     Generates an image intensity profile along each edge proposal by reading
     from an image on the cloud.
@@ -181,8 +180,8 @@ def generate_img_profiles(neurograph, proposals, path):
         predicted segmentation.
     proposals : list[frozenset]
         List of edge proposals for which features will be generated.
-    path : str
-        Path to image on GCS bucket.
+    img : tensorstore.TensorStore
+        Image stored in a GCS bucket.
 
     Returns
     -------
@@ -191,36 +190,79 @@ def generate_img_profiles(neurograph, proposals, path):
         profile.
 
     """
-    # Generate coordinates to be read
-    coords = set()
-    lines = dict()
-    t0 = time()
+    # Generate coordinates
+    coords = dict()
     for i, edge in enumerate(proposals):
-        xyz_0, xyz_1 = neurograph.proposal_xyz(edge)
-        coord_0 = utils.to_img(xyz_0)
-        coord_1 = utils.to_img(xyz_1)
-        lines[edge] = geometry.make_line(coord_0, coord_1, N_PROFILE_PTS)
-        for coord in lines[edge]:
-            coords.add(tuple(coord))
-    print("   generate_coords():", time() - t0)
+        coords[edge] = get_profile_coords(neurograph, edge)
 
-    # Read image intensities
-    t0 = time()
-    driver = "n5" if ".n5" in path else "zarr"
-    img = utils.open_tensorstore(path, driver)
-    print("   open_img():", time() - t0)
+    # Generate profiles
+    img_profiles = dict()
+    with ThreadPoolExecutor() as executor:
+        threads = []
+        for e, coords_e in coords.items():
+            threads.append(executor.submit(get_profile, img, e, coords_e))
 
-    t0 = time()
-    img_intensity = utils.read_img_intensities(img, list(coords))
-    print("   read_img_intensities():", time() - t0)
+    for thread in as_completed(threads):
+        e, img_profile_e = thread.result()
+        img_profiles[e] = img_profile_e
+    return img_profiles
 
-    # Generate intensity profiles
-    t0 = time()
-    profile_features = dict()
-    for edge, line in lines.items():
-        profile_features[edge] = [img_intensity[tuple(xyz)] for xyz in line]
-    print("   generate_profiles():", time() - t0)
-    return profile_features
+
+def get_profile_coords(neurograph, edge):
+    """
+    Gets coordinates needed to compute an image intensity profile.
+
+    Parameters
+    ----------
+    neurograph : NeuroGarph
+        NeuroGraph generated from a directory of swcs generated from a
+        predicted segmentation.
+    edge : frozenset
+        Edge proposal that image intensity profile will be generated for.
+
+    Returns
+    -------
+    coords : dict
+        Coordinates needed to compute an image intensity profile.
+
+    """
+    # Compute coordinates
+    xyz_0, xyz_1 = neurograph.proposal_xyz(edge)
+    coord_0 = utils.to_img(xyz_0)
+    coord_1 = utils.to_img(xyz_1)
+
+    # Store coordinates
+    bbox = utils.get_minimal_bbox(coord_0, coord_1)
+    coords = {
+        "bbox": bbox,
+        "start": [coord_0[i] - bbox["min"][i] for i in range(3)],
+        "end": [coord_1[i] - bbox["min"][i] for i in range(3)],
+    }
+    return coords
+
+
+def get_profile(img, edge, coords):
+    """
+    Gets the image intensity profile for a given edge proposal.
+
+    Parameters
+    ----------
+    img : tensorstore.TensorStore
+        Image to be queried.
+    edge : frozenset
+        Edge proposal that image profile corresponds to.
+
+    Returns
+    -------
+    edge : frozenset
+        Edge proposal that image profile corresponds to.
+    list[int]
+        Image intensity profile.
+
+    """
+    chunk = utils.read_tensorstore_bbox(img, coords["bbox"])
+    line = geometry.make_line(coords["start"], coords["end"], N_PROFILE_PTS)
+    return edge, [chunk[tuple(xyz)] for xyz in line]
 
 
 def generate_skel_features(neurograph, proposals):
@@ -258,7 +300,6 @@ def get_directionals(neurograph, edge, window_size):
     inner_product_1 = abs(np.dot(edge_direction, direction_i))
     inner_product_2 = abs(np.dot(edge_direction, direction_j))
     inner_product_3 = np.dot(direction_i, direction_j)
-
     return np.array([inner_product_1, inner_product_2, inner_product_3])
 
 

@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 
-from deep_neurographs.machine_learning import feature_extraction as extracter
+from deep_neurographs.machine_learning import feature_generation
 from deep_neurographs.machine_learning.datasets import (
     ImgProposalDataset,
     MultiModalDataset,
@@ -86,12 +86,12 @@ def init_model(model_type):
     elif model_type == "RandomForest":
         return RandomForestClassifier()
     elif model_type == "FeedForwardNet":
-        n_features = extracter.count_features(model_type)
+        n_features = feature_generation.count_features(model_type)
         return FeedForwardNet(n_features)
     elif model_type == "ConvNet":
         return ConvNet()
     elif model_type == "MultiModalNet":
-        n_features = extracter.count_features(model_type)
+        n_features = feature_generation.count_features(model_type)
         return MultiModalNet(n_features)
 
 
@@ -153,7 +153,7 @@ def init_dataset(
     neurographs, features, model_type, block_ids=None, transform=False
 ):
     # Extract features
-    inputs, targets, block_to_idx, idx_to_edge = extracter.get_feature_matrix(
+    inputs, targets, block_to_idx, idx_to_edge = feature_generation.get_feature_matrix(
         neurographs, features, model_type, block_ids=block_ids
     )
     lens = []
