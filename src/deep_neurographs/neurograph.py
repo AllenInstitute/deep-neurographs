@@ -487,9 +487,9 @@ class NeuroGraph(nx.Graph):
     def proposal_length(self, edge):
         i, j = tuple(edge)
         return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
-    
+
     def proposal_midpoint(self, edge):
-        i, j = tuple(edge) 
+        i, j = tuple(edge)
         return get_midpoint(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
     def merge_proposal(self, edge):
@@ -513,7 +513,7 @@ class NeuroGraph(nx.Graph):
                 self.nodes[i]["proposals"].remove(j)
                 self.nodes[j]["proposals"].remove(i)
                 del self.proposals[edge]
-        
+
     # --- Utils ---
     def get_branches(self, i, key="xyz"):
         branches = []

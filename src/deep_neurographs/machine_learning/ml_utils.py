@@ -10,6 +10,7 @@ Helper routines for training machine learning models.
 
 from random import sample
 
+import joblib
 import numpy as np
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 
@@ -64,40 +65,55 @@ def get_kfolds(filenames, k):
     return folds
 
 
-def init_model(model_type, model_path=None):
+def init_model(model_type):
+    """
+    Initializes a machine learning model.
+
+    Parameters
+    ----------
+    model_type : str
+        Type of machine learning model.
+
+    Returns
+    -------
+    ...
+
+    """
     assert model_type in SUPPORTED_MODELS, f"{model_type} not supported!"
-    if model_type in ["AdaBoost", "RandomForest"]:
-        return init_ml_model(model_type, model_path)
-    else:
-        return init_dl_model(model_type, model_path)
-
-
-def init_ml_model(model_type, model_path):
-    # Load wgts (if applicable)
-    if model_path:
-        return joblib.load(model_path)
-
-    # Initialize model
     if model_type == "AdaBoost":
         return AdaBoostClassifier()
-    else:
+    elif model_type == "RandomForest":
         return RandomForestClassifier()
-
-
-def init_dl_model(model_type, model_path):
-    # Initialize model
-    if model_type == "FeedForwardNet":
+    elif model_type == "FeedForwardNet":
         n_features = extracter.count_features(model_type)
-        model = FeedForwardNet(n_features)
+        return FeedForwardNet(n_features)
     elif model_type == "ConvNet":
-        model = ConvNet()
-    else:
+        return ConvNet()
+    elif model_type == "MultiModalNet":
         n_features = extracter.count_features(model_type)
-        model = MultiModalNet(n_features)
+        return MultiModalNet(n_features)
 
-    # Load wgts (if applicable)
-    
-    
+
+def load_model(model_type, path):
+    """
+    Loads the parameters of a machine learning model.
+
+    Parameters
+    ----------
+    model_type : str
+        Type of machine learning model.
+    path : str
+        Path to the model parameters.
+
+    Returns
+    -------
+    ...
+    """
+    if model_type in ["AdaBoost", "RandomForest"]:
+        return joblib.load(path)
+    else:
+        return torch.load(path)
+
 
 def get_dataset(inputs, targets, model_type, transform, lengths):
     """

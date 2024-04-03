@@ -312,9 +312,9 @@ def get_radii(neurograph, edge):
 
 
 # -- Build feature matrix
-def get_feature_matrix(neurographs, features, model_type, block_ids=[]):
+def get_feature_matrix(neurographs, features, model_type, block_ids=None):
     assert model_type in SUPPORTED_MODELS, "Error! model_type not supported"
-    if len(block_ids) > 0:
+    if block_ids:
         return __multiblock_feature_matrix(
             neurographs, features, block_ids, model_type
         )
