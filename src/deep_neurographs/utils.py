@@ -388,6 +388,12 @@ def read_tensorstore(arr, xyz, shape, from_center=True):
     return chunk.read().result()
 
 
+def read_tensorstore_bbox(img, bbox):
+    start = bbox["min"]
+    end = bbox["max"]
+    return img[start[0]: end[0], start[1]: end[1], start[2]: end[2]].read().result()
+
+
 def get_chunk(arr, xyz, shape, from_center=True):
     start, end = get_start_end(xyz, shape, from_center=from_center)
     return deepcopy(
@@ -432,62 +438,6 @@ def get_superchunks(img_path, labels_path, xyz, shape, from_center=True):
 def get_superchunk(path, driver, xyz, shape, from_center=True):
     arr = open_tensorstore(path, driver)
     return read_tensorstore(arr, xyz, shape, from_center=from_center)
-
-
-def read_img_intensities(img, coord_list):
-    """
-    Reads image intensities at the coordinates listed in "xyz_list" from
-    an image stored in a GCS bcuket.
-
-    Parameters
-    ----------
-    img_gcs : tensorstore.TensorStore
-        Image to be read.
-    coord_list : list
-        List of coordinates to be read from "img".
-
-    Returns
-    -------
-    img_intensities : dict
-        Dictionary where keys are coordinateas from "coord_list" and values are
-        the corresponding image intensity value.
-
-    """
-    with ThreadPoolExecutor() as executor:
-        # Assign threads
-        threads = []
-        for coord in coord_list:
-            threads.append(executor.submit(__read_gcs_voxel, img, coord))
-
-        # Store results
-        img_intensities = dict()
-        for thread in as_completed(threads):
-            coord, intensity = thread.result()
-            img_intensities[coord] = intensity
-    return img_intensities
-
-
-def __read_gcs_voxel(img, coord):
-    """
-    Reads intensity at image coordinate "coord" from an image stored in a
-    GCS bucket.
-
-    Parameters
-    ----------
-    img : tensorstore.TensorStore
-        Image on to be read
-    coord : tuple[int]
-        Coordinates that indexes into "img".
-
-    Returns
-    -------
-    coord : tuple[int]
-        Coordinates that indexes into "img".
-    int
-       Image intensity at "coord".
-   
-    """
-    return coord, int(img[coord].read().result())
 
 
 def read_json(path):
@@ -639,6 +589,12 @@ def get_img_bbox(origin, shape):
     else:
         return None
 
+def get_minimal_bbox(coord_0, coord_1):
+    bbox = {
+        "min": [min(coord_0[i], coord_1[i]) for i in range(3)],
+        "max": [max(coord_0[i], coord_1[i]) + 1 for i in range(3)],
+    }
+    return bbox
 
 def get_swc_id(path):
     """

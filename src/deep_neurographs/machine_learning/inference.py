@@ -22,7 +22,7 @@ from torch.utils.data import DataLoader
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import reconstruction as build
 from deep_neurographs import utils
-from deep_neurographs.machine_learning import feature_extraction as extracter
+from deep_neurographs.machine_learning import feature_generation
 from deep_neurographs.machine_learning import ml_utils
 from deep_neurographs.neurograph import NeuroGraph
 
@@ -153,10 +153,10 @@ def predict(
 ):
     # Generate features
     t3 = time()
-    features = extracter.generate_features(
+    features = feature_generation.run(
         neurograph,
         model_type,
-        img_path=img_path,
+        img_path,
         labels_path=labels_path,
         proposals=proposals,
     )
