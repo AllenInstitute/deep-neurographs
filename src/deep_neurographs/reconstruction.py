@@ -86,12 +86,9 @@ def get_structure_aware_prediction(
 ):
     # Initializations
     proposals = list(probs.keys())
-    t0 = time()
     pred_graph = neurograph.copy_graph()
-    print("   copy_graph():", time() - t0)
 
     # Add best simple edges
-    t0 = time()
     preds = []
     remaining_proposals = []
     # dists = [neurograph.proposal_length(edge) for edge in proposals]
@@ -103,9 +100,6 @@ def get_structure_aware_prediction(
                 preds.append(edge)
         else:
             remaining_proposals.append(edge)
-
-    print("   check_best():", time() - t0)
-    stop
 
     # Add remaining viable edges
     for edge in remaining_proposals:
