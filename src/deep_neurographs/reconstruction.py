@@ -18,8 +18,6 @@ import numpy as np
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import swc_utils, utils
 
-BATCH_PERCENT = 0.25
-
 
 def get_accepted_propoals_blocks(
     neurographs,
@@ -117,7 +115,7 @@ def get_structure_aware_accepts(
 ):
     # Add best preds
     best_preds, best_probs = get_best_preds(neurograph, preds, high_threshold)
-    accepts = check_cycles_sequential(neurograph, best_preds, best_probs)
+    accepts = check_cycles_sequential(graph, best_preds, best_probs)
     if len(best_preds) == len(preds.keys()):
         return accepts
 
@@ -130,7 +128,7 @@ def get_structure_aware_accepts(
             good_preds.append(edge)
             good_probs.append(prob)
 
-    more_accepts = check_cycles_sequential(neurograph, good_preds, good_probs)
+    more_accepts = check_cycles_sequential(graph, good_preds, good_probs)
     accepts.extend(more_accepts)    
     return accepts
 
@@ -203,7 +201,7 @@ def check_cycles_sequential(graph, edges, probs):
         subgraph = get_subgraphs(graph, edges[i])
         created_cycle, _ = gutils.creates_cycle(subgraph, tuple(edges[i]))
         if not created_cycle:
-            graph.add_edges_from(tuple(edges[i]))
+            graph.add_edges_from([tuple(edges[i])])
             accepts.append(edges[i])
     return accepts
 
@@ -219,11 +217,17 @@ def get_best_preds(neurograph, preds, threshold):
 
 
 def fuse_branches(neurograph, edges):
+    simple_cnt = 0
+    complex_cnt = 0
     for edge in edges:
         if neurograph.is_simple(edge):
+            simple_cnt += 1
             neurograph.merge_proposal(edge)
         else:
-            print("merge not implemented for complex")
+            complex_cnt += 1
+            #print("merge not implemented for complex")
+    print("# simple:", simple_cnt)
+    print("# complex:", complex_cnt)
     return neurograph
 
 
