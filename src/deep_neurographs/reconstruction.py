@@ -64,7 +64,7 @@ def get_accepted_proposals(
     high_threshold=0.9,
     low_threshold=0.6,
     structure_aware=True,
-):
+):  
     # Get positive edge predictions
     preds = threshold_preds(preds, idx_to_edge, low_threshold)
     if structure_aware:
@@ -131,8 +131,8 @@ def get_structure_aware_accepts(
             good_probs.append(prob)
 
     more_accepts = check_cycles_sequential(neurograph, good_preds, good_probs)
-    accepts.extend(more_accepts)
-    return list(set(accepts))
+    accepts.extend(more_accepts)    
+    return accepts
 
 
 def get_subgraphs(graph, edge):
@@ -203,6 +203,7 @@ def check_cycles_sequential(graph, edges, probs):
         subgraph = get_subgraphs(graph, edges[i])
         created_cycle, _ = gutils.creates_cycle(subgraph, tuple(edges[i]))
         if not created_cycle:
+            graph.add_edges_from(tuple(edges[i]))
             accepts.append(edges[i])
     return accepts
 
@@ -212,79 +213,17 @@ def get_best_preds(neurograph, preds, threshold):
     probs = []
     for edge, prob in preds.items():
         if neurograph.is_simple(edge) and prob > threshold:
-            edges.append(tuple(edge))
+            edges.append(edge)
             probs.append(prob)
     return edges, probs
 
 
-# -- Merge branches --
 def fuse_branches(neurograph, edges):
-    cnt = 0
-    n_trues = 0
-    n_falses = 0
-    print("# nodes:", len(neurograph.nodes))
     for edge in edges:
-        
-        if edge in neurograph.proposals.keys():
-            n_trues += 1
+        if neurograph.is_simple(edge):
+            neurograph.merge_proposal(edge)
         else:
-            n_falses += 1
-
-        i, j = tuple(edge)
-        #del neurograph.proposals[edge]
-        if neurograph.is_leaf(i) and neurograph.is_leaf(j):
-            cnt += 1
-            neurograph = simple_fusion(neurograph, edge)
-        else:
-            neurograph = simple_fusion(neurograph, edge)
-    print("% trues:", n_trues / len(edges))
-    print("% false:", n_falses / len(edges))
-    return neurograph
-
-
-def simple_fusion(neurograph, edge):
-    # Attributes
-    i, j = tuple(edge)
-    radii = np.array(
-        [neurograph.nodes[i]["radius"], neurograph.nodes[j]["radius"]]
-    )
-    xyz = np.vstack([neurograph.nodes[i]["xyz"], neurograph.nodes[j]["xyz"]])
-
-    # Add
-    neurograph.add_edge(
-        i, j, radius=radii, swc_id=neurograph.nodes[i]["swc_id"], xyz=xyz
-    )
-    return neurograph
-
-
-def sample_neighbor(graph, i):
-    return sample(list(graph.neighbors(i)), 1)[0]
-
-
-def fusion(neurograph, edge):
-    # Get nodes
-    i, j = tuple(edge)
-    nb_i = sample_neighbor(neurograph, i)
-    nb_j = sample_neighbor(neurograph, j)
-
-    # Get branch attributes
-    branch_xyz_i = neurograph.get_branches(i, key="xyz")[0]
-    branch_xyz_j = neurograph.get_branches(j, key="xyz")[0]
-    branch_radii_i = neurograph.get_branches(i, key="radius")[0]
-    branch_radii_j = neurograph.get_branches(j, key="radius")[0]
-
-    # Fuse attributes
-    radii = np.concatenate((np.flip(branch_radii_j), branch_radii_i))
-    xyz = np.vstack((np.flip(branch_xyz_j, axis=0), branch_xyz_i))
-
-    # Delete
-    neurograph.remove_edge(i, nb_i)
-    neurograph.remove_edge(j, nb_j)
-
-    # Add
-    neurograph.add_edge(
-        nb_i, nb_j, radius=radii, swc_id=neurograph.nodes[i]["swc_id"], xyz=xyz
-    )
+            print("merge not implemented for complex")
     return neurograph
 
 

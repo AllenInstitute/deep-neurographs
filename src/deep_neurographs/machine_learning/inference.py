@@ -107,15 +107,12 @@ def run_without_seeds(
     n_batches = 1 + len(proposals) // BATCH_SIZE_PROPOSALS
     assert not gutils.cycle_exists(graph), "Google prediction contains cycle"
 
-    print("# batches:", n_batches)
-
     # Run
     accepts = []
     progress_cnt = 1
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_batches * 0.02), 1)
     for i, batch in enumerate(batches):
-        print("\n\nbatch:", batch)
         # Prediction
         t2 = time()
         proposals_i = [proposals[j] for j in batch]
@@ -132,9 +129,7 @@ def run_without_seeds(
 
         # Merge proposals
         t2 = time()
-        print("start fusing branches")
         neurograph = build.fuse_branches(neurograph, accepts_i)
-        print("stop fusing branches")
         accepts.extend(accepts_i)
 
         # Report progress
