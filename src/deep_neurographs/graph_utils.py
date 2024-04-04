@@ -102,6 +102,22 @@ def get_irreducibles(
 
 
 def trim_branches(graph, bbox):
+    """
+    Deletes all nodes from "graph" that are not contained in "bbox".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched
+    bbox : dict
+        Bounding box.
+
+    Returns
+    -------
+    graph : networkx.Graph
+        "graph" with nodes deleted that were not contained in "bbox".
+
+    """
     if bbox:
         delete_nodes = set()
         for i in graph.nodes:
@@ -622,12 +638,33 @@ def creates_cycle(graph, edge):
 
     """
     graph.add_edges_from([edge])
+    exists = cycle_exists(graph)
+    graph.remove_edges_from([edge])
+    if exists:
+        return True, edge
+    else:
+        return False, edge
+
+
+def cycle_exists(graph):
+    """
+    Checks whether a cycle exists in "graph".
+
+    Paramaters
+    ----------
+    graph : networkx.Graph
+        Graph to be checked for cycles.
+
+    Returns
+    -------
+    bool
+        Indication of whether there exists a cycle.
+
+    """
     try:
         nx.find_cycle(graph)
-        graph.remove_edges_from([edge])
         return True
     except:
-        graph.remove_edges_from([edge])
         return False
 
 

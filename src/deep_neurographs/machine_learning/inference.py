@@ -100,23 +100,28 @@ def run_without_seeds(
     progress_bar=True,
 ):
     # Initializations
+    graph = neurograph.copy_graph()
     dists = [neurograph.proposal_length(edge) for edge in proposals]
-    batches = utils.get_batch(np.argsort(dists), batch_size_proposals)
+    batches = utils.get_batches(np.argsort(dists), batch_size_proposals)
     model = ml_utils.load_model(model_type, model_path)
     n_batches = 1 + len(proposals) // BATCH_SIZE_PROPOSALS
+    assert not gutils.cycle_exists(graph), "Google prediction contains cycle"
+
     print("# batches:", n_batches)
 
     # Run
-    preds = []
+    accepts = []
     progress_cnt = 1
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_batches * 0.02), 1)
     for i, batch in enumerate(batches):
+        print("\n\nbatch:", batch)
         # Prediction
         t2 = time()
         proposals_i = [proposals[j] for j in batch]
-        preds_i = predict(
+        accepts_i = predict(
             neurograph,
+            graph,
             img_path,
             labels_path,
             proposals_i,
@@ -127,11 +132,11 @@ def run_without_seeds(
 
         # Merge proposals
         t2 = time()
-        preds.extend(preds_i)
-        stop
-        neurograph = build.fuse_branches(neurograph, preds_i)
-        print("fuse_branches():", time() - t2)
-        
+        print("start fusing branches")
+        neurograph = build.fuse_branches(neurograph, accepts_i)
+        print("stop fusing branches")
+        accepts.extend(accepts_i)
+
         # Report progress
         if i > progress_cnt * chunk_size and progress_bar:
             progress_cnt, t1 = report_progress(
@@ -139,11 +144,12 @@ def run_without_seeds(
             )
             t0, t1 = utils.init_timers()
 
-    return neurograph, preds
+    return neurograph, accepts
 
 
 def predict(
     neurograph,
+    graph,
     img_path,
     labels_path,
     proposals,
@@ -161,23 +167,19 @@ def predict(
         proposals=proposals,
     )
     dataset = ml_utils.init_dataset(neurograph, features, model_type)
-    print("   generate_features():", time() - t3)
 
     # Run model
     t3 = time()
     proposal_probs = run_model(dataset, model, model_type)
-    print("   run_model():", time() - t3)
-    
-    t3 = time()
-    proposal_preds = build.get_reconstruction(
+    accepts = build.get_accepted_proposals(
         neurograph,
+        graph,
         proposal_probs,
         dataset["idx_to_edge"],
         high_threshold=0.95,
         low_threshold=confidence_threshold,
     )
-    print("   get_reconstruction():", time() - t3)
-    return proposal_preds
+    return accepts
 
 
 def build_from_soma(
@@ -199,16 +201,12 @@ def get_swc_ids(path, xyz, chunk_shape, from_center=True):
 def build_seed_neurograph(neurograph, swc_ids):
     seed_neurograph = NeuroGraph()
     for nodes in nx.connected_components(neurograph):
-        i = sample_singleton(nodes)
+        i = utils.sample_singleton(nodes)
         swc_id = int(neurograph.nodes[i]["swc_id"])
         if swc_id in swc_ids:
             seed_neurograph.update(neurograph.subgraph(nodes))
             seed_neurograph.add_swc_id(swc_id)
     return seed_neurograph
-
-
-def sample_singleton(my_container):
-    return sample(my_container, 1)[0]
 
 
 def build_from_boundary(neurograph, pred_neurograph, boundary_components):
