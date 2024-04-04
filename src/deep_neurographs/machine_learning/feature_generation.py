@@ -39,9 +39,7 @@ SUPPORTED_MODELS = [
 
 
 # -- Wrappers --
-def run(
-    neurograph, model_type, img_path, labels_path=None, proposals=None
-):
+def run(neurograph, model_type, img_path, labels_path=None, proposals=None):
     """
     Generates feature vectors for every edge proposal in a neurograph.
 

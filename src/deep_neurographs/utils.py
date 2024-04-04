@@ -391,13 +391,17 @@ def read_tensorstore(arr, xyz, shape, from_center=True):
 def read_tensorstore_bbox(img, bbox):
     start = bbox["min"]
     end = bbox["max"]
-    return img[start[0]: end[0], start[1]: end[1], start[2]: end[2]].read().result()
+    return (
+        img[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
+        .read()
+        .result()
+    )
 
 
 def get_chunk(arr, xyz, shape, from_center=True):
     start, end = get_start_end(xyz, shape, from_center=from_center)
     return deepcopy(
-        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+        arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
     )
 
 
@@ -589,12 +593,14 @@ def get_img_bbox(origin, shape):
     else:
         return None
 
+
 def get_minimal_bbox(coord_0, coord_1):
     bbox = {
         "min": [min(coord_0[i], coord_1[i]) for i in range(3)],
         "max": [max(coord_0[i], coord_1[i]) + 1 for i in range(3)],
     }
     return bbox
+
 
 def get_swc_id(path):
     """
@@ -657,6 +663,6 @@ def time_writer(t, unit="seconds"):
     return t, unit
 
 
-def get_batch(iterable, batch_size):
+def get_batches(iterable, batch_size):
     for start in range(0, len(iterable), batch_size):
-        yield iterable[start: min(start + batch_size, len(iterable))]
+        yield iterable[start : min(start + batch_size, len(iterable))]
