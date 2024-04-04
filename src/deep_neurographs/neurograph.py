@@ -317,8 +317,8 @@ class NeuroGraph(nx.Graph):
                     len2 = self.proposal_length(edge)
                     if len1 < len2:
                         node1, node2 = tuple(edge)
-                        self.nodes[node1]["proposals"].discard(node2)
-                        self.nodes[node2]["proposals"].discard(node1)
+                        self.nodes[node1]["proposals"].remove(node2)
+                        self.nodes[node2]["proposals"].remove(node1)
                         del self.proposals[edge]
                         del existing_connections[pair_id]
                     else:
@@ -329,7 +329,7 @@ class NeuroGraph(nx.Graph):
                 existing_connections[pair_id] = frozenset({leaf, node})
 
         # Finish
-        self.filter_nodes()
+        #self.filter_nodes()
         self.init_kdtree(node_type="leaf")
         self.init_kdtree(node_type="proposal")
         if optimize:
@@ -468,13 +468,13 @@ class NeuroGraph(nx.Graph):
         return set([e for e in self.get_proposals() if not self.is_simple(e)])
 
     def get_isolated_proposals(self, r):
-        isolated_proposals = set()
+        isolated_proposals = list()
         for edge in self.proposals.keys():
             xyz = self.proposal_midpoint(edge)
             nearby_proposals = self.query_kdtree(xyz, r, node_type="proposal")
             nearby_leafs = self.query_kdtree(xyz, r, node_type="leaf")
             if len(nearby_proposals) <= 2 and len(nearby_leafs) <= 2:
-                isolated_proposals.add(edge)
+                isolated_proposals.append(edge)
         return isolated_proposals
 
     def is_simple(self, edge):
@@ -497,9 +497,10 @@ class NeuroGraph(nx.Graph):
         i, j = tuple(edge)
         xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
         radius = np.array([self.nodes[i]["radius"], self.nodes[j]["radius"]])
+        swc_id = self.nodes[i]["swc_id"]
 
         # Add
-        self.add_edge(i, j, xyz=xyz, radius=radius, swc_id="merged")
+        self.add_edge(i, j, xyz=xyz, radius=radius, swc_id=swc_id)
         del self.proposals[edge]
         # delete from kdtree
 
