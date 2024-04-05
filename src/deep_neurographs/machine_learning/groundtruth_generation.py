@@ -27,12 +27,13 @@ def init_targets(target_neurograph, pred_neurograph):
     valid_proposals = get_valid_proposals(target_neurograph, pred_neurograph)
 
     # Add best simple edges
-    dists = [pred_neurograph.proposal_length(p) for p in valid_proposals]
-    groundtruth_graph = pred_neurograph.copy_graph()
+    dists = [pred_neurograph.proposal_length(e) for e in valid_proposals]
+    graph = pred_neurograph.copy_graph()
     for idx in np.argsort(dists):
         edge = valid_proposals[idx]
-        if not gutils.creates_cycle(groundtruth_graph, tuple(edge)):
-            groundtruth_graph.add_edges_from([edge])
+        created_cycle, _ = gutils.creates_cycle(graph, tuple(edge))
+        if not created_cycle:
+            graph.add_edges_from([edge])
             target_edges.add(edge)
     return target_edges
 

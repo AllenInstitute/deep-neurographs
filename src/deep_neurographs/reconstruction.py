@@ -21,7 +21,6 @@ from deep_neurographs import swc_utils, utils
 
 def get_accepted_propoals_blocks(
     neurographs,
-    graph,
     preds,
     blocks,
     block_to_idxs,
@@ -42,6 +41,7 @@ def get_accepted_propoals_blocks(
 
         # Refine accepts wrt structure
         if structure_aware:
+            graph = neurographs[block_id].copy()
             accepts[block_id] = get_structure_aware_accepts(
                 neurographs[block_id],
                 graph,
@@ -102,6 +102,7 @@ def threshold_preds(preds, idx_to_edge, threshold, valid_idxs=[]):
         predicted probability.
 
     """
+    print(preds)
     thresholded_preds = dict()
     for i, pred_i in enumerate(preds):
         contained_bool = True if len(valid_idxs) == 0 else i in valid_idxs
