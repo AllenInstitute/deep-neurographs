@@ -306,7 +306,7 @@ class NeuroGraph(nx.Graph):
                 # Get connection
                 (i, j) = self.xyz_to_edge[xyz]
                 node, xyz = self.__get_connection(leaf, xyz, (i, j), radius)
-                if not complex_proposals and self.degree[node] >= 2:
+                if not complex_proposals and self.degree[node] > 1:
                     continue
 
                 # Check whether connection exists
@@ -329,7 +329,7 @@ class NeuroGraph(nx.Graph):
                 existing_connections[pair_id] = frozenset({leaf, node})
 
         # Finish
-        #self.filter_nodes()
+        self.filter_nodes()
         self.init_kdtree(node_type="leaf")
         self.init_kdtree(node_type="proposal")
         if optimize:

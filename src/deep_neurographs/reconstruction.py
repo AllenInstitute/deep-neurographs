@@ -23,7 +23,6 @@ BATCH_PERCENT = 0.25
 
 def get_accepted_propoals_blocks(
     neurographs,
-    graph,
     preds,
     blocks,
     block_to_idxs,
@@ -44,6 +43,7 @@ def get_accepted_propoals_blocks(
 
         # Refine accepts wrt structure
         if structure_aware:
+            graph = neurographs[block_id].copy()
             accepts[block_id] = get_structure_aware_accepts(
                 neurographs[block_id],
                 graph,
@@ -104,6 +104,7 @@ def threshold_preds(preds, idx_to_edge, threshold, valid_idxs=[]):
         predicted probability.
 
     """
+    print(preds)
     thresholded_preds = dict()
     for i, pred_i in enumerate(preds):
         contained_bool = True if len(valid_idxs) == 0 else i in valid_idxs
@@ -117,7 +118,7 @@ def get_structure_aware_accepts(
 ):
     # Add best preds
     best_preds, best_probs = get_best_preds(neurograph, preds, high_threshold)
-    accepts = check_cycles_sequential(neurograph, best_preds, best_probs)
+    accepts = check_cycles_sequential(graph, best_preds, best_probs)
     if len(best_preds) == len(preds.keys()):
         return accepts
 
@@ -130,7 +131,7 @@ def get_structure_aware_accepts(
             good_preds.append(edge)
             good_probs.append(prob)
 
-    more_accepts = check_cycles_sequential(neurograph, good_preds, good_probs)
+    more_accepts = check_cycles_sequential(graph, good_preds, good_probs)
     accepts.extend(more_accepts)    
     return accepts
 
@@ -203,7 +204,7 @@ def check_cycles_sequential(graph, edges, probs):
         subgraph = get_subgraphs(graph, edges[i])
         created_cycle, _ = gutils.creates_cycle(subgraph, tuple(edges[i]))
         if not created_cycle:
-            graph.add_edges_from(tuple(edges[i]))
+            graph.add_edges_from([tuple(edges[i])])
             accepts.append(edges[i])
     return accepts
 
