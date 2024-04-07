@@ -113,10 +113,37 @@ class DenseGraph:
         self.kdtree = KDTree(list(self.xyz_to_swc.keys()))
 
     def get_projection(self, xyz):
+        """
+        Projects "xyz" onto "self by finding the closest point.
+
+        Parameters
+        ----------
+        xyz : numpy.ndarray
+            xyz coordinate to be queried.
+
+        Returns
+        -------
+        numpy.ndarray
+            Projection of "xyz".
+
+        """
         _, idx = self.kdtree.query(xyz, k=1)
         return tuple(self.kdtree.data[idx])
 
     def save(self, output_dir):
+        """
+        Saves "self" to an swc file.
+
+        Parameters
+        ----------
+        output_dir : str
+            Path to directory that swc files are written to.
+
+        Returns
+        -------
+        None
+
+        """
         for swc_id, graph in self.graphs.items():
             cnt = 0
             for component in nx.connected_components(graph):
@@ -128,6 +155,22 @@ class DenseGraph:
                 swc_utils.write(path, entry_list)
 
     def make_entries(self, graph, component):
+        """
+        Makes swc entries corresponding to nodes in "component".
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph that "component" is a connected component of.
+        component : set
+            Connected component of "graph".
+
+        Returns
+        -------
+        entry_list
+            List of swc entries generated from nodes in "component".
+
+        """
         node_to_idx = dict()
         entry_list = []
         for i, j in nx.dfs_edges(graph.subgraph(component)):

@@ -111,13 +111,14 @@ def detect_merges_neuron(
     radius : int
         Each node within "radius" is deleted.
     output_dir : str, optional
-        ...
+        Directory that merge sites are saved in swc files. The default is
+        None.
     save : bool, optional
         Indication of whether to save merge sites. The default is False.
 
     Returns
     -------
-    set
+    delete_nodes : set
         Nodes that are part of a merge mistake.
 
     """
@@ -171,6 +172,34 @@ def detect_intersections(target_densegraph, graph, component):
 
 
 def detect_merges(target_densegraph, graph, hits, radius, output_dir, save):
+    """
+    Detects merge mistakes in "graph" (i.e. whether "graph" is closely aligned
+    with two distinct connected components in "target_densegraph".
+
+    Parameters
+    ----------
+    target_densegraph : DenseGraph
+        Graph built from ground truth swc files.
+    graph : networkx.Graph
+        Graph build from a predicted swc file.
+    hits : dict
+        Dictionary that stores intersections between "target_densegraph" and
+        "graph", where the keys are swc ids from "target_densegraph" and
+        values are nodes from "graph".
+    radius : int
+        Each node within "radius" is deleted.
+    output_dir : str, optional
+        Directory that merge sites are saved in swc files. The default is
+        None.
+    save : bool, optional
+        Indication of whether to save merge sites.
+
+    Returns
+    -------
+    merge_sites : set
+        Nodes that are part of a merge site.
+
+    """
     merge_sites = set()
     if len(hits.keys()) > 0:
         visited = set()
@@ -184,7 +213,6 @@ def detect_merges(target_densegraph, graph, hits, radius, output_dir, save):
                 # Check for merge site
                 min_dist, sites = locate_site(graph, hits[id_1], hits[id_2])
                 visited.add(pair)
-                print(graph.nodes[sites[0]]["xyz"], min_dist)
                 if min_dist < MERGE_DIST_THRESHOLD:
                     merge_nbhd = get_merged_nodes(graph, sites, radius)
                     merge_sites = merge_sites.union(merge_nbhd)
@@ -231,6 +259,24 @@ def locate_site(graph, merged_1, merged_2):
 
 
 def get_merged_nodes(graph, sites, radius):
+    """
+    Gets nodes that are falsely merged.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph that contains a merge at "sites".
+    sites : list
+        Nodes in "graph" that are part of a merge mistake.
+    radius : int
+        Radius about node to be searched.
+
+    Returns
+    -------
+    merged_nodes : set
+        Nodes that are falsely merged.
+
+    """
     i, j = tuple(sites)
     merged_nodes = set(nx.shortest_path(graph, source=i, target=j))
     merged_nodes = merged_nodes.union(get_nbhd(graph, i, radius))
@@ -239,10 +285,44 @@ def get_merged_nodes(graph, sites, radius):
 
 
 def get_nbhd(graph, i, radius):
+    """
+    Gets all nodes within a path length of "radius" from node "i".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to searched.
+    i : node
+        Node that is root of neighborhood to be returned.
+    radius : int
+        Radius about node to be searched.
+
+    Returns
+    -------
+    set
+        Nodes within a path length of "radius" from node "i".
+
+    """
     return set(nx.dfs_tree(graph, source=i, depth_limit=radius))
 
 
 def get_point(graph, sites):
+    """
+    Gets midpoint of merge site defined by the pair contained in "sites".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph that contains a merge at "sites".
+    sites : list
+        Nodes in "graph" that are part of a merge mistake.
+
+    Returns
+    -------
+    numpy.ndarray
+        Midpoint between pair of xyz coordinates in "sites".
+
+    """
     xyz_0 = graph.nodes[sites[0]]["xyz"]
     xyz_1 = graph.nodes[sites[1]]["xyz"]
     return geometry.get_midpoint(xyz_0, xyz_1)

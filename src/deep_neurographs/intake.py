@@ -8,7 +8,6 @@ Builds neurograph for neuron reconstruction.
 
 """
 
-import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from time import time
 
