@@ -12,7 +12,7 @@ import json
 import math
 import os
 import shutil
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from io import BytesIO
 from random import sample
@@ -392,7 +392,7 @@ def read_tensorstore_bbox(img, bbox):
     start = bbox["min"]
     end = bbox["max"]
     return (
-        img[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
+        img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
         .read()
         .result()
     )
@@ -401,7 +401,7 @@ def read_tensorstore_bbox(img, bbox):
 def get_chunk(arr, xyz, shape, from_center=True):
     start, end = get_start_end(xyz, shape, from_center=from_center)
     return deepcopy(
-        arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
+        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
     )
 
 
@@ -580,6 +580,47 @@ def sample_singleton(my_container):
     return sample(my_container, 1)[0]
 
 
+# --- runtime ---
+def init_timers():
+    """
+    Initializes two timers.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    time.time
+        Timer.
+    time.time
+        Timer.
+
+    """
+    return time(), time()
+
+
+def progress_bar(current, total, bar_length=50, eta=None, runtime=None):
+    progress = int(current / total * bar_length)
+    n_completed = f"Completed: {current}/{total}"
+    bar = f"[{'=' * progress}{' ' * (bar_length - progress)}]"
+    eta = f"Time Remaining: {eta}" if eta else ""
+    runtime = f"Estimated Total Runtime: {runtime}" if runtime else ""
+    print(f"\r{bar} {n_completed} | {eta} | {runtime}    ", end="", flush=True)
+
+
+def time_writer(t, unit="seconds"):
+    assert unit in ["seconds", "minutes", "hours"]
+    upd_unit = {"seconds": "minutes", "minutes": "hours"}
+    if t < 60 or unit == "hours":
+        return t, unit
+    else:
+        t /= 60
+        unit = upd_unit[unit]
+        t, unit = time_writer(t, unit=unit)
+    return t, unit
+
+
 # --- miscellaneous ---
 def get_img_bbox(origin, shape):
     """
@@ -638,31 +679,6 @@ def get_memory_usage():
     return psutil.virtual_memory().used / 1e9
 
 
-def init_timers():
-    return time(), time()
-
-
-def progress_bar(current, total, bar_length=50, eta=None, runtime=None):
-    progress = int(current / total * bar_length)
-    n_completed = f"Completed: {current}/{total}"
-    bar = f"[{'=' * progress}{' ' * (bar_length - progress)}]"
-    eta = f"Time Remaining: {eta}" if eta else ""
-    runtime = f"Estimated Total Runtime: {runtime}" if runtime else ""
-    print(f"\r{bar} {n_completed} | {eta} | {runtime}    ", end="", flush=True)
-
-
-def time_writer(t, unit="seconds"):
-    assert unit in ["seconds", "minutes", "hours"]
-    upd_unit = {"seconds": "minutes", "minutes": "hours"}
-    if t < 60 or unit == "hours":
-        return t, unit
-    else:
-        t /= 60
-        unit = upd_unit[unit]
-        t, unit = time_writer(t, unit=unit)
-    return t, unit
-
-
 def get_batches(iterable, batch_size):
     for start in range(0, len(iterable), batch_size):
-        yield iterable[start : min(start + batch_size, len(iterable))]
+        yield iterable[start: min(start + batch_size, len(iterable))]

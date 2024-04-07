@@ -341,13 +341,6 @@ def save_edge(path, xyz_1, xyz_2, color=None, radius=6):
         f.write(make_simple_entry(2, 1, xyz_2, radius=radius))
 
 
-def set_radius(graph, i):
-    try:
-        return graph[i]["radius"]
-    except:
-        return 2
-
-
 def make_entry(graph, i, parent, node_to_idx):
     """
     Makes an entry to be written in an swc file.
@@ -368,7 +361,7 @@ def make_entry(graph, i, parent, node_to_idx):
     ...
 
     """
-    r = set_radius(graph, i)
+    r = graph[i]["radius"]
     x, y, z = tuple(graph.nodes[i]["xyz"])
     node_to_idx[i] = len(node_to_idx) + 1
     entry = f"{node_to_idx[i]} 2 {x} {y} {z} {r} {node_to_idx[parent]}"

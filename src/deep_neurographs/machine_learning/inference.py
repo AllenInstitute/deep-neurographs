@@ -9,21 +9,19 @@ Routines for running inference on models that classify edge proposals.
 """
 
 from copy import deepcopy
-from random import sample
+from time import time
 
 import fastremap
 import networkx as nx
 import numpy as np
 import torch
-from time import time
 from torch.nn.functional import sigmoid
 from torch.utils.data import DataLoader
 
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import reconstruction as build
 from deep_neurographs import utils
-from deep_neurographs.machine_learning import feature_generation
-from deep_neurographs.machine_learning import ml_utils
+from deep_neurographs.machine_learning import feature_generation, ml_utils
 from deep_neurographs.neurograph import NeuroGraph
 
 BATCH_SIZE_PROPOSALS = 1000
@@ -114,7 +112,6 @@ def run_without_seeds(
     chunk_size = max(int(n_batches * 0.02), 1)
     for i, batch in enumerate(batches):
         # Prediction
-        t2 = time()
         proposals_i = [proposals[j] for j in batch]
         accepts_i = predict(
             neurograph,
@@ -128,7 +125,6 @@ def run_without_seeds(
         )
 
         # Merge proposals
-        t2 = time()
         neurograph = build.fuse_branches(neurograph, accepts_i)
         accepts.extend(accepts_i)
 
@@ -153,7 +149,6 @@ def predict(
     confidence_threshold=0.7,
 ):
     # Generate features
-    t3 = time()
     features = feature_generation.run(
         neurograph,
         model_type,
@@ -164,7 +159,6 @@ def predict(
     dataset = ml_utils.init_dataset(neurograph, features, model_type)
 
     # Run model
-    t3 = time()
     proposal_probs = run_model(dataset, model, model_type)
     accepts = build.get_accepted_proposals(
         neurograph,

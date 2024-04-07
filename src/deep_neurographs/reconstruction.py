@@ -8,11 +8,10 @@ Created on Sat Dec 12 17:00:00 2023
 
 """
 
-import networkx as nx
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from random import sample
 
+import networkx as nx
 import numpy as np
 
 from deep_neurographs import graph_utils as gutils
@@ -64,7 +63,7 @@ def get_accepted_proposals(
     high_threshold=0.9,
     low_threshold=0.6,
     structure_aware=True,
-):  
+):
     # Get positive edge predictions
     preds = threshold_preds(preds, idx_to_edge, low_threshold)
     if structure_aware:
@@ -132,7 +131,7 @@ def get_structure_aware_accepts(
             good_probs.append(prob)
 
     more_accepts = check_cycles_sequential(graph, good_preds, good_probs)
-    accepts.extend(more_accepts)    
+    accepts.extend(more_accepts)
     return accepts
 
 

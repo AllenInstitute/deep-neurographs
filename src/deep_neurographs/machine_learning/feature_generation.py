@@ -21,7 +21,6 @@ from random import sample
 
 import numpy as np
 import tensorstore as ts
-from time import time
 
 from deep_neurographs import geometry, utils
 
@@ -68,7 +67,7 @@ def run(neurograph, model_type, img_path, labels_path=None, proposals=None):
 
     """
     # Initializations
-    img_driver = driver = "n5" if ".n5" in img_path else "zarr"
+    img_driver = "n5" if ".n5" in img_path else "zarr"
     img = utils.open_tensorstore(img_path, img_driver)
     if labels_path:
         labels_driver = "neuroglancer_precomputed"
