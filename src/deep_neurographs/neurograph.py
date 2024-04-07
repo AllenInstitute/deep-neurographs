@@ -9,6 +9,7 @@ Implementation of subclass of Networkx.Graph called "NeuroGraph".
 """
 import os
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from random import sample
 
 import networkx as nx
@@ -77,13 +78,14 @@ class NeuroGraph(nx.Graph):
 
     def copy_graph(self, add_attrs=False):
         graph = nx.Graph()
-        graph.add_nodes_from(self.nodes(data=add_attrs))
+        nodes = deepcopy(self.nodes(data=add_attrs))
+        graph.add_nodes_from(nodes)
         if add_attrs:
             for edge in self.edges:
                 i, j = tuple(edge)
                 graph.add_edge(i, j, **self.get_edge_data(i, j))
         else:
-            graph.add_edges_from(self.edges)
+            graph.add_edges_from(deepcopy(self.edges))
         return graph
 
     # --- Edit Graph --

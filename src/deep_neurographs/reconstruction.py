@@ -17,8 +17,6 @@ import numpy as np
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import swc_utils, utils
 
-BATCH_PERCENT = 0.25
-
 
 def get_accepted_propoals_blocks(
     neurographs,
@@ -219,11 +217,17 @@ def get_best_preds(neurograph, preds, threshold):
 
 
 def fuse_branches(neurograph, edges):
+    simple_cnt = 0
+    complex_cnt = 0
     for edge in edges:
         if neurograph.is_simple(edge):
+            simple_cnt += 1
             neurograph.merge_proposal(edge)
         else:
-            print("merge not implemented for complex")
+            complex_cnt += 1
+            #print("merge not implemented for complex")
+    print("# simple:", simple_cnt)
+    print("# complex:", complex_cnt)
     return neurograph
 
 
