@@ -115,7 +115,7 @@ def get_structure_aware_accepts(
 ):
     # Add best preds
     best_preds, best_probs = get_best_preds(neurograph, preds, high_threshold)
-    accepts = check_cycles_sequential(graph, best_preds, best_probs)
+    accepts, graph = check_cycles_sequential(graph, best_preds, best_probs)
     if len(best_preds) == len(preds.keys()):
         return accepts
 
@@ -128,9 +128,9 @@ def get_structure_aware_accepts(
             good_preds.append(edge)
             good_probs.append(prob)
 
-    more_accepts = check_cycles_sequential(graph, good_preds, good_probs)
-    accepts.extend(more_accepts)
-    return accepts
+    more_accepts, graph = check_cycles_sequential(graph, good_preds, good_probs)
+    accepts.extend(more_accepts)    
+    return accepts, graph
 
 
 def get_subgraphs(graph, edge):
@@ -203,7 +203,7 @@ def check_cycles_sequential(graph, edges, probs):
         if not created_cycle:
             graph.add_edges_from([tuple(edges[i])])
             accepts.append(edges[i])
-    return accepts
+    return accepts, graph
 
 
 def get_best_preds(neurograph, preds, threshold):
@@ -220,14 +220,7 @@ def fuse_branches(neurograph, edges):
     simple_cnt = 0
     complex_cnt = 0
     for edge in edges:
-        if neurograph.is_simple(edge):
-            simple_cnt += 1
-            neurograph.merge_proposal(edge)
-        else:
-            complex_cnt += 1
-            #print("merge not implemented for complex")
-    print("# simple:", simple_cnt)
-    print("# complex:", complex_cnt)
+        neurograph.merge_proposal(edge)
     return neurograph
 
 
