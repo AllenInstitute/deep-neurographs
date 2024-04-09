@@ -8,11 +8,10 @@ Created on Sat Dec 12 17:00:00 2023
 
 """
 
-import networkx as nx
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from random import sample
 
+import networkx as nx
 import numpy as np
 
 from deep_neurographs import graph_utils as gutils
@@ -21,7 +20,6 @@ from deep_neurographs import swc_utils, utils
 
 def get_accepted_propoals_blocks(
     neurographs,
-    graph,
     preds,
     blocks,
     block_to_idxs,
@@ -42,6 +40,7 @@ def get_accepted_propoals_blocks(
 
         # Refine accepts wrt structure
         if structure_aware:
+            graph = neurographs[block_id].copy()
             accepts[block_id] = get_structure_aware_accepts(
                 neurographs[block_id],
                 graph,
@@ -62,7 +61,7 @@ def get_accepted_proposals(
     high_threshold=0.9,
     low_threshold=0.6,
     structure_aware=True,
-):  
+):
     # Get positive edge predictions
     preds = threshold_preds(preds, idx_to_edge, low_threshold)
     if structure_aware:
@@ -102,6 +101,7 @@ def threshold_preds(preds, idx_to_edge, threshold, valid_idxs=[]):
         predicted probability.
 
     """
+    print(preds)
     thresholded_preds = dict()
     for i, pred_i in enumerate(preds):
         contained_bool = True if len(valid_idxs) == 0 else i in valid_idxs
