@@ -101,7 +101,6 @@ def threshold_preds(preds, idx_to_edge, threshold, valid_idxs=[]):
         predicted probability.
 
     """
-    print(preds)
     thresholded_preds = dict()
     for i, pred_i in enumerate(preds):
         contained_bool = True if len(valid_idxs) == 0 else i in valid_idxs
@@ -225,19 +224,23 @@ def fuse_branches(neurograph, edges):
 
 
 # -- Save result --
-def save_prediction(neurograph, proposal_preds, output_dir):
+def save_prediction(neurograph, accepted_proposals, output_dir):
     # Initializations
     corrections_dir = os.path.join(output_dir, "corrections")
     utils.mkdir(output_dir, delete=True)
     utils.mkdir(corrections_dir, delete=True)
+    
+    connections_path = os.path.join(output_dir, "connections.txt")
+    reconstruction.save_prediction(output_neurograph, accepted_proposals, output_dir)
+    utils.save_connection(pred_neurograph, accepted_proposals, connections_path)
 
     # Write Result
     neurograph.to_swc(output_dir)
-    save_corrections(neurograph, proposal_preds, corrections_dir)
+    save_corrections(neurograph, accepted_proposals, corrections_dir)
 
 
-def save_corrections(neurograph, proposal_preds, output_dir):
-    for cnt, (i, j) in enumerate(proposal_preds):
+def save_corrections(neurograph, accepted_proposals, output_dir):
+    for cnt, (i, j) in enumerate(accepted_proposals):
         # Info
         color = f"1.0 1.0 1.0"
         filename = f"merge-{cnt + 1}.swc"
