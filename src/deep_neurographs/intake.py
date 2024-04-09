@@ -244,7 +244,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
     # Initializations
     bucket = storage.Client().bucket(bucket_name)
     zip_paths = utils.list_gcs_filenames(bucket, gcs_path, ".zip")
-    chunk_size = int(len(zip_paths) * 0.05)
+    chunk_size = int(len(zip_paths) * 0.02)
 
     # Parse
     cnt = 1
@@ -260,8 +260,6 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
             cnt, t1 = report_progress(
                 i, len(zip_paths), chunk_size, cnt, t0, t1
             )
-            break
-
     return swc_dicts
 
 

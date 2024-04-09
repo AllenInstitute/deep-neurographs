@@ -116,7 +116,7 @@ def run_without_seeds(
         # Prediction
         t2 = time()
         proposals_i = [proposals[j] for j in batch]
-        accepts_i = predict(
+        accepts_i, graph = predict(
             neurograph,
             graph,
             img_path,
@@ -166,7 +166,7 @@ def predict(
     # Run model
     t3 = time()
     proposal_probs = run_model(dataset, model, model_type)
-    accepts = build.get_accepted_proposals(
+    accepts, graph = build.get_accepted_proposals(
         neurograph,
         graph,
         proposal_probs,
@@ -174,7 +174,7 @@ def predict(
         high_threshold=0.95,
         low_threshold=confidence_threshold,
     )
-    return accepts
+    return accepts, graph
 
 
 def build_from_soma(
