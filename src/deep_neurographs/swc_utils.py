@@ -238,9 +238,7 @@ def write_list(path, entry_list, color=None):
         else:
             f.write("# id, type, z, y, x, r, pid")
         for i, entry in enumerate(entry_list):
-            f.write("\n")
-            for item in entry:
-                f.write(str(item) + " ")
+            f.write("\n" + entry)
 
 
 def write_dict(path, swc_dict, color=None):
@@ -266,10 +264,10 @@ def write_graph(path, graph, color=None):
         List of swc file entries to be written.
 
     """
-    node_to_idx = dict()
+    node_to_idx = {-1: -1}
     for i, j in nx.dfs_edges(graph):
         # Initialize entry list
-        if len(node_to_idx) < 1:
+        if len(node_to_idx) == 1:
             entry, node_to_idx = make_entry(graph, i, -1, node_to_idx)
             entry_list = [entry]
 
@@ -361,11 +359,19 @@ def make_entry(graph, i, parent, node_to_idx):
     ...
 
     """
-    r = graph[i]["radius"]
+    r = set_radius(graph, i)
     x, y, z = tuple(graph.nodes[i]["xyz"])
-    node_to_idx[i] = len(node_to_idx) + 1
+    node_to_idx[i] = len(node_to_idx)
     entry = f"{node_to_idx[i]} 2 {x} {y} {z} {r} {node_to_idx[parent]}"
     return entry, node_to_idx
+
+
+def set_radius(graph, i):
+    try:
+        radius = graph[i]["radius"]
+        return radius
+    except:
+        return 1
 
 
 def make_simple_entry(node, parent, xyz, radius=8):
