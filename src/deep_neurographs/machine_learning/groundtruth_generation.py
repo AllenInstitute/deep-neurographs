@@ -21,16 +21,36 @@ ALIGNED_THRESHOLD = 3.5
 MIN_INTERSECTION = 10
 
 
-def init_targets(target_neurograph, pred_neurograph):
+def init_targets(target_neurograph, pred_neurograph, strict=True):
+    """
+    Initializes ground truth for edge proposals.
+
+    Parameters
+    ----------
+    target_neurograph : NeuroGraph
+        Graph built from ground truth swc files.
+    pred_neurograph : NeuroGraph
+        Graph build from predicted swc files.
+    strict : bool, optional
+        Indication if whether target edges should be determined by using
+        stricter criteria that checks if proposals are reasonably well
+        aligned. The default is True.
+
+    Returns
+    -------
+    target_edges : set
+        Edge proposals that machine learning model learns to accept.
+
+    """
     # Initializations
-    target_edges = set()
     valid_proposals = get_valid_proposals(target_neurograph, pred_neurograph)
+    lengths = [pred_neurograph.proposal_length(e) for e in valid_proposals]
 
     # Add best simple edges
-    dists = [pred_neurograph.proposal_length(e) for e in valid_proposals]
+    target_edges = set()
     graph = pred_neurograph.copy_graph()
-    for idx in np.argsort(dists):
-        edge = valid_proposals[idx]
+    for i in np.argsort(lengths):
+        edge = valid_proposals[i]
         created_cycle, _ = gutils.creates_cycle(graph, tuple(edge))
         if not created_cycle:
             graph.add_edges_from([edge])
@@ -39,26 +59,18 @@ def init_targets(target_neurograph, pred_neurograph):
 
 
 def get_valid_proposals(target_neurograph, pred_neurograph):
-    # Detect components unaligned to ground truth
-    invalid_proposals = set()
-    node_to_target = dict()
-    for component in nx.connected_components(pred_neurograph):
-        aligned, target_id = is_component_aligned(
-            target_neurograph, pred_neurograph, component
-        )
-        if not aligned:
-            i = utils.sample_singleton(component)
-            invalid_proposals.add(pred_neurograph.nodes[i]["swc_id"])
-        else:
-            node_to_target = upd_dict(node_to_target, component, target_id)
+    # Initializations
+    valid_proposals = list()
+    invalid_ids, node_to_target = unaligned_components(
+        target_neurograph, pred_neurograph
+    )
 
     # Check whether aligned to same/adjacent target edges (i.e. valid)
-    valid_proposals = list()
     for edge in pred_neurograph.proposals:
         # Filter invalid and proposals btw different components
         i, j = tuple(edge)
-        invalid_i = pred_neurograph.nodes[i]["swc_id"] in invalid_proposals
-        invalid_j = pred_neurograph.nodes[j]["swc_id"] in invalid_proposals
+        invalid_i = pred_neurograph.nodes[i]["swc_id"] in invalid_ids
+        invalid_j = pred_neurograph.nodes[j]["swc_id"] in invalid_ids
         if invalid_i or invalid_j:
             continue
         elif node_to_target[i] != node_to_target[j]:
@@ -69,6 +81,41 @@ def get_valid_proposals(target_neurograph, pred_neurograph):
         if is_valid(target_neurograph, pred_neurograph, target_id, edge):
             valid_proposals.append(edge)
     return valid_proposals
+
+
+def unaligned_components(target_neurograph, pred_neurograph):
+    """
+    Detects connected components in "pred_neurograph" that are unaligned to a
+    connected component in "target_neurograph".
+
+    Parameters
+    ----------
+    target_neurograph : NeuroGraph
+        Graph built from ground truth swc files.
+    pred_neurograph : NeuroGraph
+        Graph build from predicted swc files.
+
+    Returns
+    -------
+    invalid_ids : set
+        IDs in ""pred_neurograph" that correspond to connected components that
+        are unaligned to a connected component in "target_neurograph".
+    node_to_target : dict
+        Mapping between nodes and target ids.
+
+    """
+    invalid_ids = set()
+    node_to_target = dict()
+    for component in nx.connected_components(pred_neurograph):
+        aligned, target_id = is_component_aligned(
+            target_neurograph, pred_neurograph, component
+        )
+        if not aligned:
+            i = utils.sample_singleton(component)
+            invalid_ids.add(pred_neurograph.nodes[i]["swc_id"])
+        else:
+            node_to_target = upd_dict(node_to_target, component, target_id)
+    return invalid_ids, node_to_target
 
 
 def is_component_aligned(target_neurograph, pred_neurograph, component):
@@ -137,7 +184,6 @@ def is_valid(target_neurograph, pred_neurograph, target_id, edge):
     bool
         Indication of whether proposal is consistent
     """
-    # aligned = is_proposal_aligned(target_neurograph, pred_neurograph, edge)
     consistent = is_consistent(
         target_neurograph, pred_neurograph, target_id, edge
     )
@@ -164,7 +210,7 @@ def is_consistent(target_neurograph, pred_neurograph, target_id, edge):
     Returns
     -------
     bool
-        Indication of whether proposal is consistent
+        Indication of whether proposal is consistent.
 
     """
     # Find closest edges from target_neurograph
@@ -186,16 +232,8 @@ def is_consistent(target_neurograph, pred_neurograph, target_id, edge):
         xyz_j = pred_neurograph.nodes[j]["xyz"]
         if is_adjacent_aligned(hat_branch_i, hat_branch_j, xyz_i, xyz_j):
             return True
-    return False
-
-
-def is_proposal_aligned(target_neurograph, pred_neurograph, edge):
-    xyz_0, xyz_1 = pred_neurograph.proposal_xyz(edge)
-    proj_dists = []
-    for xyz in geometry.make_line(xyz_0, xyz_1, 10):
-        hat_xyz = target_neurograph.get_projection(tuple(xyz))
-        proj_dists.append(get_dist(hat_xyz, xyz))
-    return True if np.mean(proj_dists) < ALIGNED_THRESHOLD else False
+    else:
+        return False
 
 
 def proj_branch(target_neurograph, pred_neurograph, target_id, i):

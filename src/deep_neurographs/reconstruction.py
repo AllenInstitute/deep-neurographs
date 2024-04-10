@@ -110,7 +110,7 @@ def threshold_preds(preds, idx_to_edge, threshold, valid_idxs=[]):
 
 
 def get_structure_aware_accepts(
-    neurograph, graph, preds, high_threshold=0.8, low_threshold=0.6
+    neurograph, graph, preds, high_threshold=0.9, low_threshold=0.6
 ):
     # Add best preds
     best_preds, best_probs = get_best_preds(neurograph, preds, high_threshold)
@@ -250,3 +250,30 @@ def save_corrections(neurograph, accepted_proposals, output_dir):
         xyz_i = neurograph.nodes[i]["xyz"]
         xyz_j = neurograph.nodes[j]["xyz"]
         swc_utils.save_edge(path, xyz_i, xyz_j, color=color, radius=3)
+
+
+def save_connections(neurograph, accepted_proposals, path):
+    """
+    Saves predicted connections between connected components in a txt file.
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph built from predicted swc files.
+    accepted_proposals : list[frozenset]
+        List of accepted edge proposals where each entry is a frozenset that
+        consists of the nodes corresponding to a predicted connection.
+    path : str
+        Path that output is written to.
+
+    Returns
+    -------
+    None
+
+    """
+    with open(path, 'w') as f:
+        for edge in accepted_proposals:
+            i, j = tuple(edge)
+            swc_id_i = neurograph.nodes[i]["swc_id"]
+            swc_id_j = neurograph.nodes[j]["swc_id"]
+            f.write(f"{swc_id_i}, {swc_id_j}" + '\n')
