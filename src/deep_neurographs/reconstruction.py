@@ -226,17 +226,15 @@ def fuse_branches(neurograph, edges):
 # -- Save result --
 def save_prediction(neurograph, accepted_proposals, output_dir):
     # Initializations
+    connections_path = os.path.join(output_dir, "connections.txt")
     corrections_dir = os.path.join(output_dir, "corrections")
     utils.mkdir(output_dir, delete=True)
     utils.mkdir(corrections_dir, delete=True)
-    
-    connections_path = os.path.join(output_dir, "connections.txt")
-    reconstruction.save_prediction(output_neurograph, accepted_proposals, output_dir)
-    utils.save_connection(pred_neurograph, accepted_proposals, connections_path)
 
     # Write Result
     neurograph.to_swc(output_dir)
     save_corrections(neurograph, accepted_proposals, corrections_dir)
+    utils.save_connection(pred_neurograph, accepted_proposals, connections_path)
 
 
 def save_corrections(neurograph, accepted_proposals, output_dir):
