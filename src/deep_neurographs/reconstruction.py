@@ -127,8 +127,10 @@ def get_structure_aware_accepts(
             good_preds.append(edge)
             good_probs.append(prob)
 
-    more_accepts, graph = check_cycles_sequential(graph, good_preds, good_probs)
-    accepts.extend(more_accepts)    
+    more_accepts, graph = check_cycles_sequential(
+        graph, good_preds, good_probs
+    )
+    accepts.extend(more_accepts)
     return accepts, graph
 
 
@@ -216,8 +218,6 @@ def get_best_preds(neurograph, preds, threshold):
 
 
 def fuse_branches(neurograph, edges):
-    simple_cnt = 0
-    complex_cnt = 0
     for edge in edges:
         neurograph.merge_proposal(edge)
     return neurograph
@@ -229,10 +229,14 @@ def save_prediction(neurograph, accepted_proposals, output_dir):
     corrections_dir = os.path.join(output_dir, "corrections")
     utils.mkdir(output_dir, delete=True)
     utils.mkdir(corrections_dir, delete=True)
-    
+
     connections_path = os.path.join(output_dir, "connections.txt")
-    reconstruction.save_prediction(output_neurograph, accepted_proposals, output_dir)
-    utils.save_connection(pred_neurograph, accepted_proposals, connections_path)
+    save_prediction(
+        neurograph, accepted_proposals, output_dir
+    )
+    utils.save_connection(
+        neurograph, accepted_proposals, connections_path
+    )
 
     # Write Result
     neurograph.to_swc(output_dir)
@@ -271,9 +275,9 @@ def save_connections(neurograph, accepted_proposals, path):
     None
 
     """
-    with open(path, 'w') as f:
+    with open(path, "w") as f:
         for edge in accepted_proposals:
             i, j = tuple(edge)
             swc_id_i = neurograph.nodes[i]["swc_id"]
             swc_id_j = neurograph.nodes[j]["swc_id"]
-            f.write(f"{swc_id_i}, {swc_id_j}" + '\n')
+            f.write(f"{swc_id_i}, {swc_id_j}" + "\n")

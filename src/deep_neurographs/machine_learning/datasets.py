@@ -230,6 +230,11 @@ class MultiModalDataset(Dataset):
         return {"inputs": inputs, "targets": self.targets[idx]}
 
 
+class ProposalGraphDataset(Dataset):
+    def __init__(self, neurograph, inputs, labels):
+        pass
+
+
 # Augmentation
 class AugmentImages:
     """
