@@ -85,7 +85,7 @@ def run_on_proposals(
         features["img_chunks"], features["img_profile"] = generate_img_chunks(
             neurograph, proposals, img, labels
         )
-    if model_type in ["AdaBoost", "RandomForest", "FeedForwardNet"]:
+    else:
         features["img_profile"] = generate_img_profiles(
             neurograph, proposals, img
         )
