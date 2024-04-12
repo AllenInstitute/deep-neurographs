@@ -231,12 +231,8 @@ def save_prediction(neurograph, accepted_proposals, output_dir):
     utils.mkdir(corrections_dir, delete=True)
 
     connections_path = os.path.join(output_dir, "connections.txt")
-    save_prediction(
-        neurograph, accepted_proposals, output_dir
-    )
-    utils.save_connection(
-        neurograph, accepted_proposals, connections_path
-    )
+    save_prediction(neurograph, accepted_proposals, output_dir)
+    utils.save_connection(neurograph, accepted_proposals, connections_path)
 
     # Write Result
     neurograph.to_swc(output_dir)

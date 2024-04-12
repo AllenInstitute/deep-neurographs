@@ -33,6 +33,7 @@ SUPPORTED_MODELS = [
     "FeedForwardNet",
     "ConvNet",
     "MultiModalNet",
+    "GraphNeuralNet",
 ]
 
 
@@ -153,7 +154,7 @@ def init_dataset(
     neurographs, features, model_type, block_ids=None, transform=False
 ):
     # Extract features
-    inputs, targets, block_to_idx, idx_to_edge = feature_generation.get_feature_matrix(
+    inputs, targets, idx_transforms = feature_generation.get_feature_matrix(
         neurographs, features, model_type, block_ids=block_ids
     )
     lens = []
@@ -163,14 +164,7 @@ def init_dataset(
 
     dataset = {
         "dataset": get_dataset(inputs, targets, model_type, transform, lens),
-        "block_to_idxs": block_to_idx,
-        "idx_to_edge": idx_to_edge,
+        "block_to_idxs": idx_transforms["block_to_idxs"],
+        "idx_to_edge": idx_transforms["idx_to_edge"],
     }
     return dataset
-
-
-def get_lengths(neurograph):
-    lengths = []
-    for edge in neurograph.proposals.keys():
-        lengths.append(neurograph.proposal_length(edge))
-    return lengths

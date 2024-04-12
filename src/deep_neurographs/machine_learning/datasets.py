@@ -4,7 +4,7 @@ Created on Sat November 04 15:30:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Custom datasets for deep learning models.
+Custom datasets for training deep learning models.
 
 """
 
@@ -230,11 +230,6 @@ class MultiModalDataset(Dataset):
         return {"inputs": inputs, "targets": self.targets[idx]}
 
 
-class ProposalGraphDataset(Dataset):
-    def __init__(self, neurograph, inputs, labels):
-        pass
-
-
 # Augmentation
 class AugmentImages:
     """
@@ -282,6 +277,13 @@ class AugmentImages:
 
         """
         return self.transform(arr)
+
+
+def get_lengths(neurograph):
+    lengths = []
+    for edge in neurograph.proposals.keys():
+        lengths.append(neurograph.proposal_length(edge))
+    return lengths
 
 
 # -- utils --
