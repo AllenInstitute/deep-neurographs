@@ -1,5 +1,5 @@
 """
-Created on Sat April 11 15:30:00 2023
+Created on Sat April 12 11:00:00 2024
 
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
@@ -37,21 +37,20 @@ def init(neurograph, branch_features, proposal_features, heterogeneous=False):
 
     # Initialize data
     if heterogeneous:
-        data, idxs_branches, idxs_proposals = HeteroGraphDataset(
+        graph_dataset = HeteroGraphDataset(
             neurograph, x_branches, x_proposals, idxs_branches, idxs_proposals
         )
     else:
         graph_dataset = GraphDataset(
-            neurograph, x_branches, x_proposals, idxs_branches, idxs_proposals
+            neurograph,
+            x_branches,
+            x_proposals,
+            y_proposals,
+            idxs_branches,
+            idxs_proposals
         )
 
-    # Store dataset
-    dataset = {
-        "dataset": graph_dataset,
-        "idxs_branches": idxs_branches,
-        "idxs_proposals": idxs_proposals,
-    }
-    return dataset
+    return graph_dataset
 
 
 # Datasets
@@ -61,18 +60,22 @@ class GraphDataset:
         neurograph,
         x_branches,
         x_proposals,
+        y_proposals,
         idxs_branches,
         idxs_proposals,
     ):
         # Combine feature matrices
-        x = torch.tensor(np.vstack([x_proposals, x_branches]))
+        x = np.vstack([x_proposals, x_branches]).astype(np.float32)
+        x = torch.tensor(x)
+        y = torch.tensor(y_proposals.astype(np.float32))
         idxs_branches = upd_idxs(idxs_branches, x_proposals.shape[0])
         self.idxs_branches = add_edge_to_idx(idxs_branches)
         self.idxs_proposals = add_edge_to_idx(idxs_proposals)
+        self.n_proposals = len(y_proposals)
 
         # Initialize data
-        edge_index = init_edge_index(neurograph, idxs_branches, idxs_proposals)
-        self.data = GraphData(x=x, edge_index=edge_index)
+        edge_index = set_edge_index(neurograph, idxs_branches, idxs_proposals)
+        self.data = GraphData(x=x, y=y, edge_index=edge_index)
 
 
 class HeteroGraphDataset:
@@ -141,7 +144,7 @@ def add_edge_to_idx(idxs):
     return idxs
 
 
-def init_edge_index(neurograph, idxs_branches, idxs_proposals):
+def set_edge_index(neurograph, idxs_branches, idxs_proposals):
     # Initializations
     branches_line_graph = nx.line_graph(neurograph)
     proposals_line_graph = init_proposals_line_graph(neurograph)
@@ -154,7 +157,11 @@ def init_edge_index(neurograph, idxs_branches, idxs_proposals):
     edge_index.extend(
         branch_to_proposal(neurograph, idxs_branches, idxs_proposals)
     )
-    return edge_index
+
+    # Reshape
+    edge_index = np.array(edge_index, dtype=np.int64).tolist()
+    edge_index = torch.Tensor(edge_index).t().contiguous()
+    return edge_index.long()
 
 
 def init_proposals_line_graph(neurograph):
