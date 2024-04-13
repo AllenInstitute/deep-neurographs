@@ -15,6 +15,7 @@ from copy import deepcopy
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from torch.nn.functional import sigmoid
 from torch.utils.tensorboard import SummaryWriter
+from deep_neurographs.machine_learning import ml_utils
 
 
 LR = 1e-3
@@ -24,6 +25,10 @@ WEIGHT_DECAY = 5e-4
 
 
 class GraphTrainer:
+    """
+    Custom class that trains graph neural networks.
+
+    """
     def __init__(
         self,
         model,
@@ -32,6 +37,28 @@ class GraphTrainer:
         n_epochs=N_EPOCHS,
         weight_decay=WEIGHT_DECAY,
     ):
+        """
+        Constructs a GraphTrainer object.
+
+        Parameters
+        ----------
+        model : torch.nn.Module
+            Graph neural network.
+        criterion : torch.nn.Module._Loss
+            Loss function.
+        lr : float, optional
+            Learning rate. The default is the global variable LR.
+        n_epochs : int
+            Number of epochs. The default is the global variable N_EPOCHS.
+        weight_decay : float
+            Weight decay used in optimizer. The default is the global variable
+            WEIGHT_DECAY.
+
+        Returns
+        -------
+        None.
+
+        """
         self.model = model.to("cuda:0")
         self.criterion = criterion
         self.n_epochs = n_epochs
@@ -41,6 +68,22 @@ class GraphTrainer:
         self.writer = SummaryWriter()
 
     def run_on_graphs(self, graph_datasets):
+        """
+        Trains a graph neural network in the case where "graph_datasets" is a
+        dictionary of datasets such that each corresponds to a distinct graph.
+
+        Parameters
+        ----------
+        graph_datasets : dict
+            Dictionary where each key is a graph id and the value is the
+            corresponding graph dataset.
+
+        Returns
+        -------
+        model : torch.nn.Module
+            Graph neural network that has been fit onto "graph_datasets".
+
+        """
         # Initializations
         best_score = -np.inf
         best_ckpt = None
@@ -73,24 +116,114 @@ class GraphTrainer:
                     best_ckpt = deepcopy(self.model.state_dict())
         return self.model.load_state_dict(best_ckpt)
 
+    def run_on_graph(self):
+        """
+        Trains a graph neural network in the case where "graph_dataset" is a
+        graph that may contain multiple connected components.
+
+        Parameters
+        ----------
+        graph_dataset : dict
+            Dictionary where each key is a graph id and the value is the
+            corresponding graph dataset.
+
+        Returns
+        -------
+        None
+
+        """
+        pass
+
     def train(self, graph_data, epoch):
+        """
+        Performs the forward pass and backpropagation to update the model's
+        weights.
+
+        Parameters
+        ----------
+        graph_data : GraphDataset
+            Graph dataset that corresponds to a single connected component.
+        epoch : int
+            Current epoch.
+
+        Returns
+        -------
+        y : torch.Tensor
+            Ground truth.
+        hat_y : torch.Tensor
+            Prediction.
+
+        """
         y, hat_y = self.forward(graph_data)
         self.backpropagate(y, hat_y, epoch)
         return y, hat_y
 
     def forward(self, graph_data):
+        """
+        Runs "graph_data" through "self.model" to generate a prediction.
+
+        Parameters
+        ----------
+        graph_data : GraphDataset
+            Graph dataset that corresponds to a single connected component.
+
+        Returns
+        -------
+        y : torch.Tensor
+            Ground truth.
+        hat_y : torch.Tensor
+            Prediction.
+
+        """
         self.optimizer.zero_grad()
         x, y, edge_index = toGPU(graph_data)
         hat_y = self.model(x, edge_index)
         return y, truncate(hat_y, y)
 
     def backpropagate(self, y, hat_y, epoch):
+        """
+        Runs backpropagation to update the model's weights.
+
+        Parameters
+        ----------
+        y : torch.Tensor
+            Ground truth.
+        hat_y : torch.Tensor
+            Prediction.
+        epoch : int
+            Current epoch.
+
+        Returns
+        -------
+        None
+
+        """
         loss = self.criterion(hat_y, y)
         loss.backward()
         self.optimizer.step()
         self.writer.add_scalar("loss", loss, epoch)
 
     def compute_metrics(self, y, hat_y, prefix, epoch):
+        """
+        Computes and logs evaluation metrics for binary classification.
+
+        Parameters
+        ----------
+        y : torch.Tensor
+            Ground truth.
+        hat_y : torch.Tensor
+            Prediction.
+        prefix : str
+            Prefix to be added to the metric names when logging.
+        epoch : int
+            Current epoch.
+
+        Returns
+        -------
+        f1 : float
+            F1 score.
+
+        """
         # Initializations
         y = np.array(y, dtype=int).tolist()
         hat_y = get_predictions(hat_y)
@@ -108,7 +241,7 @@ class GraphTrainer:
         self.writer.add_scalar(prefix + '_precision:', precision, epoch)
         self.writer.add_scalar(prefix + '_recall:', recall, epoch)
         self.writer.add_scalar(prefix + '_f1:', f1, epoch)
-        return accuracy_dif
+        return f1
 
 
 # -- utils --
@@ -132,17 +265,65 @@ def shuffler(my_list):
 
 
 def train_test_split(graph_ids):
-    n_test_examples = 1  # int(len(graph_ids) * TEST_PERCENT)
+    """
+    Split a list of graph IDs into training and testing sets.
+
+    Parameters
+    ----------
+    graph_ids : list[str]
+        A list containing unique identifiers (IDs) for graphs.
+
+    Returns
+    -------
+    train_ids : list
+        A list containing IDs for the training set.
+    test_ids : list
+        A list containing IDs for the testing set.
+
+    """
+    n_test_examples = int(len(graph_ids) * TEST_PERCENT)
     test_ids = sample(graph_ids, n_test_examples)
     train_ids = list(set(graph_ids) - set(test_ids))
     return train_ids, test_ids
 
 
 def toCPU(tensor):
+    """
+    Moves "tensor" from GPU to CPU.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        Dataset to be moved to GPU.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array.
+
+    """
     return np.array(tensor.detach().cpu()).tolist()
 
 
 def toGPU(graph_data):
+    """
+    Moves "graph_data" from CPU to GPU.
+
+    Parameters
+    ----------
+    graph_data : GraphDataset
+        Dataset to be moved to GPU.
+
+    Returns
+    -------
+    x : torch.Tensor
+        Matrix of node feature vectors.
+    y : torch.Tensor
+        Ground truth.
+    edge_idx : torch.Tensor
+        Tensor containing edges in graph.
+
+    """
     x = graph_data.x.to("cuda:0", dtype=torch.float32)
     y = graph_data.y.to("cuda:0", dtype=torch.float32)
     edge_index = graph_data.edge_index.to("cuda:0")
@@ -172,8 +353,20 @@ def truncate(hat_y, y):
 
 
 def get_predictions(hat_y, threshold=0.5):
-    return (sigmoid(np.array(hat_y)) > threshold).tolist()
+    """
+    Generate binary predictions based on the input probabilities.
 
+    Parameters
+    ----------
+    hat_y : torch.Tensor
+        Predicted probabilities generated by "self.model".
+    threshold : float, optional
+        The threshold value for binary classification. The default is 0.5.
 
-def sigmoid(x):
-    return 1.0/(1.0 + np.exp(-x))
+    Returns
+    -------
+    list[int]
+        Binary predictions based on the given threshold.
+
+    """
+    return (ml_utils.sigmoid(np.array(hat_y)) > threshold).tolist()

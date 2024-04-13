@@ -175,3 +175,24 @@ def get_lengths(neurograph):
     for edge in neurograph.proposals.keys():
         lengths.append(neurograph.proposal_length(edge))
     return lengths
+
+
+def toCPU(tensor):
+    return np.array(tensor.detach().cpu())
+
+
+def sigmoid(x):
+    """
+    Sigmoid function.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        Input to sigmoid.
+
+    Return
+    ------
+    Sigmoid applied to "x".
+
+    """
+    return 1.0/(1.0 + np.exp(-x))
