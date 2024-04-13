@@ -6,12 +6,13 @@ Created on Sat April 12 11:00:00 2024
 
 Custom datasets for training graph neural networks.
 
+# explain branches vs edges terminology
+
 """
 
 import networkx as nx
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 from torch_geometric.data import Data as GraphData
 from torch_geometric.data import HeteroData as HeteroGraphData
 
@@ -25,13 +26,31 @@ def init(neurograph, branch_features, proposal_features, heterogeneous=False):
 
     Parameters
     ----------
-    
+    neurograph : NeuroGraph
+        Graph that dataset is built from.
+    branch_features : dict
+        Feature vectors corresponding to branches such that the keys are a
+        frozenset of the node pair and values are the corresponding feature
+        vectors.
+    proposal_features : dict
+        Feature vectors corresponding to proposals such that the keys are a
+        frozenset of the node pair and values are the corresponding feature
+        vectors.
+    heterogeneous : bool
+        Indication of whether dataset should be stored as a heterogeneous
+        graph.
+
+    Returns
+    -------
+    GraphDataset, HeteroGraphDataset
+        Custom dataset.
+
     """
     # Extract features
-    x_branches, _, idxs_branches = feature_generation.get_feature_matrix(
+    x_branches, _, idxs_branches = feature_generation.get_matrix(
         neurograph, branch_features, "GraphNeuralNet"
     )
-    x_proposals, y_proposals, idxs_proposals = feature_generation.get_feature_matrix(
+    x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
         neurograph, proposal_features, "GraphNeuralNet"
     )
 
@@ -47,7 +66,7 @@ def init(neurograph, branch_features, proposal_features, heterogeneous=False):
             x_proposals,
             y_proposals,
             idxs_branches,
-            idxs_proposals
+            idxs_proposals,
         )
 
     return graph_dataset
@@ -55,6 +74,10 @@ def init(neurograph, branch_features, proposal_features, heterogeneous=False):
 
 # Datasets
 class GraphDataset:
+    """
+    Custom dataset for homogenous graphs.
+
+    """
     def __init__(
         self,
         neurograph,
@@ -79,6 +102,10 @@ class GraphDataset:
 
 
 class HeteroGraphDataset:
+    """
+    Custom dataset for heterogenous graphs.
+
+    """
     def __init__(
         self,
         neurograph,

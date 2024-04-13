@@ -8,25 +8,33 @@ Graph neural network architectures that learn to classify edge proposals.
 
 """
 
-from torch.nn import ELU, Linear
-from torch_geometric.nn import GCNConv
-
 import torch
 import torch.nn.functional as F
+from torch.nn import ELU, Linear
+from torch_geometric.nn import GCNConv
 
 
 class GCN(torch.nn.Module):
     def __init__(self, input_channels):
         super().__init__()
         self.conv1 = GCNConv(input_channels, input_channels // 2)
-        self.conv2 = GCNConv(input_channels // 2, 1)
+        self.conv2 = GCNConv(input_channels // 2, input_channels // 2)
+        self.conv3 = GCNConv(input_channels // 2, 1)
         self.ELU = ELU()
 
     def forward(self, x, edge_index):
+        # Layer 1
         x = self.conv1(x, edge_index)
         x = self.ELU(x)
         x = F.dropout(x, p=0.25)
+
+        # Layer 2
         x = self.conv2(x, edge_index)
+        x = self.ELU(x)
+        x = F.dropout(x, p=0.25)
+
+        # Layer 3
+        x = self.conv3(x, edge_index)
         return x
 
 
@@ -37,7 +45,7 @@ class MLP(torch.nn.Module):
         self.linear2 = Linear(input_channels // 2, 1)
         self.ELU = ELU()
 
-    def forward(self, x):
+    def forward(self, x, edge_index):
         x = self.linear1(x)
         x = self.ELU(x)
         x = F.dropout(x, p=0.25)

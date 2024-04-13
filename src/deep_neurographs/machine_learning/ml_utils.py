@@ -154,7 +154,7 @@ def init_dataset(
     neurographs, features, model_type, block_ids=None, transform=False
 ):
     # Extract features
-    inputs, targets, idx_transforms = feature_generation.get_feature_matrix(
+    inputs, targets, idx_transforms = feature_generation.get_matrix(
         neurographs, features, model_type, block_ids=block_ids
     )
     lens = []
@@ -168,3 +168,10 @@ def init_dataset(
         "idx_to_edge": idx_transforms["idx_to_edge"],
     }
     return dataset
+
+
+def get_lengths(neurograph):
+    lengths = []
+    for edge in neurograph.proposals.keys():
+        lengths.append(neurograph.proposal_length(edge))
+    return lengths
