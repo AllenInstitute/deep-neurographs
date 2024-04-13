@@ -120,7 +120,7 @@ class LitModel(pl.LightningModule):
         if criterion:
             self.criterion = criterion
         else:
-            pos_weight = torch.tensor([0.75], device=0)
+            pos_weight = torch.tensor([1.0], device=0)
             self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     def forward(self, batch):
