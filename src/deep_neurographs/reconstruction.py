@@ -154,7 +154,11 @@ def get_subgraphs(graph, edge):
     i, j = tuple(edge)
     subgraph_1 = graph.subgraph(gutils.get_component(graph, i))
     subgraph_2 = graph.subgraph(gutils.get_component(graph, j))
-    return nx.union(subgraph_1, subgraph_2)
+    try:
+        subgraph = nx.union(subgraph_1, subgraph_2)
+        return subgraph
+    except:
+        return False 
 
 
 def check_cycles_parallelized(graph, edge_list):
@@ -200,10 +204,11 @@ def check_cycles_sequential(graph, edges, probs):
     accepts = []
     for i in np.argsort(probs):
         subgraph = get_subgraphs(graph, edges[i])
-        created_cycle, _ = gutils.creates_cycle(subgraph, tuple(edges[i]))
-        if not created_cycle:
-            graph.add_edges_from([tuple(edges[i])])
-            accepts.append(edges[i])
+        if subgraph:
+            created_cycle, _ = gutils.creates_cycle(subgraph, tuple(edges[i]))
+            if not created_cycle:
+                graph.add_edges_from([tuple(edges[i])])
+                accepts.append(edges[i])
     return accepts, graph
 
 
@@ -226,18 +231,17 @@ def fuse_branches(neurograph, edges):
 # -- Save result --
 def save_prediction(neurograph, accepted_proposals, output_dir):
     # Initializations
+    connections_path = os.path.join(output_dir, "connections.txt")
     corrections_dir = os.path.join(output_dir, "corrections")
+    swc_dir = os.path.join(output_dir, "corrected-processed-swcs")
     utils.mkdir(output_dir, delete=True)
     utils.mkdir(corrections_dir, delete=True)
-
-    connections_path = os.path.join(output_dir, "connections.txt")
-    save_prediction(neurograph, accepted_proposals, output_dir)
-    utils.save_connection(neurograph, accepted_proposals, connections_path)
+    utils.mkdir(swc_dir, delete=True)
 
     # Write Result
-    neurograph.to_swc(output_dir)
+    neurograph.to_swc(swc_dir)
     save_corrections(neurograph, accepted_proposals, corrections_dir)
-
+    save_connections(neurograph, accepted_proposals, connections_path)
 
 def save_corrections(neurograph, accepted_proposals, output_dir):
     for cnt, (i, j) in enumerate(accepted_proposals):
