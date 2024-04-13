@@ -145,7 +145,6 @@ def upd_idxs(idxs, shift):
         Updated index transform dictinoary.
 
     """
-    idxs["block_to_idxs"] = upd_set(idxs["block_to_idxs"], shift)
     idxs["idx_to_edge"] = upd_dict(idxs["idx_to_edge"], shift)
     return idxs
 
