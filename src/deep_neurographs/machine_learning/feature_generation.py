@@ -26,6 +26,7 @@ from deep_neurographs import geometry, utils
 
 CHUNK_SIZE = [64, 64, 64]
 WINDOW = [5, 5, 5]
+N_BRANCH_PTS = 50
 N_PROFILE_PTS = 10
 N_SKEL_FEATURES = 19
 SUPPORTED_MODELS = [
@@ -34,13 +35,16 @@ SUPPORTED_MODELS = [
     "FeedForwardNet",
     "ConvNet",
     "MultiModalNet",
+    "GraphNeuralNet",
 ]
 
 
 # -- Wrappers --
-def run(neurograph, model_type, img_path, labels_path=None, proposals=None):
+def run_on_proposals(
+    neurograph, model_type, img_path, labels_path=None, proposals=None
+):
     """
-    Generates feature vectors for every edge proposal in a neurograph.
+    Generates feature vectors for every proposal in a neurograph.
 
     Parameters
     ----------
@@ -56,7 +60,7 @@ def run(neurograph, model_type, img_path, labels_path=None, proposals=None):
         Path to predicted segmentation stored in a GCS bucket. The default is
         None.
     proposals : list[frozenset], optional
-        List of edge proposals for which features will be generated. The
+        List of proposals for which features will be generated. The
         default is None.
 
     Returns
@@ -81,19 +85,39 @@ def run(neurograph, model_type, img_path, labels_path=None, proposals=None):
         features["img_chunks"], features["img_profile"] = generate_img_chunks(
             neurograph, proposals, img, labels
         )
-    if model_type in ["AdaBoost", "RandomForest", "FeedForwardNet"]:
+    else:
         features["img_profile"] = generate_img_profiles(
             neurograph, proposals, img
         )
     return features
 
 
-# -- Edge feature extraction --
+def run_on_branches(neurograph, branches):
+    """
+    Generates feature vectors for every edge in a neurograph.
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        NeuroGraph generated from a directory of swcs generated from a
+        predicted segmentation.
+
+    Returns
+    -------
+    features : dict
+        Dictionary where each key-value pair corresponds to a type of feature
+        vector and the numerical vector.
+
+    """
+    return {"skel": generate_branch_features(neurograph, branches)}
+
+
+# -- Proposal Feature Extraction --
 def generate_img_chunks(neurograph, proposals, img, labels):
     """
-    Generates an image chunk for each edge proposal such that the centroid of
-    the image chunk is the midpoint of the edge proposal. Image chunks contain
-    two channels: raw image and predicted segmentation.
+    Generates an image chunk for each proposal such that the centroid of the
+    image chunk is the midpoint of the proposal. Image chunks contain two
+    channels: raw image and predicted segmentation.
 
     Parameters
     ----------
@@ -105,33 +129,33 @@ def generate_img_chunks(neurograph, proposals, img, labels):
     labels : tensorstore.TensorStore
         Predicted segmentation mask stored in a GCS bucket.
     proposals : list[frozenset], optional
-        List of edge proposals for which features will be generated. The
+        List of proposals for which features will be generated. The
         default is None.
 
     Returns
     -------
     features : dict
-        Dictonary such that each pair is the edge id and image chunk.
+        Dictonary such that each pair is the proposal id and image chunk.
 
     """
     with ThreadPoolExecutor() as executor:
         # Assign Threads
         threads = [None] * len(proposals)
-        for t, edge in enumerate(proposals):
-            xyz_0, xyz_1 = neurograph.proposal_xyz(edge)
+        for t, proposal in enumerate(proposals):
+            xyz_0, xyz_1 = neurograph.proposal_xyz(proposal)
             coord_0 = utils.to_img(xyz_0)
             coord_1 = utils.to_img(xyz_1)
             threads[t] = executor.submit(
-                get_img_chunk, img, labels, coord_0, coord_1, edge
+                get_img_chunk, img, labels, coord_0, coord_1, proposal
             )
 
         # Save result
         chunks = dict()
         profiles = dict()
         for thread in as_completed(threads):
-            edge, chunk, profile = thread.result()
-            chunks[edge] = chunk
-            profiles[edge] = profile
+            proposal, chunk, profile = thread.result()
+            chunks[proposal] = chunk
+            profiles[proposal] = profile
     return chunks, profiles
 
 
@@ -166,8 +190,8 @@ def get_img_chunk(img, labels, coord_0, coord_1, thread_id=None):
 
 def generate_img_profiles(neurograph, proposals, img):
     """
-    Generates an image intensity profile along each edge proposal by reading
-    from an image on the cloud.
+    Generates an image intensity profile along each proposal by reading from
+    an image on the cloud.
 
     Parameters
     ----------
@@ -175,21 +199,21 @@ def generate_img_profiles(neurograph, proposals, img):
         NeuroGraph generated from a directory of swcs generated from a
         predicted segmentation.
     proposals : list[frozenset]
-        List of edge proposals for which features will be generated.
+        List of proposals for which features will be generated.
     img : tensorstore.TensorStore
         Image stored in a GCS bucket.
 
     Returns
     -------
     features : dict
-        Dictonary such that each pair is the edge id and image intensity
+        Dictonary such that each pair is the proposal id and image intensity
         profile.
 
     """
     # Generate coordinates
     coords = dict()
-    for i, edge in enumerate(proposals):
-        coords[edge] = get_profile_coords(neurograph, edge)
+    for i, proposal in enumerate(proposals):
+        coords[proposal] = get_profile_coords(neurograph, proposal)
 
     # Generate profiles
     img_profiles = dict()
@@ -204,7 +228,7 @@ def generate_img_profiles(neurograph, proposals, img):
     return img_profiles
 
 
-def get_profile_coords(neurograph, edge):
+def get_profile_coords(neurograph, proposal):
     """
     Gets coordinates needed to compute an image intensity profile.
 
@@ -213,8 +237,8 @@ def get_profile_coords(neurograph, edge):
     neurograph : NeuroGarph
         NeuroGraph generated from a directory of swcs generated from a
         predicted segmentation.
-    edge : frozenset
-        Edge proposal that image intensity profile will be generated for.
+    proposal : frozenset
+        Proposal that image intensity profile will be generated for.
 
     Returns
     -------
@@ -223,7 +247,7 @@ def get_profile_coords(neurograph, edge):
 
     """
     # Compute coordinates
-    xyz_0, xyz_1 = neurograph.proposal_xyz(edge)
+    xyz_0, xyz_1 = neurograph.proposal_xyz(proposal)
     coord_0 = utils.to_img(xyz_0)
     coord_1 = utils.to_img(xyz_1)
 
@@ -237,70 +261,70 @@ def get_profile_coords(neurograph, edge):
     return coords
 
 
-def get_profile(img, edge, coords):
+def get_profile(img, proposal, coords):
     """
-    Gets the image intensity profile for a given edge proposal.
+    Gets the image intensity profile for a given proposal.
 
     Parameters
     ----------
     img : tensorstore.TensorStore
         Image to be queried.
-    edge : frozenset
-        Edge proposal that image profile corresponds to.
+    proposal : frozenset
+        Proposal that image profile corresponds to.
 
     Returns
     -------
-    edge : frozenset
-        Edge proposal that image profile corresponds to.
+    proposal : frozenset
+        Proposal that image profile corresponds to.
     list[int]
         Image intensity profile.
 
     """
     chunk = utils.read_tensorstore_bbox(img, coords["bbox"])
     line = geometry.make_line(coords["start"], coords["end"], N_PROFILE_PTS)
-    return edge, [chunk[tuple(xyz)] for xyz in line]
+    return proposal, [chunk[tuple(xyz)] for xyz in line]
 
 
 def generate_skel_features(neurograph, proposals):
     features = dict()
-    for edge in proposals:
-        i, j = tuple(edge)
-        features[edge] = np.concatenate(
+    for proposal in proposals:
+        i, j = tuple(proposal)
+        features[proposal] = np.concatenate(
             (
-                neurograph.proposal_length(edge),
+                neurograph.proposal_length(proposal),
                 neurograph.degree[i],
                 neurograph.degree[j],
-                get_radii(neurograph, edge),
-                get_avg_radii(neurograph, edge),
-                get_directionals(neurograph, edge, 8),
-                get_directionals(neurograph, edge, 16),
-                get_directionals(neurograph, edge, 32),
-                get_directionals(neurograph, edge, 64),
+                get_radii(neurograph, proposal),
+                get_avg_radii(neurograph, proposal),
+                get_directionals(neurograph, proposal, 8),
+                get_directionals(neurograph, proposal, 16),
+                get_directionals(neurograph, proposal, 32),
+                get_directionals(neurograph, proposal, 64),
             ),
             axis=None,
         )
     return features
 
 
-def get_directionals(neurograph, edge, window_size):
+def get_directionals(neurograph, proposal, window_size):
     # Compute tangent vectors
-    i, j = tuple(edge)
-    edge_direction = geometry.compute_tangent(
-        neurograph.proposals[edge]["xyz"]
+    i, j = tuple(proposal)
+    proposal_direction = geometry.compute_tangent(
+        neurograph.proposals[proposal]["xyz"]
     )
-    origin = neurograph.proposal_midpoint(edge)
+    origin = neurograph.proposal_midpoint(proposal)
     direction_i = geometry.get_directional(neurograph, i, origin, window_size)
     direction_j = geometry.get_directional(neurograph, j, origin, window_size)
 
     # Compute features
-    inner_product_1 = abs(np.dot(edge_direction, direction_i))
-    inner_product_2 = abs(np.dot(edge_direction, direction_j))
+    inner_product_1 = abs(np.dot(proposal_direction, direction_i))
+    inner_product_2 = abs(np.dot(proposal_direction, direction_j))
     inner_product_3 = np.dot(direction_i, direction_j)
     return np.array([inner_product_1, inner_product_2, inner_product_3])
 
 
-def get_avg_radii(neurograph, edge):
-    i, j = tuple(edge)
+def get_avg_radii(neurograph, proposal):
+    i, j = tuple(proposal)
     radii_i = neurograph.get_branches(i, key="radius")
     radii_j = neurograph.get_branches(j, key="radius")
     return np.array([get_avg_radius(radii_i), get_avg_radius(radii_j)])
@@ -314,8 +338,8 @@ def get_avg_radius(radii_list):
     return avg
 
 
-def get_avg_branch_lens(neurograph, edge):
-    i, j = tuple(edge)
+def get_avg_branch_lens(neurograph, proposal):
+    i, j = tuple(proposal)
     branches_i = neurograph.get_branches(i, key="xyz")
     branches_j = neurograph.get_branches(j, key="xyz")
     return np.array([get_branch_len(branches_i), get_branch_len(branches_j)])
@@ -328,15 +352,57 @@ def get_branch_len(branch_list):
     return branch_len
 
 
-def get_radii(neurograph, edge):
-    i, j = tuple(edge)
+def get_radii(neurograph, proposal):
+    i, j = tuple(proposal)
     radius_i = neurograph.nodes[i]["radius"]
     radius_j = neurograph.nodes[j]["radius"]
     return np.array([radius_i, radius_j])
 
 
+def avg_branch_radii(neurograph, edge):
+    return np.array([np.mean(neurograph.edges[edge]["radius"])])
+
+
+# --- Edge Feature Generation --
+def generate_branch_features(neurograph, edges):
+    features = dict()
+    for (i, j) in edges:
+        edge = frozenset((i, j))
+        features[edge] = np.zeros((31))
+
+        temp = np.concatenate(
+            (
+                np.array([len(neurograph.edges[i, j]["xyz"])]),
+                avg_branch_radii(neurograph, edge),
+                compute_curvature(neurograph, edge),
+            )
+        )
+    return features
+
+
+def compute_curvature(neurograph, edge):
+    kappa = curvature(neurograph.edges[edge]["xyz"])
+    n_pts = len(kappa)
+    if n_pts <= N_BRANCH_PTS:
+        sampled_kappa = np.zeros((N_BRANCH_PTS))
+        sampled_kappa[0:n_pts] = kappa
+    else:
+        idxs = np.linspace(0, n_pts - 1, N_BRANCH_PTS).astype(int)
+        sampled_kappa = kappa[idxs]
+    return np.array(sampled_kappa)
+
+
+def curvature(xyz_list):
+    a = np.linalg.norm(xyz_list[1:-1] - xyz_list[:-2], axis=1)
+    b = np.linalg.norm(xyz_list[2:] - xyz_list[1:-1], axis=1)
+    c = np.linalg.norm(xyz_list[2:] - xyz_list[:-2], axis=1)
+    s = 0.5 * (a + b + c)
+    delta = np.sqrt(s * (s - a) * (s - b) * (s - c))
+    return 4 * delta / (a * b * c)
+
+
 # -- Build feature matrix
-def get_feature_matrix(neurographs, features, model_type, block_ids=None):
+def get_matrix(neurographs, features, model_type, block_ids=None):
     assert model_type in SUPPORTED_MODELS, "Error! model_type not supported"
     if block_ids:
         return __multiblock_feature_matrix(
@@ -350,27 +416,25 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
     # Initialize
     X = None
     y = None
-
-    block_to_idxs = dict()
-    idx_to_edge = dict()
+    idx_transforms = {"block_to_idxs": dict(), "idx_to_edge": dict()}
 
     # Feature extraction
     for block_id in blocks:
         if neurographs[block_id].n_proposals() == 0:
-            block_to_idxs[block_id] = set()
+            idx_transforms["block_to_idxs"][block_id] = set()
             continue
 
         idx_shift = 0 if X is None else X.shape[0]
         if model_type == "MultiModalNet":
-            X_i, x_i, y_i, idxs_i, idx_to_edge_i = get_multimodal_features(
+            X_i, x_i, y_i, idx_transforms_i = get_multimodal_features(
                 neurographs[block_id], features[block_id], shift=idx_shift
             )
         elif model_type == "ConvNet":
-            X_i, y_i, idxs_i, idx_to_edge_i = stack_img_chunks(
+            X_i, y_i, idx_transforms_i = stack_img_chunks(
                 neurographs[block_id], features[block_id], shift=idx_shift
             )
         else:
-            X_i, y_i, idxs_i, idx_to_edge_i = get_feature_vectors(
+            X_i, y_i, idx_transforms_i = get_feature_vectors(
                 neurographs[block_id], features[block_id], shift=idx_shift
             )
 
@@ -387,13 +451,15 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
                 x = np.concatenate((x, x_i), axis=0)
 
         # Update dicts
-        block_to_idxs[block_id] = idxs_i
-        idx_to_edge.update(idx_to_edge_i)
+        idx_transforms["block_to_idxs"][block_id] = idx_transforms_i[
+            "block_to_idxs"
+        ]
+        idx_transforms["idx_to_edge"].update(idx_transforms_i["idx_to_edge"])
 
     if model_type == "MultiModalNet":
         X = {"imgs": X, "features": x}
 
-    return X, y, block_to_idxs, idx_to_edge
+    return X, y, idx_transforms
 
 
 def __feature_matrix(neurographs, features, model_type):
@@ -409,18 +475,17 @@ def get_feature_vectors(neurograph, features, shift=0):
     # Initialize
     features = combine_features(features)
     key = sample(list(features.keys()), 1)[0]
-    X = np.zeros((neurograph.n_proposals(), len(features[key])))
-    y = np.zeros((neurograph.n_proposals()))
+    X = np.zeros((len(features.keys()), len(features[key])))
+    y = np.zeros((len(features.keys())))
+    idx_transforms = {"block_to_idxs": set(), "idx_to_edge": dict()}
 
     # Build
-    idxs = set()
-    idx_to_edge = dict()
     for i, edge in enumerate(features.keys()):
         X[i, :] = features[edge]
         y[i] = 1 if edge in neurograph.target_edges else 0
-        idxs.add(i + shift)
-        idx_to_edge[i + shift] = edge
-    return X, y, idxs, idx_to_edge
+        idx_transforms["block_to_idxs"].add(i + shift)
+        idx_transforms["idx_to_edge"][i + shift] = edge
+    return X, y, idx_transforms
 
 
 def get_multimodal_features(neurograph, features, shift=0):
@@ -429,35 +494,33 @@ def get_multimodal_features(neurograph, features, shift=0):
     X = np.zeros(((n_edges, 2) + tuple(CHUNK_SIZE)))
     x = np.zeros((n_edges, N_SKEL_FEATURES + N_PROFILE_PTS))
     y = np.zeros((n_edges))
+    idx_transforms = {"block_to_idxs": set(), "idx_to_edge": dict()}
 
     # Build
-    idxs = set()
-    idx_to_edge = dict()
     for i, edge in enumerate(features["img_chunks"].keys()):
         X[i, :] = features["img_chunks"][edge]
         x[i, :] = np.concatenate(
             (features["skel"][edge], features["img_profile"][edge])
         )
         y[i] = 1 if edge in neurograph.target_edges else 0
-        idxs.add(i + shift)
-        idx_to_edge[i + shift] = edge
-    return X, x, y, idxs, idx_to_edge
+        idx_transforms["block_to_idxs"].add(i + shift)
+        idx_transforms["idx_to_edge"][i + shift] = edge
+    return X, x, y, idx_transforms
 
 
 def stack_img_chunks(neurograph, features, shift=0):
     # Initialize
     X = np.zeros(((neurograph.n_proposals(), 2) + tuple(CHUNK_SIZE)))
     y = np.zeros((neurograph.n_proposals()))
+    idx_transforms = {"block_to_idxs": set(), "idx_to_edge": dict()}
 
     # Build
-    idxs = set()
-    idx_to_edge = dict()
     for i, edge in enumerate(features["img_chunks"].keys()):
         X[i, :] = features["img_chunks"][edge]
         y[i] = 1 if edge in neurograph.target_edges else 0
-        idxs.add(i + shift)
-        idx_to_edge[i + shift] = edge
-    return X, y, idxs, idx_to_edge
+        idx_transforms["block_to_idxs"].add(i + shift)
+        idx_transforms["idx_to_edge"][i + shift] = edge
+    return X, y, idx_transforms
 
 
 # -- Utils --

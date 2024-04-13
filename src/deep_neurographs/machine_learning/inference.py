@@ -28,6 +28,7 @@ BATCH_SIZE_PROPOSALS = 1000
 CHUNK_SHAPE = (256, 256, 256)
 
 
+# -- Whole Brain Inference --
 def run(
     neurograph,
     model_type,
@@ -171,6 +172,7 @@ def predict(
     return accepts, graph
 
 
+# -- Whole Brain Seed-Based Inference --
 def build_from_soma(
     neurograph, labels_path, chunk_origin, chunk_shape=CHUNK_SHAPE, n_hops=1
 ):
@@ -250,11 +252,14 @@ def ingest_subgraph(neurograph_1, neurograph_2, node_subset):
     return neurograph_2
 
 
+# -- Inference --
 def run_model(dataset, model, model_type):
-    data = dataset["dataset"]
-    if "Net" in model_type:
+    if "Graph" in model_type:
+        return run_graph_model(dataset, model)
+    elif "Net" in model_type:
         model.eval()
         hat_y = []
+        data = dataset["dataset"]
         for batch in DataLoader(data, batch_size=32, shuffle=False):
             # Run model
             with torch.no_grad():
@@ -267,6 +272,17 @@ def run_model(dataset, model, model_type):
     else:
         hat_y = model.predict_proba(data["inputs"])[:, 1]
     return np.array(hat_y)
+
+
+def run_graph_model(graph_data, model):
+    # Run model
+    x, edge_index = toGPU(graph_data.data)
+    hat_y = model(x, edge_index)
+
+    # Reformat pred
+    idx = graph_data.n_proposals
+    hat_y = ml_utils.toCPU(hat_y[0:idx, 0])
+    return ml_utils.sigmoid(hat_y)
 
 
 # Utils
@@ -290,3 +306,8 @@ def get_runtime(current, total, chunk_size, t0, t1):
     total_runtime = time() - t0 + eta
     t, unit = utils.time_writer(total_runtime)
     return f"{round(t, 4)} {unit}"
+
+def toGPU(graph_data):
+    x = graph_data.x.to("cuda:0", dtype=torch.float32)
+    edge_index = graph_data.edge_index.to("cuda:0")
+    return x, edge_index
