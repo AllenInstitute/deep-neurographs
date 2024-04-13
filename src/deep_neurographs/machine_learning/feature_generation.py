@@ -369,7 +369,7 @@ def generate_branch_features(neurograph, edges):
     for (i, j) in edges:
         edge = frozenset((i, j))
         features[edge] = np.zeros((31))
-        
+
         temp = np.concatenate(
             (
                 np.array([len(neurograph.edges[i, j]["xyz"])]),
@@ -402,7 +402,7 @@ def curvature(xyz_list):
 
 
 # -- Build feature matrix
-def get_feature_matrix(neurographs, features, model_type, block_ids=None):
+def get_matrix(neurographs, features, model_type, block_ids=None):
     assert model_type in SUPPORTED_MODELS, "Error! model_type not supported"
     if block_ids:
         return __multiblock_feature_matrix(

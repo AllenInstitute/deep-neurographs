@@ -279,13 +279,6 @@ class AugmentImages:
         return self.transform(arr)
 
 
-def get_lengths(neurograph):
-    lengths = []
-    for edge in neurograph.proposals.keys():
-        lengths.append(neurograph.proposal_length(edge))
-    return lengths
-
-
 # -- utils --
 def reformat(arr):
     """
