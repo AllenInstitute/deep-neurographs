@@ -18,7 +18,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 LR = 1e-3
-N_EPOCHS = 300
+N_EPOCHS = 1000
 TEST_PERCENT = 0.15
 WEIGHT_DECAY = 5e-4
 
@@ -33,6 +33,7 @@ class GraphTrainer:
         weight_decay=WEIGHT_DECAY,
     ):
         self.model = model.to("cuda:0")
+        self.criterion = criterion
         self.n_epochs = n_epochs
         self.optimizer = torch.optim.Adam(
             model.parameters(), lr=lr, weight_decay=weight_decay
@@ -51,30 +52,30 @@ class GraphTrainer:
             y, hat_y = [], []
             self.model.train()
             for graph_id in train_ids:
-                y_i, hat_y_i = self.forward(graph_datasets[graph_id].data)
+                y_i, hat_y_i = self.train(graph_datasets[graph_id].data, epoch)
                 y.extend(toCPU(y_i))
                 hat_y.extend(toCPU(hat_y_i))
             train_score = self.compute_metrics(y, hat_y, "train", epoch)
 
             # Test
-            y, hat_y = [], []
-            self.model.eval()
-            for graph_id in test_ids:
-                y_i, hat_y_i = self.forward(graph_datasets[graph_id].data)
-                y.extend(toCPU(y_i))
-                hat_y.extend(toCPU(hat_y_i))
-            test_score = self.compute_metrics(y, hat_y, "val", epoch)
+            if epoch % 10 == 0:
+                y, hat_y = [], []
+                self.model.eval()
+                for graph_id in test_ids:
+                    y_i, hat_y_i = self.forward(graph_datasets[graph_id].data)
+                    y.extend(toCPU(y_i))
+                    hat_y.extend(toCPU(hat_y_i))
+                test_score = self.compute_metrics(y, hat_y, "val", epoch)
 
-            # Check for best
-            print(test_score)
-            if test_score > best_score:
-                best_score = test_score
-                best_ckpt = deepcopy(self.model.state_dict())
+                # Check for best
+                if test_score > best_score:
+                    best_score = test_score
+                    best_ckpt = deepcopy(self.model.state_dict())
         return self.model.load_state_dict(best_ckpt)
 
-    def train(self, graph_data):
-        y, hat_y = self.forward_pass(graph_data)
-        self.backpropagate(y, hat_y)
+    def train(self, graph_data, epoch):
+        y, hat_y = self.forward(graph_data)
+        self.backpropagate(y, hat_y, epoch)
         return y, hat_y
 
     def forward(self, graph_data):
@@ -83,10 +84,11 @@ class GraphTrainer:
         hat_y = self.model(x, edge_index)
         return y, truncate(hat_y, y)
 
-    def backpropagate(self, y, hat_y):
+    def backpropagate(self, y, hat_y, epoch):
         loss = self.criterion(hat_y, y)
         loss.backward()
         self.optimizer.step()
+        self.writer.add_scalar("loss", loss, epoch)
 
     def compute_metrics(self, y, hat_y, prefix, epoch):
         # Initializations
@@ -105,7 +107,7 @@ class GraphTrainer:
         self.writer.add_scalar(prefix + '_accuracy_df:', accuracy_dif, epoch)
         self.writer.add_scalar(prefix + '_precision:', precision, epoch)
         self.writer.add_scalar(prefix + '_recall:', recall, epoch)
-        self.writer.add_scalar(prefix + 'val_f1:', f1, epoch)
+        self.writer.add_scalar(prefix + '_f1:', f1, epoch)
         return accuracy_dif
 
 
