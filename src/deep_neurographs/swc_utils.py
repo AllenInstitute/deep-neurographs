@@ -359,7 +359,7 @@ def make_entry(graph, i, parent, node_to_idx):
     ...
 
     """
-    r = set_radius(graph, i)
+    r = graph[i]["radius"]
     x, y, z = tuple(graph.nodes[i]["xyz"])
     node_to_idx[i] = len(node_to_idx)
     entry = f"{node_to_idx[i]} 2 {x} {y} {z} {r} {node_to_idx[parent]}"

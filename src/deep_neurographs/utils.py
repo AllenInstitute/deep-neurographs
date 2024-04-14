@@ -22,6 +22,7 @@ from zipfile import ZipFile
 import numpy as np
 import psutil
 import tensorstore as ts
+import torch
 import zarr
 from skimage.color import label2rgb
 
@@ -620,10 +621,11 @@ def time_writer(t, unit="seconds"):
         t, unit = time_writer(t, unit=unit)
     return t, unit
 
+
 def report_progress(current, total, chunk_size, cnt, t0, t1):
     eta = get_eta(current, total, chunk_size, t1)
     runtime = get_runtime(current, total, chunk_size, t0, t1)
-    utils.progress_bar(current, total, eta=eta, runtime=runtime)
+    progress_bar(current, total, eta=eta, runtime=runtime)
     return cnt + 1, time()
 
 
@@ -631,15 +633,16 @@ def get_eta(current, total, chunk_size, t0, return_str=True):
     chunk_runtime = time() - t0
     remaining = total - current
     eta = remaining * (chunk_runtime / chunk_size)
-    t, unit = utils.time_writer(eta)
+    t, unit = time_writer(eta)
     return f"{round(t, 4)} {unit}" if return_str else eta
 
 
 def get_runtime(current, total, chunk_size, t0, t1):
     eta = get_eta(current, total, chunk_size, t1, return_str=False)
     total_runtime = time() - t0 + eta
-    t, unit = utils.time_writer(total_runtime)
+    t, unit = time_writer(total_runtime)
     return f"{round(t, 4)} {unit}"
+
 
 def toGPU(graph_data):
     x = graph_data.x.to("cuda:0", dtype=torch.float32)

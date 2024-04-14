@@ -78,6 +78,7 @@ class GraphDataset:
     Custom dataset for homogenous graphs.
 
     """
+
     def __init__(
         self,
         neurograph,
@@ -106,6 +107,7 @@ class HeteroGraphDataset:
     Custom dataset for heterogenous graphs.
 
     """
+
     def __init__(
         self,
         neurograph,

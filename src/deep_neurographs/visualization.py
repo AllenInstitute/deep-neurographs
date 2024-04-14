@@ -142,7 +142,6 @@ def plot(data, title):
     fig.update_layout(
         title=title,
         template="plotly_white",
-        # plot_bgcolor="rgba(0, 0, 0, 0)",
         scene=dict(aspectmode="manual", aspectratio=dict(x=1, y=1, z=1)),
         width=1200,
         height=700,
