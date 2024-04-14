@@ -131,7 +131,7 @@ def run_without_seeds(
 
         # Report progress
         if i > progress_cnt * chunk_size and progress_bar:
-            progress_cnt, t1 = report_progress(
+            progress_cnt, t1 = utils.report_progress(
                 i, n_batches, chunk_size, progress_cnt, t0, t1
             )
             t0, t1 = utils.init_timers()
@@ -270,44 +270,41 @@ def run_model(dataset, model, model_type):
             hat_y_i = np.array(hat_y_i)
             hat_y.extend(hat_y_i.tolist())
     else:
+        data = dataset["dataset"]
         hat_y = model.predict_proba(data["inputs"])[:, 1]
     return np.array(hat_y)
 
 
 def run_graph_model(graph_data, model):
     # Run model
+    model.eval()
     x, edge_index = toGPU(graph_data.data)
-    hat_y = model(x, edge_index)
+    with torch.no_grad():
+        hat_y = sigmoid(model(x, edge_index))
 
     # Reformat pred
     idx = graph_data.n_proposals
     hat_y = ml_utils.toCPU(hat_y[0:idx, 0])
-    return ml_utils.sigmoid(hat_y)
+    return hat_y
 
-
-# Utils
-def report_progress(current, total, chunk_size, cnt, t0, t1):
-    eta = get_eta(current, total, chunk_size, t1)
-    runtime = get_runtime(current, total, chunk_size, t0, t1)
-    utils.progress_bar(current, total, eta=eta, runtime=runtime)
-    return cnt + 1, time()
-
-
-def get_eta(current, total, chunk_size, t0, return_str=True):
-    chunk_runtime = time() - t0
-    remaining = total - current
-    eta = remaining * (chunk_runtime / chunk_size)
-    t, unit = utils.time_writer(eta)
-    return f"{round(t, 4)} {unit}" if return_str else eta
-
-
-def get_runtime(current, total, chunk_size, t0, t1):
-    eta = get_eta(current, total, chunk_size, t1, return_str=False)
-    total_runtime = time() - t0 + eta
-    t, unit = utils.time_writer(total_runtime)
-    return f"{round(t, 4)} {unit}"
 
 def toGPU(graph_data):
+    """
+    Moves "graph_data" from CPU to GPU.
+
+    Parameters
+    ----------
+    graph_data : GraphDataset
+        Dataset to be moved to GPU.
+
+    Returns
+    -------
+    x : torch.Tensor
+        Matrix of node feature vectors.
+    edge_idx : torch.Tensor
+        Tensor containing edges in graph.
+
+    """
     x = graph_data.x.to("cuda:0", dtype=torch.float32)
     edge_index = graph_data.edge_index.to("cuda:0")
     return x, edge_index

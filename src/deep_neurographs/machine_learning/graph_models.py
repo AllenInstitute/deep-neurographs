@@ -42,7 +42,8 @@ class MLP(torch.nn.Module):
     def __init__(self, input_channels):
         super().__init__()
         self.linear1 = Linear(input_channels, input_channels // 2)
-        self.linear2 = Linear(input_channels // 2, 1)
+        self.linear2 = Linear(input_channels // 2, input_channels // 2)
+        self.linear3 = Linear(input_channels // 2, 1)
         self.ELU = ELU()
 
     def forward(self, x, edge_index):
@@ -50,4 +51,7 @@ class MLP(torch.nn.Module):
         x = self.ELU(x)
         x = F.dropout(x, p=0.25)
         x = self.linear2(x)
+        x = self.ELU(x)
+        x = F.dropout(x, p=0.25)
+        x = self.linear3(x)
         return x

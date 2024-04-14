@@ -31,14 +31,6 @@ def get_accepted_propoals_blocks(
     accepts = dict()
     for block_id in blocks:
         # Get accepts
-        preds = threshold_preds(
-            preds,
-            idx_to_edge,
-            low_threshold,
-            valid_idxs=block_to_idxs[block_id],
-        )
-
-        # Refine accepts wrt structure
         if structure_aware:
             graph = neurographs[block_id].copy()
             accepts[block_id] = get_structure_aware_accepts(
@@ -49,6 +41,12 @@ def get_accepted_propoals_blocks(
                 low_threshold=low_threshold,
             )
         else:
+            preds = threshold_preds(
+                preds,
+                idx_to_edge,
+                low_threshold,
+                valid_idxs=block_to_idxs[block_id],
+            )
             accepts[block_id] = preds.keys()
     return accepts
 
