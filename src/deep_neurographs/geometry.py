@@ -20,21 +20,38 @@ def get_directional(neurograph, i, origin, window_size):
     branches = neurograph.get_branches(i)
     branches = translate_branches(branches, origin)
     if len(branches) == 1:
-        return compute_tangent(get_sub_branch(branches[0], window_size))
+        return compute_tangent(get_subarray(branches[0], window_size))
     elif len(branches) == 2:
-        branch_1 = get_sub_branch(branches[0], window_size)
-        branch_2 = get_sub_branch(branches[1], window_size)
+        branch_1 = get_subarray(branches[0], window_size)
+        branch_2 = get_subarray(branches[1], window_size)
         branch = np.concatenate((branch_1, branch_2))
         return compute_tangent(branch)
     else:
         return np.array([0, 0, 0])
 
 
-def get_sub_branch(branch, window_size):
-    if branch.shape[0] < window_size:
-        return branch
+def get_subarray(arr, window_size):
+    """
+    Extracts a sub-array of a specified window size from a given input array.
+
+    Parameters
+    ----------
+    branch : numpy.ndarray
+        Array from which the sub-branch will be extracted.
+    window_size : int
+        Size of the window to extract from "arr".
+
+    Returns
+    -------
+    numpy.ndarray
+        A sub-array of the specified window size. If the input array is
+        smaller than the window size, the entire branch array is returned.
+
+    """
+    if arr.shape[0] < window_size:
+        return arr
     else:
-        return branch[0:window_size, :]
+        return arr[0:window_size, :]
 
 
 def compute_svd(xyz):
@@ -65,6 +82,22 @@ def compute_svd(xyz):
 
 
 def compute_tangent(xyz):
+    """
+    Computes the tangent vector at a given point or along a curve defined by
+    an array of points.
+
+    Parameters
+    ----------
+    xyz : numpy.ndarray
+        Array containing either two xyz coordinates or an arbitrary number of
+        defining a curve.
+
+    Returns
+    -------
+    numpy.ndarray
+        Tangent vector at the specified point or along the curve.
+
+    """
     if xyz.shape[0] == 2:
         tangent = (xyz[1] - xyz[0]) / dist(xyz[1], xyz[0])
     else:
@@ -74,6 +107,21 @@ def compute_tangent(xyz):
 
 
 def compute_normal(xyz):
+    """
+    Computes the normal vector of a plane defined by an array of xyz
+    coordinates using Singular Value Decomposition (SVD).
+
+    Parameters
+    ----------
+    xyz : numpy.ndarray
+        An array of xyz coordinates that normal vector is to be computed of.
+
+    Returns
+    -------
+    numpy.ndarray
+        The normal vector of the array "xyz".
+
+    """
     U, S, VT = compute_svd(xyz)
     normal = VT[-1]
     return normal / np.linalg.norm(normal)
@@ -148,16 +196,6 @@ def fit_spline(xyz, s=None):
     spline_y = UnivariateSpline(t, xyz[:, 1], s=s, k=3)
     spline_z = UnivariateSpline(t, xyz[:, 2], s=s, k=3)
     return spline_x, spline_y, spline_z
-
-
-def sample_path(path, n_points):
-    if len(path) > 5:
-        t = np.linspace(0, 1, n_points)
-        spline_x, spline_y, spline_z = fit_spline(path)
-        path = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
-    else:
-        path = make_line(path[0], path[-1], 10)
-    return path.astype(int)
 
 
 # Image feature extraction

@@ -195,4 +195,4 @@ def sigmoid(x):
     Sigmoid applied to "x".
 
     """
-    return 1.0/(1.0 + np.exp(-x))
+    return 1.0 / (1.0 + np.exp(-x))

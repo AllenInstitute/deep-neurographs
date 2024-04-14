@@ -8,15 +8,20 @@ Routines for training graph neural networks that classify edge proposals.
 
 """
 
+from copy import deepcopy
 from random import sample, shuffle
+
 import numpy as np
 import torch
-from copy import deepcopy
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from torch.nn.functional import sigmoid
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+)
 from torch.utils.tensorboard import SummaryWriter
-from deep_neurographs.machine_learning import ml_utils
 
+from deep_neurographs.machine_learning import ml_utils
 
 LR = 1e-3
 N_EPOCHS = 1000
@@ -29,6 +34,7 @@ class GraphTrainer:
     Custom class that trains graph neural networks.
 
     """
+
     def __init__(
         self,
         model,
@@ -98,7 +104,7 @@ class GraphTrainer:
                 y_i, hat_y_i = self.train(graph_datasets[graph_id].data, epoch)
                 y.extend(toCPU(y_i))
                 hat_y.extend(toCPU(hat_y_i))
-            train_score = self.compute_metrics(y, hat_y, "train", epoch)
+            self.compute_metrics(y, hat_y, "train", epoch)
 
             # Test
             if epoch % 10 == 0:
@@ -236,11 +242,11 @@ class GraphTrainer:
         f1 = f1_score(y, hat_y)
 
         # Log
-        self.writer.add_scalar(prefix + '_accuracy:', accuracy, epoch)
-        self.writer.add_scalar(prefix + '_accuracy_df:', accuracy_dif, epoch)
-        self.writer.add_scalar(prefix + '_precision:', precision, epoch)
-        self.writer.add_scalar(prefix + '_recall:', recall, epoch)
-        self.writer.add_scalar(prefix + '_f1:', f1, epoch)
+        self.writer.add_scalar(prefix + "_accuracy:", accuracy, epoch)
+        self.writer.add_scalar(prefix + "_accuracy_df:", accuracy_dif, epoch)
+        self.writer.add_scalar(prefix + "_precision:", precision, epoch)
+        self.writer.add_scalar(prefix + "_recall:", recall, epoch)
+        self.writer.add_scalar(prefix + "_f1:", f1, epoch)
         return f1
 
 
@@ -349,7 +355,7 @@ def truncate(hat_y, y):
         Truncated "hat_y".
 
     """
-    return hat_y[0: y.size(0), 0]
+    return hat_y[: y.size(0), 0]
 
 
 def get_predictions(hat_y, threshold=0.5):

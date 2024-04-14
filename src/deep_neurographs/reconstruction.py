@@ -30,23 +30,26 @@ def get_accepted_propoals_blocks(
 ):
     accepts = dict()
     for block_id in blocks:
+        # Threshold prediction
+        preds_upd = threshold_preds(
+            preds,
+            idx_to_edge,
+            low_threshold,
+            valid_idxs=block_to_idxs[block_id],
+        )
+
         # Get accepts
         if structure_aware:
             graph = neurographs[block_id].copy()
-            accepts[block_id] = get_structure_aware_accepts(
+            accepts[block_id], _ = get_structure_aware_accepts(
                 neurographs[block_id],
                 graph,
-                preds,
+                preds_upd,
                 high_threshold=high_threshold,
                 low_threshold=low_threshold,
             )
         else:
-            preds = threshold_preds(
-                preds,
-                idx_to_edge,
-                low_threshold,
-                valid_idxs=block_to_idxs[block_id],
-            )
+
             accepts[block_id] = preds.keys()
     return accepts
 
@@ -114,7 +117,7 @@ def get_structure_aware_accepts(
     best_preds, best_probs = get_best_preds(neurograph, preds, high_threshold)
     accepts, graph = check_cycles_sequential(graph, best_preds, best_probs)
     if len(best_preds) == len(preds.keys()):
-        return accepts
+        return accepts, graph
 
     # Add remaining preds
     best_preds = set(best_preds)
@@ -156,7 +159,7 @@ def get_subgraphs(graph, edge):
         subgraph = nx.union(subgraph_1, subgraph_2)
         return subgraph
     except:
-        return False 
+        return False
 
 
 def check_cycles_parallelized(graph, edge_list):
@@ -201,6 +204,7 @@ def check_cycles_parallelized(graph, edge_list):
 def check_cycles_sequential(graph, edges, probs):
     accepts = []
     for i in np.argsort(probs):
+        print(i, edges)
         subgraph = get_subgraphs(graph, edges[i])
         if subgraph:
             created_cycle, _ = gutils.creates_cycle(subgraph, tuple(edges[i]))
@@ -240,6 +244,7 @@ def save_prediction(neurograph, accepted_proposals, output_dir):
     neurograph.to_swc(swc_dir)
     save_corrections(neurograph, accepted_proposals, corrections_dir)
     save_connections(neurograph, accepted_proposals, connections_path)
+
 
 def save_corrections(neurograph, accepted_proposals, output_dir):
     for cnt, (i, j) in enumerate(accepted_proposals):

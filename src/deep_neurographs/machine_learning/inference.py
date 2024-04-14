@@ -9,7 +9,6 @@ Routines for running inference on models that classify edge proposals.
 """
 
 from copy import deepcopy
-from time import time
 
 import fastremap
 import networkx as nx
@@ -268,7 +267,7 @@ def run_model(dataset, model, model_type):
 
             # Postprocess
             hat_y_i = np.array(hat_y_i)
-            hat_y.extend(hat_y_i.tolist())
+            hat_y.extend(hat_y_i[:, 0].tolist())
     else:
         data = dataset["dataset"]
         hat_y = model.predict_proba(data["inputs"])[:, 1]
