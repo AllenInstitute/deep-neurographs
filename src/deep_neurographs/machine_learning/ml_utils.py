@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 
-from deep_neurographs.machine_learning import feature_generation
+from deep_neurographs.machine_learning import feature_generation, graph_datasets
 from deep_neurographs.machine_learning.datasets import (
     ImgProposalDataset,
     MultiModalDataset,
@@ -151,6 +151,22 @@ def get_dataset(inputs, targets, model_type, transform, lengths):
 
 
 def init_dataset(
+    neurographs, features, model_type, block_ids=None, transform=False
+):
+    if "Graph" in model_type:
+        dataset = graph_datasets.init(neurographs, features)
+    else:
+        dataset =  init_proposal_dataset(
+            neurographs,
+            features,
+            model_type,
+            block_ids=block_ids,
+            transform=transform
+        )
+    return dataset
+
+
+def init_proposal_dataset(
     neurographs, features, model_type, block_ids=None, transform=False
 ):
     # Extract features
