@@ -335,6 +335,7 @@ def generate_skel_features(neurograph, proposals):
                 n_nearby_leafs(neurograph, proposal),
                 get_radii(neurograph, proposal),
                 get_avg_radii(neurograph, proposal),
+                get_avg_branch_lens(neurograph, proposal),
                 get_directionals(neurograph, proposal, 8),
                 get_directionals(neurograph, proposal, 16),
                 get_directionals(neurograph, proposal, 32),
