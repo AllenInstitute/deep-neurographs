@@ -10,7 +10,7 @@ Graph neural network architectures that learn to classify edge proposals.
 
 import torch
 import torch.nn.functional as F
-from torch.nn import ELU, Dropout, Linear
+from torch.nn import ELU, Dropout, LeakyReLU, Linear
 import torch.nn.init as init
 from torch_geometric.nn import GATv2Conv as GATConv
 from torch_geometric.nn import GCNConv
@@ -24,22 +24,19 @@ class GCN(torch.nn.Module):
         self.conv2 = GCNConv(2 * input_channels, input_channels)
         self.conv3 = GCNConv(input_channels, input_channels // 2)
         self.dropout = Dropout(0.3)
-        self.ELU = ELU()
+        self.leaky_relu = LeakyReLU()
         self.output = Linear(input_channels // 2, 1)
 
         # Initialize weights
         self.init_weights()
 
     def init_weights(self):
-        layers = [self.conv1, self.conv2, self.conv3]
-        #, self.input, self.output]
+        layers = [self.conv1, self.conv2, self.conv3, self.input, self.output]
         for layer in layers:
             for param in layer.parameters():
                 if len(param.shape) > 1:
-                    # Initialize weights using Glorot uniform initialization
-                    init.xavier_uniform_(param)
+                    init.kaiming_normal_(param)
                 else:
-                    # Initialize biases to zeros
                     init.zeros_(param)
 
     def forward(self, x, edge_index):
@@ -48,16 +45,18 @@ class GCN(torch.nn.Module):
 
         # Layer 1
         x = self.conv1(x, edge_index)
-        x = self.ELU(x)
+        x = self.leaky_relu(x)
         x = self.dropout(x)
 
         # Layer 2
         x = self.conv2(x, edge_index)
-        x = self.ELU(x)
+        x = self.leaky_relu(x)
         x = self.dropout(x)
 
         # Layer 3
         x = self.conv3(x, edge_index)
+        x = self.leaky_relu(x)
+        x = self.dropout(x)
 
         # Output
         x = self.output(x)

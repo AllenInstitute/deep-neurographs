@@ -20,7 +20,7 @@ from deep_neurographs.machine_learning import feature_generation
 
 
 # Wrapper
-def init(neurograph, branch_features, proposal_features, heterogeneous=False):
+def init(neurograph, features, heterogeneous=False):
     """
     Initializes a dataset that can be used to train a graph neural network.
 
@@ -28,14 +28,10 @@ def init(neurograph, branch_features, proposal_features, heterogeneous=False):
     ----------
     neurograph : NeuroGraph
         Graph that dataset is built from.
-    branch_features : dict
-        Feature vectors corresponding to branches such that the keys are a
-        frozenset of the node pair and values are the corresponding feature
-        vectors.
-    proposal_features : dict
-        Feature vectors corresponding to proposals such that the keys are a
-        frozenset of the node pair and values are the corresponding feature
-        vectors.
+    features : dict
+        Feature vectors corresponding to branches such that the keys are
+        "proposals" and "branches". The values are a dictionary containing
+        different types of features for edges and branches.
     heterogeneous : bool
         Indication of whether dataset should be stored as a heterogeneous
         graph.
@@ -48,10 +44,10 @@ def init(neurograph, branch_features, proposal_features, heterogeneous=False):
     """
     # Extract features
     x_branches, _, idxs_branches = feature_generation.get_matrix(
-        neurograph, branch_features, "GraphNeuralNet"
+        neurograph, features["branches"], "GraphNeuralNet"
     )
     x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
-        neurograph, proposal_features, "GraphNeuralNet"
+        neurograph, features["proposals"], "GraphNeuralNet"
     )
 
     # Initialize data

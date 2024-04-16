@@ -292,7 +292,7 @@ def train_test_split(graph_ids):
 
     """
     n_test_examples = int(len(graph_ids) * TEST_PERCENT)
-    test_ids = ["block_007", "block_010"]  # sample(graph_ids, n_test_examples)
+    test_ids = ["block_007", "block_010"] #sample(graph_ids, n_test_examples)
     train_ids = list(set(graph_ids) - set(test_ids))
     return train_ids, test_ids
 

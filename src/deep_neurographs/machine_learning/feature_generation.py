@@ -28,7 +28,7 @@ CHUNK_SIZE = [64, 64, 64]
 WINDOW = [5, 5, 5]
 N_BRANCH_PTS = 50
 N_PROFILE_PTS = 10
-N_SKEL_FEATURES = 19
+N_SKEL_FEATURES = 20
 SUPPORTED_MODELS = [
     "AdaBoost",
     "RandomForest",
@@ -40,8 +40,44 @@ SUPPORTED_MODELS = [
 
 
 # -- Wrappers --
+def run(
+    neurograph,
+    model_type,
+    search_radius,
+    img_path,
+    labels_path=None,
+    proposals=None,
+):
+    if "Graph" in model_type:
+        features = dict()
+        features["branches"] = run_on_branches(neurograph)
+        features["proposals"] = run_on_proposals(
+            neurograph,
+            model_type,
+            search_radius,
+            img_path,
+            labels_path=labels_path,
+            proposals=proposals,
+        )
+    else:
+        features = run_on_proposals(
+            neurograph,
+            model_type,
+            search_radius,
+            img_path,
+            labels_path=labels_path,
+            proposals=proposals,
+        )
+    return features
+    
+
 def run_on_proposals(
-    neurograph, model_type, img_path, labels_path=None, proposals=None
+    neurograph,
+    model_type,
+    search_radius,
+    img_path,
+    labels_path=None,
+    proposals=None,
 ):
     """
     Generates feature vectors for every proposal in a neurograph.
@@ -54,6 +90,8 @@ def run_on_proposals(
     model_type : str
         Type of model to be trained. Options include: AdaBoost, RandomForest,
         FeedForwardNet, ConvNet, MultiModalNet.
+    search_radius : float
+        Search radius used to generate proposals.
     img_path : str
         Path to raw image stored in a GCS bucket.
     labels_path : str, optional
@@ -92,7 +130,7 @@ def run_on_proposals(
     return features
 
 
-def run_on_branches(neurograph, branches):
+def run_on_branches(neurograph):
     """
     Generates feature vectors for every edge in a neurograph.
 
@@ -109,7 +147,7 @@ def run_on_branches(neurograph, branches):
         vector and the numerical vector.
 
     """
-    return {"skel": generate_branch_features(neurograph, branches)}
+    return {"skel": generate_branch_features(neurograph)}
 
 
 # -- Proposal Feature Extraction --
@@ -368,15 +406,15 @@ def avg_branch_radii(neurograph, edge):
 def n_nearby_leafs(neurograph, proposal):
     xyz = neurograph.proposal_midpoint(proposal)
     leafs = neurograph.query_kdtree(xyz, 25, node_type="leaf")
-    return len(leafs)
+    return len(leafs) - 2
 
 
 # --- Edge Feature Generation --
-def generate_branch_features(neurograph, edges):
+def generate_branch_features(neurograph):
     features = dict()
-    for (i, j) in edges:
+    for (i, j) in neurograph.edges:
         edge = frozenset((i, j))
-        features[edge] = np.zeros((34))
+        features[edge] = np.zeros((32))
 
         temp = np.concatenate(
             (

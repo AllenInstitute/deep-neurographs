@@ -35,6 +35,7 @@ def run(
     img_path,
     labels_path,
     proposals,
+    search_radius,
     batch_size_proposals=BATCH_SIZE_PROPOSALS,
     confidence_threshold=0.7,
     seeds=None,
@@ -47,6 +48,7 @@ def run(
             img_path,
             labels_path,
             proposals,
+            search_radius,
             seeds,
             batch_size_proposals=batch_size_proposals,
             confidence_threshold=confidence_threshold,
@@ -59,6 +61,7 @@ def run(
             img_path,
             labels_path,
             proposals,
+            search_radius,
             batch_size_proposals=batch_size_proposals,
             confidence_threshold=confidence_threshold,
         )
@@ -71,6 +74,7 @@ def run_with_seeds(
     img_path,
     labels_path,
     proposals,
+    search_radius,
     seeds,
     batch_size_proposals=BATCH_SIZE_PROPOSALS,
     confidence_threshold=0.7,
@@ -93,6 +97,7 @@ def run_without_seeds(
     img_path,
     labels_path,
     proposals,
+    search_radius,
     batch_size_proposals=BATCH_SIZE_PROPOSALS,
     confidence_threshold=0.7,
     progress_bar=True,
@@ -121,6 +126,7 @@ def run_without_seeds(
             proposals_i,
             model,
             model_type,
+            search_radius,
             confidence_threshold=confidence_threshold,
         )
 
@@ -146,12 +152,14 @@ def predict(
     proposals,
     model,
     model_type,
+    search_radius,
     confidence_threshold=0.7,
 ):
     # Generate features
-    features = feature_generation.run(
+    features = feature_generation.run_on_proposals(
         neurograph,
         model_type,
+        search_radius,
         img_path,
         labels_path=labels_path,
         proposals=proposals,

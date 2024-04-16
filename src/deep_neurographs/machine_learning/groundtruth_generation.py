@@ -17,7 +17,7 @@ from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
 from deep_neurographs.geometry import dist as get_dist
 
-ALIGNED_THRESHOLD = 3.5
+ALIGNED_THRESHOLD = 4
 MIN_INTERSECTION = 10
 
 
