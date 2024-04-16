@@ -19,6 +19,7 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
+from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 
 from deep_neurographs.machine_learning import ml_utils
@@ -26,7 +27,7 @@ from deep_neurographs.machine_learning import ml_utils
 LR = 1e-3
 N_EPOCHS = 1000
 TEST_PERCENT = 0.15
-WEIGHT_DECAY = 5e-4
+WEIGHT_DECAY = 5e-3
 
 
 class GraphTrainer:
@@ -93,6 +94,7 @@ class GraphTrainer:
         # Initializations
         best_score = -np.inf
         best_ckpt = None
+        scheduler = StepLR(self.optimizer, step_size=500, gamma=0.5)
 
         # Main
         train_ids, test_ids = train_test_split(list(graph_datasets.keys()))
@@ -105,6 +107,7 @@ class GraphTrainer:
                 y.extend(toCPU(y_i))
                 hat_y.extend(toCPU(hat_y_i))
             self.compute_metrics(y, hat_y, "train", epoch)
+            scheduler.step()
 
             # Test
             if epoch % 10 == 0:
@@ -120,7 +123,8 @@ class GraphTrainer:
                 if test_score > best_score:
                     best_score = test_score
                     best_ckpt = deepcopy(self.model.state_dict())
-        return self.model.load_state_dict(best_ckpt)
+        self.model.load_state_dict(best_ckpt)
+        return self.model
 
     def run_on_graph(self):
         """
@@ -288,7 +292,7 @@ def train_test_split(graph_ids):
 
     """
     n_test_examples = int(len(graph_ids) * TEST_PERCENT)
-    test_ids = sample(graph_ids, n_test_examples)
+    test_ids = ["block_007", "block_010"]  # sample(graph_ids, n_test_examples)
     train_ids = list(set(graph_ids) - set(test_ids))
     return train_ids, test_ids
 

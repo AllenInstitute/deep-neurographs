@@ -87,9 +87,9 @@ def fit_deep_model(
 
     # Fit model
     pylightning_trainer = pl.Trainer(
-        # accelerator="gpu",
+        accelerator="gpu",
         callbacks=[ckpt_callback],
-        # devices=1,
+        devices=1,
         enable_model_summary=False,
         enable_progress_bar=False,
         logger=logger,

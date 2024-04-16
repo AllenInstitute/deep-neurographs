@@ -9,8 +9,6 @@ Created on Sat Dec 12 17:00:00 2023
 """
 
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
-
 import networkx as nx
 import numpy as np
 
@@ -40,13 +38,12 @@ def get_accepted_propoals_blocks(
 
         # Get accepts
         if structure_aware:
-            graph = neurographs[block_id].copy()
+            graph = neurographs[block_id].copy_graph()
             accepts[block_id], _ = get_structure_aware_accepts(
                 neurographs[block_id],
                 graph,
                 preds_upd,
                 high_threshold=high_threshold,
-                low_threshold=low_threshold,
             )
         else:
 
@@ -67,11 +64,7 @@ def get_accepted_proposals(
     preds = threshold_preds(preds, idx_to_edge, low_threshold)
     if structure_aware:
         return get_structure_aware_accepts(
-            neurograph,
-            graph,
-            preds,
-            high_threshold=high_threshold,
-            low_threshold=low_threshold,
+            neurograph, graph, preds, high_threshold=high_threshold
         )
     else:
         return preds.keys()
@@ -110,9 +103,7 @@ def threshold_preds(preds, idx_to_edge, threshold, valid_idxs=[]):
     return thresholded_preds
 
 
-def get_structure_aware_accepts(
-    neurograph, graph, preds, high_threshold=0.9, low_threshold=0.6
-):
+def get_structure_aware_accepts(neurograph, graph, preds, high_threshold=0.9):
     # Add best preds
     best_preds, best_probs = get_best_preds(neurograph, preds, high_threshold)
     accepts, graph = check_cycles_sequential(graph, best_preds, best_probs)
@@ -162,49 +153,9 @@ def get_subgraphs(graph, edge):
         return False
 
 
-def check_cycles_parallelized(graph, edge_list):
-    """
-    Checks whether each edge in "edge_list" creates a cycle in "graph" in a
-    with a parallelized algorithm.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-    edge_list : list
-        List of edges to be checked.
-
-    Returns
-    -------
-    graph : networkx.Graph
-        Graph with each edge in "edge_list" added
-    fail : bool
-        Indication of whether a cycle was created due to parallelization.
-
-    """
-    # Assign processes
-    with ProcessPoolExecutor() as executor:
-        processes = []
-        for edge in edge_list:
-            subgraph = get_subgraphs(graph, edge)
-            executor.submit(gutils.creates_cycle, subgraph, edge)
-
-    # Store result
-    accepts = []
-    for process in as_completed(processes):
-        created_cycle, edge = process.result()
-        if not created_cycle:
-            accepts.append(edge)
-            graph.add_edge_from([edge])
-
-    fail = True if gutils.cycle_exists(graph) else False
-    return accepts, fail
-
-
 def check_cycles_sequential(graph, edges, probs):
     accepts = []
     for i in np.argsort(probs):
-        print(i, edges)
         subgraph = get_subgraphs(graph, edges[i])
         if subgraph:
             created_cycle, _ = gutils.creates_cycle(subgraph, tuple(edges[i]))
