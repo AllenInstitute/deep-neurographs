@@ -294,8 +294,10 @@ def generate_skel_features(neurograph, proposals):
                 neurograph.proposal_length(proposal),
                 neurograph.degree[i],
                 neurograph.degree[j],
+                n_nearby_leafs(neurograph, proposal),
                 get_radii(neurograph, proposal),
                 get_avg_radii(neurograph, proposal),
+                get_avg_branch_lens(neurograph, proposal),
                 get_directionals(neurograph, proposal, 8),
                 get_directionals(neurograph, proposal, 16),
                 get_directionals(neurograph, proposal, 32),
@@ -363,12 +365,18 @@ def avg_branch_radii(neurograph, edge):
     return np.array([np.mean(neurograph.edges[edge]["radius"])])
 
 
+def n_nearby_leafs(neurograph, proposal):
+    xyz = neurograph.proposal_midpoint(proposal)
+    leafs = neurograph.query_kdtree(xyz, 25, node_type="leaf")
+    return len(leafs)
+
+
 # --- Edge Feature Generation --
 def generate_branch_features(neurograph, edges):
     features = dict()
     for (i, j) in edges:
         edge = frozenset((i, j))
-        features[edge] = np.zeros((31))
+        features[edge] = np.zeros((34))
 
         temp = np.concatenate(
             (
