@@ -156,7 +156,7 @@ def predict(
     confidence_threshold=0.7,
 ):
     # Generate features
-    features = feature_generation.run_on_proposals(
+    features = feature_generation.run(
         neurograph,
         model_type,
         search_radius,
@@ -167,16 +167,24 @@ def predict(
     dataset = ml_utils.init_dataset(neurograph, features, model_type)
 
     # Run model
+    idx_to_edge = get_idxs(dataset, model_type)
     proposal_probs = run_model(dataset, model, model_type)
     accepts, graph = build.get_accepted_proposals(
         neurograph,
         graph,
         proposal_probs,
-        dataset["idx_to_edge"],
+        idx_to_edge,
         high_threshold=0.95,
         low_threshold=confidence_threshold,
     )
     return accepts, graph
+
+
+def get_idxs(dataset, model_type):
+    if "Graph" in model_type:
+        return dataset.idxs_proposals["idx_to_edge"]
+    else:
+        return dataset["idx_to_edge"]
 
 
 # -- Whole Brain Seed-Based Inference --
