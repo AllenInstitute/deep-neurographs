@@ -26,6 +26,8 @@ from deep_neurographs.machine_learning import ml_utils
 
 LR = 1e-3
 N_EPOCHS = 1000
+SCHEDULER_GAMMA = 0.5
+SCHEDULER_STEP_SIZE = 1000
 TEST_PERCENT = 0.15
 WEIGHT_DECAY = 5e-3
 
@@ -72,7 +74,15 @@ class GraphTrainer:
         self.optimizer = torch.optim.Adam(
             model.parameters(), lr=lr, weight_decay=weight_decay
         )
+        self.init_scheduler()
         self.writer = SummaryWriter()
+
+    def init_scheduler(self):
+        self.scheduler = StepLR(
+            self.optimizer,
+            step_size=SCHEDULER_STEP_SIZE,
+            gamma=SCHEDULER_GAMMA
+        )
 
     def run_on_graphs(self, graph_datasets):
         """
@@ -94,7 +104,6 @@ class GraphTrainer:
         # Initializations
         best_score = -np.inf
         best_ckpt = None
-        scheduler = StepLR(self.optimizer, step_size=500, gamma=0.5)
 
         # Main
         train_ids, test_ids = train_test_split(list(graph_datasets.keys()))
@@ -107,7 +116,7 @@ class GraphTrainer:
                 y.extend(toCPU(y_i))
                 hat_y.extend(toCPU(hat_y_i))
             self.compute_metrics(y, hat_y, "train", epoch)
-            scheduler.step()
+            self.scheduler.step()
 
             # Test
             if epoch % 10 == 0:

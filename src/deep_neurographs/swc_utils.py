@@ -77,12 +77,9 @@ def process_gcs_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
             # Process results
             swc_dicts = []
             for thread in as_completed(threads):
-                try:
-                    result = thread.result()
-                    if len(result["id"]) > min_size:
-                        swc_dicts.append(result)
-                except:
-                    None
+                result = thread.result()
+                if len(result["id"]) > min_size:
+                    swc_dicts.append(result)
     return swc_dicts
 
 
@@ -179,8 +176,12 @@ def read_from_gcs_zip(zip_file, path):
     Reads the content of an swc file from a zip file in a GCS bucket.
 
     """
-    with zip_file.open(path) as text_file:
-        return text_file.read().decode("utf-8").splitlines()
+    try:
+        with zip_file.open(path) as text_file:
+            return text_file.read().decode("utf-8").splitlines()
+    except:
+        print(f"Failed to from {path}")
+        return ""
 
 
 def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
@@ -359,7 +360,7 @@ def make_entry(graph, i, parent, node_to_idx):
     ...
 
     """
-    r = graph[i]["radius"]
+    r = graph.nodes[i]["radius"]
     x, y, z = tuple(graph.nodes[i]["xyz"])
     node_to_idx[i] = len(node_to_idx)
     entry = f"{node_to_idx[i]} 2 {x} {y} {z} {r} {node_to_idx[parent]}"

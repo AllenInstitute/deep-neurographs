@@ -9,6 +9,7 @@ Created on Sat Dec 12 17:00:00 2023
 """
 
 import os
+
 import networkx as nx
 import numpy as np
 
@@ -22,6 +23,7 @@ def get_accepted_propoals_blocks(
     blocks,
     block_to_idxs,
     idx_to_edge,
+    max_length,
     high_threshold=0.9,
     low_threshold=0.6,
     structure_aware=True,
@@ -29,7 +31,7 @@ def get_accepted_propoals_blocks(
     accepts = dict()
     for block_id in blocks:
         # Threshold prediction
-        preds_upd = threshold_preds(
+        preds_upd = filter(
             preds,
             idx_to_edge,
             low_threshold,
@@ -43,10 +45,10 @@ def get_accepted_propoals_blocks(
                 neurographs[block_id],
                 graph,
                 preds_upd,
+                max_length,
                 high_threshold=high_threshold,
             )
         else:
-
             accepts[block_id] = preds.keys()
     return accepts
 
@@ -56,23 +58,28 @@ def get_accepted_proposals(
     graph,
     preds,
     idx_to_edge,
+    max_length,
     high_threshold=0.9,
-    low_threshold=0.6,
+    threshold=0.6,
     structure_aware=True,
 ):
     # Get positive edge predictions
-    preds = threshold_preds(preds, idx_to_edge, low_threshold)
+    preds = filter(preds, idx_to_edge, threshold)
     if structure_aware:
         return get_structure_aware_accepts(
-            neurograph, graph, preds, high_threshold=high_threshold
+            neurograph,
+            graph,
+            preds,
+            max_length,
+            high_threshold=high_threshold,
         )
     else:
         return preds.keys()
 
 
-def threshold_preds(preds, idx_to_edge, threshold, valid_idxs=[]):
+def filter(preds, idx_to_edge, threshold, valid_idxs=[]):
     """
-    Thresholds predictions by iterating over "preds" and checking whether a
+    Filters predictions by iterating over "preds" and checking whether a
     given predicted probability is above "threshold".
 
     Parameters
@@ -95,32 +102,37 @@ def threshold_preds(preds, idx_to_edge, threshold, valid_idxs=[]):
         predicted probability.
 
     """
-    thresholded_preds = dict()
+    filtered_preds = dict()
     for i, pred_i in enumerate(preds):
         contained_bool = True if len(valid_idxs) == 0 else i in valid_idxs
         if pred_i > threshold and contained_bool:
-            thresholded_preds[idx_to_edge[i]] = pred_i
-    return thresholded_preds
+            filtered_preds[idx_to_edge[i]] = pred_i
+    return filtered_preds
 
 
-def get_structure_aware_accepts(neurograph, graph, preds, high_threshold=0.9):
+def get_structure_aware_accepts(
+    neurograph, graph, preds, max_length, high_threshold=0.9
+):
     # Add best preds
-    best_preds, best_probs = get_best_preds(neurograph, preds, high_threshold)
-    accepts, graph = check_cycles_sequential(graph, best_preds, best_probs)
+    best_preds, best_confidences = get_best(
+        neurograph, preds, high_threshold, max_length
+    )
+    accepts, graph = check_cycles(graph, best_preds, best_confidences)
     if len(best_preds) == len(preds.keys()):
         return accepts, graph
 
     # Add remaining preds
     best_preds = set(best_preds)
     good_preds = []
-    good_probs = []
-    for edge, prob in preds.items():
-        if edge not in best_preds:
-            good_preds.append(edge)
-            good_probs.append(prob)
+    good_confidence = []
+    for proposal, confidence in preds.items():
+        length = neurograph.proposal_length(proposal)
+        if proposal not in best_preds and length < max_length:
+            good_preds.append(proposal)
+            good_confidence.append(confidence)
 
-    more_accepts, graph = check_cycles_sequential(
-        graph, good_preds, good_probs
+    more_accepts, graph = check_cycles(
+        graph, good_preds, good_confidence
     )
     accepts.extend(more_accepts)
     return accepts, graph
@@ -153,7 +165,7 @@ def get_subgraphs(graph, edge):
         return False
 
 
-def check_cycles_sequential(graph, edges, probs):
+def check_cycles(graph, edges, probs):
     accepts = []
     for i in np.argsort(probs):
         subgraph = get_subgraphs(graph, edges[i])
@@ -165,11 +177,20 @@ def check_cycles_sequential(graph, edges, probs):
     return accepts, graph
 
 
-def get_best_preds(neurograph, preds, threshold):
+def get_best(neurograph, preds, threshold, max_length):
+    """
+    Gets the best proposals (i.e. simple proposals with high confidence).
+
+    Parameters
+    ----------
+
+    """
     edges = []
     probs = []
     for edge, prob in preds.items():
-        if neurograph.is_simple(edge) and prob > threshold:
+        length = neurograph.proposal_length(edge)
+        accept = prob > threshold and length < max_length
+        if neurograph.is_simple(edge) and accept:
             edges.append(edge)
             probs.append(prob)
     return edges, probs
