@@ -15,7 +15,10 @@ import numpy as np
 import torch
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 
-from deep_neurographs.machine_learning import feature_generation, graph_datasets
+from deep_neurographs.machine_learning import (
+    feature_generation,
+    graph_datasets,
+)
 from deep_neurographs.machine_learning.datasets import (
     ImgProposalDataset,
     MultiModalDataset,

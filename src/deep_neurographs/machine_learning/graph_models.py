@@ -10,8 +10,8 @@ Graph neural network architectures that learn to classify edge proposals.
 
 import torch
 import torch.nn.functional as F
-from torch.nn import ELU, Dropout, LeakyReLU, Linear
 import torch.nn.init as init
+from torch.nn import ELU, Dropout, LeakyReLU, Linear
 from torch_geometric.nn import GATv2Conv as GATConv
 from torch_geometric.nn import GCNConv
 
@@ -19,7 +19,7 @@ from torch_geometric.nn import GCNConv
 class GCN(torch.nn.Module):
     def __init__(self, input_channels):
         super().__init__()
-        self.input = Linear(input_channels, input_channels)
+        self.input =  Linear(input_channels, input_channels)
         self.conv1 = GCNConv(input_channels, 2 * input_channels)
         self.conv2 = GCNConv(2 * input_channels, input_channels)
         self.conv3 = GCNConv(input_channels, input_channels // 2)
@@ -42,6 +42,8 @@ class GCN(torch.nn.Module):
     def forward(self, x, edge_index):
         # Input
         x = self.input(x)
+        x = self.leaky_relu(x)
+        x = self.dropout(x)
 
         # Layer 1
         x = self.conv1(x, edge_index)
@@ -62,6 +64,9 @@ class GCN(torch.nn.Module):
         x = self.output(x)
 
         return x
+    #self.resgated = ResGatedGraphConv(CoraDataset.num_features, hidden_channels)
+    #self.sage = SAGEConv(hidden_channels, 2 * hidden_channels)
+    #self.transformer = TransformerConv(2 * hidden_channels, 2 * hidden_channels)
 
 
 class GAT(torch.nn.Module):
