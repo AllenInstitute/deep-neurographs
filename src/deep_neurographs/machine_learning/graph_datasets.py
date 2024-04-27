@@ -51,6 +51,7 @@ def init(neurograph, features, heterogeneous=False):
     )
 
     # Initialize data
+    proposals = features["proposals"]["skel"].keys()
     if heterogeneous:
         graph_dataset = HeteroGraphDataset(
             neurograph, x_branches, x_proposals, idxs_branches, idxs_proposals
@@ -58,6 +59,7 @@ def init(neurograph, features, heterogeneous=False):
     else:
         graph_dataset = GraphDataset(
             neurograph,
+            proposals,
             x_branches,
             x_proposals,
             y_proposals,
@@ -78,6 +80,7 @@ class GraphDataset:
     def __init__(
         self,
         neurograph,
+        proposals,
         x_branches,
         x_proposals,
         y_proposals,
@@ -94,7 +97,9 @@ class GraphDataset:
         self.n_proposals = len(y_proposals)
 
         # Initialize data
-        edge_index = set_edge_index(neurograph, idxs_branches, idxs_proposals)
+        edge_index = set_edge_index(
+            neurograph, proposals, idxs_branches, idxs_proposals
+        )
         self.data = GraphData(x=x, y=y, edge_index=edge_index)
 
 
@@ -168,10 +173,10 @@ def add_edge_to_idx(idxs):
     return idxs
 
 
-def set_edge_index(neurograph, idxs_branches, idxs_proposals):
+def set_edge_index(neurograph, proposals, idxs_branches, idxs_proposals):
     # Initializations
     branches_line_graph = nx.line_graph(neurograph)
-    proposals_line_graph = init_proposals_line_graph(neurograph)
+    proposals_line_graph = init_proposals_line_graph(neurograph, proposals)
 
     # Compute edges
     edge_index = branch_to_branch(branches_line_graph, idxs_branches)
@@ -179,7 +184,9 @@ def set_edge_index(neurograph, idxs_branches, idxs_proposals):
         proposal_to_proposal(proposals_line_graph, idxs_proposals)
     )
     edge_index.extend(
-        branch_to_proposal(neurograph, idxs_branches, idxs_proposals)
+        branch_to_proposal(
+            neurograph, proposals, idxs_branches, idxs_proposals
+        )
     )
 
     # Reshape
@@ -188,9 +195,9 @@ def set_edge_index(neurograph, idxs_branches, idxs_proposals):
     return edge_index.long()
 
 
-def init_proposals_line_graph(neurograph):
+def init_proposals_line_graph(neurograph, proposals):
     proposals_graph = nx.Graph()
-    proposals_graph.add_edges_from(list(neurograph.proposals.keys()))
+    proposals_graph.add_edges_from(proposals)
     return nx.line_graph(proposals_graph)
 
 
@@ -212,9 +219,9 @@ def proposal_to_proposal(proposals_line_graph, idxs_proposals):
     return edge_index
 
 
-def branch_to_proposal(neurograph, idxs_branches, idxs_proposals):
+def branch_to_proposal(neurograph, proposals, idxs_branches, idxs_proposals):
     edge_index = []
-    for e in neurograph.proposals.keys():
+    for e in proposals:
         i, j = tuple(e)
         v1 = idxs_proposals["edge_to_idx"][frozenset(e)]
         for k in neurograph.neighbors(i):

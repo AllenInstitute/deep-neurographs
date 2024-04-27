@@ -50,8 +50,14 @@ def visualize_graph(graph, title="Initial Segmentation"):
     plot(data, title)
 
 
-def visualize_proposals(graph, title="Edge Proposals"):
-    visualize_subset(graph, graph.proposals, proposal_subset=True, title=title)
+def visualize_proposals(graph, target_graph=None, title="Edge Proposals"):
+    visualize_subset(
+        graph,
+        graph.proposals,
+        proposal_subset=True,
+        target_graph=target_graph,
+        title=title,
+    )
 
 
 def visualize_targets(graph, target_graph=None, title="Target Edges"):

@@ -484,9 +484,10 @@ def read_txt(path):
         return f.read()
 
 
-def parse_metadata(path):
+def parse_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
     metadata = read_json(path)
-    return metadata["chunk_origin"], metadata["chunk_shape"]
+    chunk_origin = to_img(metadata["chunk_origin"]).tolist()
+    return chunk_origin, metadata["chunk_shape"]
 
 
 def write_json(path, contents):
