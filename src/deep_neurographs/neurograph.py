@@ -20,8 +20,6 @@ from scipy.spatial import KDTree
 from deep_neurographs import generate_proposals, geometry
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import swc_utils, utils
-from deep_neurographs.generate_proposals import is_valid
-from deep_neurographs.geometry import check_dists
 from deep_neurographs.geometry import dist as get_dist
 from deep_neurographs.geometry import get_midpoint
 from deep_neurographs.machine_learning.groundtruth_generation import (
@@ -275,63 +273,31 @@ class NeuroGraph(nx.Graph):
     # --- Proposal Generation ---
     def generate_proposals(
         self,
-        radius,
-        complex_proposals=True,
-        filter_doubles=False,
+        search_radius,
+        complex_bool=True,
         proposals_per_leaf=3,
         optimize=False,
         optimization_depth=10,
     ):
         """
-        Generates edges for the graph.
-        bug: checking whether generated proposal is a double
+        Generates proposals from leaf nodes in "self".
 
         Returns
         -------
         None
 
         """
+        # Initializations
         self.init_kdtree()
-        self.doubles = set()
         self.reset_proposals()
         self.set_proposals_per_leaf(proposals_per_leaf)
-        existing_connections = dict()
-        for leaf in self.leafs:
-            # Check if leaf is valid
-            swc_id = self.nodes[leaf]["swc_id"]
-            if not is_valid(self, leaf, filter_doubles):
-                continue
 
-            # Check potential proposals
-            xyz_leaf = self.nodes[leaf]["xyz"]
-            for xyz in generate_proposals.run(self, leaf, xyz_leaf, radius):
-                # Get connection
-                (i, j) = self.xyz_to_edge[xyz]
-                node, xyz = self.__get_connection(leaf, xyz, (i, j), radius)
-                if not complex_proposals and self.degree[node] > 1:
-                    continue
-
-                # Check whether connection exists
-                pair_id = frozenset((swc_id, self.nodes[i]["swc_id"]))
-                if pair_id in existing_connections.keys():
-                    edge = existing_connections[pair_id]
-                    len1 = self.node_xyz_dist(leaf, xyz)
-                    len2 = self.proposal_length(edge)
-                    if len1 < len2:
-                        node1, node2 = tuple(edge)
-                        self.nodes[node1]["proposals"].remove(node2)
-                        self.nodes[node2]["proposals"].remove(node1)
-                        del self.proposals[edge]
-                        del existing_connections[pair_id]
-                    else:
-                        continue
-
-                # Add proposal
-                self.add_proposal(leaf, node)
-                existing_connections[pair_id] = frozenset({leaf, node})
+        # Main
+        self = generate_proposals.run(
+            self, search_radius, complex_bool=complex_bool
+        )
 
         # Finish
-        self.filter_nodes()
         self.init_kdtree(node_type="leaf")
         self.init_kdtree(node_type="proposal")
         if optimize:
@@ -346,27 +312,12 @@ class NeuroGraph(nx.Graph):
     def set_proposals_per_leaf(self, proposals_per_leaf):
         self.proposals_per_leaf = proposals_per_leaf
 
-    def __get_connection(self, leaf, xyz_edge, edge, radius):
-        i, j = tuple(edge)
-        xyz_leaf = self.nodes[leaf]["xyz"]
-        d_i = check_dists(xyz_leaf, xyz_edge, self.nodes[i]["xyz"], radius)
-        d_j = check_dists(xyz_leaf, xyz_edge, self.nodes[j]["xyz"], radius)
-        if d_i and self.is_contained(i, buffer=36):
-            return i, self.nodes[i]["xyz"]
-        elif d_j and self.is_contained(j, buffer=36):
-            return j, self.nodes[j]["xyz"]
-        else:
-            attrs = self.get_edge_data(i, j)
-            idxs = np.where(np.all(attrs["xyz"] == xyz_edge, axis=1))[0]
-            node = self.split_edge((i, j), attrs, idxs[0])
-            return node, xyz_edge
-
     def init_targets(self, target_neurograph):
         target_neurograph.init_kdtree()
         self.target_edges = init_targets(target_neurograph, self)
 
     def run_optimization(self):
-        driver = "n5" if ".n5" in self.img_path else "zarr"
+        driver = "n5" if "n5" in self.img_path else "zarr"
         img = utils.get_superchunk(
             self.img_path, driver, self.origin, self.shape, from_center=False
         )
@@ -469,7 +420,7 @@ class NeuroGraph(nx.Graph):
     def get_complex_proposals(self):
         return set([e for e in self.get_proposals() if not self.is_simple(e)])
 
-    def get_isolated_proposals(self, r):
+    def isolated_proposals(self, r):
         isolated_proposals = list()
         for edge in self.proposals.keys():
             xyz = self.proposal_midpoint(edge)
@@ -479,19 +430,45 @@ class NeuroGraph(nx.Graph):
                 isolated_proposals.append(edge)
         return isolated_proposals
 
+    def nonisolated_proposals(self, max_depth, max_dist=100):
+        nonisolated_proposals = []
+        for edge in self.proposals.keys():
+            i, j = tuple(edge)
+            if self.proposal_search(i, j, max_depth, max_dist):
+                nonisolated_proposals.append(edge)
+        return nonisolated_proposals
+
+    def proposal_search(self, root_1, root_2, max_depth, max_dist):
+        queue = [(root_1, 0), (root_2, 0)]
+        roots = [root_1, root_2]
+        proposals = set()
+        visited = set()
+        while len(queue) > 0:
+            # Visit node
+            i, depth = queue.pop(0)
+            proposals = proposals.union(self.nodes[i]["proposals"])
+            visited.add(i)
+
+            # Add neighbors
+            if depth < max_depth:
+                for j in [j for j in self.neighbors(i) if j not in visited]:
+                    dist = max(self.dist(root_1, j), self.dist(root_2, j))
+                    if j not in roots and dist < max_dist:
+                        queue.append((j, depth + 1))
+        return len(proposals) - 2 > 0
+
     def is_simple(self, edge):
         i, j = tuple(edge)
         return True if self.is_leaf(i) and self.is_leaf(j) else False
 
-    def proposal_xyz(self, edge):
-        return tuple(self.proposals[edge]["xyz"])
+    def proposal_xyz(self, proposal):
+        return tuple(self.proposals[proposal]["xyz"])
 
-    def proposal_length(self, edge):
-        i, j = tuple(edge)
-        return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
+    def proposal_length(self, proposal):
+        return self.dist(*tuple(proposal))
 
-    def proposal_midpoint(self, edge):
-        i, j = tuple(edge)
+    def proposal_midpoint(self, proposal):
+        i, j = tuple(proposal)
         return get_midpoint(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
     def merge_proposal(self, edge):
@@ -504,20 +481,27 @@ class NeuroGraph(nx.Graph):
         # Add
         self.add_edge(i, j, xyz=xyz, radius=radius, swc_id=swc_id)
         del self.proposals[edge]
-        # delete from kdtree
-
-    def remove_nonisolated_proposals(self, radius):
-        isolated_proposals = self.get_isolated_proposals(radius)
-        proposals = self.get_proposals()
-        while len(proposals) > 0:
-            edge = proposals.pop()
-            if edge not in isolated_proposals:
-                i, j = tuple(edge)
-                self.nodes[i]["proposals"].remove(j)
-                self.nodes[j]["proposals"].remove(i)
-                del self.proposals[edge]
 
     # --- Utils ---
+    def dist(self, i, j):
+        """
+        Computes the Euclidean distance between nodes "i" and "j".
+
+        Parameters
+        ----------
+        i : int
+            Node in self.
+        j : int
+            Nonde in self.
+
+        Returns
+        -------
+        float
+            Euclidean distance between nodes "i" and "j".
+
+        """
+        return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
+
     def get_branches(self, i, key="xyz"):
         branches = []
         for j in self.neighbors(i):
@@ -690,14 +674,17 @@ class NeuroGraph(nx.Graph):
             if len(entry_list) == 0:
                 x, y, z = tuple(self.nodes[i]["xyz"])
                 r = self.nodes[i]["radius"]
-                entry_list.append([1, 2, x, y, z, r, -1])
+                entry_list.append(f"1 2 {x} {y} {z} {r} -1")
                 node_to_idx[i] = 1
 
             # Create entry
             parent = node_to_idx[i]
             entry_list = self.branch_to_entries(entry_list, i, j, parent)
             node_to_idx[j] = len(entry_list)
-        swc_utils.write(path, entry_list)
+
+        # Write
+        if len(entry_list) > 30:
+            swc_utils.write(path, entry_list)
 
     def branch_to_entries(self, entry_list, i, j, parent):
         # Orient branch
@@ -713,6 +700,44 @@ class NeuroGraph(nx.Graph):
             r = branch_radius[k]
             node_id = len(entry_list) + 1
             parent = len(entry_list) if k > 1 else parent
-            entry_list.append([node_id, 2, x, y, z, r, parent])
-
+            entry = f"{node_id} 2 {x} {y} {z} {r} {parent}"
+            entry_list.append(entry)
         return entry_list
+
+    def near_proposal(self, root, depth):
+        # Check root
+        if len(self.nodes[root]["proposals"]) > 0:
+            return True
+
+        # Check nbhd
+        for i, j in nx.bfs_edges(self, source=root, depth_limit=depth):
+            if len(self.nodes[j]["proposals"]) > 0:
+                return True
+        return False
+
+    def remove_components_without_proposals(self):
+        remove_nodes = set()
+        n_components_removed = 0
+        for component in nx.connected_components(self):
+            # Check for proposals
+            hit_proposal = False
+            for i in component:
+                if len(self.nodes[i]["proposals"]) > 0:
+                    hit_proposal = True
+                    break
+
+            # Check whether hit proposal
+            if not hit_proposal:
+                remove_nodes = remove_nodes.union(set(component))
+                n_components_removed += 1
+
+        self.remove_nodes_from(remove_nodes)
+
+
+def connected_components_with_proposals(self):
+    nodes = set(self.nodes)
+    connected_components = list()
+    while len(nodes) > 0:
+        root = utils.sample_singleton(nodes)
+        connected_components.append(self.get_component(root))
+    return connected_components

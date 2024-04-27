@@ -159,12 +159,12 @@ def init_dataset(
     if "Graph" in model_type:
         dataset = graph_datasets.init(neurographs, features)
     else:
-        dataset =  init_proposal_dataset(
+        dataset = init_proposal_dataset(
             neurographs,
             features,
             model_type,
             block_ids=block_ids,
-            transform=transform
+            transform=transform,
         )
     return dataset
 

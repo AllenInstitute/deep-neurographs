@@ -67,11 +67,7 @@ def get_accepted_proposals(
     preds = filter(preds, idx_to_edge, threshold)
     if structure_aware:
         return get_structure_aware_accepts(
-            neurograph,
-            graph,
-            preds,
-            max_length,
-            high_threshold=high_threshold,
+            neurograph, graph, preds, max_length, high_threshold=high_threshold
         )
     else:
         return preds.keys()
@@ -131,9 +127,7 @@ def get_structure_aware_accepts(
             good_preds.append(proposal)
             good_confidence.append(confidence)
 
-    more_accepts, graph = check_cycles(
-        graph, good_preds, good_confidence
-    )
+    more_accepts, graph = check_cycles(graph, good_preds, good_confidence)
     accepts.extend(more_accepts)
     return accepts, graph
 

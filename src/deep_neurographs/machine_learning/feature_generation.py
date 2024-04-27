@@ -69,7 +69,7 @@ def run(
             proposals=proposals,
         )
     return features
-    
+
 
 def run_on_proposals(
     neurograph,
@@ -320,7 +320,7 @@ def get_profile(img, proposal, coords):
     """
     chunk = utils.read_tensorstore_bbox(img, coords["bbox"])
     line = geometry.make_line(coords["start"], coords["end"], N_PROFILE_PTS)
-    return proposal, [chunk[tuple(xyz)] for xyz in line]
+    return proposal, [chunk[tuple(xyz)] / 100 for xyz in line]
 
 
 def generate_skel_features(neurograph, proposals):
@@ -413,8 +413,8 @@ def generate_branch_features(neurograph):
     features = dict()
     for (i, j) in neurograph.edges:
         edge = frozenset((i, j))
+        # if neurograph.near_proposal(i, 3) or neurograph.near_proposal(i, 3):
         features[edge] = np.zeros((32))
-
         temp = np.concatenate(
             (
                 np.array([len(neurograph.edges[i, j]["xyz"])]),

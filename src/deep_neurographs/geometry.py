@@ -454,34 +454,6 @@ def dist(v_1, v_2, metric="l2"):
         return distance.euclidean(v_1, v_2)
 
 
-def check_dists(xyz_1, xyz_2, xyz_3, radius):
-    """
-    Determine whether to create new vertex at "xyz_2" or draw proposal between
-    "xyz_1" and existing node at "xyz_3".
-
-    Parameters
-    ----------
-    xyz_1 : np.ndarray
-        xyz coordinate of leaf node (i.e. source of edge proposal).
-    xyz_2 : np.ndarray
-        xyz coordinate queried from kdtree (i.e. dest of edge proposal).
-    xyz_3 : np.ndarray
-        xyz coordinate of existing node in graph that is near "xyz_2".
-    radius : float
-        Maximum Euclidean length of edge proposal.
-
-    Parameters
-    ----------
-    bool
-        Indication of whether to draw edge proposal between "xyz_1" and
-        "xyz_3".
-
-    """
-    d_1 = dist(xyz_1, xyz_3) < radius
-    d_2 = dist(xyz_2, xyz_3) < 10
-    return True if d_1 and d_2 else False
-
-
 def make_line(xyz_1, xyz_2, n_steps):
     """
     Generates a series of points representing a straight line between two 3D

@@ -29,7 +29,7 @@ N_EPOCHS = 1000
 SCHEDULER_GAMMA = 0.5
 SCHEDULER_STEP_SIZE = 1000
 TEST_PERCENT = 0.15
-WEIGHT_DECAY = 5e-3
+WEIGHT_DECAY = 2e-3
 
 
 class GraphTrainer:
@@ -81,24 +81,24 @@ class GraphTrainer:
         self.scheduler = StepLR(
             self.optimizer,
             step_size=SCHEDULER_STEP_SIZE,
-            gamma=SCHEDULER_GAMMA
+            gamma=SCHEDULER_GAMMA,
         )
 
-    def run_on_graphs(self, graph_datasets):
+    def run_on_graphs(self, datasets):
         """
-        Trains a graph neural network in the case where "graph_datasets" is a
+        Trains a graph neural network in the case where "datasets" is a
         dictionary of datasets such that each corresponds to a distinct graph.
 
         Parameters
         ----------
-        graph_datasets : dict
+        datasets : dict
             Dictionary where each key is a graph id and the value is the
             corresponding graph dataset.
 
         Returns
         -------
         model : torch.nn.Module
-            Graph neural network that has been fit onto "graph_datasets".
+            Graph neural network that has been fit onto "datasets".
 
         """
         # Initializations
@@ -106,13 +106,13 @@ class GraphTrainer:
         best_ckpt = None
 
         # Main
-        train_ids, test_ids = train_test_split(list(graph_datasets.keys()))
+        train_ids, test_ids = train_test_split(list(datasets.keys()))
         for epoch in range(self.n_epochs):
             # Train
             y, hat_y = [], []
             self.model.train()
             for graph_id in train_ids:
-                y_i, hat_y_i = self.train(graph_datasets[graph_id].data, epoch)
+                y_i, hat_y_i = self.train(datasets[graph_id].data, epoch)
                 y.extend(toCPU(y_i))
                 hat_y.extend(toCPU(hat_y_i))
             self.compute_metrics(y, hat_y, "train", epoch)
@@ -123,7 +123,7 @@ class GraphTrainer:
                 y, hat_y = [], []
                 self.model.eval()
                 for graph_id in test_ids:
-                    y_i, hat_y_i = self.forward(graph_datasets[graph_id].data)
+                    y_i, hat_y_i = self.forward(datasets[graph_id].data)
                     y.extend(toCPU(y_i))
                     hat_y.extend(toCPU(hat_y_i))
                 test_score = self.compute_metrics(y, hat_y, "val", epoch)
@@ -137,12 +137,12 @@ class GraphTrainer:
 
     def run_on_graph(self):
         """
-        Trains a graph neural network in the case where "graph_dataset" is a
+        Trains a graph neural network in the case where "dataset" is a
         graph that may contain multiple connected components.
 
         Parameters
         ----------
-        graph_dataset : dict
+        dataset : dict
             Dictionary where each key is a graph id and the value is the
             corresponding graph dataset.
 
@@ -153,14 +153,14 @@ class GraphTrainer:
         """
         pass
 
-    def train(self, graph_data, epoch):
+    def train(self, data, epoch):
         """
         Performs the forward pass and backpropagation to update the model's
         weights.
 
         Parameters
         ----------
-        graph_data : GraphDataset
+        data : GraphDataset
             Graph dataset that corresponds to a single connected component.
         epoch : int
             Current epoch.
@@ -173,17 +173,17 @@ class GraphTrainer:
             Prediction.
 
         """
-        y, hat_y = self.forward(graph_data)
+        y, hat_y = self.forward(data)
         self.backpropagate(y, hat_y, epoch)
         return y, hat_y
 
-    def forward(self, graph_data):
+    def forward(self, data):
         """
-        Runs "graph_data" through "self.model" to generate a prediction.
+        Runs "data" through "self.model" to generate a prediction.
 
         Parameters
         ----------
-        graph_data : GraphDataset
+        data : GraphDataset
             Graph dataset that corresponds to a single connected component.
 
         Returns
@@ -195,7 +195,7 @@ class GraphTrainer:
 
         """
         self.optimizer.zero_grad()
-        x, y, edge_index = toGPU(graph_data)
+        x, y, edge_index = toGPU(data)
         hat_y = self.model(x, edge_index)
         return y, truncate(hat_y, y)
 
@@ -301,7 +301,7 @@ def train_test_split(graph_ids):
 
     """
     n_test_examples = int(len(graph_ids) * TEST_PERCENT)
-    test_ids = ["block_007", "block_010"] #sample(graph_ids, n_test_examples)
+    test_ids = ["block_000", "block_002"]  # sample(graph_ids, n_test_examples)
     train_ids = list(set(graph_ids) - set(test_ids))
     return train_ids, test_ids
 
@@ -324,13 +324,13 @@ def toCPU(tensor):
     return np.array(tensor.detach().cpu()).tolist()
 
 
-def toGPU(graph_data):
+def toGPU(data):
     """
-    Moves "graph_data" from CPU to GPU.
+    Moves "data" from CPU to GPU.
 
     Parameters
     ----------
-    graph_data : GraphDataset
+    data : GraphDataset
         Dataset to be moved to GPU.
 
     Returns
@@ -343,9 +343,9 @@ def toGPU(graph_data):
         Tensor containing edges in graph.
 
     """
-    x = graph_data.x.to("cuda:0", dtype=torch.float32)
-    y = graph_data.y.to("cuda:0", dtype=torch.float32)
-    edge_index = graph_data.edge_index.to("cuda:0")
+    x = data.x.to("cuda:0", dtype=torch.float32)
+    y = data.y.to("cuda:0", dtype=torch.float32)
+    edge_index = data.edge_index.to("cuda:0")
     return x, y, edge_index
 
 
@@ -389,3 +389,11 @@ def get_predictions(hat_y, threshold=0.5):
 
     """
     return (ml_utils.sigmoid(np.array(hat_y)) > threshold).tolist()
+
+
+def connected_components(data):
+    cc_list = []
+    cc_idxs = torch.unique(data.edge_index[0], return_inverse=True)[1]
+    for i in range(cc_idxs.max().item() + 1):
+        cc_list.append(torch.nonzero(cc_idxs == i, as_tuple=False).view(-1))
+    return cc_list
