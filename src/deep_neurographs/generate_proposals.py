@@ -37,10 +37,9 @@ def run(neurograph, search_radius, complex_bool=True):
     """
     connections = dict()
     for leaf in neurograph.leafs:
-        if neurograph.nodes[leaf]["swc_id"] == "864374559":
-            neurograph, connections = run_on_leaf(
-                neurograph, connections, leaf, search_radius, complex_bool
-            )
+        neurograph, connections = run_on_leaf(
+            neurograph, connections, leaf, search_radius, complex_bool
+        )
     neurograph.filter_nodes()
     return neurograph
 
@@ -73,7 +72,6 @@ def run_on_leaf(neurograph, connections, leaf, search_radius, complex_bool):
         were added to "neurograph".
 
     """
-    print("leaf:", leaf)
     leaf_swc_id = neurograph.nodes[leaf]["swc_id"]
     for xyz in get_candidates(neurograph, leaf, search_radius):
         # Get connection
