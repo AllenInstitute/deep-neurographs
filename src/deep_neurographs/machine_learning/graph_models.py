@@ -18,13 +18,18 @@ from torch_geometric.nn import GCNConv, SAGEConv
 class GCN(torch.nn.Module):
     def __init__(self, input_channels):
         super().__init__()
-        self.input =  Linear(input_channels, input_channels)
-        self.conv1 = GCNConv(input_channels, 2 * input_channels)
-        self.conv2 = GCNConv(2 * input_channels, input_channels)
+        # Linear layers
+        self.input = Linear(input_channels, input_channels)
+        self.output = Linear(input_channels // 2, 1)
+
+        # Convolutional layers
+        self.conv1 = GCNConv(input_channels, input_channels // 2)
+        self.conv2 = GCNConv(input_channels // 2, input_channels // 2)
         self.conv3 = GCNConv(input_channels, input_channels // 2)
+
+        # Activation
         self.dropout = Dropout(0.3)
         self.leaky_relu = LeakyReLU()
-        self.output = Linear(input_channels, 1)
 
         # Initialize weights
         self.init_weights()
@@ -63,24 +68,23 @@ class GCN(torch.nn.Module):
         x = self.output(x)
 
         return x
-    #self.resgated = ResGatedGraphConv(CoraDataset.num_features, hidden_channels)
-    #self.sage = SAGEConv(hidden_channels, 2 * hidden_channels)
-    #self.transformer = TransformerConv(2 * hidden_channels, 2 * hidden_channels)
-
-    # self.sage = SAGEConv(hidden_channels, 2 * hidden_channels)
-    # self.transformer = TransformerConv(2 * hidden_channels, 2 * hidden_channels)
 
 
 class GAT(torch.nn.Module):
     def __init__(self, input_channels):
         super().__init__()
+        # Linear layers
         self.input = Linear(input_channels, input_channels)
-        self.conv1 = GATConv(input_channels, 2 * input_channels)
-        self.conv2 = GATConv(2 * input_channels, input_channels)
+        self.output = Linear(input_channels // 2, 1)
+
+        # Convolutional layers
+        self.conv1 = GATConv(input_channels, input_channels // 2)
+        self.conv2 = GATConv(input_channels // 2, input_channels // 2)
         self.conv3 = GATConv(input_channels, input_channels // 2)
+
+        # Activation
         self.dropout = Dropout(0.3)
         self.leaky_relu = LeakyReLU()
-        self.output = Linear(input_channels, 1)
 
         # Initialize weights
         self.init_weights()
@@ -124,13 +128,16 @@ class GAT(torch.nn.Module):
 class MLP(torch.nn.Module):
     def __init__(self, input_channels):
         super().__init__()
+        # Linear layers
         self.input = Linear(input_channels, input_channels)
-        self.linear1 = Linear(input_channels, 2 * input_channels)
-        self.linear2 = Linear(2 * input_channels, input_channels)
+        self.linear1 = Linear(input_channels, input_channels // 2)
+        self.linear2 = Linear(input_channels // 2, input_channels // 2)
         self.linear3 = Linear(input_channels, input_channels // 2)
+        self.output = Linear(input_channels // 2, 1)
+
+        # Activation
         self.dropout = Dropout(0.3)
         self.leaky_relu = LeakyReLU()
-        self.output = Linear(input_channels, 1)
 
         # Initialize weights
         self.init_weights()
