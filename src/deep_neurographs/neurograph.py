@@ -559,6 +559,19 @@ class NeuroGraph(nx.Graph):
         return img_coord - shift
 
     def is_leaf(self, i):
+        """
+        Checks whether node "i" is a leaf.
+
+        Parameters
+        ----------
+        i : int
+            Node to be checked.
+
+        Returns
+        -------
+        Indication of whether node "i" is a leaf
+
+        """
         return True if self.degree[i] == 1 else False
 
     def get_edge_attr(self, edge, key):
