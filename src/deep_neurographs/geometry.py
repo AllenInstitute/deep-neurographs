@@ -41,7 +41,7 @@ def get_directional(neurograph, i, origin, window_size):
         specified origin.
 
     """
-    branches = neurograph.get_branches(i)
+    branches = neurograph.get_branches(i, ignore_reducibles=True)
     branches = shift_branches(branches, origin)
     if len(branches) == 1:
         return compute_tangent(get_subarray(branches[0], window_size))
@@ -341,8 +341,8 @@ def optimize_simple_alignment(neurograph, img, edge, depth=15):
 
     """
     i, j = tuple(edge)
-    branch_i = neurograph.get_branches(i)[0]
-    branch_j = neurograph.get_branches(j)[0]
+    branch_i = neurograph.get_branches(i, ignore_reducibles=True)[0]
+    branch_j = neurograph.get_branches(j, ignore_reducibles=True,)[0]
     d_i, d_j, _ = align(neurograph, img, branch_i, branch_j, depth)
     return branch_i[d_i], branch_j[d_j]
 

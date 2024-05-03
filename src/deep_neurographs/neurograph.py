@@ -512,11 +512,46 @@ class NeuroGraph(nx.Graph):
         """
         return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
-    def get_branches(self, i, key="xyz"):
+    def get_branches(self, i, ignore_reducibles=False, key="xyz"):
         branches = []
         for j in self.neighbors(i):
-            branches.append(self.orient_edge((i, j), i, key=key))
+            branch = self.orient_edge((i, j), i, key=key)
+            if ignore_reducibles:
+                root = i
+                while self.degree[j] == 2:
+                    k = self.get_other_nb(j, root)
+                    branch_jk = self.orient_edge((j, k), j, key=key)
+                    if key == "xyz":
+                        branch = np.vstack([branch, branch_jk])
+                    else:
+                        branch = np.concatenate((branch, branch_jk))
+                    root = j
+                    j = k
+            branches.append(branch)
         return branches
+
+    def get_other_nb(self, i, j):
+        """
+        Gets the other neighbor of node "i" which is not "j" such that "j" is
+        a neighbor of node "i".
+
+        Parameters
+        ----------
+        i : int
+            Node with degree 2.
+        j : int
+            Neighbor of node "i"
+
+        Returns
+        -------
+        int
+            Neighbor of node "i" which is not "j".
+
+        """
+        assert self.degree[i] == 2, "Node does not have degree 2."
+        nbs = list(self.neighbors(i))
+        nbs.remove(j)
+        return nbs[0]
 
     def orient_edge(self, edge, i, key="xyz"):
         if (self.edges[edge][key][0] == self.nodes[i][key]).all():
