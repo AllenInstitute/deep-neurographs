@@ -44,13 +44,45 @@ def visualize_connected_components(
         plot(data, title)
 
 
-def visualize_graph(graph, title="Initial Segmentation"):
+def visualize_graph(graph, title=""):
+    """
+    Visualizes the graph with nodes and edges.
+
+    Parameters
+    ----------
+        graph : networkx.Graph
+            Graph to be visualized.
+        title : str, optional
+            Title of the plot. Default is "".
+
+    Returns
+    -------
+        None
+
+    """
     data = plot_edges(graph, graph.edges)
     data.append(plot_nodes(graph))
     plot(data, title)
 
 
-def visualize_proposals(graph, target_graph=None, title="Edge Proposals"):
+def visualize_proposals(graph, target_graph=None, title="Proposals"):
+    """
+    Visualizes a graph with proposals.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be visualized.
+    target_graph : networkx.Graph, optional
+        Graph generated from ground truth tracings. The default is None.
+    title : str, optional
+        Title of the plot. Default is "Proposals".
+
+    Returns
+    -------
+    None
+
+    """
     visualize_subset(
         graph,
         graph.proposals,
@@ -60,7 +92,26 @@ def visualize_proposals(graph, target_graph=None, title="Edge Proposals"):
     )
 
 
-def visualize_targets(graph, target_graph=None, title="Target Edges"):
+def visualize_targets(
+    graph, target_graph=None, title="Ground Truth - Accepted Proposals"
+):
+    """
+    Visualizes a graph and its ground truth accept proposals.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be visualized.
+    target_graph : networkx.Graph, optional
+        Graph generated from ground truth tracings. The default is None.
+    title : str, optional
+        Title of the plot. Default is "Ground Truth - Accepted Proposals".
+
+    Returns
+    -------
+    None
+
+    """
     visualize_subset(
         graph,
         graph.target_edges,
@@ -72,19 +123,43 @@ def visualize_targets(graph, target_graph=None, title="Target Edges"):
 
 def visualize_subset(
     graph,
-    edges,
+    subset,
     line_width=5,
     proposal_subset=False,
     target_graph=None,
     title="",
 ):
+    """
+    Visualizes a graph and a subset of edges or proposals.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be visualized.
+    subset : container
+        Subset of edges or proposals to be visualized.
+    line_width : int, optional
+        Line width used to plot "subset". The default is 5.
+    proposals_subset : bool, optional
+        Indication of whether "subset" is a subset of proposals. The default
+        is False.
+    target_graph : networkx.Graph, optional
+        Graph generated from ground truth tracings. The default is None.
+    title : str, optional
+        Title of the plot. Default is "Proposals".
+
+    Returns
+    -------
+    None
+
+    """
     # Plot graph
     data = plot_edges(graph, graph.edges, color="black")
     data.append(plot_nodes(graph))
     if proposal_subset:
-        data.extend(plot_proposals(graph, edges, line_width=line_width))
+        data.extend(plot_proposals(graph, subset, line_width=line_width))
     else:
-        data.extend(plot_edges(graph, edges, line_width=line_width))
+        data.extend(plot_edges(graph, subset, line_width=line_width))
 
     # Add target graph (if applicable)
     if target_graph:

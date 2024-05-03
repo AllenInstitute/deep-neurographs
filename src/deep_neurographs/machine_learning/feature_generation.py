@@ -367,8 +367,8 @@ def get_directionals(neurograph, proposal, window_size):
 
 def get_avg_radii(neurograph, proposal):
     i, j = tuple(proposal)
-    radii_i = neurograph.get_branches(i, key="radius")
-    radii_j = neurograph.get_branches(j, key="radius")
+    radii_i = neurograph.get_branches(i, ignore_reducibles=True, key="radius")
+    radii_j = neurograph.get_branches(j, ignore_reducibles=True, key="radius")
     return np.array([get_avg_radius(radii_i), get_avg_radius(radii_j)])
 
 
@@ -382,8 +382,8 @@ def get_avg_radius(radii_list):
 
 def get_avg_branch_lens(neurograph, proposal):
     i, j = tuple(proposal)
-    branches_i = neurograph.get_branches(i, key="xyz")
-    branches_j = neurograph.get_branches(j, key="xyz")
+    branches_i = neurograph.get_branches(i, ignore_reducibles=True)
+    branches_j = neurograph.get_branches(j, ignore_reducibles=True)
     return np.array([get_branch_len(branches_i), get_branch_len(branches_j)])
 
 
