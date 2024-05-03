@@ -12,7 +12,7 @@ import torch
 import torch.nn.init as init
 from torch.nn import Dropout, LeakyReLU, Linear
 from torch_geometric.nn import GATv2Conv as GATConv
-from torch_geometric.nn import GCNConv, SAGEConv
+from torch_geometric.nn import GCNConv
 
 
 class GCN(torch.nn.Module):
@@ -58,11 +58,6 @@ class GCN(torch.nn.Module):
         x = self.conv2(x, edge_index)
         x = self.leaky_relu(x)
         x = self.dropout(x)
-
-        # Layer 3
-        # x = self.conv3(x, edge_index)
-        # x = self.leaky_relu(x)
-        # x = self.dropout(x)
 
         # Output
         x = self.output(x)
@@ -113,11 +108,6 @@ class GAT(torch.nn.Module):
         x = self.conv2(x, edge_index)
         x = self.leaky_relu(x)
         x = self.dropout(x)
-
-        # Layer 3
-        # x = self.conv3(x, edge_index)
-        # x = self.leaky_relu(x)
-        # x = self.dropout(x)
 
         # Output
         x = self.output(x)

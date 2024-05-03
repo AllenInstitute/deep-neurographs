@@ -393,7 +393,7 @@ def read_tensorstore_bbox(img, bbox):
     start = bbox["min"]
     end = bbox["max"]
     return (
-        img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+        img[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
         .read()
         .result()
     )
@@ -402,7 +402,7 @@ def read_tensorstore_bbox(img, bbox):
 def get_chunk(arr, xyz, shape, from_center=True):
     start, end = get_start_end(xyz, shape, from_center=from_center)
     return deepcopy(
-        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+        arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
     )
 
 
@@ -486,7 +486,8 @@ def read_txt(path):
 
 def parse_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
     metadata = read_json(path)
-    chunk_origin = to_img(metadata["chunk_origin"]).tolist()
+    origin = metadata["chunk_origin"]
+    chunk_origin = to_img(origin, anisotropy=anisotropy).tolist()
     return chunk_origin, metadata["chunk_shape"]
 
 
@@ -557,8 +558,8 @@ def to_world(xyz, shift=[0, 0, 0]):
     return tuple([xyz[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
 
 
-def to_img(xyz):
-    return (xyz / ANISOTROPY).astype(int)
+def to_img(xyz, anisotropy=ANISOTROPY):
+    return (xyz / np.array(anisotropy)).astype(int)
 
 
 # --- math utils ---
@@ -711,4 +712,4 @@ def get_memory_usage():
 
 def get_batches(iterable, batch_size):
     for start in range(0, len(iterable), batch_size):
-        yield iterable[start: min(start + batch_size, len(iterable))]
+        yield iterable[start : min(start + batch_size, len(iterable))]
