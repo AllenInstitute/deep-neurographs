@@ -26,7 +26,7 @@ from deep_neurographs.machine_learning import ml_utils
 
 LR = 1e-3
 N_EPOCHS = 1000
-SCHEDULER_GAMMA = 0.5
+SCHEDULER_GAMMA = 0.75
 SCHEDULER_STEP_SIZE = 1000
 TEST_PERCENT = 0.15
 WEIGHT_DECAY = 1e-3

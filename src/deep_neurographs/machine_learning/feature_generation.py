@@ -28,7 +28,7 @@ CHUNK_SIZE = [64, 64, 64]
 WINDOW = [5, 5, 5]
 N_BRANCH_PTS = 50
 N_PROFILE_PTS = 10
-N_SKEL_FEATURES = 20
+N_SKEL_FEATURES = 23
 SUPPORTED_MODELS = [
     "AdaBoost",
     "RandomForest",
@@ -117,7 +117,9 @@ def run_on_proposals(
 
     # Generate features
     proposals = neurograph.get_proposals() if proposals is None else proposals
-    features = {"skel": generate_skel_features(neurograph, proposals)}
+    features = {
+        "skel": generate_skel_features(neurograph, proposals, search_radius)
+    }
     if model_type in ["ConvNet", "MultiModalNet"]:
         assert labels_path, "Must provide label_path for model_type!"
         features["img_chunks"], features["img_profile"] = generate_img_chunks(
@@ -323,16 +325,17 @@ def get_profile(img, proposal, coords):
     return proposal, [chunk[tuple(xyz)] / 100 for xyz in line]
 
 
-def generate_skel_features(neurograph, proposals):
+def generate_skel_features(neurograph, proposals, search_radius):
     features = dict()
     for proposal in proposals:
         i, j = tuple(proposal)
         features[proposal] = np.concatenate(
             (
+                1,  # edge type
                 neurograph.proposal_length(proposal),
                 neurograph.degree[i],
                 neurograph.degree[j],
-                n_nearby_leafs(neurograph, proposal),
+                n_nearby_leafs(neurograph, proposal, search_radius),
                 get_radii(neurograph, proposal),
                 get_avg_radii(neurograph, proposal),
                 get_directionals(neurograph, proposal, 8),
@@ -402,25 +405,48 @@ def avg_branch_radii(neurograph, edge):
     return np.array([np.mean(neurograph.edges[edge]["radius"])])
 
 
-def n_nearby_leafs(neurograph, proposal):
+def n_nearby_leafs(neurograph, proposal, r):
     xyz = neurograph.proposal_midpoint(proposal)
-    leafs = neurograph.query_kdtree(xyz, 25, node_type="leaf")
-    return len(leafs) - 2
+    leafs = neurograph.query_kdtree(xyz, 24, node_type="leaf")
+    return len(leafs) - 1
+
+
+def n_nearby_junctions(neurograph, proposal, r):
+    i, j = tuple(proposal)
+    n_hits_i = count_junctions(neurograph, i, r)
+    n_hits_j = count_junctions(neurograph, j, r)
+    return np.array([n_hits_i, n_hits_j])
+
+
+def count_junctions(neurograph, i, r):
+    n_hits = 0
+    swc_id_i = neurograph.nodes[i]["xyz"]
+    xyz_i = neurograph.nodes[i]["xyz"]
+    for xyz in neurograph.query_kdtree(xyz_i, r, node_type="junction"):
+        if swc_id_i == neurograph.xyz_to_swc(xyz):
+            n_hits += 1
+    return n_hits
 
 
 # --- Edge Feature Generation --
 def generate_branch_features(neurograph):
     features = dict()
-    for (i, j) in neurograph.edges:
-        edge = frozenset((i, j))
-        # if neurograph.near_proposal(i, 3) or neurograph.near_proposal(i, 3):
-        features[edge] = np.zeros((32))
-        temp = np.concatenate(
+    for edge in neurograph.edges:
+        i, j = tuple(edge)
+        features[frozenset(edge)] = np.concatenate(
             (
-                np.array([len(neurograph.edges[i, j]["xyz"])]),
-                avg_branch_radii(neurograph, edge),
-                compute_curvature(neurograph, edge),
-            )
+                -1,  # edge type
+                -1,
+                neurograph.degree[i],
+                neurograph.degree[j],
+                -1,
+                get_radii(neurograph, edge),
+                np.mean(neurograph.edges[i, j]["radius"]),
+                np.mean(neurograph.edges[i, j]["radius"]),
+                -1 * np.ones(12),
+                -1 * np.ones((N_PROFILE_PTS + 2)),
+            ),
+            axis=None,
         )
     return features
 

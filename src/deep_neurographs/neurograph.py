@@ -298,6 +298,7 @@ class NeuroGraph(nx.Graph):
         )
 
         # Finish
+        self.init_kdtree(node_type="junction")
         self.init_kdtree(node_type="leaf")
         self.init_kdtree(node_type="proposal")
         if optimize:
@@ -342,10 +343,14 @@ class NeuroGraph(nx.Graph):
 
         """
         err_msg = "Invalid node_type in self.query_kdtree!"
-        assert node_type in [None, "proposal", "leaf"], err_msg
+        assert node_type in [None, "proposal", "leaf", "junction"], err_msg
         if node_type == "leaf":
             xyz_list = [self.nodes[leaf]["xyz"] for leaf in self.leafs]
             self.leaf_kdtree = KDTree(xyz_list)
+        elif node_type == "junction":
+            xyz_list = [self.nodes[j]["xyz"] for j in self.junctions]
+            nonempty = len(xyz_list) > 0
+            self.junction_kdtree = KDTree(xyz_list) if nonempty else None
         elif node_type == "proposal":
             self.proposal_kdtree = KDTree(list(self.xyz_to_proposal.keys()))
         else:
@@ -368,9 +373,14 @@ class NeuroGraph(nx.Graph):
 
         """
         err_msg = "Invalid node_type in self.query_kdtree!"
-        assert node_type in [None, "leaf", "proposal"], err_msg
+        assert node_type in [None, "leaf", "proposal", "junction"], err_msg
         if node_type == "leaf":
             return geometry.query_ball(self.leaf_kdtree, xyz, d)
+        elif node_type == "junction":
+            if self.junction_kdtree:
+                return geometry.query_ball(self.junction_kdtree, xyz, d)
+            else:
+                return []
         elif node_type == "proposal":
             return geometry.query_ball(self.proposal_kdtree, xyz, d)
         else:
@@ -517,6 +527,14 @@ class NeuroGraph(nx.Graph):
     def node_xyz_dist(self, node, xyz):
         return get_dist(xyz, self.nodes[node]["xyz"])
 
+    def edge_length(self, edge):
+        length = 0
+        for i in range(1, len(self.edges[edge]["xyz"])):
+            length += get_dist(
+                self.edges[edge]["xyz"][i - 1], self.edges[edge]["xyz"][i]
+            )
+        return length
+
     def is_contained(self, node_or_xyz, buffer=0):
         if self.bbox:
             img_coord = self.to_img(node_or_xyz)
@@ -609,12 +627,6 @@ class NeuroGraph(nx.Graph):
                 length_i = len(segment_i)
                 length_j = self.component_cardinality(j)
                 if length_i / length_j < 0.6:
-                    # print("swc_id_i:", swc_id_i)
-                    # print("swc_id_j:", swc_id_j)
-                    # print("% branch hit:", percent_close)
-                    # print("length ratio:", length_i / length_j)
-                    # print("double:", swc_id_i)
-                    # print("")
                     return True
         return False
 
@@ -622,9 +634,9 @@ class NeuroGraph(nx.Graph):
         edge = self.xyz_to_edge[tuple(xyz)]
         i, j = tuple(edge)
         if return_node:
-            return self.edges[edge]["swc_id"], i
+            return self.nodes[i]["swc_id"], i
         else:
-            return self.edges[edge]["swc_id"]
+            return self.nodes[i]["swc_id"]
 
     def component_cardinality(self, root):
         cardinality = 0
