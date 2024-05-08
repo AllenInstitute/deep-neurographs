@@ -25,7 +25,6 @@ class GCN(torch.nn.Module):
         # Convolutional layers
         self.conv1 = GCNConv(input_channels, input_channels // 2)
         self.conv2 = GCNConv(input_channels // 2, input_channels // 2)
-        self.conv3 = GCNConv(input_channels, input_channels // 2)
 
         # Activation
         self.dropout = Dropout(0.3)
@@ -35,7 +34,7 @@ class GCN(torch.nn.Module):
         self.init_weights()
 
     def init_weights(self):
-        layers = [self.conv1, self.conv2, self.conv3, self.input, self.output]
+        layers = [self.conv1, self.conv2, self.input, self.output]
         for layer in layers:
             for param in layer.parameters():
                 if len(param.shape) > 1:
@@ -69,13 +68,12 @@ class GAT(torch.nn.Module):
     def __init__(self, input_channels):
         super().__init__()
         # Linear layers
-        self.input = Linear(input_channels, input_channels)
+        self.input = Linear(input_channels, 2 * input_channels)
         self.output = Linear(input_channels // 2, 1)
 
         # Convolutional layers
-        self.conv1 = GATConv(input_channels, input_channels // 2)
-        self.conv2 = GATConv(input_channels // 2, input_channels // 2)
-        self.conv3 = GATConv(input_channels, input_channels // 2)
+        self.conv1 = GATConv(2 * input_channels, input_channels)
+        self.conv2 = GATConv(input_channels, input_channels // 2)
 
         # Activation
         self.dropout = Dropout(0.3)
@@ -85,7 +83,7 @@ class GAT(torch.nn.Module):
         self.init_weights()
 
     def init_weights(self):
-        layers = [self.conv1, self.conv2, self.conv3, self.input, self.output]
+        layers = [self.conv1, self.conv2, self.input, self.output]
         for layer in layers:
             for param in layer.parameters():
                 if len(param.shape) > 1:
