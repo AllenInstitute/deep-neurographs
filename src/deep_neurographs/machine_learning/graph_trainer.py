@@ -21,15 +21,21 @@ from sklearn.metrics import (
 )
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
+from torch_geometric.utils import subgraph
 
 from deep_neurographs.machine_learning import ml_utils
 
+# Training
 LR = 1e-3
-N_EPOCHS = 1000
-SCHEDULER_GAMMA = 0.75
+N_EPOCHS = 200
+SCHEDULER_GAMMA = 0.5
 SCHEDULER_STEP_SIZE = 1000
 TEST_PERCENT = 0.15
 WEIGHT_DECAY = 1e-3
+
+# Augmentation
+MAX_PROPOSAL_DROPOUT = 0.1
+SCALING_FACTOR = 0.05
 
 
 class GraphTrainer:
@@ -44,6 +50,8 @@ class GraphTrainer:
         criterion,
         lr=LR,
         n_epochs=N_EPOCHS,
+        max_proposal_dropout=MAX_PROPOSAL_DROPOUT,
+        scaling_factor=SCALING_FACTOR,
         weight_decay=WEIGHT_DECAY,
     ):
         """
@@ -68,6 +76,7 @@ class GraphTrainer:
         None.
 
         """
+        # Training
         self.model = model.to("cuda:0")
         self.criterion = criterion
         self.n_epochs = n_epochs
@@ -77,6 +86,10 @@ class GraphTrainer:
         self.init_scheduler()
         self.writer = SummaryWriter()
 
+        # Augmentation
+        self.scaling_factor = scaling_factor
+        self.max_proposal_dropout = max_proposal_dropout
+
     def init_scheduler(self):
         self.scheduler = StepLR(
             self.optimizer,
@@ -84,7 +97,7 @@ class GraphTrainer:
             gamma=SCHEDULER_GAMMA,
         )
 
-    def run_on_graphs(self, datasets):
+    def run_on_graphs(self, datasets, augment=False):
         """
         Trains a graph neural network in the case where "datasets" is a
         dictionary of datasets such that each corresponds to a distinct graph.
@@ -112,7 +125,7 @@ class GraphTrainer:
             y, hat_y = [], []
             self.model.train()
             for graph_id in train_ids:
-                y_i, hat_y_i = self.train(datasets[graph_id].data, epoch)
+                y_i, hat_y_i = self.train(datasets[graph_id], epoch, augment=augment)
                 y.extend(toCPU(y_i))
                 hat_y.extend(toCPU(hat_y_i))
             self.compute_metrics(y, hat_y, "train", epoch)
@@ -153,7 +166,7 @@ class GraphTrainer:
         """
         pass
 
-    def train(self, data, epoch):
+    def train(self, dataset, epoch, augment=False):
         """
         Performs the forward pass and backpropagation to update the model's
         weights.
@@ -164,6 +177,8 @@ class GraphTrainer:
             Graph dataset that corresponds to a single connected component.
         epoch : int
             Current epoch.
+        augment : bool, optional
+            Indication of whether to augment data. Default is False.
 
         Returns
         -------
@@ -173,9 +188,16 @@ class GraphTrainer:
             Prediction.
 
         """
-        y, hat_y = self.forward(data)
+        if augment:
+            dataset = self.augment(deepcopy(dataset))
+        y, hat_y = self.forward(dataset.data)
         self.backpropagate(y, hat_y, epoch)
         return y, hat_y
+
+    def augment(self, dataset):
+        augmented_dataset = rescale_data(dataset, self.scaling_factor)
+        #augmented_data = proposal_dropout(dataset, self.max_proposal_dropout)
+        return augmented_dataset
 
     def forward(self, data):
         """
@@ -397,3 +419,31 @@ def connected_components(data):
     for i in range(cc_idxs.max().item() + 1):
         cc_list.append(torch.nonzero(cc_idxs == i, as_tuple=False).view(-1))
     return cc_list
+
+
+def rescale_data(dataset, scaling_factor):
+    # Get scaling factor
+    low = 1.0 - scaling_factor
+    high = 1.0 + scaling_factor
+    scaling_factor = torch.tensor(np.random.uniform(low=low, high=high))
+
+    # Rescale
+    n = count_proposals(dataset)
+    dataset.data.x[0:n, 1] = scaling_factor * dataset.data.x[0:n, 1]
+    return dataset
+
+
+def proposal_dropout(data, max_proposal_dropout):
+    n_dropout_edges = len(data.dropout_edges) // 2
+    dropout_prob = np.random.uniform(low=0, high=max_proposal_dropout)
+    n_remove = int(dropout_prob * n_dropout_edges)
+    remove_edges = sample(data.dropout_edges, n_remove)
+    for edge in remove_edges:
+        reversed_edge = [edge[1], edge[0]]
+        edges_to_remove = torch.tensor([edge, reversed_edge], dtype=torch.long)
+        edges_mask = torch.all(data.data.edge_index.T == edges_to_remove[:, None], dim=2).any(dim=0)
+        data.data.edge_index = data.data.edge_index[:, ~edges_mask]
+    return data
+
+def count_proposals(dataset):
+    return dataset.data.y.size(0)

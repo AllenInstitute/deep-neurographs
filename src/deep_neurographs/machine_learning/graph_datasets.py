@@ -97,10 +97,11 @@ class GraphDataset:
         self.n_proposals = len(y_proposals)
 
         # Initialize data
-        edge_index = set_edge_index(
+        edge_index, proposal_edges = set_edge_index(
             neurograph, proposals, idxs_branches, idxs_proposals
         )
         self.data = GraphData(x=x, y=y, edge_index=edge_index)
+        self.dropout_edges = proposal_edges
 
 
 class HeteroGraphDataset:
@@ -177,12 +178,11 @@ def set_edge_index(neurograph, proposals, idxs_branches, idxs_proposals):
     # Initializations
     branches_line_graph = nx.line_graph(neurograph)
     proposals_line_graph = init_proposals_line_graph(neurograph, proposals)
+    proposal_edges = proposal_to_proposal(proposals_line_graph, idxs_proposals)
 
     # Compute edges
     edge_index = branch_to_branch(branches_line_graph, idxs_branches)
-    edge_index.extend(
-        proposal_to_proposal(proposals_line_graph, idxs_proposals)
-    )
+    edge_index.extend(proposal_edges)
     edge_index.extend(
         branch_to_proposal(
             neurograph, proposals, idxs_branches, idxs_proposals
@@ -192,7 +192,7 @@ def set_edge_index(neurograph, proposals, idxs_branches, idxs_proposals):
     # Reshape
     edge_index = np.array(edge_index, dtype=np.int64).tolist()
     edge_index = torch.Tensor(edge_index).t().contiguous()
-    return edge_index.long()
+    return edge_index.long(), proposal_edges
 
 
 def init_proposals_line_graph(neurograph, proposals):

@@ -331,7 +331,7 @@ def generate_skel_features(neurograph, proposals, search_radius):
         i, j = tuple(proposal)
         features[proposal] = np.concatenate(
             (
-                1,  # edge type
+                1, # edge type
                 neurograph.proposal_length(proposal),
                 neurograph.degree[i],
                 neurograph.degree[j],
@@ -361,7 +361,12 @@ def get_directionals(neurograph, proposal, window_size):
     # Compute features
     inner_product_1 = abs(np.dot(proposal_direction, direction_i))
     inner_product_2 = abs(np.dot(proposal_direction, direction_j))
-    inner_product_3 = np.dot(direction_i, direction_j)
+    if neurograph.is_simple(proposal):
+        inner_product_3 = np.dot(direction_i, direction_j)
+    else:
+        inner_product_3a = np.dot(direction_i, direction_j)
+        inner_product_3b = np.dot(direction_i, direction_j)
+        inner_product_3 = max(inner_product_3a, inner_product_3b)
     return np.array([inner_product_1, inner_product_2, inner_product_3])
 
 
@@ -435,21 +440,23 @@ def generate_branch_features(neurograph):
         i, j = tuple(edge)
         features[frozenset(edge)] = np.concatenate(
             (
-                -1,  # edge type
-                -1,
-                neurograph.degree[i],
-                neurograph.degree[j],
-                -1,
-                get_radii(neurograph, edge),
-                np.mean(neurograph.edges[i, j]["radius"]),
-                np.mean(neurograph.edges[i, j]["radius"]),
-                -1 * np.ones(12),
-                -1 * np.ones((N_PROFILE_PTS + 2)),
+                -1, # edge type
+                np.zeros((32))
             ),
             axis=None,
         )
     return features
-
+"""
+                0,
+                neurograph.degree[i],
+                neurograph.degree[j],
+                0,
+                get_radii(neurograph, edge),
+                np.mean(neurograph.edges[i, j]["radius"]),
+                np.mean(neurograph.edges[i, j]["radius"]),
+                np.zeros(12),
+                np.zeros((N_PROFILE_PTS + 2)),
+"""
 
 def compute_curvature(neurograph, edge):
     kappa = curvature(neurograph.edges[edge]["xyz"])
