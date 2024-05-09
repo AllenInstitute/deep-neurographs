@@ -29,6 +29,7 @@ WINDOW = [5, 5, 5]
 N_BRANCH_PTS = 50
 N_PROFILE_PTS = 10
 N_SKEL_FEATURES = 23
+NODE_PROFILE_DEPTH = 15
 SUPPORTED_MODELS = [
     "AdaBoost",
     "RandomForest",
@@ -126,7 +127,7 @@ def run_on_proposals(
             neurograph, proposals, img, labels
         )
     else:
-        features["img_profile"] = generate_img_profiles(
+        features["img_profile"] = generate_proposal_profiles(
             neurograph, proposals, img
         )
     return features
@@ -228,7 +229,7 @@ def get_img_chunk(img, labels, coord_0, coord_1, thread_id=None):
         return chunk, profile
 
 
-def generate_img_profiles(neurograph, proposals, img):
+def generate_proposal_profiles(neurograph, proposals, img):
     """
     Generates an image intensity profile along each proposal by reading from
     an image on the cloud.
@@ -256,19 +257,89 @@ def generate_img_profiles(neurograph, proposals, img):
         coords[proposal] = get_profile_coords(neurograph, proposal)
 
     # Generate profiles
-    img_profiles = dict()
     with ThreadPoolExecutor() as executor:
         threads = []
-        for e, coords_e in coords.items():
-            threads.append(executor.submit(get_profile, img, e, coords_e))
+        for proposal_i, coords_i in coords.items():
+            threads.append(
+                executor.submit(get_profile, img, coords_i, proposal_i)
+            )
 
+    # Process results
+    profiles = dict()
     for thread in as_completed(threads):
-        e, img_profile_e = thread.result()
-        img_profiles[e] = img_profile_e
-    return img_profiles
+        proposal, profile = thread.result()
+        profiles[proposal] = profile
+    return profiles
 
 
-def get_profile_coords(neurograph, proposal):
+def generate_edge_profiles(neurograph, img):
+    pass
+
+
+def generate_node_profiles(neurograph, img):
+    # Generate coordinates
+    coords = dict()
+    for i in neurograph.nodes:
+        if neurograph.degree[i] == 1:
+            path = get_leaf_profile_coords(neurograph, i)
+        else:
+            path = get_junction_profile_coords(neurograph, i)
+
+        coords[i] = {
+            "bbox": get_node_bbox(neurograph, path),
+            "path": geometry.sample_curve(path, N_PROFILE_PTS)
+        }
+
+    # Generate profiles
+    with ThreadPoolExecutor() as executor:
+        threads = []
+        for i, coords_i in coords.items():
+            threads.append(executor.submit(get_profile, img, coords_i, i))
+
+    # Process results
+    profiles = dict()
+    for thread in as_completed(threads):
+        i, profile = thread.result()
+        profiles[i] = profile
+    return profiles
+
+
+def get_leaf_profile_coords(neurograph, i):
+    j = list(neurograph.neighbors(i))[0]
+    return get_profile_path(neurograph.orient_edge((i, j), i, key="xyz"))
+
+
+def get_junction_profile_coords(neurograph, i):
+    # Get branches
+    nbs = list(neurograph.neighbors(i))
+    xyz_list_1 = neurograph.orient_edge((i, nbs[0]), i, key="xyz")
+    xyz_list_2 = neurograph.orient_edge((i, nbs[1]), i, key="xyz")
+
+    # Get profile paths
+    path_1 = get_profile_path(xyz_list_1)
+    path_2 = get_profile_path(xyz_list_2)
+    return np.vstack([np.flip(path_1, axis=0), path_2])
+
+
+def get_profile_path(xyz_list):
+    path_length = 0
+    for i in range(1, len(xyz_list)):
+        if i > 0:
+            path_length += geometry.dist(xyz_list[i - 1], xyz_list[i])
+        if path_length >= NODE_PROFILE_DEPTH:
+            break
+    return xyz_list[0:i, :]
+
+
+def get_node_bbox(neurograph, coords):
+    bbox = {
+        "start": np.floor(np.min(coords, axis=0)).astype(int),
+        "end": np.ceil(np.max(coords, axis=0)).astype(int),
+    }
+    return bbox
+
+
+def get_proposal_profile_coords(neurograph, proposal):
     """
     Gets coordinates needed to compute an image intensity profile.
 
@@ -293,15 +364,16 @@ def get_profile_coords(neurograph, proposal):
 
     # Store coordinates
     bbox = utils.get_minimal_bbox(coord_0, coord_1)
+    start = [coord_0[i] - bbox["min"][i] for i in range(3)]
+    end = [coord_1[i] - bbox["min"][i] for i in range(3)]
     coords = {
         "bbox": bbox,
-        "start": [coord_0[i] - bbox["min"][i] for i in range(3)],
-        "end": [coord_1[i] - bbox["min"][i] for i in range(3)],
+        "path": geometry.make_line(start, end, N_PROFILE_PTS),
     }
     return coords
 
 
-def get_profile(img, proposal, coords):
+def get_profile(img, coords, thread_id):
     """
     Gets the image intensity profile for a given proposal.
 
@@ -309,20 +381,21 @@ def get_profile(img, proposal, coords):
     ----------
     img : tensorstore.TensorStore
         Image to be queried.
-    proposal : frozenset
-        Proposal that image profile corresponds to.
+    coords : dict
+        ...
+    thread_id : hashable
+        ...
 
     Returns
     -------
-    proposal : frozenset
-        Proposal that image profile corresponds to.
+    thread_id : hashable
+        ...
     list[int]
         Image intensity profile.
 
     """
     chunk = utils.read_tensorstore_bbox(img, coords["bbox"])
-    line = geometry.make_line(coords["start"], coords["end"], N_PROFILE_PTS)
-    return proposal, [chunk[tuple(xyz)] / 100 for xyz in line]
+    return thread_id, [chunk[tuple(xyz)] for xyz in coords["path"]]
 
 
 def generate_skel_features(neurograph, proposals, search_radius):
@@ -446,6 +519,7 @@ def generate_branch_features(neurograph):
             axis=None,
         )
     return features
+
 """
                 0,
                 neurograph.degree[i],
