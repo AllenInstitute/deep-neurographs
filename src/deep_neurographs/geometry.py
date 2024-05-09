@@ -349,7 +349,7 @@ def optimize_simple_alignment(neurograph, img, edge, depth=15):
     """
     i, j = tuple(edge)
     branch_i = neurograph.get_branches(i, ignore_reducibles=True)[0]
-    branch_j = neurograph.get_branches(j, ignore_reducibles=True,)[0]
+    branch_j = neurograph.get_branches(j, ignore_reducibles=True)[0]
     d_i, d_j, _ = align(neurograph, img, branch_i, branch_j, depth)
     return branch_i[d_i], branch_j[d_j]
 
