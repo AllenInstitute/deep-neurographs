@@ -287,7 +287,7 @@ def generate_node_profiles(neurograph, img):
 
         coords[i] = {
             "bbox": get_node_bbox(neurograph, path),
-            "path": geometry.sample_curve(path, N_PROFILE_PTS)
+            "path": geometry.sample_curve(path, N_PROFILE_PTS),
         }
 
     # Generate profiles
@@ -512,11 +512,7 @@ def generate_branch_features(neurograph):
     for edge in neurograph.edges:
         i, j = tuple(edge)
         features[frozenset(edge)] = np.concatenate(
-            (
-                -1,  # edge type
-                np.zeros((32))
-            ),
-            axis=None,
+            (-1, np.zeros((32))), axis=None  # edge type
         )
     return features
 

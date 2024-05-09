@@ -125,7 +125,9 @@ class GraphTrainer:
             y, hat_y = [], []
             self.model.train()
             for graph_id in train_ids:
-                y_i, hat_y_i = self.train(datasets[graph_id], epoch, augment=augment)
+                y_i, hat_y_i = self.train(
+                    datasets[graph_id], epoch, augment=augment
+                )
                 y.extend(toCPU(y_i))
                 hat_y.extend(toCPU(hat_y_i))
             self.compute_metrics(y, hat_y, "train", epoch)
@@ -196,7 +198,7 @@ class GraphTrainer:
 
     def augment(self, dataset):
         augmented_dataset = rescale_data(dataset, self.scaling_factor)
-        #augmented_data = proposal_dropout(dataset, self.max_proposal_dropout)
+        # augmented_data = proposal_dropout(dataset, self.max_proposal_dropout)
         return augmented_dataset
 
     def forward(self, data):
@@ -441,9 +443,12 @@ def proposal_dropout(data, max_proposal_dropout):
     for edge in remove_edges:
         reversed_edge = [edge[1], edge[0]]
         edges_to_remove = torch.tensor([edge, reversed_edge], dtype=torch.long)
-        edges_mask = torch.all(data.data.edge_index.T == edges_to_remove[:, None], dim=2).any(dim=0)
+        edges_mask = torch.all(
+            data.data.edge_index.T == edges_to_remove[:, None], dim=2
+        ).any(dim=0)
         data.data.edge_index = data.data.edge_index[:, ~edges_mask]
     return data
+
 
 def count_proposals(dataset):
     return dataset.data.y.size(0)
