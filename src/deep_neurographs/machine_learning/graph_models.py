@@ -72,7 +72,7 @@ class GAT(torch.nn.Module):
         self.output = Linear(input_channels // 2, 1)
 
         # Convolutional layers
-        self.conv1 = GATConv(2 * input_channels, input_channels)
+        self.conv1 = GATConv(2 * input_channels, mlp_hidden=[2 * input_channels, input_channels])
         self.conv2 = GATConv(input_channels, input_channels // 2)
 
         # Activation
