@@ -362,7 +362,7 @@ def get_proposal_profile_coords(neurograph, proposal):
     }
     return coords
 
-
+  
 def get_leaf_profile_coords(neurograph, i):
     j = list(neurograph.neighbors(i))[0]
     return get_profile_path(neurograph.orient_edge((i, j), i, key="xyz"))
