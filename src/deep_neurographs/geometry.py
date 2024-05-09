@@ -222,6 +222,13 @@ def fit_spline(xyz, s=None):
     return spline_x, spline_y, spline_z
 
 
+def sample_curve(xyz, n_pts):
+    t = np.linspace(0, 1, n_pts)
+    spline_x, spline_y, spline_z = fit_spline(xyz, s=0)
+    xyz = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
+    return xyz.astype(int)
+
+
 # Image feature extraction
 def get_profile(img, xyz_arr, process_id=None, window=[5, 5, 5]):
     """
