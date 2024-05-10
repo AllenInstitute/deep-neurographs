@@ -34,6 +34,7 @@ def run(neurograph, search_radius, img_path, proposals=None):
     features["proposals"] = run_on_proposals(
         neurograph, search_radius, img, proposals
     )
+    return features
 
 
 def run_on_nodes(neurograph, img):
@@ -101,6 +102,7 @@ def branch_skeletal(neurograph):
             ),
             axis=None,
         )
+    return features
 
 
 def proposal_skeletal(neurograph, proposals, search_radius):

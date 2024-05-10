@@ -33,7 +33,7 @@ def open_tensorstore(path, driver):
 
     Returns
     -------
-    sparse_volume : dict
+    dict
         Sparse image volume.
 
     """
@@ -172,6 +172,21 @@ def get_superchunk(path, driver, xyz, shape, from_center=True):
 
 # -- Image Operations --
 def normalize_img(img):
+    """
+    Normalizes an image so that the minimum and maximum intensity values are 0
+    and 1.
+
+    Parameters
+    ----------
+    img : numpy.ndarray
+        Image to be normalized.
+
+    Returns
+    -------
+    numpy.ndarray
+        Normalized image.
+
+    """
     img -= np.min(img)
     return img / np.max(img)
 
