@@ -572,7 +572,7 @@ class NeuroGraph(nx.Graph):
 
     def is_contained(self, node_or_xyz, buffer=0):
         if self.bbox:
-            img_coord = self.to_img(node_or_xyz)
+            img_coord = self.to_voxels(node_or_xyz)
             return utils.is_contained(self.bbox, img_coord, buffer=buffer)
         else:
             return True
@@ -585,12 +585,12 @@ class NeuroGraph(nx.Graph):
         else:
             return True
 
-    def to_img(self, node_or_xyz, shift=False):
+    def to_voxels(self, node_or_xyz, shift=False):
         shift = self.origin if shift else np.zeros((3))
         if type(node_or_xyz) == int:
-            img_coord = utils.to_img(self.nodes[node_or_xyz]["xyz"])
+            img_coord = utils.to_voxels(self.nodes[node_or_xyz]["xyz"])
         else:
-            img_coord = utils.to_img(node_or_xyz)
+            img_coord = utils.to_voxels(node_or_xyz)
         return img_coord - shift
 
     def is_leaf(self, i):
@@ -616,9 +616,9 @@ class NeuroGraph(nx.Graph):
     def to_patch_coords(self, edge, midpoint, chunk_size):
         patch_coords = []
         for xyz in self.edges[edge]["xyz"]:
-            img_coord = self.to_img(xyz)
-            coord = utils.img_to_patch(img_coord, midpoint, chunk_size)
-            patch_coords.append(coord)
+            coord = self.to_voxels(xyz)
+            local_coord = utils.img_to_patch(coord, midpoint, chunk_size)
+            patch_coords.append(local_coord)
         return patch_coords
 
     def get_reconstruction(self, proposals, upd_self=False):
