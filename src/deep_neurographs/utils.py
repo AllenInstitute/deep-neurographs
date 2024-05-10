@@ -12,8 +12,6 @@ import json
 import math
 import os
 import shutil
-from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
 from io import BytesIO
 from random import sample
 from time import time
@@ -21,13 +19,9 @@ from zipfile import ZipFile
 
 import numpy as np
 import psutil
-import tensorstore as ts
 import torch
-import zarr
-from skimage.color import label2rgb
 
 ANISOTROPY = np.array([0.748, 0.748, 1.0])
-SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
 
 # --- dictionary utils ---
@@ -318,133 +312,7 @@ def list_gcs_filenames(bucket, cloud_path, extension):
     return [blob.name for blob in blobs if extension in blob.name]
 
 
-# --- io utils ---
-def open_zarr(path):
-    """
-    Opens zarr file at "path".
-
-    Parameters
-    ----------
-    path : str
-        Path to zarr file to be opened.
-
-    Returns
-    -------
-    np.ndarray
-        Contents of zarr file at "path".
-
-    """
-    n5store = zarr.N5FSStore(path, "r")
-    if "653980" in path:
-        return zarr.open(n5store).ch488.s0
-    elif "653158" in path:
-        return zarr.open(n5store).s0
-
-
-def open_tensorstore(path, driver):
-    """
-    Uploads segmentation mask stored as a directory of shard files.
-
-    Parameters
-    ----------
-    path : str
-        Path to directory containing shard files.
-    driver : str
-        Storage driver needed to read data at "path".
-
-    Returns
-    -------
-    sparse_volume : dict
-        Sparse image volume.
-
-    """
-    assert driver in SUPPORTED_DRIVERS, "Error! Driver is not supported!"
-    arr = ts.open(
-        {
-            "driver": driver,
-            "kvstore": {
-                "driver": "gcs",
-                "bucket": "allen-nd-goog",
-                "path": path,
-            },
-            "context": {
-                "cache_pool": {"total_bytes_limit": 1000000000},
-                "cache_pool#remote": {"total_bytes_limit": 1000000000},
-                "data_copy_concurrency": {"limit": 8},
-            },
-            "recheck_cached_data": "open",
-        }
-    ).result()
-    if driver == "neuroglancer_precomputed":
-        return arr[ts.d["channel"][0]]
-    elif driver == "zarr":
-        arr = arr[0, 0, :, :, :]
-        arr = arr[ts.d[0].transpose[2]]
-        arr = arr[ts.d[0].transpose[1]]
-    return arr
-
-
-def read_tensorstore(arr, xyz, shape, from_center=True):
-    chunk = get_chunk(arr, xyz, shape, from_center=from_center)
-    return chunk.read().result()
-
-
-def read_tensorstore_bbox(img, bbox):
-    start = bbox["min"]
-    end = bbox["max"]
-    return (
-        img[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
-        .read()
-        .result()
-    )
-
-
-def get_chunk(arr, xyz, shape, from_center=True):
-    start, end = get_start_end(xyz, shape, from_center=from_center)
-    return deepcopy(
-        arr[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
-    )
-
-
-def get_start_end(xyz, shape, from_center=True):
-    if from_center:
-        start = [xyz[i] - shape[i] // 2 for i in range(3)]
-        end = [xyz[i] + shape[i] // 2 for i in range(3)]
-    else:
-        start = xyz
-        end = [xyz[i] + shape[i] for i in range(3)]
-    return start, end
-
-
-def get_superchunks(img_path, labels_path, xyz, shape, from_center=True):
-    with ThreadPoolExecutor() as executor:
-        img_job = executor.submit(
-            get_superchunk,
-            img_path,
-            "n5" if ".n5" in img_path else "zarr",
-            xyz,
-            shape,
-            from_center=from_center,
-        )
-        labels_job = executor.submit(
-            get_superchunk,
-            labels_path,
-            "neuroglancer_precomputed",
-            xyz,
-            shape,
-            from_center=from_center,
-        )
-    img = img_job.result().astype(np.int16)
-    labels = labels_job.result().astype(np.int64)
-    assert img.shape == labels.shape, "img.shape != labels.shape"
-    return img, labels
-
-
-def get_superchunk(path, driver, xyz, shape, from_center=True):
-    arr = open_tensorstore(path, driver)
-    return read_tensorstore(arr, xyz, shape, from_center=from_center)
-
-
+# -- io utils --
 def read_json(path):
     """
     Reads json file stored at "path".
@@ -487,8 +355,8 @@ def read_txt(path):
 def parse_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
     metadata = read_json(path)
     origin = metadata["chunk_origin"]
-    chunk_origin = to_img(origin, anisotropy=anisotropy).tolist()
-    return chunk_origin, metadata["chunk_shape"]
+    chunk_origin = to_voxels(origin, anisotropy=anisotropy)
+    return chunk_origin.tolist(), metadata["chunk_shape"]
 
 
 def write_json(path, contents):
@@ -532,16 +400,6 @@ def write_txt(path, contents):
     f.close()
 
 
-def set_path(dir_name, filename, ext):
-    cnt = 0
-    ext = ext.replace(".", "")
-    path = os.path.join(dir_name, f"{filename}.{ext}")
-    while os.path.exists(path):
-        path = os.path.join(dir_name, f"{filename}.{cnt}.{ext}")
-        cnt += 1
-    return path
-
-
 # --- coordinate conversions ---
 def img_to_patch(xyz, patch_centroid, patch_dims):
     half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
@@ -558,7 +416,7 @@ def to_world(xyz, shift=[0, 0, 0]):
     return tuple([xyz[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
 
 
-def to_img(xyz, anisotropy=ANISOTROPY):
+def to_voxels(xyz, anisotropy=ANISOTROPY):
     return (xyz / np.array(anisotropy)).astype(int)
 
 
@@ -576,7 +434,7 @@ def is_contained(bbox, xyz, buffer=0):
 
 
 def is_list_contained(bbox, xyz_list):
-    return any([is_contained(bbox, to_img(xyz)) for xyz in xyz_list])
+    return any([is_contained(bbox, to_voxels(xyz)) for xyz in xyz_list])
 
 
 def sample_singleton(my_container):
@@ -683,21 +541,6 @@ def get_swc_id(path):
     return filename.split(".")[0]
 
 
-def get_img_mip(img, axis=0):
-    return np.max(img, axis=axis)
-
-
-def get_labels_mip(img, axis=0):
-    mip = np.max(img, axis=axis)
-    mip = label2rgb(mip)
-    return (255 * mip).astype(np.uint8)
-
-
-def normalize_img(img):
-    img -= np.min(img)
-    return img / np.max(img)
-
-
 def numpy_to_hashable(arr):
     return [tuple(item) for item in arr.tolist()]
 
@@ -712,4 +555,14 @@ def get_memory_usage():
 
 def get_batches(iterable, batch_size):
     for start in range(0, len(iterable), batch_size):
-        yield iterable[start : min(start + batch_size, len(iterable))]
+        yield iterable[start: min(start + batch_size, len(iterable))]
+
+
+def set_path(dir_name, filename, ext):
+    cnt = 0
+    ext = ext.replace(".", "")
+    path = os.path.join(dir_name, f"{filename}.{ext}")
+    while os.path.exists(path):
+        path = os.path.join(dir_name, f"{filename}.{cnt}.{ext}")
+        cnt += 1
+    return path
