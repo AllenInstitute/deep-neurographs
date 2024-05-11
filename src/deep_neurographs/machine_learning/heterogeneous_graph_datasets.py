@@ -47,7 +47,7 @@ def init(neurograph, features):
     x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
         neurograph, features["proposals"], "GraphNeuralNet"
     )
-    x_nodes = None  # get node feature matrix, combine img and skeletal
+    x_nodes = feature_generation.combine_features(features["nodes"])
 
     # Initialize data
     proposals = list(features["proposals"]["skel"].keys())
@@ -124,6 +124,7 @@ class HeteroGraphDataset:
 
         # Edges
         self.init_edges(neurograph)
+        self.init_edge_attrs(x_nodes)
 
     def init_edges(self, neurograph):
         """
@@ -148,7 +149,7 @@ class HeteroGraphDataset:
         self.data["branch", "to", "branch"] = branch_edges
         self.data["branch", "to", "proposal"] = branch_proposal_edges
 
-    def init_edge_attrs(self):
+    def init_edge_attrs(self, x_nodes):
         """
         Initializes edge attributes.
 
@@ -161,7 +162,16 @@ class HeteroGraphDataset:
         None
 
         """
-        proposal_attrs = self.proposal_to_proposal_attrs()
+        # Proposal edges
+        edge_type = ("proposal", "to", "proposal")
+        attrs = self.set_edge_attrs(x_nodes, edge_type, self.idxs_proposals)
+        # --> set attr
+
+        # Branch edges
+        edge_type = ("branch", "to", "branch")
+
+        # Branch-Proposal edges
+        edge_type = ("branch", "to", "proposal")
 
     # -- Set Edges --
     def proposal_to_proposal(self):
@@ -242,7 +252,7 @@ class HeteroGraphDataset:
         return to_tensor(edge_index)
 
     # Set Edge Attributes
-    def proposal_to_proposal_attrs(self, edge_type, idx_mapping):
+    def set_edge_attrs(self, x_nodes, edge_type, idx_mapping):
         """
         Generate proposal edge attributes
 
@@ -255,10 +265,14 @@ class HeteroGraphDataset:
         None
 
         """
+        attrs = []
         for i in range(self.data[edge_type].size(1)):
             e1, e2 = self.data[edge_type][:, i]
             v = node_intersection(idx_mapping, e1, e2)
-
+            attrs.append(x_nodes[v])
+            print(v)
+            print(attrs)
+            stop
 
 # -- utils --
 def init_idxs(idxs):

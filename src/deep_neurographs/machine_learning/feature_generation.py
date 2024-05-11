@@ -293,7 +293,10 @@ def get_profile(img, coords, thread_id):
 
     """
     chunk = img_utils.read_tensorstore_with_bbox(img, coords["bbox"])
-    return thread_id, [chunk[tuple(xyz)] for xyz in coords["path"]]
+    profile = [chunk[tuple(xyz)] for xyz in coords["path"]]
+    avg, std = utils.get_avg_std(profile)
+    profile.extend([avg, std])
+    return thread_id, profile
 
 
 def get_proposal_profile_coords(neurograph, proposal):
@@ -353,25 +356,24 @@ def proposal_skeletal(neurograph, proposals, search_radius):
     return features
 
 
-def get_directionals(neurograph, proposal, window_size):
+def get_directionals(neurograph, proposal, window):
     # Compute tangent vectors
     i, j = tuple(proposal)
-    proposal_direction = geometry.compute_tangent(
+    direction = geometry.compute_tangent(
         neurograph.proposals[proposal]["xyz"]
     )
     origin = neurograph.proposal_midpoint(proposal)
-    direction_i = geometry.get_directional(neurograph, i, origin, window_size)
-    direction_j = geometry.get_directional(neurograph, j, origin, window_size)
+    direction_i = geometry.get_directional(neurograph, i, origin, window)
+    direction_j = geometry.get_directional(neurograph, j, origin, window)
 
     # Compute features
-    inner_product_1 = abs(np.dot(proposal_direction, direction_i))
-    inner_product_2 = abs(np.dot(proposal_direction, direction_j))
+    inner_product_1 = abs(np.dot(direction, direction_i))
+    inner_product_2 = abs(np.dot(direction, direction_j))
     if neurograph.is_simple(proposal):
         inner_product_3 = np.dot(direction_i, direction_j)
     else:
-        inner_product_3a = np.dot(direction_i, direction_j)
-        inner_product_3b = np.dot(direction_i, direction_j)
-        inner_product_3 = max(inner_product_3a, inner_product_3b)
+        inner_product_3 = np.dot(direction_i, direction_j)
+        inner_product_3 = max(inner_product_3, -inner_product_3)
     return np.array([inner_product_1, inner_product_2, inner_product_3])
 
 
@@ -379,10 +381,10 @@ def get_avg_radii(neurograph, proposal):
     i, j = tuple(proposal)
     radii_i = neurograph.get_branches(i, ignore_reducibles=True, key="radius")
     radii_j = neurograph.get_branches(j, ignore_reducibles=True, key="radius")
-    return np.array([get_avg_radius(radii_i), get_avg_radius(radii_j)])
+    return np.array([avg_radius(radii_i), avg_radius(radii_j)])
 
 
-def get_avg_radius(radii_list):
+def avg_radius(radii_list):
     avg = 0
     for radii in radii_list:
         end = min(16, len(radii) - 1)
@@ -390,14 +392,7 @@ def get_avg_radius(radii_list):
     return avg
 
 
-def get_avg_branch_lens(neurograph, proposal):
-    i, j = tuple(proposal)
-    branches_i = neurograph.get_branches(i, ignore_reducibles=True)
-    branches_j = neurograph.get_branches(j, ignore_reducibles=True)
-    return np.array([get_branch_len(branches_i), get_branch_len(branches_j)])
-
-
-def get_branch_len(branch_list):
+def branch_length(branch_list):
     branch_len = 0
     for branch in branch_list:
         branch_len += len(branch) / len(branch_list)
@@ -411,8 +406,8 @@ def get_radii(neurograph, proposal):
     return np.array([radius_i, radius_j])
 
 
-def avg_branch_radii(neurograph, edge):
-    return np.array([np.mean(neurograph.edges[edge]["radius"])])
+def avg_radii(neurograph, edge):
+    return np.mean(neurograph.edges[edge]["radius"])
 
 
 def n_nearby_leafs(neurograph, proposal, radius):
@@ -620,12 +615,6 @@ def combine_features(features):
             if combined[edge] is None:
                 combined[edge] = deepcopy(features[key][edge])
             else:
-                combined[edge] = np.append(
-                    combined[edge], np.mean(features[key][edge])
-                )
-                combined[edge] = np.append(
-                    combined[edge], np.std(features[key][edge])
-                )
                 combined[edge] = np.concatenate(
                     (combined[edge], features[key][edge])
                 )

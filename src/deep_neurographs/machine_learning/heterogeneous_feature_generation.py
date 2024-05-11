@@ -152,8 +152,8 @@ def node_skeletal(neurograph):
     for i in neurograph.nodes:
         features[i] = np.concatenate(
             (
-                neurograph.nodes[i]["radius"],
                 neurograph.degree[i],
+                neurograph.nodes[i]["radius"],
                 len(neurograph.nodes[i]["proposals"]),
             ),
             axis=None,
@@ -325,12 +325,12 @@ def get_profile_path(xyz_list):
     return xyz_list[0:i, :]
 
 
-def get_node_profile_coords(neurograph, path):
-    xyz_arr = np.array([utils.to_voxels(xyz) for xyz in path])
+def get_node_profile_coords(neurograph, xyz_arr):
+    xyz_arr = np.array([utils.to_voxels(xyz) for xyz in xyz_arr])
     bbox = get_bbox(neurograph, xyz_arr)
     coords = {
         "bbox": bbox,
-        "path": geometry.sample_curve(path - bbox["min"], N_PROFILE_PTS),
+        "path": geometry.sample_curve(xyz_arr - bbox["min"], N_PROFILE_PTS),
     }
     return coords
 
@@ -340,8 +340,3 @@ def get_bbox(neurograph, xyz_arr):
         "min": np.floor(np.min(xyz_arr, axis=0)).astype(int) - 1,
         "max": np.ceil(np.max(xyz_arr, axis=0)).astype(int) + 1,
     }
-
-
-# -- Build Feature Matrix --
-def build_node_matrix(neurograph, features):
-    pass

@@ -142,9 +142,9 @@ class GraphDataset:
 
         # Compile edge_index
         self.dropout_edges = proposal_edges
-        edge_index = np.vstack(
-            [branch_edges, branch_proposal_edges, proposal_edges]
-        )
+        edge_index = branch_proposal_edges
+        edge_index.extend(branch_edges)
+        edge_index.extend(proposal_edges)
         return to_tensor(edge_index)
 
     def proposal_to_proposal(self):
@@ -244,7 +244,8 @@ def shift_idxs(idxs, shift):
     shifted_idxs = dict()
     for key, value in idxs["idx_to_edge"].items():
         shifted_idxs[key + shift] = value
-    return shifted_idxs
+    idxs["idx_to_edge"] = shifted_idxs
+    return idxs
 
 
 def init_idxs(idxs):

@@ -38,6 +38,7 @@ def remove_item(my_set, item):
 
     Returns
     -------
+    set
         Set "my_set" with "item" removed if it existed.
 
     """
@@ -83,9 +84,8 @@ def remove_key(my_dict, key):
 
     Returns
     -------
-    my_dict : dict
-        Dictionary "my_dict" with key-value associated with "key" removed if
-        it existed.
+    dict
+        Updated dictionary.
 
     """
     if check_key(my_dict, key):
@@ -108,8 +108,8 @@ def remove_items(my_dict, keys):
 
     Returns
     -------
-    my_dict : dict
-        Updated dictionary with items corresponding to "keys" removed.
+    dict
+        Updated dictionary.
 
     """
     for key in keys:
@@ -133,7 +133,7 @@ def append_dict_value(my_dict, key, value):
 
     Returns
     -------
-    my_dict : dict
+    dict
         Updated dictionary.
 
     """
@@ -156,7 +156,7 @@ def find_best(my_dict):
 
     Returns
     -------
-    best_key : hashable data type
+    hashable data type
         Key associated with the longest list or largest integer in "my_dict".
 
     """
@@ -229,8 +229,8 @@ def listdir(path, ext=None):
     Returns
     -------
     list
-        List of all files in directory at "path" with extension "ext" if
-        provided. Otherwise, list of all files in directory.
+        Files in directory at "path" with extension "ext" if provided.
+        Otherwise, list of all files in directory.
 
     """
     if ext is None:
@@ -294,6 +294,26 @@ def list_paths(directory, ext=None):
 
 
 def set_path(dir_name, filename, ext):
+    """
+    Sets the path for a file in a directory. If a file with the same name
+    exists, then this routine finds a suffix to append to the filename.
+
+    Parameters
+    ----------
+    dir_name : str
+        Name of directory that path will be generated to point to.
+    filename : str
+        Name of file that path will contain.
+    ext : str
+        Extension of file.
+
+    Returns
+    -------
+    str
+        Path to file in "dirname" with the name "filename" and possibly some
+        suffix.
+
+    """
     cnt = 0
     ext = ext.replace(".", "")
     path = os.path.join(dir_name, f"{filename}.{ext}")
@@ -307,6 +327,16 @@ def set_path(dir_name, filename, ext):
 def list_files_in_gcs_zip(zip_content):
     """
     Lists all files in a zip file stored in a GCS bucket.
+
+    Parameters
+    ----------
+    zip_content : str
+        Content stored in a zip file in the form of a string of bytes.
+
+    Returns
+    -------
+    list[str]
+        List of filenames in a zip file.
 
     """
     with ZipFile(BytesIO(zip_content), "r") as zip_file:
@@ -384,8 +414,8 @@ def parse_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
     path : str
         Path to metadata file to be read.
     anisotropy : list[float], optional
-        Anisotropy to be applied to values of interest. The default is
-        [1.0, 1.0, 1.0].
+        Anisotropy to be applied to values of interest that converts
+        coordinates from voxels to world. The default is [1.0, 1.0, 1.0].
 
     Returns
     -------
@@ -426,7 +456,7 @@ def write_txt(path, contents):
     Parameters
     ----------
     path : str
-        Path that .txt file is written to.
+        Path that txt file is written to.
     contents : dict
         Contents to be written to txt file.
 
@@ -531,6 +561,23 @@ def to_voxels(xyz, anisotropy=ANISOTROPY):
 
 # --- math utils ---
 def get_avg_std(data, weights=None):
+    """
+    Computes the average and standard deviation of "data". If "weights" is
+    provided, the weighted average and standard deviation are computed.
+
+    Parameters
+    ----------
+    data : numpy.ndarray
+        Data to be evaluated.
+    weights : numpy.ndarray, optional
+        Weights to apply to each point in "data". The default is None.
+
+    Returns
+    -------
+    float, float
+        Average and standard deviation of "data".
+
+    """
     avg = np.average(data, weights=weights)
     var = np.average((data - avg) ** 2, weights=weights)
     return avg, math.sqrt(var)
@@ -553,7 +600,8 @@ def is_list_contained(bbox, xyz_list):
     Parameters
     ----------
     bbox : dict
-        Bounding box.
+        Dictionary with the keys "min" and "max" which specify a bounding box
+        in the image.
     xyz_list
         List of xyz coordinates to be checked.
 
