@@ -97,7 +97,7 @@ class GraphDataset:
             represents the edge's position in "x_branches".
         idxs_proposals : dict
             Dictionary that maps "proposals" to an index that represents the
-            edge's position in "x_proposals".
+            proposals's position in "x_proposals".
 
         Returns
         -------
@@ -113,14 +113,114 @@ class GraphDataset:
         idxs_branches = shift_idxs(idxs_branches, x_proposals.shape[0])
         self.idxs_branches = init_idxs(idxs_branches)
         self.idxs_proposals = init_idxs(idxs_proposals)
+        self.proposals = proposals
         self.n_proposals = len(y_proposals)
 
         # Initialize data
-        edge_index, proposal_edges = init_edge_index(
-            neurograph, proposals, idxs_branches, idxs_proposals
-        )
+        edge_index = self.init_edge_index(neurograph)
         self.data = GraphData(x=x, y=y, edge_index=edge_index)
+
+    def init_edge_index(self, neurograph):
+        """
+        Initializes edge index for a graph dataset.
+
+        Parameters
+        ----------
+        neurograph : neurograph.NeuroGraph
+            Graph that represents a predicted segmentation.
+
+        Returns
+        -------
+        list
+            List of edges in a graph dataset.
+
+        """
+        # Compute edges
+        branch_edges = self.branch_to_branch(neurograph)
+        branch_proposal_edges = self.branch_to_proposal(neurograph)
+        proposal_edges = self.proposal_to_proposal()
+        
+        # Compile edge_index
         self.dropout_edges = proposal_edges
+        edge_index = np.vstack([
+            branch_edges, branch_proposal_edges, proposal_edges
+        ])
+        return to_tensor(edge_index)
+
+    def proposal_to_proposal(self):
+        """
+        Generates edge indices between nodes corresponding to proposals.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        list
+            Edges generated from proposal line graph that are a subset of
+            edges in edge_index.
+
+        """
+        edge_index = []
+        line_graph = init_line_graph(self.proposals)
+        for e1, e2 in line_graph.edges:
+            v1 = self.idxs_proposals["edge_to_idx"][frozenset(e1)]
+            v2 = self.idxs_proposals["edge_to_idx"][frozenset(e2)]
+            edge_index.extend([[v1, v2], [v2, v1]])
+        return edge_index
+
+    def branch_to_branch(self, neurograph):
+        """
+        Generates edge indices between nodes corresponding to branches
+        (i.e. edges in neurograph).
+
+        Parameters
+        ----------
+        neurograph : neurograph.NeuroGraph
+            Graph that represents a predicted segmentation.
+
+        Returns
+        -------
+        list
+            Edges generated from "branches_line_graph" that are a subset of
+            edges in edge_index.
+
+        """
+        edge_index = []
+        for e1, e2 in nx.line_graph(neurograph).edges:
+            v1 = self.idxs_branches["edge_to_idx"][frozenset(e1)]
+            v2 = self.idxs_branches["edge_to_idx"][frozenset(e2)]
+            edge_index.extend([[v1, v2], [v2, v1]])
+        return edge_index
+
+    def branch_to_proposal(self, neurograph):
+        """
+        Generates edge indices between nodes that correspond to proposals and
+        edges.
+
+        Parameters
+        ----------
+        neurograph : neurograph.NeuroGraph
+            Graph that represents a predicted segmentation.
+
+        Returns
+        -------
+        list
+            List of edges between proposals and branches.
+
+        """
+        edge_index = []
+        for e in self.proposals:
+            i, j = tuple(e)
+            v1 = self.idxs_proposals["edge_to_idx"][frozenset(e)]
+            for k in neurograph.neighbors(i):
+                v2 = self.idxs_branches["edge_to_idx"][frozenset((i, k))]
+                edge_index.extend([[v1, v2], [v2, v1]])
+            for k in neurograph.neighbors(j):
+                v2 = self.idxs_branches["edge_to_idx"][frozenset((j, k))]
+                edge_index.extend([[v1, v2], [v2, v1]])
+        return edge_index
 
 
 # -- utils --
@@ -170,59 +270,12 @@ def init_idxs(idxs):
     return idxs
 
 
-def init_edge_index(neurograph, proposals, idxs_branches, idxs_proposals):
-    """
-    Initializes edge index for a graph dataset.
-
-    Parameters
-    ----------
-    neurograph : neurograph.NeuroGraph
-        Graph that represents a predicted segmentation.
-    proposals : list
-        List of edge proposals.
-    idxs_branches : dict
-        Dictionary that maps edges in "neurograph" to an index that represents
-        an edge's position in "x_branches".
-    idxs_proposals : dict
-        Dictionary that maps "proposals" to an index that represents an edge's
-        position in "x_proposals".
-
-    Returns
-    -------
-    list
-        List of edges in a graph dataset.
-    list
-        List of edges in a graph dataset that correspond to "proposals".
-
-    """
-    # Initializations
-    branches_line_graph = nx.line_graph(neurograph)
-    proposals_line_graph = init_line_graph(neurograph, proposals)
-    proposal_edges = proposal_to_proposal(proposals_line_graph, idxs_proposals)
-
-    # Compute edges
-    edge_index = branch_to_branch(branches_line_graph, idxs_branches)
-    edge_index.extend(proposal_edges)
-    edge_index.extend(
-        branch_to_proposal(
-            neurograph, proposals, idxs_branches, idxs_proposals
-        )
-    )
-
-    # Reshape
-    edge_index = np.array(edge_index, dtype=np.int64).tolist()
-    edge_index = torch.Tensor(edge_index).t().contiguous()
-    return edge_index.long(), proposal_edges
-
-
-def init_line_graph(neurograph, edges):
+def init_line_graph(edges):
     """
     Initializes a line graph from a list of edges.
 
     Parameters
     ----------
-    neurograph : neurograph.NeuroGraph
-        Graph that represents a predicted segmentation.
     edges : list
         List of edges.
 
@@ -237,89 +290,20 @@ def init_line_graph(neurograph, edges):
     return nx.line_graph(graph)
 
 
-def branch_to_branch(branches_line_graph, idxs_branches):
+def to_tensor(arr):
     """
-    Generates edge indices between nodes corresponding to branches (i.e. edges
-    in some neurograph).
+    Converts an array to a tensor with contiguous memory.
 
     Parameters
     ----------
-    branches_line_graph : networkx.Graph
-        Line graph where each node represents an edge from some neurograph.
-    idxs_branches : dict
-        Dictionary that maps edges to vertices in "branches_line_graph".
+    arr : numpy.ndarray
+        Array to be converted into a tensor.
 
     Returns
     -------
-    list
-        List of edges generated from "branches_line_graph" that are a subset
-        of edges in some edge_index for a graph dataset.
+    torch.Tensor
+        Tensor.
 
     """
-    edge_index = []
-    for e1, e2 in branches_line_graph.edges:
-        v1 = idxs_branches["edge_to_idx"][frozenset(e1)]
-        v2 = idxs_branches["edge_to_idx"][frozenset(e2)]
-        edge_index.extend([[v1, v2], [v2, v1]])
-    return edge_index
-
-
-def proposal_to_proposal(proposals_line_graph, idxs_proposals):
-    """
-    Generates edge indices between nodes corresponding to proposals.
-
-    Parameters
-    ----------
-    proposals_line_graph : networkx.Graph
-        Line graph where each node represents a proposal from some neurograph.
-    idxs_proposals : dict
-        Dictionary that maps proposals to vertices in "proposals_line_graph".
-
-    Returns
-    -------
-    list
-        List of edges generated from "proposal_line_graph" that are a subset
-        of edges in some edge_index for a graph dataset.
-
-    """
-    edge_index = []
-    for e1, e2 in proposals_line_graph.edges:
-        v1 = idxs_proposals["edge_to_idx"][frozenset(e1)]
-        v2 = idxs_proposals["edge_to_idx"][frozenset(e2)]
-        edge_index.extend([[v1, v2], [v2, v1]])
-    return edge_index
-
-
-def branch_to_proposal(neurograph, proposals, idxs_branches, idxs_proposals):
-    """
-    Generates edge indices between nodes that correspond to proposals and
-    edges.
-
-    Parameters
-    ----------
-    neurograph : neurograph.NeuroGraph
-        Graph that represents a predicted segmentation.
-    proposals : list
-        List of edge proposals.
-    idxs_branches : dict
-        Dictionary that maps edges to vertices in "branches_line_graph".
-    idxs_proposals : dict
-        Dictionary that maps proposals to vertices in "proposals_line_graph".
-
-    Returns
-    -------
-    list
-        List of edges generated from "proposal_line_graph" that are a subset
-        of edges in some edge_index for a graph dataset.
-    """
-    edge_index = []
-    for e in proposals:
-        i, j = tuple(e)
-        v1 = idxs_proposals["edge_to_idx"][frozenset(e)]
-        for k in neurograph.neighbors(i):
-            v2 = idxs_branches["edge_to_idx"][frozenset((i, k))]
-            edge_index.extend([[v1, v2], [v2, v1]])
-        for k in neurograph.neighbors(j):
-            v2 = idxs_branches["edge_to_idx"][frozenset((j, k))]
-            edge_index.extend([[v1, v2], [v2, v1]])
-    return edge_index
+    arr = np.array(arr, dtype=np.int64).tolist()
+    return torch.Tensor(arr).t().contiguous().long()

@@ -13,7 +13,7 @@ Custom datasets for training graph neural networks.
 import networkx as nx
 import numpy as np
 import torch
-from torch_geometric.data import Data as GraphData
+from torch_geometric.data import HeteroData as HeteroGraphData
 
 from deep_neurographs.machine_learning import feature_generation
 
@@ -50,7 +50,7 @@ def init(neurograph, features):
     # get node feature matrix
 
     # Initialize data
-    proposals = features["proposals"]["skel"].keys()
+    proposals = list(features["proposals"]["skel"].keys())
     graph_dataset = HeteroGraphDataset(
         neurograph,
         proposals,
@@ -73,6 +73,7 @@ class HeteroGraphDataset:
     def __init__(
         self,
         neurograph,
+        proposals,
         x_branches,
         x_proposals,
         y_proposals,
@@ -109,7 +110,7 @@ class HeteroGraphDataset:
         # Conversion idxs
         self.idxs_branches = init_idxs(idxs_branches)
         self.idxs_proposals = init_idxs(idxs_proposals)
-        self.proposals = len(proposals)
+        self.proposals = proposals
 
         # Features
         self.data = HeteroGraphData()
@@ -150,16 +151,13 @@ class HeteroGraphDataset:
 
         Parameters
         ----------
-        proposals_line_graph : networkx.Graph
-            Line graph where each node represents a proposal from some neurograph.
-        idxs_proposals : dict
-            Dictionary that maps proposals to vertices in "proposals_line_graph".
+        None
 
         Returns
         -------
         list
-            Edges generated from "proposal_line_graph" which are part of an
-            edge_index for a graph dataset.
+            Edges generated from line_graph generated from proposals which are
+            part of an edge_index for a graph dataset.
 
         """
         edge_index = []
@@ -183,8 +181,8 @@ class HeteroGraphDataset:
         Returns
         -------
         torch.Tensor
-            Edges generated from "branches_line_graph" which are a subset of an
-            edge_index for a graph dataset.
+            Edges generated from "branches_line_graph" which are a subset of
+            an edge_index for a graph dataset.
 
         """
         edge_index = []
@@ -285,5 +283,4 @@ def to_tensor(my_list):
 
     """
     arr = np.array(my_list, dtype=np.int64).tolist()
-    arr = torch.Tensor(arr).t().contiguous()
-    return arr.long()
+    return torch.Tensor(arr).t().contiguous().long()

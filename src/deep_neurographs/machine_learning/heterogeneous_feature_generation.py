@@ -95,7 +95,7 @@ def node_skeletal(neurograph):
 def branch_skeletal(neurograph):
     features = dict()
     for edge in neurograph.edges:
-        features[edge] = np.concatenate(
+        features[frozenset(edge)] = np.concatenate(
             (
                 np.mean(neurograph.edges[edge]["radius"]),
                 neurograph.edge_length(edge),
