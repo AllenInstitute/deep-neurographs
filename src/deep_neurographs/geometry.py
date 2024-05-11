@@ -188,7 +188,7 @@ def smooth_branch(xyz, s=None):
 
     Returns
     -------
-    xyz : numpy.ndarray
+    numpy.ndarray
         Smoothed points.
 
     """
@@ -199,7 +199,7 @@ def smooth_branch(xyz, s=None):
     return xyz.astype(np.float32)
 
 
-def fit_spline(xyz, s=None):
+def fit_spline(xyz, k=3, s=None):
     """
     Fits a cubic spline to an array containing xyz coordinates.
 
@@ -222,9 +222,9 @@ def fit_spline(xyz, s=None):
     """
     s = xyz.shape[0] / 10 if not s else xyz.shape[0] / s
     t = np.linspace(0, 1, xyz.shape[0])
-    spline_x = UnivariateSpline(t, xyz[:, 0], s=s, k=3)
-    spline_y = UnivariateSpline(t, xyz[:, 1], s=s, k=3)
-    spline_z = UnivariateSpline(t, xyz[:, 2], s=s, k=3)
+    spline_x = UnivariateSpline(t, xyz[:, 0], k=k, s=s)
+    spline_y = UnivariateSpline(t, xyz[:, 1], k=k, s=s)
+    spline_z = UnivariateSpline(t, xyz[:, 2], k=k, s=s)
     return spline_x, spline_y, spline_z
 
 
@@ -245,8 +245,9 @@ def sample_curve(xyz_arr, n_pts):
         Resampled points along curve.
 
     """
+    k = 1 if xyz_arr.shape[0] <= 3 else 3
     t = np.linspace(0, 1, n_pts)
-    spline_x, spline_y, spline_z = fit_spline(xyz_arr, s=0)
+    spline_x, spline_y, spline_z = fit_spline(xyz_arr, k=k, s=0)
     xyz = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
     return xyz.astype(int)
 
