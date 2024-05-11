@@ -47,13 +47,14 @@ def init(neurograph, features):
     x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
         neurograph, features["proposals"], "GraphNeuralNet"
     )
-    # get node feature matrix
+    x_nodes = None  # get node feature matrix, combine img and skeletal
 
     # Initialize data
     proposals = list(features["proposals"]["skel"].keys())
     graph_dataset = HeteroGraphDataset(
         neurograph,
         proposals,
+        x_nodes,
         x_branches,
         x_proposals,
         y_proposals,
@@ -74,6 +75,7 @@ class HeteroGraphDataset:
         self,
         neurograph,
         proposals,
+        x_nodes,
         x_branches,
         x_proposals,
         y_proposals,
@@ -89,6 +91,8 @@ class HeteroGraphDataset:
             Graph that represents a predicted segmentation.
         proposals : list
             List of edge proposals.
+        x_nodes : numpy.ndarray
+            Feature matrix generated from nodes in "neurograph".
         x_branches : numpy.ndarray
             Feature matrix generated from branches in "neurograph".
         x_proposals : numpy.ndarray
@@ -136,15 +140,30 @@ class HeteroGraphDataset:
 
         """
         # Compute edges
-        proposal_edges = self.proposal_to_proposal()
         branch_edges = self.branch_to_branch(neurograph)
         branch_proposal_edges = self.branch_to_proposal(neurograph)
 
         # Store edges
-        self.data["proposal", "to", "proposal"] = proposal_edges
+        self.data["proposal", "to", "proposal"] = self.proposal_to_proposal()
         self.data["branch", "to", "branch"] = branch_edges
         self.data["branch", "to", "proposal"] = branch_proposal_edges
 
+    def init_edge_attrs(self):
+        """
+        Initializes edge attributes.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        proposal_attrs = self.proposal_to_proposal_attrs()
+
+    # -- Set Edges --
     def proposal_to_proposal(self):
         """
         Generates edge indices between nodes corresponding to proposals.
@@ -222,6 +241,24 @@ class HeteroGraphDataset:
                 edge_index.extend([[v2, v1]])
         return to_tensor(edge_index)
 
+    # Set Edge Attributes
+    def proposal_to_proposal_attrs(self, edge_type, idx_mapping):
+        """
+        Generate proposal edge attributes
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        for i in range(self.data[edge_type].size(1)):
+            e1, e2 = self.data[edge_type][:, i]
+            v = node_intersection(idx_mapping, e1, e2)
+
 
 # -- utils --
 def init_idxs(idxs):
@@ -284,3 +321,26 @@ def to_tensor(my_list):
     """
     arr = np.array(my_list, dtype=np.int64).tolist()
     return torch.Tensor(arr).t().contiguous().long()
+
+
+def node_intersection(idx_mapping, e1, e2):
+    """
+    Computes the common node between "e1" and "e2".
+
+    Parameters
+    ----------
+    e1 : torch.Tensor
+        Edge to be checked.
+    e2 : torch.Tensor
+        Edge to be checked.
+
+    Returns
+    -------
+    int
+        Common node between "e1" and "e2".
+    """
+    hat_e1 = idx_mapping["idx_to_edge"][int(e1)]
+    hat_e2 = idx_mapping["idx_to_edge"][int(e2)]
+    node = list(hat_e1.intersection(hat_e2))
+    assert len(node) == 1, "Node intersection is not unique!"
+    return node[0]
