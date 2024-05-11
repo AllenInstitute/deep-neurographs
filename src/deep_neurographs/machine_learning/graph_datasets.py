@@ -110,9 +110,9 @@ class GraphDataset:
         y = torch.tensor(y_proposals.astype(np.float32))
 
         # Set edges
-        idxs_branches = upd_idxs(idxs_branches, x_proposals.shape[0])
-        self.idxs_branches = add_edge_to_idx(idxs_branches)
-        self.idxs_proposals = add_edge_to_idx(idxs_proposals)
+        idxs_branches = shift_idxs(idxs_branches, x_proposals.shape[0])
+        self.idxs_branches = init_idxs(idxs_branches)
+        self.idxs_proposals = init_idxs(idxs_proposals)
         self.n_proposals = len(y_proposals)
 
         # Initialize data
@@ -124,7 +124,7 @@ class GraphDataset:
 
 
 # -- utils --
-def upd_idxs(idxs, shift):
+def shift_idxs(idxs, shift):
     """
     Shifts every key in "idxs["idx_to_edge"]" by "shift".
 
@@ -147,7 +147,7 @@ def upd_idxs(idxs, shift):
     return shifted_idxs
 
 
-def add_edge_to_idx(idxs):
+def init_idxs(idxs):
     """
     Adds dictionary item called "edge_to_index" which maps an edge in a
     neurograph to an that represents the edge's position in the feature
