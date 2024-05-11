@@ -105,9 +105,9 @@ def parse(contents, anisotropy=[1.0, 1.0, 1.0]):
 
     Parameters
     ----------
-    path : str
-        Path to an swc file.
-    ...
+    contents : list[str]
+        List of entries from an swc file.
+    anisotropy : list[float]
 
     Returns
     -------
