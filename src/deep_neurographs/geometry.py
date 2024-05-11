@@ -161,6 +161,12 @@ def get_midpoint(xyz_1, xyz_2):
         n-dimensional coordinate.
     xyz_2 : numpy.ndarray
         n-dimensional coordinate.
+
+    Returns
+    -------
+    numpy.ndarray
+        Midpoint of "xyz_1" and "xyz_2".
+
     """
     return np.mean([xyz_1, xyz_2], axis=0)
 
@@ -206,11 +212,11 @@ def fit_spline(xyz, s=None):
 
     Returns
     -------
-    spline_x : UnivariateSpline
+    UnivariateSpline
         Spline fit to x-coordinates of "xyz".
-    spline_y : UnivariateSpline
+    UnivariateSpline
         Spline fit to the y-coordinates of "xyz".
-    spline_z : UnivariateSpline
+    UnivariateSpline
         Spline fit to the z-coordinates of "xyz".
 
     """
@@ -222,9 +228,25 @@ def fit_spline(xyz, s=None):
     return spline_x, spline_y, spline_z
 
 
-def sample_curve(xyz, n_pts):
+def sample_curve(xyz_arr, n_pts):
+    """
+    Uniformly samples points from a curve represented as an array.
+
+    Parameters
+    ----------
+    xyz_arr : numpy.ndarray
+        Array of xyz coordinates representing points along a curve.
+    n_pts : int
+        Number of points to be sampled.
+
+    Returns
+    -------
+    numpy.ndarray
+        Resampled points along curve.
+
+    """
     t = np.linspace(0, 1, n_pts)
-    spline_x, spline_y, spline_z = fit_spline(xyz, s=0)
+    spline_x, spline_y, spline_z = fit_spline(xyz_arr, s=0)
     xyz = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
     return xyz.astype(int)
 
@@ -291,7 +313,7 @@ def fill_path(img, path, val=-1):
     """
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
-        img[x - 1: x + 2, y - 1: y + 2, z - 1: z + 2] = val
+        img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
     return img
 
 
@@ -412,11 +434,11 @@ def align(neurograph, img, branch_1, branch_2, depth):
 
     Returns
     -------
-    best_xyz_1 : np.ndarray
+    np.ndarray
         Optimal xyz coordinate from "branch_1".
-    best_xyz_2 : np.ndarray
+    np.ndarray
         Optimal xyz coordinate from "branch_2".
-    best_score : float
+    float
         Average brightness of voxels sampled along line between "best_xyz_1"
         and "best_xyz_2".
 

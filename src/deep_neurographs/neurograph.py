@@ -617,7 +617,7 @@ class NeuroGraph(nx.Graph):
         patch_coords = []
         for xyz in self.edges[edge]["xyz"]:
             coord = self.to_voxels(xyz)
-            local_coord = utils.img_to_patch(coord, midpoint, chunk_size)
+            local_coord = utils.voxels_to_patch(coord, midpoint, chunk_size)
             patch_coords.append(local_coord)
         return patch_coords
 

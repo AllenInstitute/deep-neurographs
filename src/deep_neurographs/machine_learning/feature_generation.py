@@ -207,8 +207,8 @@ def get_chunk(img, labels, coord_0, coord_1, thread_id=None):
 
     # Coordinate transform
     chunk = utils.normalize_img(chunk)
-    patch_coord_0 = utils.img_to_patch(coord_0, midpoint, CHUNK_SIZE)
-    patch_coord_1 = utils.img_to_patch(coord_1, midpoint, CHUNK_SIZE)
+    patch_coord_0 = utils.voxels_to_patch(coord_0, midpoint, CHUNK_SIZE)
+    patch_coord_1 = utils.voxels_to_patch(coord_1, midpoint, CHUNK_SIZE)
 
     # Generate features
     path = geometry.make_line(patch_coord_0, patch_coord_1, N_PROFILE_PTS)

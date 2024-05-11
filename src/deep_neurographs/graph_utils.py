@@ -114,7 +114,7 @@ def trim_branches(graph, bbox):
 
     Returns
     -------
-    graph : networkx.Graph
+    networkx.Graph
         "graph" with nodes deleted that were not contained in "bbox".
 
     """
@@ -152,9 +152,9 @@ def prune_branches(
 
     Returns
     -------
-    graph : networkx.Graph
+    networkx.Graph
         Pruned graph.
-    connector_centroids : list[numpy.ndarray]
+    list[numpy.ndarray]
         List of xyz coordinates of the centerpoint of the connector path.
 
     """
@@ -170,6 +170,24 @@ def prune_branches(
 
 
 def __get_irreducibles(graph, swc_dict, smooth):
+    """
+    Gets the irreducible components of "graph".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+    swc_dict : dict
+        Dictionary that was used to build "graph".
+    smooth : bool
+        Indication of whether to smooth irreducible edges.
+
+    Returns
+    -------
+    dict
+        Dictionary containing irreducible components of "graph".
+
+    """
     # Extract nodes
     leafs, junctions = get_irreducible_nodes(graph)
     if len(leafs) == 0:
@@ -223,10 +241,8 @@ def get_irreducible_nodes(graph):
 
     Returns
     -------
-    leafs : set
-        Nodes with degreee 1.
-    junctions : set
-        Nodes with degree > 2.
+    set, set
+        Nodes with degreee 1 and degree > 2.
 
     """
     leafs = set()
@@ -254,7 +270,7 @@ def prune_short_branches(graph, depth):
 
     Returns
     -------
-    graph : networkx.Graph
+    networkx.Graph
         Graph with short branches pruned.
 
     """
@@ -304,15 +320,16 @@ def prune_short_connectors(graph, length=8):
     ----------
     graph : netowrkx.graph
         Graph to be inspected.
-    length : int
-        Upper bound on the distance that defines a connector path to be pruned.
+    length : int, optional
+        Upper bound on the distance that defines a connector path to be
+        pruned. The default is 8.
 
     Returns
     -------
-    graph : list[tuple]
-        Graph with connectors pruned
-    pruned_centroids : list[np.ndarray]
-        List of xyz coordinates of centroids of connectors
+    list[tuple]
+        Graph with connectors pruned.
+    list[np.ndarray]
+        List of xyz coordinates of centroids of connectors.
 
     """
     junctions = [j for j in graph.nodes if graph.degree[j] > 2]
@@ -388,6 +405,12 @@ def __smooth_branch(swc_dict, attrs, edges, nbs, root, j):
         End point of branch to be smoothed.
     j : int
         End point of branch to be smoothed.
+
+    Returns
+    -------
+    dict, dict
+        Dictionaries that have been updated with respect to smoothed edges.
+        
     """
     attrs["xyz"] = geometry.smooth_branch(attrs["xyz"], s=5)
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, root, 0)
@@ -417,9 +440,9 @@ def upd_xyz(swc_dict, attrs, edges, nbs, i, endpoint):
 
     Returns
     -------
-    swc_dict : dict
+    dict
         Updated with new xyz coordinates.
-    edges : dict
+    dict
         Updated with new xyz coordinates.
 
     """
@@ -453,7 +476,7 @@ def upd_endpoint_xyz(edges, key, old_xyz, new_xyz):
 
     Returns
     -------
-    edges : dict
+    dict
         Updated with new xyz coordinates.
 
     """
@@ -505,7 +528,7 @@ def upd_edge_attrs(swc_dict, attrs, i):
 
     Returns
     -------
-    attrs : dict
+    dict
         Edge attribute dictionary.
 
     """
@@ -549,7 +572,7 @@ def to_numpy(attrs):
 
     Returns
     -------
-    attrs : dict
+    dict
         Updated edge attribute dictionary.
 
     """
@@ -571,7 +594,7 @@ def set_node_attrs(swc_dict, nodes):
 
     Returns
     -------
-    attrs : dict
+    dict
         Dictionary in which keys are node ids and values are a dictionary of
         attributes extracted from "swc_dict".
 
@@ -604,9 +627,9 @@ def upd_node_attrs(swc_dict, leafs, junctions, i):
 
     Returns
     -------
-    leafs : dict
+    dict
         Updated dictionary if "i" was contained in "leafs.keys()".
-    junctions : dict
+    dict
         Updated dictionary if "i" was contained in "junctions.keys()".
 
     """

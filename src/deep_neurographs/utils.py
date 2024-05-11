@@ -293,6 +293,16 @@ def list_paths(directory, ext=None):
     return paths
 
 
+def set_path(dir_name, filename, ext):
+    cnt = 0
+    ext = ext.replace(".", "")
+    path = os.path.join(dir_name, f"{filename}.{ext}")
+    while os.path.exists(path):
+        path = os.path.join(dir_name, f"{filename}.{cnt}.{ext}")
+        cnt += 1
+    return path
+
+
 # -- gcs utils --
 def list_files_in_gcs_zip(zip_content):
     """
@@ -306,6 +316,20 @@ def list_files_in_gcs_zip(zip_content):
 def list_gcs_filenames(bucket, cloud_path, extension):
     """
     Lists all files in a GCS bucket with the given extension.
+
+    Parameters
+    ----------
+    bucket : str
+        Name of bucket to be read from.
+    cloud_path : str
+        Path to directory in "bucket".
+    extension : str
+        File extension of filenames to be listed.
+
+    Returns
+    -------
+    list
+        Filenames stored at "cloud" path with the given extension.
 
     """
     blobs = bucket.list_blobs(prefix=cloud_path)
@@ -329,8 +353,7 @@ def read_json(path):
 
     """
     with open(path, "r") as f:
-        data = json.load(f)
-    return data
+        return json.load(f)
 
 
 def read_txt(path):
@@ -353,6 +376,23 @@ def read_txt(path):
 
 
 def parse_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
+    """
+    Parses metadata file to extract the "chunk_origin" and "chunk_shape".
+
+    Parameters
+    ----------
+    path : str
+        Path to metadata file to be read.
+    anisotropy : list[float], optional
+        Anisotropy to be applied to values of interest. The default is
+        [1.0, 1.0, 1.0].
+
+    Returns
+    -------
+    list, list
+        Chunk origin and chunk shape specified by metadata.
+
+    """
     metadata = read_json(path)
     origin = metadata["chunk_origin"]
     chunk_origin = to_voxels(origin, anisotropy=anisotropy)
@@ -401,22 +441,91 @@ def write_txt(path, contents):
 
 
 # --- coordinate conversions ---
-def img_to_patch(xyz, patch_centroid, patch_dims):
-    half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
-    patch_coord = xyz - patch_centroid + half_patch_dims
+def img_to_patch(coord, patch_centroid, patch_shape):
+    """
+    Converts coordinates from global to local image coordinates.
+
+    Parameters
+    ----------
+    coord : numpy.ndarray
+        Coordinates to be converted.
+    patch_centroid : numpy.ndarray
+        Centroid of image patch.
+    patch_shape : numpy.ndarray
+        Shape of image patch.
+
+    Returns
+    -------
+    tuple
+        Converted coordinates.
+
+    """
+    half_patch_shape= [patch_shape[i] // 2 for i in range(3)]
+    patch_coord = coord - patch_centroid + half_patch_shape
     return tuple(patch_coord.astype(int))
 
 
-def patch_to_img(xyz, patch_centroid, patch_dims):
+def patch_to_img(coord, patch_centroid, patch_dims):
+    """
+    Converts coordinates from local to global image coordinates.
+
+    Parameters
+    ----------
+    coord : numpy.ndarray
+        Coordinates to be converted.
+    patch_centroid : numpy.ndarray
+        Centroid of image patch.
+    patch_shape : numpy.ndarray
+        Shape of image patch.
+
+    Returns
+    -------
+    tuple
+        Converted coordinates.
+
+    """
     half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
-    return np.round(xyz + patch_centroid - half_patch_dims).astype(int)
+    return np.round(coord + patch_centroid - half_patch_dims).astype(int)
 
 
-def to_world(xyz, shift=[0, 0, 0]):
-    return tuple([xyz[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
+def to_world(coord, shift=[0, 0, 0]):
+    """
+    Converts coordinates from voxels to world.
+
+    Parameters
+    ----------
+    coord : numpy.ndarray
+        Coordinate to be converted.
+    shift : list, optional
+        Shift to be applied to "coord". The default is [0, 0, 0].
+
+    Returns
+    -------
+    tuple
+        Converted coordinates.
+
+    """
+    return tuple([coord[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
 
 
 def to_voxels(xyz, anisotropy=ANISOTROPY):
+    """
+    Converts coordinates from world to voxel.
+
+    Parameters
+    ----------
+    xyz : numpy.ndarray
+        xyz coordinate to be converted to voxels.
+    anisotropy : list, optional
+        Anisotropy to be applied to values of interest. The default is
+        [1.0, 1.0, 1.0].
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinates converted to voxels.
+
+    """
     return (xyz / np.array(anisotropy)).astype(int)
 
 
@@ -428,16 +537,50 @@ def get_avg_std(data, weights=None):
 
 
 def is_contained(bbox, xyz, buffer=0):
+    """
+    Checks whether "xyz" is contained within "bbox".
+
+    """
     above = any(xyz > bbox["max"] - buffer)
     below = any(xyz < bbox["min"] + buffer)
     return False if above or below else True
 
 
 def is_list_contained(bbox, xyz_list):
+    """
+    Checks whether every element in "xyz_list" is contained in "bbox".
+
+    Parameters
+    ----------
+    bbox : dict
+        Bounding box.
+    xyz_list
+        List of xyz coordinates to be checked.
+
+    Returns
+    -------
+    bool
+        Indication of whether every element in "xyz_list" is contained in
+        "bbox".
+
+    """
     return any([is_contained(bbox, to_voxels(xyz)) for xyz in xyz_list])
 
 
 def sample_singleton(my_container):
+    """
+    Samples a single element from "my_container".
+
+    Parameters
+    ----------
+    my_container : container
+        Container to be sampled from.
+
+    Returns
+    -------
+    sample
+
+    """
     return sample(my_container, 1)[0]
 
 
@@ -505,6 +648,20 @@ def get_runtime(current, total, chunk_size, t0, t1):
 
 
 def toGPU(graph_data):
+    """
+    Moves "graph_data" from CPU to GPU.
+
+    Parameters
+    ----------
+    graph_data : torch.dataset.GraphData
+        Graph data to be moved to GPU.
+
+    Returns
+    -------
+    torch.Tensor, torch.Tensor
+        Items from "graph_data" moved to GPU.
+
+    """
     x = graph_data.x.to("cuda:0", dtype=torch.float32)
     edge_index = graph_data.edge_index.to("cuda:0")
     return x, edge_index
@@ -536,6 +693,16 @@ def get_swc_id(path):
     """
     Gets segment id of the swc file at "path".
 
+    Parameters
+    ----------
+    path : str
+        Path to swc file.
+
+    Returns
+    -------
+    str
+        Segment id.
+
     """
     filename = path.split("/")[-1]
     return filename.split(".")[0]
@@ -550,19 +717,22 @@ def reformat_number(number):
 
 
 def get_memory_usage():
+    """
+    Gets the current memory usage.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    float
+        Current memory usage.
+
+    """
     return psutil.virtual_memory().used / 1e9
 
 
 def get_batches(iterable, batch_size):
     for start in range(0, len(iterable), batch_size):
-        yield iterable[start: min(start + batch_size, len(iterable))]
-
-
-def set_path(dir_name, filename, ext):
-    cnt = 0
-    ext = ext.replace(".", "")
-    path = os.path.join(dir_name, f"{filename}.{ext}")
-    while os.path.exists(path):
-        path = os.path.join(dir_name, f"{filename}.{cnt}.{ext}")
-        cnt += 1
-    return path
+        yield iterable[start : min(start + batch_size, len(iterable))]

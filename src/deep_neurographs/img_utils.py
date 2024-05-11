@@ -38,7 +38,7 @@ def open_tensorstore(path, driver):
 
     """
     assert driver in SUPPORTED_DRIVERS, "Error! Driver is not supported!"
-    arr = ts.open(
+    img = ts.open(
         {
             "driver": driver,
             "kvstore": {
@@ -55,12 +55,12 @@ def open_tensorstore(path, driver):
         }
     ).result()
     if driver == "neuroglancer_precomputed":
-        return arr[ts.d["channel"][0]]
+        return img[ts.d["channel"][0]]
     elif driver == "zarr":
-        arr = arr[0, 0, :, :, :]
-        arr = arr[ts.d[0].transpose[2]]
-        arr = arr[ts.d[0].transpose[1]]
-    return arr
+        img = img[0, 0, :, :, :]
+        img = img[ts.d[0].transpose[2]]
+        img = img[ts.d[0].transpose[1]]
+    return img
 
 
 def open_zarr(path):
@@ -85,17 +85,17 @@ def open_zarr(path):
         return zarr.open(n5store).s0
 
 
-def read_tensorstore(arr, xyz, shape, from_center=True):
+def read_tensorstore(img, xyz, shape, from_center=True):
     """
-    Reads a chunk of data from the specified tensorstore array, given the
+    Reads a chunk of data from the specified tensorstore array, given the xyz
     coordinates and shape of the chunk.
 
     Parameters
     ----------
-    arr : tensorstore.ndarray Array
-        Array from which data is to be read.
+    img : tensorstore.TensorStore
+        Image to be read.
     xyz : tuple
-        xyz coordinates of chunk to be read from the tensorstore array.
+        xyz coordinates of chunk to be read.
     shape : tuple
         Shape (dimensions) of the chunk to be read.
     from_center : bool, optional
@@ -107,14 +107,29 @@ def read_tensorstore(arr, xyz, shape, from_center=True):
     Returns
     -------
     numpy.ndarray
-        Chunk of data read from the tensorstore array.
+        Chunk of data read from the image.
 
     """
-    chunk = read_chunk(arr, xyz, shape, from_center=from_center)
+    chunk = read_chunk(img, xyz, shape, from_center=from_center)
     return chunk.read().result()
 
 
 def read_tensorstore_with_bbox(img, bbox):
+    """
+    Reads a chunk from a subarray that is determined by "bbox".
+
+    Parameters
+    ----------
+    img : tensorstore.TensorStore
+        Image to be read.
+    bbox : dict
+        Dictionary that contains min and max coordinates of a bounding box.
+
+    Returns
+    -------
+    numpy.ndarray
+        Chunk of data read from the image.
+    """
     start = bbox["min"]
     end = bbox["max"]
     return (
@@ -124,14 +139,59 @@ def read_tensorstore_with_bbox(img, bbox):
     )
 
 
-def read_chunk(arr, xyz, shape, from_center=True):
+def read_chunk(img, xyz, shape, from_center=True):
+    """
+    Reads a chunk of data from arr"", given the xyz coordinates and shape of
+    the chunk.
+
+    Parameters
+    ----------
+    img : numpy.ndarray or tensorstore.TensorStore
+        Image to be read.
+    xyz : tuple
+        xyz coordinates of chunk to be read.
+    shape : tuple
+        Shape (dimensions) of the chunk to be read.
+    from_center : bool, optional
+        Indication of whether the provided coordinates represent the center of
+        the chunk or the starting point. If True, coordinates are the center;
+        if False, coordinates are the starting point of the chunk. The default
+        is True.
+
+    Returns
+    -------
+    numpy.ndarray
+        Chunk of data read from the array.
+
+    """
     start, end = get_start_end(xyz, shape, from_center=from_center)
     return deepcopy(
-        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+        img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
     )
 
 
 def get_start_end(xyz, shape, from_center=True):
+    """
+    Gets the start and end indices of the chunk to be read.
+
+    Parameters
+    ----------
+    xyz : tuple
+        xyz coordinates of chunk to be read.
+    shape : tuple
+        Shape (dimensions) of the chunk to be read.
+    from_center : bool, optional
+        Indication of whether the provided coordinates represent the center of
+        the chunk or the starting point. If True, coordinates are the center;
+        if False, coordinates are the starting point of the chunk. The default
+        is True.
+
+    Return
+    ------
+    tuple[list[int]]
+        Start and end indices of the chunk to be read.
+
+    """
     if from_center:
         start = [xyz[i] - shape[i] // 2 for i in range(3)]
         end = [xyz[i] + shape[i] // 2 for i in range(3)]
@@ -142,6 +202,31 @@ def get_start_end(xyz, shape, from_center=True):
 
 
 def read_superchunks(img_path, labels_path, xyz, shape, from_center=True):
+    """
+    Reads an image and label mask via multithreading.
+
+    Parameters
+    ----------
+    img_path : str
+        Path to an image on a GCS bucket.
+    labels_path : str
+        Path to a label mask on a GCS bucket.
+    xyz : tuple
+        xyz coordinates of chunk to be read.
+    shape : tuple
+        Shape (dimensions) of the chunk to be read.
+    from_center : bool, optional
+        Indication of whether the provided coordinates represent the center of
+        the chunk or the starting point. If True, coordinates are the center;
+        if False, coordinates are the starting point of the chunk. The default
+        is True.
+
+    Returns
+    -------
+    numpy.ndarray, numpy.ndarray
+        Image and label mask read from cloud bucket.
+
+    """
     with ThreadPoolExecutor() as executor:
         img_job = executor.submit(
             get_superchunk,
@@ -166,8 +251,33 @@ def read_superchunks(img_path, labels_path, xyz, shape, from_center=True):
 
 
 def get_superchunk(path, driver, xyz, shape, from_center=True):
-    arr = open_tensorstore(path, driver)
-    return read_tensorstore(arr, xyz, shape, from_center=from_center)
+    """
+    Opens and reads a chunk from an image on a GCS bucket.
+
+    Parameters
+    ----------
+    path : str
+        Path to image on GCS bucket.
+    driver : str
+        Driver needed to open image.
+    xyz : tuple
+        xyz coordinates of chunk to be read.
+    shape : tuple
+        Shape (dimensions) of the chunk to be read.
+    from_center : bool, optional
+        Indication of whether the provided coordinates represent the center of
+        the chunk or the starting point. If True, coordinates are the center;
+        if False, coordinates are the starting point of the chunk. The default
+        is True.
+
+    Returns
+    -------
+    numpy.ndarray
+        Image read from GCS bucket.
+
+    """
+    img = open_tensorstore(path, driver)
+    return read_tensorstore(img, xyz, shape, from_center=from_center)
 
 
 # -- Image Operations --
@@ -212,6 +322,24 @@ def get_mip(img, axis=0):
 
 
 def get_labels_mip(img, axis=0):
+    """
+    Compute the maximum intensity projection (MIP) of a segmentation along
+    "axis". This routine differs from "get_mip" because it retuns an rgb 
+    image.
+
+    Parameters
+    ----------
+    img : numpy.ndarray
+        Image to compute MIP of.
+    axis : int, optional
+        Projection axis. The default is 0.
+
+    Returns
+    -------
+    numpy.ndarray
+        MIP of "img".
+
+    """
     mip = np.max(img, axis=axis)
     mip = label2rgb(mip)
     return (255 * mip).astype(np.uint8)

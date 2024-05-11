@@ -14,6 +14,7 @@ import networkx as nx
 import numpy as np
 import torch
 from torch_geometric.data import HeteroData as HeteroGraphData
+
 from deep_neurographs.machine_learning import feature_generation
 
 DTYPE = torch.float32
@@ -115,7 +116,7 @@ class HeteroGraphDataset:
         self.data = HeteroGraphData()
         self.data["branch"].x = torch.tensor(x_branches, dtype=DTYPE)
         self.data["proposal"].x = torch.tensor(x_proposals, dtype=DTYPE)
-        self.data["proposal"].y =  torch.tensor(y_proposals, dtype=DTYPE)
+        self.data["proposal"].y = torch.tensor(y_proposals, dtype=DTYPE)
 
         # Edges
         self.init_edges(neurograph)
