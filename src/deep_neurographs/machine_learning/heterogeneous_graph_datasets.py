@@ -14,7 +14,6 @@ import networkx as nx
 import numpy as np
 import torch
 from torch_geometric.data import HeteroData as HeteroGraphData
-
 from deep_neurographs.machine_learning import feature_generation
 
 DTYPE = torch.float32

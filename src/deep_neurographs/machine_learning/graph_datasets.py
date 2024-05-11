@@ -289,7 +289,6 @@ def init_line_graph(edges):
     graph.add_edges_from(edges)
     return nx.line_graph(graph)
 
-
 def to_tensor(arr):
     """
     Converts an array to a tensor with contiguous memory.
