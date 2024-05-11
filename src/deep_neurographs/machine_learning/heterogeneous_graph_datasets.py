@@ -164,11 +164,11 @@ class HeteroGraphDataset:
         """
         # Proposal edges
         edge_type = ("proposal", "to", "proposal")
-        attrs = self.set_edge_attrs(x_nodes, edge_type, self.idxs_proposals)
-        # --> set attr
+        self.set_edge_attrs(x_nodes, edge_type, self.idxs_proposals)
 
         # Branch edges
         edge_type = ("branch", "to", "branch")
+        self.set_edge_attrs(x_nodes, edge_type, self.idxs_branches)
 
         # Branch-Proposal edges
         edge_type = ("branch", "to", "proposal")
@@ -270,9 +270,9 @@ class HeteroGraphDataset:
             e1, e2 = self.data[edge_type][:, i]
             v = node_intersection(idx_mapping, e1, e2)
             attrs.append(x_nodes[v])
-            print(v)
-            print(attrs)
-            stop
+        arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
+        self.data[edge_type].edge_attr = arrs
+
 
 # -- utils --
 def init_idxs(idxs):
