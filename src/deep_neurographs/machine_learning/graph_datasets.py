@@ -139,12 +139,12 @@ class GraphDataset:
         branch_edges = self.branch_to_branch(neurograph)
         branch_proposal_edges = self.branch_to_proposal(neurograph)
         proposal_edges = self.proposal_to_proposal()
-        
+
         # Compile edge_index
         self.dropout_edges = proposal_edges
-        edge_index = np.vstack([
-            branch_edges, branch_proposal_edges, proposal_edges
-        ])
+        edge_index = np.vstack(
+            [branch_edges, branch_proposal_edges, proposal_edges]
+        )
         return to_tensor(edge_index)
 
     def proposal_to_proposal(self):
@@ -243,7 +243,7 @@ def shift_idxs(idxs, shift):
     """
     shifted_idxs = dict()
     for key, value in idxs["idx_to_edge"].items():
-        shifted_idxs[key + shift] = value    
+        shifted_idxs[key + shift] = value
     return shifted_idxs
 
 
@@ -288,6 +288,7 @@ def init_line_graph(edges):
     graph = nx.Graph()
     graph.add_edges_from(edges)
     return nx.line_graph(graph)
+
 
 def to_tensor(arr):
     """
