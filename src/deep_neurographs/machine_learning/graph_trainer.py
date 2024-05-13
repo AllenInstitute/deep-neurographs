@@ -190,16 +190,21 @@ class GraphTrainer:
             Prediction.
 
         """
-        if augment:
-            dataset = self.augment(deepcopy(dataset))
-        y, hat_y = self.forward(dataset.data)
+        # Data augmentation (if applicable)
+        if self.augment:
+            data = self.augment(dataset)
+        else:
+            data = deepcopy(dataset.data)
+
+        # Forward
+        y, hat_y = self.forward(data)
         self.backpropagate(y, hat_y, epoch)
         return y, hat_y
 
     def augment(self, dataset):
-        augmented_dataset = rescale_data(dataset, self.scaling_factor)
-        # augmented_data = proposal_dropout(dataset, self.max_proposal_dropout)
-        return augmented_dataset
+        augmented_data = rescale_data(dataset, self.scaling_factor)
+        # augmented_data = proposal_dropout(data, self.max_proposal_dropout)
+        return augmented_data
 
     def forward(self, data):
         """
@@ -431,8 +436,9 @@ def rescale_data(dataset, scaling_factor):
 
     # Rescale
     n = count_proposals(dataset)
-    dataset.data.x[0:n, 1] = scaling_factor * dataset.data.x[0:n, 1]
-    return dataset
+    data = deepcopy(dataset.data)
+    data.x[0:n, 1] = scaling_factor * data.x[0:n, 1]
+    return data
 
 
 def proposal_dropout(data, max_proposal_dropout):

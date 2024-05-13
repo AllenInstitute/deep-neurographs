@@ -97,8 +97,8 @@ def run_on_branches(neurograph, img):
     Returns
     -------
     dict
-        Dictionary that maps edges to a dictionary of different types of
-        feature vector.
+        Dictionary that maps edges to a dictionary of
+        different types of feature vector.
 
     """
     return {"skel": branch_skeletal(neurograph)}
@@ -122,8 +122,8 @@ def run_on_proposals(neurograph, img, proposals, search_radius):
     Returns
     -------
     dict
-        Dictionary that maps proposals to a dictionary of different types of
-        feature vector.
+        Dictionary that maps proposals to a dictionary of
+        different types of feature vector.
 
     """
     features = dict()
@@ -181,7 +181,7 @@ def branch_skeletal(neurograph):
         features[frozenset(edge)] = np.concatenate(
             (
                 np.mean(neurograph.edges[edge]["radius"]),
-                neurograph.edge_length(edge),
+                neurograph.edge_length(edge) / 1000,
             ),
             axis=None,
         )

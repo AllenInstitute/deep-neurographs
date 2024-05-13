@@ -121,7 +121,7 @@ def trim_branches(graph, bbox):
     if bbox:
         delete_nodes = set()
         for i in graph.nodes:
-            xyz = utils.to_img(graph.nodes[i]["xyz"])
+            xyz = utils.to_voxels(graph.nodes[i]["xyz"])
             if not utils.is_contained(bbox, xyz):
                 delete_nodes.add(i)
         graph.remove_nodes_from(delete_nodes)
