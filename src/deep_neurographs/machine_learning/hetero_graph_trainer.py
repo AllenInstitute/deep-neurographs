@@ -138,7 +138,7 @@ class HeteroGraphTrainer:
                 y, hat_y = [], []
                 self.model.eval()
                 for graph_id in test_ids:
-                    y_i, hat_y_i = self.forward(datasets[graph_id].data)
+                    y_i, hat_y_i = self.forward(datasets[graph_id])
                     y.extend(toCPU(y_i))
                     hat_y.extend(toCPU(hat_y_i))
                 test_score = self.compute_metrics(y, hat_y, "val", epoch)
@@ -191,8 +191,8 @@ class HeteroGraphTrainer:
 
         """
         if augment:
-            dataset = self.augment(deepcopy(dataset))
-        y, hat_y = self.forward(dataset.data)
+            dataset = self.augment(dataset)
+        y, hat_y = self.forward(dataset)
         self.backpropagate(y, hat_y, epoch)
         return y, hat_y
 
@@ -201,7 +201,7 @@ class HeteroGraphTrainer:
         # augmented_data = proposal_dropout(dataset, self.max_proposal_dropout)
         return augmented_dataset
 
-    def forward(self, data):
+    def forward(self, dataset):
         """
         Runs "data" through "self.model" to generate a prediction.
 
@@ -219,8 +219,8 @@ class HeteroGraphTrainer:
 
         """
         self.optimizer.zero_grad()
-        x, y, edge_index = toGPU(data)
-        hat_y = self.model(x, edge_index)
+        dataset.toGPU()
+        hat_y = self.model(dataset.data, edge_index)
         return y, truncate(hat_y, y)
 
     def backpropagate(self, y, hat_y, epoch):
@@ -330,47 +330,22 @@ def train_test_split(graph_ids):
     return train_ids, test_ids
 
 
-def toCPU(tensor):
+def toList(tensor):
     """
-    Moves "tensor" from GPU to CPU.
+    Converts a pytorch tensor to a list.
 
     Parameters
     ----------
     tensor : torch.Tensor
-        Dataset to be moved to GPU.
+        Dataset to be converted to a list.
 
     Returns
     -------
-    numpy.ndarray
+    list
         Array.
 
     """
-    return np.array(tensor.detach().cpu()).tolist()
-
-
-def toGPU(data):
-    """
-    Moves "data" from CPU to GPU.
-
-    Parameters
-    ----------
-    data : GraphDataset
-        Dataset to be moved to GPU.
-
-    Returns
-    -------
-    x : torch.Tensor
-        Matrix of node feature vectors.
-    y : torch.Tensor
-        Ground truth.
-    edge_idx : torch.Tensor
-        Tensor containing edges in graph.
-
-    """
-    x = data.x.to("cuda:0", dtype=torch.float32)
-    y = data.y.to("cuda:0", dtype=torch.float32)
-    edge_index = data.edge_index.to("cuda:0")
-    return x, y, edge_index
+    return np.array(tensor).tolist()
 
 
 def truncate(hat_y, y):
