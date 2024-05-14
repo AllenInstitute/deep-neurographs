@@ -38,7 +38,7 @@ MAX_PROPOSAL_DROPOUT = 0.1
 SCALING_FACTOR = 0.05
 
 
-class GraphTrainer:
+class HeteroGraphTrainer:
     """
     Custom class that trains graph neural networks.
 
@@ -190,21 +190,16 @@ class GraphTrainer:
             Prediction.
 
         """
-        # Data augmentation (if applicable)
-        if self.augment:
-            data = self.augment(dataset)
-        else:
-            data = deepcopy(dataset.data)
-
-        # Forward
-        y, hat_y = self.forward(data)
+        if augment:
+            dataset = self.augment(deepcopy(dataset))
+        y, hat_y = self.forward(dataset.data)
         self.backpropagate(y, hat_y, epoch)
         return y, hat_y
 
     def augment(self, dataset):
-        augmented_data = rescale_data(dataset, self.scaling_factor)
-        # augmented_data = proposal_dropout(data, self.max_proposal_dropout)
-        return augmented_data
+        augmented_dataset = rescale_data(dataset, self.scaling_factor)
+        # augmented_data = proposal_dropout(dataset, self.max_proposal_dropout)
+        return augmented_dataset
 
     def forward(self, data):
         """
@@ -436,9 +431,8 @@ def rescale_data(dataset, scaling_factor):
 
     # Rescale
     n = count_proposals(dataset)
-    data = deepcopy(dataset.data)
-    data.x[0:n, 1] = scaling_factor * data.x[0:n, 1]
-    return data
+    dataset.data.x[0:n, 1] = scaling_factor * dataset.data.x[0:n, 1]
+    return dataset
 
 
 def proposal_dropout(data, max_proposal_dropout):

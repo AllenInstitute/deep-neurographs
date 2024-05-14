@@ -114,7 +114,7 @@ def run_on_proposals(
     features = dict()
     if labels_path:
         labels_driver = "neuroglancer_precomputed"
-        labels = utils.open_tensorstore(labels_path, labels_driver)
+        labels = img_utils.open_tensorstore(labels_path, labels_driver)
 
     # Generate features
     features["skel"] = proposal_skeletal(neurograph, proposals, search_radius)
@@ -293,7 +293,7 @@ def get_profile(img, coords, thread_id):
 
     """
     chunk = img_utils.read_tensorstore_with_bbox(img, coords["bbox"])
-    profile = [chunk[tuple(xyz)] for xyz in coords["path"]]
+    profile = [chunk[tuple(xyz)] / 100 for xyz in coords["path"]]
     avg, std = utils.get_avg_std(profile)
     profile.extend([avg, std])
     return thread_id, profile
@@ -371,7 +371,8 @@ def get_directionals(neurograph, proposal, window):
         inner_product_3 = np.dot(direction_i, direction_j)
     else:
         inner_product_3 = np.dot(direction_i, direction_j)
-        inner_product_3 = max(inner_product_3, -inner_product_3)
+        if not neurograph.is_simple(proposal):
+            inner_product_3 = max(inner_product_3, -inner_product_3)
     return np.array([inner_product_1, inner_product_2, inner_product_3])
 
 
@@ -437,7 +438,7 @@ def generate_branch_features(neurograph):
     for edge in neurograph.edges:
         i, j = tuple(edge)
         features[frozenset(edge)] = np.concatenate(
-            (-1, np.zeros((32))), axis=None
+            (1, np.zeros((32))), axis=None
         )
     return features
 

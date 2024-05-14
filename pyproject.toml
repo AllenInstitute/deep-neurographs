@@ -25,10 +25,12 @@ dependencies = [
     'plotly',
     'scikit-learn',
     'scipy',
+    'tensorboard',
     'tensorstore',
     'torch',
     'torcheval',
     'torchio',
+    'torch_geometric',
     'zarr',
 ]
 
