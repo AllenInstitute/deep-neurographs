@@ -18,6 +18,7 @@ from torch_geometric.data import HeteroData as HeteroGraphData
 
 from deep_neurographs.machine_learning import feature_generation
 
+DEVICE = "cuda:0"
 DTYPE = torch.float32
 
 
@@ -117,6 +118,14 @@ class HeteroGraphDataset:
         self.idxs_proposals = init_idxs(idxs_proposals)
         self.proposals = proposals
 
+        # Types
+        self.node_types = ["branch", "proposal"]
+        self.edge_types = [
+            ("proposal", "to", "proposal"),
+            ("branch", "to", "branch"),
+            ("branch", "to", "proposal")
+        ]
+
         # Features
         self.data = HeteroGraphData()
         self.data["branch"].x = torch.tensor(x_branches, dtype=DTYPE)
@@ -143,13 +152,14 @@ class HeteroGraphDataset:
 
         """
         # Compute edges
+        proposal_edges = self.proposal_to_proposal()
         branch_edges = self.branch_to_branch(neurograph)
         branch_proposal_edges = self.branch_to_proposal(neurograph)
 
         # Store edges
-        self.data["proposal", "to", "proposal"] = self.proposal_to_proposal()
-        self.data["branch", "to", "branch"] = branch_edges
-        self.data["branch", "to", "proposal"] = branch_proposal_edges
+        self.data["proposal", "to", "proposal"].edge_index = proposal_edges
+        self.data["branch", "to", "branch"].edge_index = branch_edges
+        self.data["branch", "to", "proposal"].edge_index = branch_proposal_edges
 
     def init_edge_attrs(self, x_nodes):
         """
@@ -286,6 +296,52 @@ class HeteroGraphDataset:
                 edge_index.extend([[v2, v1]])
         return to_tensor(edge_index)
 
+    def toGPU(self):
+        """
+        Moves "data" from CPU to GPU.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        # Node features
+        for n_type in self.node_types:
+            self.data[n_type]["x"] = self.data[n_type]["x"].to(DEVICE, dtype=DTYPE)
+
+        # Edge features
+        for e_type in self.edge_types:
+            if e_type != ("branch", "to", "proposal"):
+                self.data[e_type]["x"] = self.data[e_type]["x"].to(DEVICE, dtype=DTYPE)
+
+        # Labels
+        self.data[n_type]["y"] = self.data[n_type]["y"].to(DEVICE, dtype=DTYPE)
+
+    def toCPU(self):
+        """
+        Moves "data" from GPU to CPU.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        # Node features
+        for n_type in self.node_types:
+            self.data[n_type] = self.data[n_type]["x"].detach().cpu()
+
+        # Edge features
+        for e_type in self.edge_types:
+            self.data[e_type] = self.data[e_type]["x"].detach().cpu()
+
     # Set Edge Attributes
     def set_edge_attrs(self, x_nodes, edge_type, idx_mapping):
         """
@@ -301,12 +357,12 @@ class HeteroGraphDataset:
 
         """
         attrs = []
-        for i in range(self.data[edge_type].size(1)):
-            e1, e2 = self.data[edge_type][:, i]
+        for i in range(self.data[edge_type].edge_index.size(1)):
+            e1, e2 = self.data[edge_type].edge_index[:, i]
             v = node_intersection(idx_mapping, e1, e2)
             attrs.append(x_nodes[v])
         arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
-        self.data[edge_type].edge_attr = arrs
+        self.data[edge_type].x = arrs
 
 
 # -- utils --
