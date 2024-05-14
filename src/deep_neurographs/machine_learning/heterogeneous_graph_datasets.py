@@ -13,6 +13,7 @@ Custom datasets for training graph neural networks.
 import networkx as nx
 import numpy as np
 import torch
+from random import sample
 from torch_geometric.data import HeteroData as HeteroGraphData
 
 from deep_neurographs.machine_learning import feature_generation
@@ -125,6 +126,7 @@ class HeteroGraphDataset:
         # Edges
         self.init_edges(neurograph)
         self.init_edge_attrs(x_nodes)
+        self.n_edge_attrs = n_edge_features(x_nodes)
 
     def init_edges(self, neurograph):
         """
@@ -172,6 +174,39 @@ class HeteroGraphDataset:
 
         # Branch-Proposal edges
         edge_type = ("branch", "to", "proposal")
+
+    # -- Getters --
+    def n_branch_features(self):
+        """
+        Gets the dimension of feature vector for branches.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Dimension of feature vector for branches.
+
+        """
+        return self.data["branch"]["x"].size(1)
+
+    def n_proposal_features(self):
+        """
+        Gets the dimension of feature vector for proposals.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Dimension of feature vector for proposals.
+
+        """
+        return self.data["proposal"]["x"].size(1)
 
     # -- Set Edges --
     def proposal_to_proposal(self):
@@ -358,3 +393,22 @@ def node_intersection(idx_mapping, e1, e2):
     node = list(hat_e1.intersection(hat_e2))
     assert len(node) == 1, "Node intersection is not unique!"
     return node[0]
+
+
+def n_edge_features(x):
+    """
+    Gets the number of edge features.
+
+    Parameters
+    ----------
+    x : dict
+        Dictionary that maps node (from a neurograph) to feature vectors.
+
+    Returns
+    -------
+    int
+        Number of edge features.
+
+    """
+    key = sample(list(x.keys()), 1)[0]
+    return x[key].shape[0]

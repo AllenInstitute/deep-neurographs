@@ -17,7 +17,7 @@ from deep_neurographs.machine_learning import feature_generation as fg
 
 WINDOW = [5, 5, 5]
 N_PROFILE_PTS = 10
-NODE_PROFILE_DEPTH = 15
+NODE_PROFILE_DEPTH = 16
 
 
 # -- Wrappers --
@@ -320,7 +320,7 @@ def get_profile_path(xyz_list):
     for i in range(1, len(xyz_list)):
         if i > 0:
             path_length += geometry.dist(xyz_list[i - 1], xyz_list[i])
-        if path_length >= NODE_PROFILE_DEPTH:
+        if path_length >= NODE_PROFILE_DEPTH and i > 1:
             break
     return xyz_list[0:i, :]
 
@@ -337,6 +337,6 @@ def get_node_profile_coords(neurograph, xyz_arr):
 
 def get_bbox(neurograph, xyz_arr):
     return {
-        "min": np.floor(np.min(xyz_arr, axis=0)).astype(int) - 1,
-        "max": np.ceil(np.max(xyz_arr, axis=0)).astype(int) + 1,
+        "min": np.floor(np.min(xyz_arr, axis=0)).astype(int) - 2,
+        "max": np.ceil(np.max(xyz_arr, axis=0)).astype(int) + 2,
     }

@@ -490,7 +490,7 @@ def img_to_patch(coord, patch_centroid, patch_shape):
         Converted coordinates.
 
     """
-    half_patch_shape= [patch_shape[i] // 2 for i in range(3)]
+    half_patch_shape = [patch_shape[i] // 2 for i in range(3)]
     patch_coord = coord - patch_centroid + half_patch_shape
     return tuple(patch_coord.astype(int))
 

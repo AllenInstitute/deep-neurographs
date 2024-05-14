@@ -359,9 +359,7 @@ def proposal_skeletal(neurograph, proposals, search_radius):
 def get_directionals(neurograph, proposal, window):
     # Compute tangent vectors
     i, j = tuple(proposal)
-    direction = geometry.compute_tangent(
-        neurograph.proposals[proposal]["xyz"]
-    )
+    direction = geometry.compute_tangent(neurograph.proposals[proposal]["xyz"])
     origin = neurograph.proposal_midpoint(proposal)
     direction_i = geometry.get_directional(neurograph, i, origin, window)
     direction_j = geometry.get_directional(neurograph, j, origin, window)
