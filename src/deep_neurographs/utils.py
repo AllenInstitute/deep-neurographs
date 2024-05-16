@@ -731,8 +731,8 @@ def get_img_bbox(origin, shape):
 
 def get_minimal_bbox(coord_0, coord_1):
     bbox = {
-        "min": [min(coord_0[i], coord_1[i]) for i in range(3)],
-        "max": [max(coord_0[i], coord_1[i]) + 1 for i in range(3)],
+        "min": [min(coord_0[i], coord_1[i]) - 2 for i in range(3)],
+        "max": [max(coord_0[i], coord_1[i]) + 2 for i in range(3)],
     }
     return bbox
 
@@ -783,4 +783,4 @@ def get_memory_usage():
 
 def get_batches(iterable, batch_size):
     for start in range(0, len(iterable), batch_size):
-        yield iterable[start : min(start + batch_size, len(iterable))]
+        yield iterable[start: min(start + batch_size, len(iterable))]
