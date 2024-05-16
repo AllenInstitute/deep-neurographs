@@ -10,10 +10,11 @@ Custom datasets for training graph neural networks.
 
 """
 
+from random import sample
+
 import networkx as nx
 import numpy as np
 import torch
-from random import sample
 from torch_geometric.data import HeteroData as HeteroGraphData
 
 from deep_neurographs.machine_learning import feature_generation
@@ -120,9 +121,9 @@ class HeteroGraphDataset:
         # Types
         self.node_types = ["branch", "proposal"]
         self.edge_types = [
-            ("proposal", "to", "proposal"),
-            ("branch", "to", "branch"),
-            ("branch", "to", "proposal")
+            ("proposal", "edge", "proposal"),
+            ("branch", "edge", "branch"),
+            ("branch", "edge", "proposal"),
         ]
 
         # Features
@@ -133,8 +134,8 @@ class HeteroGraphDataset:
 
         # Edges
         self.init_edges(neurograph)
-        self.init_edge_attrs(x_nodes)
-        self.n_edge_attrs = n_edge_features(x_nodes)
+        # self.init_edge_attrs(x_nodes)
+        # self.n_edge_attrs = n_edge_features(x_nodes)
 
     def init_edges(self, neurograph):
         """
@@ -156,9 +157,11 @@ class HeteroGraphDataset:
         branch_proposal_edges = self.branch_to_proposal(neurograph)
 
         # Store edges
-        self.data["proposal", "to", "proposal"].edge_index = proposal_edges
-        self.data["branch", "to", "branch"].edge_index = branch_edges
-        self.data["branch", "to", "proposal"].edge_index = branch_proposal_edges
+        self.data["proposal", "edge", "proposal"].edge_index = proposal_edges
+        self.data["branch", "edge", "branch"].edge_index = branch_edges
+        self.data[
+            "branch", "edge", "proposal"
+        ].edge_index = branch_proposal_edges
 
     def init_edge_attrs(self, x_nodes):
         """
@@ -174,15 +177,15 @@ class HeteroGraphDataset:
 
         """
         # Proposal edges
-        edge_type = ("proposal", "to", "proposal")
+        edge_type = ("proposal", "edge", "proposal")
         self.set_edge_attrs(x_nodes, edge_type, self.idxs_proposals)
 
         # Branch edges
-        edge_type = ("branch", "to", "branch")
+        edge_type = ("branch", "edge", "branch")
         self.set_edge_attrs(x_nodes, edge_type, self.idxs_branches)
 
         # Branch-Proposal edges
-        edge_type = ("branch", "to", "proposal")
+        edge_type = ("branch", "edge", "proposal")
         self.set_hetero_edge_attrs(
             x_nodes, edge_type, self.idxs_branches, self.idxs_proposals
         )
@@ -219,6 +222,23 @@ class HeteroGraphDataset:
 
         """
         return self.data["proposal"]["x"].size(1)
+
+    def n_edge_features(self):
+        """
+        Gets the dimension of feature vector for edges.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Dimension of feature vector for edges.
+
+        """
+        edge_type = ("proposal", "edge", "proposal")
+        return self.data[edge_type]["x"].size(1)
 
     # -- Set Edges --
     def proposal_to_proposal(self):
@@ -321,9 +341,7 @@ class HeteroGraphDataset:
         arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
         self.data[edge_type].x = arrs
 
-    def set_hetero_edge_attrs(
-        self, x_nodes, edge_type, idx_map_1, idx_map_2
-    ):
+    def set_hetero_edge_attrs(self, x_nodes, edge_type, idx_map_1, idx_map_2):
         """
         Generate proposal edge attributes in the case where the edge connects
         nodes with different types.
@@ -343,6 +361,7 @@ class HeteroGraphDataset:
             attrs.append(x_nodes[v])
         arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
         self.data[edge_type].x = arrs
+
 
 # -- utils --
 def init_idxs(idxs):

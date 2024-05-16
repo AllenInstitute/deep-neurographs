@@ -410,7 +410,7 @@ def __smooth_branch(swc_dict, attrs, edges, nbs, root, j):
     -------
     dict, dict
         Dictionaries that have been updated with respect to smoothed edges.
-        
+
     """
     attrs["xyz"] = geometry.smooth_branch(attrs["xyz"], s=5)
     swc_dict, edges = upd_xyz(swc_dict, attrs, edges, nbs, root, 0)

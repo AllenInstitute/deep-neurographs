@@ -79,7 +79,7 @@ class HeteroGraphTrainer:
 
         """
         # Training
-        self.model = model.to("cuda:0")
+        self.model = model  # .to("cuda:0")
         self.criterion = criterion
         self.n_epochs = n_epochs
         self.optimizer = torch.optim.Adam(
@@ -336,7 +336,7 @@ def train_test_split(graph_ids):
 def toGPU(type_dict, edges=False):
     """
     Moves feature matrices from CPU to GPU.
-    
+
     Parameters
     ----------
     type_dict : dict
@@ -348,7 +348,26 @@ def toGPU(type_dict, edges=False):
 
     """
     for key in type_dict.keys():
-        type_dict[key] = type_dict[key].to(DEVICE)
+        type_dict[key] = type_dict[key]  # .to(DEVICE)
+    return type_dict
+
+
+def toCPU(type_dict):
+    """
+    Moves feature matrices from GPU to CPU.
+
+    Parameters
+    ----------
+    type_dict : dict
+        Dictionary that maps a type of node/edge to feature matrices.
+
+    Returns
+    -------
+    None
+
+    """
+    for key in type_dict.keys():
+        type_dict[key] = type_dict[key].detach().cpu()
     return type_dict
 
 
