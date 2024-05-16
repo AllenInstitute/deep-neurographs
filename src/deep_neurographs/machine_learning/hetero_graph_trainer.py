@@ -26,6 +26,8 @@ from torch_geometric.utils import subgraph
 from deep_neurographs.machine_learning import ml_utils
 
 # Training
+DEVICE = "cuda:0"
+FEATURE_DTYPE = torch.float32
 LR = 1e-3
 N_EPOCHS = 200
 SCHEDULER_GAMMA = 0.5
@@ -219,8 +221,9 @@ class HeteroGraphTrainer:
 
         """
         self.optimizer.zero_grad()
-        dataset.toGPU()
-        hat_y = self.model(dataset.data, edge_index)
+        x_dict = toGPU(deepcopy(dataset.data.x_dict))
+        edge_index_dict = toGPU(deepcopy(dataset.data.edge_index_dict))
+        hat_y = self.model(x_dict, edge_index_dict)
         return y, truncate(hat_y, y)
 
     def backpropagate(self, y, hat_y, epoch):
@@ -328,6 +331,25 @@ def train_test_split(graph_ids):
     test_ids = ["block_000", "block_002"]  # sample(graph_ids, n_test_examples)
     train_ids = list(set(graph_ids) - set(test_ids))
     return train_ids, test_ids
+
+
+def toGPU(type_dict, edges=False):
+    """
+    Moves feature matrices from CPU to GPU.
+    
+    Parameters
+    ----------
+    type_dict : dict
+        Dictionary that maps a type of node/edge to feature matrices.
+
+    Returns
+    -------
+    None
+
+    """
+    for key in type_dict.keys():
+        type_dict[key] = type_dict[key].to(DEVICE)
+    return type_dict
 
 
 def toList(tensor):
