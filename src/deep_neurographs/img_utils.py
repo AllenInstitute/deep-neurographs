@@ -133,7 +133,7 @@ def read_tensorstore_with_bbox(img, bbox):
     start = bbox["min"]
     end = bbox["max"]
     return (
-        img[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
+        img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
         .read()
         .result()
     )
@@ -166,7 +166,7 @@ def read_chunk(img, xyz, shape, from_center=True):
     """
     start, end = get_start_end(xyz, shape, from_center=from_center)
     return deepcopy(
-        img[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
+        img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
     )
 
 
@@ -324,7 +324,7 @@ def get_mip(img, axis=0):
 def get_labels_mip(img, axis=0):
     """
     Compute the maximum intensity projection (MIP) of a segmentation along
-    "axis". This routine differs from "get_mip" because it retuns an rgb 
+    "axis". This routine differs from "get_mip" because it retuns an rgb
     image.
 
     Parameters

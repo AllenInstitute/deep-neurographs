@@ -11,9 +11,9 @@ Graph neural network architectures that learn to classify edge proposals.
 import torch
 import torch.nn.init as init
 from torch import nn
-from torch.nn import Dropout, LeakyReLU, Linear
+from torch.nn import Dropout, LeakyReLU
 from torch_geometric.nn import GATv2Conv as GATConv
-from torch_geometric.nn import GCNConv, HeteroConv, Linear
+from torch_geometric.nn import HeteroConv, Linear
 
 
 class HeteroGNN(torch.nn.Module):
@@ -36,33 +36,41 @@ class HeteroGNN(torch.nn.Module):
         """
         super().__init__()
         # Linear layers
-        self.input = nn.ModuleDict({
-            "branch": nn.Linear(n_branch_features, hidden_dim),
-            "proposal": nn.Linear(n_proposal_features, hidden_dim),
-            "to": nn.Linear(n_edge_features, hidden_dim),
-            
-        })
-        self.output = Linear(hidden_dim // 2, 1)
+        self.input = nn.ModuleDict(
+            {
+                "branch": nn.Linear(n_branch_features, hidden_dim),
+                "proposal": nn.Linear(n_proposal_features, hidden_dim),
+            }
+        )
+
+        self.output = Linear(hidden_dim, 1)
 
         # Convolutional layers
         self.conv1 = HeteroConv(
             {
-                ("proposal", "to", "proposal"): GATConv(-1, hidden_dim), #nn.Linear(hidden_dim, hidden_dim),
-                ("branch", "to", "branch"): GATConv(-1, hidden_dim), # nn.Linear(hidden_dim, hidden_dim),
-                ("branch", "to", "proposal"): GATConv(
+                ("proposal", "edge", "proposal"): GATConv(
+                    -1, hidden_dim, add_self_loops=False
+                ),
+                ("branch", "edge", "branch"): GATConv(
+                    -1, hidden_dim, add_self_loops=False
+                ),
+                ("branch", "edge", "proposal"): GATConv(
                     (-1, -1), hidden_dim, add_self_loops=False
                 ),
             },
             aggr="sum",
         )
 
-        hidden_dim = hidden_dim // 2
         self.conv2 = HeteroConv(
             {
-                ("proposal", "to", "proposal"): GATConv(-1, hidden_dim),
-                ("branch", "to", "branch"): GATConv(-1, hidden_dim),
-                ("branch", "to", "proposal"): GATConv(
-                    (-1, -1), hidden_dim // 2, add_self_loops=False
+                ("proposal", "edge", "proposal"): GATConv(
+                    -1, hidden_dim, add_self_loops=False
+                ),
+                ("branch", "edge", "branch"): GATConv(
+                    -1, hidden_dim, add_self_loops=False
+                ),
+                ("branch", "edge", "proposal"): GATConv(
+                    (-1, -1), hidden_dim, add_self_loops=False
                 ),
             },
             aggr="sum",
@@ -73,7 +81,7 @@ class HeteroGNN(torch.nn.Module):
         self.leaky_relu = LeakyReLU()
 
         # Initialize weights
-        #self.init_weights()
+        # self.init_weights()
 
     def init_weights(self):
         """
@@ -104,7 +112,7 @@ class HeteroGNN(torch.nn.Module):
 
     def forward(self, x_dict, edge_index_dict):
         # Input
-        x = torch.cat([self.linear_layers[key](x_dict[key]) for key in x_dict], dim=0)
+        x_dict = {key: f(x_dict[key]) for key, f in self.input.items()}
         x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
         x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
 
