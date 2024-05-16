@@ -18,7 +18,6 @@ from torch_geometric.data import HeteroData as HeteroGraphData
 
 from deep_neurographs.machine_learning import feature_generation
 
-DEVICE = "cuda:0"
 DTYPE = torch.float32
 
 
@@ -184,6 +183,9 @@ class HeteroGraphDataset:
 
         # Branch-Proposal edges
         edge_type = ("branch", "to", "proposal")
+        self.set_hetero_edge_attrs(
+            x_nodes, edge_type, self.idxs_branches, self.idxs_proposals
+        )
 
     # -- Getters --
     def n_branch_features(self):
@@ -296,60 +298,15 @@ class HeteroGraphDataset:
                 edge_index.extend([[v2, v1]])
         return to_tensor(edge_index)
 
-    def toGPU(self):
-        """
-        Moves "data" from CPU to GPU.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        # Node features
-        for n_type in self.node_types:
-            self.data[n_type]["x"] = self.data[n_type]["x"].to(DEVICE, dtype=DTYPE)
-
-        # Edge features
-        for e_type in self.edge_types:
-            if e_type != ("branch", "to", "proposal"):
-                self.data[e_type]["x"] = self.data[e_type]["x"].to(DEVICE, dtype=DTYPE)
-
-        # Labels
-        self.data[n_type]["y"] = self.data[n_type]["y"].to(DEVICE, dtype=DTYPE)
-
-    def toCPU(self):
-        """
-        Moves "data" from GPU to CPU.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        # Node features
-        for n_type in self.node_types:
-            self.data[n_type] = self.data[n_type]["x"].detach().cpu()
-
-        # Edge features
-        for e_type in self.edge_types:
-            self.data[e_type] = self.data[e_type]["x"].detach().cpu()
-
     # Set Edge Attributes
-    def set_edge_attrs(self, x_nodes, edge_type, idx_mapping):
+    def set_edge_attrs(self, x_nodes, edge_type, idx_map):
         """
-        Generate proposal edge attributes
+        Generate proposal edge attributes in the case where the edge connects
+        nodes with the same type.
 
         Parameters
         ----------
-        None
+        ...
 
         Returns
         -------
@@ -359,11 +316,33 @@ class HeteroGraphDataset:
         attrs = []
         for i in range(self.data[edge_type].edge_index.size(1)):
             e1, e2 = self.data[edge_type].edge_index[:, i]
-            v = node_intersection(idx_mapping, e1, e2)
+            v = node_intersection(idx_map, e1, e2)
             attrs.append(x_nodes[v])
         arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
         self.data[edge_type].x = arrs
 
+    def set_hetero_edge_attrs(
+        self, x_nodes, edge_type, idx_map_1, idx_map_2
+    ):
+        """
+        Generate proposal edge attributes in the case where the edge connects
+        nodes with different types.
+
+        Parameters
+        ----------
+        ...
+
+        Returns
+        -------
+        None
+        """
+        attrs = []
+        for i in range(self.data[edge_type].edge_index.size(1)):
+            e1, e2 = self.data[edge_type].edge_index[:, i]
+            v = hetero_node_intersection(idx_map_1, idx_map_2, e1, e2)
+            attrs.append(x_nodes[v])
+        arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
+        self.data[edge_type].x = arrs
 
 # -- utils --
 def init_idxs(idxs):
@@ -428,9 +407,10 @@ def to_tensor(my_list):
     return torch.Tensor(arr).t().contiguous().long()
 
 
-def node_intersection(idx_mapping, e1, e2):
+def node_intersection(idx_map, e1, e2):
     """
-    Computes the common node between "e1" and "e2".
+    Computes the common node between "e1" and "e2" in the case where these
+    edges connect nodes of the same type.
 
     Parameters
     ----------
@@ -444,10 +424,34 @@ def node_intersection(idx_mapping, e1, e2):
     int
         Common node between "e1" and "e2".
     """
-    hat_e1 = idx_mapping["idx_to_edge"][int(e1)]
-    hat_e2 = idx_mapping["idx_to_edge"][int(e2)]
+    hat_e1 = idx_map["idx_to_edge"][int(e1)]
+    hat_e2 = idx_map["idx_to_edge"][int(e2)]
     node = list(hat_e1.intersection(hat_e2))
     assert len(node) == 1, "Node intersection is not unique!"
+    return node[0]
+
+
+def hetero_node_intersection(idx_map_1, idx_map_2, e1, e2):
+    """
+    Computes the common node between "e1" and "e2" in the case where these
+    edges connect nodes of different types.
+
+    Parameters
+    ----------
+    e1 : torch.Tensor
+        Edge to be checked.
+    e2 : torch.Tensor
+        Edge to be checked.
+
+    Returns
+    -------
+    int
+        Common node between "e1" and "e2".
+    """
+    hat_e1 = idx_map_1["idx_to_edge"][int(e1)]
+    hat_e2 = idx_map_2["idx_to_edge"][int(e2)]
+    node = list(hat_e1.intersection(hat_e2))
+    assert len(node) == 1, "Node intersection is empty or not unique!"
     return node[0]
 
 

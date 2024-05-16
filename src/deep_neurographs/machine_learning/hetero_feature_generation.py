@@ -320,7 +320,7 @@ def get_profile_path(xyz_list):
     for i in range(1, len(xyz_list)):
         if i > 0:
             path_length += geometry.dist(xyz_list[i - 1], xyz_list[i])
-        if path_length >= NODE_PROFILE_DEPTH and i > 1:
+        if path_length >= NODE_PROFILE_DEPTH and i > 2:
             break
     return xyz_list[0:i, :]
 
