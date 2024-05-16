@@ -224,6 +224,7 @@ class HeteroGraphTrainer:
         x_dict = toGPU(deepcopy(dataset.data.x_dict))
         edge_index_dict = toGPU(deepcopy(dataset.data.edge_index_dict))
         hat_y = self.model(x_dict, edge_index_dict)
+        y = datasets.data["proposal"]["y"]
         return y, truncate(hat_y, y)
 
     def backpropagate(self, y, hat_y, epoch):
