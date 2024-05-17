@@ -341,12 +341,38 @@ def get_node_profile_coords(neurograph, profile_path):
 
 def transform_path(profile_path):
     profile_path = np.array([utils.to_voxels(xyz) for xyz in profile_path])
+    if profile_path.shape[0] < 5:
+        profile_path = check_degenerate(profile_path)
     profile_path = geometry.sample_curve(profile_path, N_PROFILE_PTS)
     return profile_path
 
 
 def shift_path(profile_path, bbox):
     return np.array([xyz - bbox["min"] for xyz in profile_path], dtype=int)
+
+
+def check_degenerate(profile_path):
+    """
+    Checks whether "profile_path" contains at least two unique points. If
+    False, the unique xyz coordinate is perturbed and added to "profile_path".
+
+    Parameters
+    ----------
+    profile_path : numpy.ndarray
+        Array containing xyz coordinates to be checked.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of xyz coordinates that form a non-degenerate path.
+
+    """
+    if np.unique(profile_path, axis=0).shape[0] == 1:
+        profile_path = np.vstack([
+            profile_path,
+            profile_path[0, :] + np.array([1, 1, 1], dtype=int)
+        ])
+    return profile_path
 
 
 def get_bbox(neurograph, xyz_arr):
