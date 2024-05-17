@@ -292,8 +292,14 @@ def get_profile(img, coords, thread_id):
         Image intensity profile.
 
     """
+    coords["bbox"]["max"] = [coords["bbox"]["max"][i] + 1 for i in range(3)]
     chunk = img_utils.read_tensorstore_with_bbox(img, coords["bbox"])
-    profile = [chunk[tuple(xyz)] / 100 for xyz in coords["path"]]
+    for xyz in coords["profile_path"]:
+        if (xyz >= chunk.shape).any():
+            print(chunk.shape)
+            print(coords)
+            stop
+    profile = [chunk[tuple(xyz)] / 100 for xyz in coords["profile_path"]]
     avg, std = utils.get_avg_std(profile)
     profile.extend([avg, std])
     return thread_id, profile
@@ -328,7 +334,7 @@ def get_proposal_profile_coords(neurograph, proposal):
     end = [coord_1[i] - bbox["min"][i] for i in range(3)]
     coords = {
         "bbox": bbox,
-        "path": geometry.make_line(start, end, N_PROFILE_PTS),
+        "profile_path": geometry.make_line(start, end, N_PROFILE_PTS),
     }
     return coords
 

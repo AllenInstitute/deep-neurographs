@@ -247,10 +247,10 @@ def node_profiles(neurograph, img):
     coords = dict()
     for i in neurograph.nodes:
         if neurograph.degree[i] == 1:
-            path = get_leaf_profile_path(neurograph, i)
+            profile_path = get_leaf_profile_path(neurograph, i)
         else:
-            path = get_junction_profile_path(neurograph, i)
-        coords[i] = get_node_profile_coords(neurograph, path)
+            profile_path = get_junction_profile_path(neurograph, i)
+        coords[i] = get_node_profile_coords(neurograph, profile_path)
 
     # Generate profiles
     with ThreadPoolExecutor() as executor:
@@ -316,27 +316,41 @@ def get_junction_profile_path(neurograph, i):
 
 
 def get_profile_path(xyz_list):
+    # Get path
     path_length = 0
     for i in range(1, len(xyz_list)):
-        if i > 0:
-            path_length += geometry.dist(xyz_list[i - 1], xyz_list[i])
+        path_length += geometry.dist(xyz_list[i - 1], xyz_list[i])
         if path_length >= NODE_PROFILE_DEPTH and i > 2:
             break
+
+    # Check for degenerate path
+    if xyz_list.shape[0] == 1:
+        xyz_list = np.vstack([xyz_list, xyz_list - 0.01])
     return xyz_list[0:i, :]
 
 
-def get_node_profile_coords(neurograph, xyz_arr):
-    xyz_arr = np.array([utils.to_voxels(xyz) for xyz in xyz_arr])
-    bbox = get_bbox(neurograph, xyz_arr)
+def get_node_profile_coords(neurograph, profile_path):
+    profile_path = transform_path(profile_path)
+    bbox = get_bbox(neurograph, profile_path)
     coords = {
         "bbox": bbox,
-        "path": geometry.sample_curve(xyz_arr - bbox["min"], N_PROFILE_PTS),
+        "profile_path": shift_path(profile_path, bbox),
     }
     return coords
 
 
+def transform_path(profile_path):
+    profile_path = np.array([utils.to_voxels(xyz) for xyz in profile_path])
+    profile_path = geometry.sample_curve(profile_path, N_PROFILE_PTS)
+    return profile_path
+
+
+def shift_path(profile_path, bbox):
+    return np.array([xyz - bbox["min"] for xyz in profile_path], dtype=int)
+
+
 def get_bbox(neurograph, xyz_arr):
     return {
-        "min": np.floor(np.min(xyz_arr, axis=0)).astype(int) - 2,
-        "max": np.ceil(np.max(xyz_arr, axis=0)).astype(int) + 2,
+        "min": np.floor(np.min(xyz_arr, axis=0)).astype(int),
+        "max": np.ceil(np.max(xyz_arr, axis=0)).astype(int),
     }

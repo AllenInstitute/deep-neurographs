@@ -224,7 +224,7 @@ class HeteroGraphTrainer:
         x_dict = toGPU(deepcopy(dataset.data.x_dict))
         edge_index_dict = toGPU(deepcopy(dataset.data.edge_index_dict))
         hat_y = self.model(x_dict, edge_index_dict)
-        y = datasets.data["proposal"]["y"]
+        y = dataset.data["proposal"]["y"]
         return y, truncate(hat_y, y)
 
     def backpropagate(self, y, hat_y, epoch):
@@ -353,23 +353,21 @@ def toGPU(type_dict, edges=False):
     return type_dict
 
 
-def toCPU(type_dict):
+def toCPU(tensor):
     """
-    Moves feature matrices from GPU to CPU.
+    Moves tensor from GPU to CPU.
 
     Parameters
     ----------
-    type_dict : dict
-        Dictionary that maps a type of node/edge to feature matrices.
+    tensor : torch.Tensor
+        Tensor.
 
     Returns
     -------
     None
 
     """
-    for key in type_dict.keys():
-        type_dict[key] = type_dict[key].detach().cpu()
-    return type_dict
+    return tensor.detach().cpu()
 
 
 def toList(tensor):
