@@ -322,6 +322,10 @@ def get_profile_path(xyz_list):
         path_length += geometry.dist(xyz_list[i - 1], xyz_list[i])
         if path_length >= NODE_PROFILE_DEPTH and i > 2:
             break
+
+    # Check for degenerate path
+    if xyz_list.shape[0] == 1:
+        xyz_list = np.vstack([xyz_list, xyz_list - 0.01])
     return xyz_list[0:i, :]
 
 
