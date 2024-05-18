@@ -196,10 +196,6 @@ def get_lengths(neurograph):
     return lengths
 
 
-def toCPU(tensor):
-    return np.array(tensor.detach().cpu())
-
-
 def sigmoid(x):
     """
     Sigmoid function.

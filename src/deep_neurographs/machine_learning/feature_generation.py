@@ -294,11 +294,6 @@ def get_profile(img, coords, thread_id):
     """
     coords["bbox"]["max"] = [coords["bbox"]["max"][i] + 1 for i in range(3)]
     chunk = img_utils.read_tensorstore_with_bbox(img, coords["bbox"])
-    for xyz in coords["profile_path"]:
-        if (xyz >= chunk.shape).any():
-            print(chunk.shape)
-            print(coords)
-            stop
     profile = [chunk[tuple(xyz)] / 100 for xyz in coords["profile_path"]]
     avg, std = utils.get_avg_std(profile)
     profile.extend([avg, std])
