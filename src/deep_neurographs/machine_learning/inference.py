@@ -21,6 +21,7 @@ from deep_neurographs import graph_utils as gutils
 from deep_neurographs import reconstruction as build
 from deep_neurographs import utils
 from deep_neurographs.machine_learning import feature_generation, ml_utils
+from deep_neurographs.machine_learning.gnn_utils import toCPU, toGPU
 from deep_neurographs.neurograph import NeuroGraph
 
 BATCH_SIZE_PROPOSALS = 1000
@@ -271,7 +272,7 @@ def ingest_subgraph(neurograph_1, neurograph_2, node_subset):
 # -- Inference --
 def run_model(dataset, model, model_type):
     if "Graph" in model_type:
-        return run_graph_model(dataset, model)
+        return run_graph_model(dataset, model, model_type)
     elif "Net" in model_type:
         model.eval()
         hat_y = []
@@ -291,36 +292,15 @@ def run_model(dataset, model, model_type):
     return np.array(hat_y)
 
 
-def run_graph_model(graph_data, model):
+def run_graph_model(dataset, model, model_type):
     # Run model
     model.eval()
-    x, edge_index = toGPU(graph_data.data)
+    is_dict = True if "Hetero" in model_type else False
+    x, edge_index = toGPU(dataset.data, is_dict=is_dict)
     with torch.no_grad():
         hat_y = sigmoid(model(x, edge_index))
 
-    # Reformat pred
-    idx = graph_data.n_proposals
-    hat_y = ml_utils.toCPU(hat_y[0:idx, 0])
+    # Reformat prediction
+    idx = len(dataset.proposals)
+    hat_y = toCPU(hat_y[0:idx, 0])
     return hat_y
-
-
-def toGPU(graph_data):
-    """
-    Moves "graph_data" from CPU to GPU.
-
-    Parameters
-    ----------
-    graph_data : GraphDataset
-        Dataset to be moved to GPU.
-
-    Returns
-    -------
-    x : torch.Tensor
-        Matrix of node feature vectors.
-    edge_idx : torch.Tensor
-        Tensor containing edges in graph.
-
-    """
-    x = graph_data.x.to("cuda:0", dtype=torch.float32)
-    edge_index = graph_data.edge_index.to("cuda:0")
-    return x, edge_index

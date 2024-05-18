@@ -114,7 +114,6 @@ class GraphDataset:
         self.idxs_branches = init_idxs(idxs_branches)
         self.idxs_proposals = init_idxs(idxs_proposals)
         self.proposals = proposals
-        self.n_proposals = len(y_proposals)
 
         # Initialize data
         edge_index = self.init_edge_index(neurograph)

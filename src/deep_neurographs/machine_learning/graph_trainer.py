@@ -24,6 +24,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.utils import subgraph
 
 from deep_neurographs.machine_learning import ml_utils
+from deep_neurographs.machine_learning.gnn_utils import toCPU, toGPU
 
 # Training
 LR = 1e-3
@@ -224,8 +225,9 @@ class GraphTrainer:
 
         """
         self.optimizer.zero_grad()
-        x, y, edge_index = toGPU(data)
+        x, edge_index = toGPU(data)
         hat_y = self.model(x, edge_index)
+        y = data.y.to("cuda:0", dtype=torch.float32)
         return y, truncate(hat_y, y)
 
     def backpropagate(self, y, hat_y, epoch):
@@ -333,49 +335,6 @@ def train_test_split(graph_ids):
     test_ids = ["block_000", "block_002"]  # sample(graph_ids, n_test_examples)
     train_ids = list(set(graph_ids) - set(test_ids))
     return train_ids, test_ids
-
-
-def toCPU(tensor):
-    """
-    Moves "tensor" from GPU to CPU.
-
-    Parameters
-    ----------
-    tensor : torch.Tensor
-        Dataset to be moved to GPU.
-
-    Returns
-    -------
-    numpy.ndarray
-        Array.
-
-    """
-    return np.array(tensor.detach().cpu()).tolist()
-
-
-def toGPU(data):
-    """
-    Moves "data" from CPU to GPU.
-
-    Parameters
-    ----------
-    data : GraphDataset
-        Dataset to be moved to GPU.
-
-    Returns
-    -------
-    x : torch.Tensor
-        Matrix of node feature vectors.
-    y : torch.Tensor
-        Ground truth.
-    edge_idx : torch.Tensor
-        Tensor containing edges in graph.
-
-    """
-    x = data.x.to("cuda:0", dtype=torch.float32)
-    y = data.y.to("cuda:0", dtype=torch.float32)
-    edge_index = data.edge_index.to("cuda:0")
-    return x, y, edge_index
 
 
 def truncate(hat_y, y):

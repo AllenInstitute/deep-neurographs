@@ -4,7 +4,8 @@ Created on Sat April 12 11:00:00 2024
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Routines for training graph neural networks that classify edge proposals.
+Routines for training heterogeneous graph neural networks that classify
+edge proposals.
 
 """
 
@@ -24,9 +25,9 @@ from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.utils import subgraph
 
 from deep_neurographs.machine_learning import ml_utils
+from deep_neurographs.machine_learning.gnn_utils import toCPU, toGPU
 
 # Training
-DEVICE = "cuda:0"
 FEATURE_DTYPE = torch.float32
 LR = 1e-3
 N_EPOCHS = 200
@@ -140,7 +141,7 @@ class HeteroGraphTrainer:
                 y, hat_y = [], []
                 self.model.eval()
                 for graph_id in test_ids:
-                    y_i, hat_y_i = self.forward(datasets[graph_id])
+                    y_i, hat_y_i = self.forward(datasets[graph_id].data)
                     y.extend(toCPU(y_i))
                     hat_y.extend(toCPU(hat_y_i))
                 test_score = self.compute_metrics(y, hat_y, "val", epoch)
@@ -192,9 +193,9 @@ class HeteroGraphTrainer:
             Prediction.
 
         """
-        if augment:
-            dataset = self.augment(dataset)
-        y, hat_y = self.forward(dataset)
+        # if augment:
+        #    dataset = self.augment(dataset)
+        y, hat_y = self.forward(dataset.data)
         self.backpropagate(y, hat_y, epoch)
         return y, hat_y
 
@@ -203,7 +204,7 @@ class HeteroGraphTrainer:
         # augmented_data = proposal_dropout(dataset, self.max_proposal_dropout)
         return augmented_dataset
 
-    def forward(self, dataset):
+    def forward(self, data):
         """
         Runs "data" through "self.model" to generate a prediction.
 
@@ -221,10 +222,9 @@ class HeteroGraphTrainer:
 
         """
         self.optimizer.zero_grad()
-        x_dict = toGPU(deepcopy(dataset.data.x_dict))
-        edge_index_dict = toGPU(deepcopy(dataset.data.edge_index_dict))
+        x_dict, edge_index_dict = toGPU(data, is_dict=True)
         hat_y = self.model(x_dict, edge_index_dict)
-        y = dataset.data["proposal"]["y"]
+        y = data["proposal"]["y"]
         return y, truncate(hat_y, y)
 
     def backpropagate(self, y, hat_y, epoch):
@@ -332,60 +332,6 @@ def train_test_split(graph_ids):
     test_ids = ["block_000", "block_002"]  # sample(graph_ids, n_test_examples)
     train_ids = list(set(graph_ids) - set(test_ids))
     return train_ids, test_ids
-
-
-def toGPU(type_dict, edges=False):
-    """
-    Moves feature matrices from CPU to GPU.
-
-    Parameters
-    ----------
-    type_dict : dict
-        Dictionary that maps a type of node/edge to feature matrices.
-
-    Returns
-    -------
-    None
-
-    """
-    for key in type_dict.keys():
-        type_dict[key] = type_dict[key]  # .to(DEVICE)
-    return type_dict
-
-
-def toCPU(tensor):
-    """
-    Moves tensor from GPU to CPU.
-
-    Parameters
-    ----------
-    tensor : torch.Tensor
-        Tensor.
-
-    Returns
-    -------
-    None
-
-    """
-    return tensor.detach().cpu()
-
-
-def toList(tensor):
-    """
-    Converts a pytorch tensor to a list.
-
-    Parameters
-    ----------
-    tensor : torch.Tensor
-        Dataset to be converted to a list.
-
-    Returns
-    -------
-    list
-        Array.
-
-    """
-    return np.array(tensor).tolist()
 
 
 def truncate(hat_y, y):

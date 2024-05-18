@@ -332,10 +332,7 @@ def get_profile_path(xyz_list):
 def get_node_profile_coords(neurograph, profile_path):
     profile_path = transform_path(profile_path)
     bbox = get_bbox(neurograph, profile_path)
-    coords = {
-        "bbox": bbox,
-        "profile_path": shift_path(profile_path, bbox),
-    }
+    coords = {"bbox": bbox, "profile_path": shift_path(profile_path, bbox)}
     return coords
 
 
@@ -368,10 +365,9 @@ def check_degenerate(profile_path):
 
     """
     if np.unique(profile_path, axis=0).shape[0] == 1:
-        profile_path = np.vstack([
-            profile_path,
-            profile_path[0, :] + np.array([1, 1, 1], dtype=int)
-        ])
+        profile_path = np.vstack(
+            [profile_path, profile_path[0, :] + np.array([1, 1, 1], dtype=int)]
+        )
     return profile_path
 
 
