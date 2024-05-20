@@ -78,7 +78,7 @@ class GraphTrainer:
 
         """
         # Training
-        self.model = model.to("cuda:0")
+        self.model = model  #.to("cuda:0")
         self.criterion = criterion
         self.n_epochs = n_epochs
         self.optimizer = torch.optim.Adam(
@@ -227,7 +227,7 @@ class GraphTrainer:
         self.optimizer.zero_grad()
         x, edge_index = toGPU(data)
         hat_y = self.model(x, edge_index)
-        y = data.y.to("cuda:0", dtype=torch.float32)
+        y = data.y  #.to("cuda:0", dtype=torch.float32)
         return y, truncate(hat_y, y)
 
     def backpropagate(self, y, hat_y, epoch):

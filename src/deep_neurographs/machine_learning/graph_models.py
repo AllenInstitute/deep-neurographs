@@ -16,15 +16,19 @@ from torch_geometric.nn import GCNConv
 
 
 class GCN(torch.nn.Module):
-    def __init__(self, input_channels):
+    def __init__(self, input_channels, hidden_channels=None):
         super().__init__()
+        # Hidden channels
+        if hidden_channels is None:
+            hidden_channels = input_channels
+        
         # Linear layers
-        self.input = Linear(input_channels, input_channels)
-        self.output = Linear(input_channels // 2, 1)
+        self.input = Linear(input_channels, hidden_channels)
+        self.output = Linear(hidden_channels, 1)
 
         # Convolutional layers
-        self.conv1 = GCNConv(input_channels, input_channels // 2)
-        self.conv2 = GCNConv(input_channels // 2, input_channels // 2)
+        self.conv1 = GCNConv(hidden_channels, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
 
         # Activation
         self.dropout = Dropout(0.3)
@@ -65,15 +69,19 @@ class GCN(torch.nn.Module):
 
 
 class GAT(torch.nn.Module):
-    def __init__(self, input_channels):
+    def __init__(self, input_channels, hidden_channels=None):
         super().__init__()
+        # Hidden channels
+        if hidden_channels is None:
+             hidden_channels = input_channels
+
         # Linear layers
-        self.input = Linear(input_channels, input_channels)
-        self.output = Linear(input_channels // 2, 1)
+        self.input = Linear(input_channels, hidden_channels)
+        self.output = Linear(hidden_channels, 1)
 
         # Convolutional layers
-        self.conv1 = GATConv(input_channels, input_channels)
-        self.conv2 = GATConv(input_channels, input_channels // 2)
+        self.conv1 = GATConv(hidden_channels, hidden_channels)
+        self.conv2 = GATConv(hidden_channels, hidden_channels)
 
         # Activation
         self.dropout = Dropout(0.3)
