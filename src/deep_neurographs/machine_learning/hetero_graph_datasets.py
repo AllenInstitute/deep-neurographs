@@ -17,7 +17,7 @@ import numpy as np
 import torch
 from torch_geometric.data import HeteroData as HeteroGraphData
 
-from deep_neurographs.machine_learning import feature_generation
+from deep_neurographs.machine_learning import feature_generation, gnn_utils
 
 DTYPE = torch.float32
 
@@ -257,12 +257,12 @@ class HeteroGraphDataset:
 
         """
         edge_index = []
-        line_graph = init_line_graph(self.proposals)
+        line_graph = gnn_utils.init_line_graph(self.proposals)
         for e1, e2 in line_graph.edges:
             v1 = self.idxs_proposals["edge_to_idx"][frozenset(e1)]
             v2 = self.idxs_proposals["edge_to_idx"][frozenset(e2)]
             edge_index.extend([[v1, v2], [v2, v1]])
-        return to_tensor(edge_index)
+        return gnn_utils.to_tensor(edge_index)
 
     def branch_to_branch(self, neurograph):
         """
@@ -282,12 +282,11 @@ class HeteroGraphDataset:
 
         """
         edge_index = []
-        line_graph = nx.line_graph(neurograph)
-        for e1, e2 in line_graph.edges:
+        for e1, e2 in nx.line_graph(neurograph).edges:
             v1 = self.idxs_branches["edge_to_idx"][frozenset(e1)]
             v2 = self.idxs_branches["edge_to_idx"][frozenset(e2)]
             edge_index.extend([[v1, v2], [v2, v1]])
-        return to_tensor(edge_index)
+        return gnn_utils.to_tensor(edge_index)
 
     def branch_to_proposal(self, neurograph):
         """
@@ -316,7 +315,7 @@ class HeteroGraphDataset:
             for k in neurograph.neighbors(j):
                 v2 = self.idxs_branches["edge_to_idx"][frozenset((j, k))]
                 edge_index.extend([[v2, v1]])
-        return to_tensor(edge_index)
+        return gnn_utils.to_tensor(edge_index)
 
     # Set Edge Attributes
     def set_edge_attrs(self, x_nodes, edge_type, idx_map):
@@ -385,45 +384,6 @@ def init_idxs(idxs):
     for idx, edge in idxs["idx_to_edge"].items():
         idxs["edge_to_idx"][edge] = idx
     return idxs
-
-
-def init_line_graph(edges):
-    """
-    Initializes a line graph from a list of edges.
-
-    Parameters
-    ----------
-    edges : list
-        List of edges.
-
-    Returns
-    -------
-    networkx.Graph
-        Line graph generated from a list of edges.
-
-    """
-    graph = nx.Graph()
-    graph.add_edges_from(edges)
-    return nx.line_graph(graph)
-
-
-def to_tensor(my_list):
-    """
-    Converts a list to a tensor with contiguous memory.
-
-    Parameters
-    ----------
-    my_list : list
-        List to be converted into a tensor.
-
-    Returns
-    -------
-    torch.Tensor
-        Tensor.
-
-    """
-    arr = np.array(my_list, dtype=np.int64).tolist()
-    return torch.Tensor(arr).t().contiguous().long()
 
 
 def node_intersection(idx_map, e1, e2):

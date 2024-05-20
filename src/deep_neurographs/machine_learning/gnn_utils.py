@@ -8,6 +8,8 @@ Helper routines for training graph neural networks.
 
 """
 
+import networkx as nx
+import numpy as np
 import torch
 
 
@@ -52,8 +54,8 @@ def toGPU(data, is_dict=False):
         x = toGPU_dict(data.x_dict)
         edge_index = toGPU_dict(data.edge_index_dict)
     else:
-        x = data.x.to("cuda:0", dtype=torch.float32)
-        edge_index = data.edge_index.to("cuda:0")
+        x = data.x  #.to("cuda:0", dtype=torch.float32)
+        edge_index = data.edge_index  #.to("cuda:0")
     return x, edge_index
 
 
@@ -75,3 +77,42 @@ def toGPU_dict(data_dict):
     for key in data_dict.keys():
         data_dict[key] = data_dict[key]  # .cuda()
     return data_dict
+
+
+def to_tensor(my_list):
+    """
+    Converts a list to a tensor with contiguous memory.
+
+    Parameters
+    ----------
+    my_list : list
+        List to be converted into a tensor.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor.
+
+    """
+    arr = np.array(my_list, dtype=np.int64).tolist()
+    return torch.Tensor(arr).t().contiguous().long()
+
+
+def init_line_graph(edges):
+    """
+    Initializes a line graph from a list of edges.
+
+    Parameters
+    ----------
+    edges : list
+        List of edges.
+
+    Returns
+    -------
+    networkx.Graph
+        Line graph generated from a list of edges.
+
+    """
+    graph = nx.Graph()
+    graph.add_edges_from(edges)
+    return nx.line_graph(graph)
