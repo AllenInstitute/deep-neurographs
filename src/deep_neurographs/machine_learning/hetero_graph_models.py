@@ -42,20 +42,19 @@ class HeteroGAT(torch.nn.Module):
                 "proposal": nn.Linear(n_proposal_features, hidden_dim),
             }
         )
-
         self.output = Linear(hidden_dim, 1)
 
         # Convolutional layers
         self.conv1 = HeteroConv(
             {
                 ("proposal", "edge", "proposal"): GATConv(
-                    -1, hidden_dim, add_self_loops=False
+                    hidden_dim, hidden_dim, add_self_loops=False
                 ),
                 ("branch", "edge", "branch"): GATConv(
-                    -1, hidden_dim, add_self_loops=False
+                    hidden_dim, hidden_dim, add_self_loops=False
                 ),
                 ("branch", "edge", "proposal"): GATConv(
-                    (-1, -1), hidden_dim, add_self_loops=False
+                    (hidden_dim, hidden_dim), hidden_dim, add_self_loops=False
                 ),
             },
             aggr="sum",
@@ -64,13 +63,13 @@ class HeteroGAT(torch.nn.Module):
         self.conv2 = HeteroConv(
             {
                 ("proposal", "edge", "proposal"): GATConv(
-                    -1, hidden_dim, add_self_loops=False
+                    hidden_dim, hidden_dim, add_self_loops=False
                 ),
                 ("branch", "edge", "branch"): GATConv(
-                    -1, hidden_dim, add_self_loops=False
+                    hidden_dim, hidden_dim, add_self_loops=False
                 ),
                 ("branch", "edge", "proposal"): GATConv(
-                    (-1, -1), hidden_dim, add_self_loops=False
+                    (hidden_dim, hidden_dim), hidden_dim, add_self_loops=False
                 ),
             },
             aggr="sum",
@@ -81,7 +80,7 @@ class HeteroGAT(torch.nn.Module):
         self.leaky_relu = LeakyReLU()
 
         # Initialize weights
-        # self.init_weights()
+        self.init_weights()
 
     def init_weights(self):
         """
@@ -97,8 +96,7 @@ class HeteroGAT(torch.nn.Module):
 
         """
         layers = [
-            self.input_branches,
-            self.input_proposals,
+            self.input,
             self.conv1,
             self.conv2,
             self.output,
@@ -154,20 +152,19 @@ class HeteroGCN(torch.nn.Module):
                 "proposal": nn.Linear(n_proposal_features, hidden_dim),
             }
         )
-
         self.output = Linear(hidden_dim, 1)
 
         # Convolutional layers
         self.conv1 = HeteroConv(
             {
                 ("proposal", "edge", "proposal"): GCNConv(
-                    -1, hidden_dim, add_self_loops=False
+                    hidden_dim, hidden_dim, add_self_loops=False
                 ),
                 ("branch", "edge", "branch"): GCNConv(
-                    -1, hidden_dim, add_self_loops=False
+                    hidden_dim, hidden_dim, add_self_loops=False
                 ),
                 ("branch", "edge", "proposal"): GATConv(
-                    (-1, -1), hidden_dim, add_self_loops=False
+                    (hidden_dim, hidden_dim), hidden_dim, add_self_loops=False
                 ),
             },
             aggr="sum",
@@ -176,13 +173,13 @@ class HeteroGCN(torch.nn.Module):
         self.conv2 = HeteroConv(
             {
                 ("proposal", "edge", "proposal"): GCNConv(
-                    -1, hidden_dim, add_self_loops=False
+                    hidden_dim, hidden_dim, add_self_loops=False
                 ),
                 ("branch", "edge", "branch"): GCNConv(
-                    -1, hidden_dim, add_self_loops=False
+                    hidden_dim, hidden_dim, add_self_loops=False
                 ),
                 ("branch", "edge", "proposal"): GATConv(
-                    (-1, -1), hidden_dim, add_self_loops=False
+                    (hidden_dim, hidden_dim), hidden_dim, add_self_loops=False
                 ),
             },
             aggr="sum",
@@ -193,7 +190,7 @@ class HeteroGCN(torch.nn.Module):
         self.leaky_relu = LeakyReLU()
 
         # Initialize weights
-        # self.init_weights()
+        self.init_weights()
 
     def init_weights(self):
         """
@@ -209,8 +206,7 @@ class HeteroGCN(torch.nn.Module):
 
         """
         layers = [
-            self.input_branches,
-            self.input_proposals,
+            self.input,
             self.conv1,
             self.conv2,
             self.output,
@@ -238,3 +234,5 @@ class HeteroGCN(torch.nn.Module):
         x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
 
         return self.output(x_dict["proposal"])
+
+    
