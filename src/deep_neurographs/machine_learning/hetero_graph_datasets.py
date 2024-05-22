@@ -134,8 +134,8 @@ class HeteroGraphDataset:
 
         # Edges
         self.init_edges(neurograph)
-        # self.init_edge_attrs(x_nodes)
-        # self.n_edge_attrs = n_edge_features(x_nodes)
+        self.init_edge_attrs(x_nodes)
+        self.n_edge_attrs = n_edge_features(x_nodes)
 
     def init_edges(self, neurograph):
         """
