@@ -54,8 +54,8 @@ def toGPU(data, is_dict=False):
         x = toGPU_dict(data.x_dict)
         edge_index = toGPU_dict(data.edge_index_dict)
     else:
-        x = data.x  #.to("cuda:0", dtype=torch.float32)
-        edge_index = data.edge_index  #.to("cuda:0")
+        x = data.x  # .to("cuda:0", dtype=torch.float32)
+        edge_index = data.edge_index  # .to("cuda:0")
     return x, edge_index
 
 
