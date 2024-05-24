@@ -30,7 +30,6 @@ class HeteroGNN(torch.nn.Module):
     def __init__(
         self,
         node_dict,
-        n_edge_features,
         hidden_dim,
         conv_type="GATConv",
         dropout=DROPOUT,
@@ -146,24 +145,202 @@ class HeteroGNN(torch.nn.Module):
                 else:
                     init.zeros_(param)
 
-    def forward(self, x_dict, edge_index_dict):
+    def forward(self, x_dict, edge_index_dict, edge_attrs_dict=None):
         # Input
-        x_dict = {key: lin(x_dict[key]) for key, lin in self.input.items()}
-        x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
-        x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+        x_dict = {key: f(x_dict[key]) for key, f in self.input.items()}
+        x_dict = self.activation(x_dict)
 
         # Convolutional layers
         x_dict = self.conv1(x_dict, edge_index_dict)
         if self.conv_type == "GCNConv":
-            x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
-            x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+            x_dict = self.activation(x_dict)
 
         x_dict = self.conv2(x_dict, edge_index_dict)
         if self.conv_type == "GCNConv":
-            x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
-            x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+            x_dict = self.activation(x_dict)
 
         return self.output(x_dict["proposal"])
+
+    def activation(self, x_dict):
+        """
+        Applies nonlinear activation
+
+        Parameters
+        ----------
+        x_dict : dict
+            Dictionary that maps node/edge types to feature matrices.
+
+        Returns
+        -------
+        dict
+            Feature matrices with activation applied.
+
+        """
+        x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
+        x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+        return x_dict
+
+
+class HeteroEGNN(torch.nn.Module):
+    """
+    Heterogeneous graph neural network that utilizes edge features.
+
+    """
+
+    def __init__(
+        self,
+        node_dict,
+        edge_dict,
+        hidden_dim,
+        dropout=DROPOUT,
+        heads_1=HEADS_1,
+        heads_2=HEADS_2,
+    ):
+        """
+        Constructs a heterogeneous graph neural network.
+
+        """
+        super().__init__()
+        # Linear layers
+        output_dim = heads_1 * heads_2 * hidden_dim
+        self.input_nodes = nn.ModuleDict(
+            {key: nn.Linear(d, hidden_dim) for key, d in node_dict.items()}
+        )
+        self.input_edges = {
+            key: nn.Linear(d, hidden_dim) for key, d in edge_dict.items()
+        }
+
+        # nn.ModuleDict(
+        #    {str(key): nn.Linear(d, hidden_dim) for key, d in edge_dict.items()}
+        # )
+        self.output = Linear(output_dim, 1)
+
+        # Convolutional layers
+        self.conv1 = HeteroConv(
+            {
+                ("proposal", "edge", "proposal"): GATConv(
+                    -1,
+                    hidden_dim,
+                    dropout=dropout,
+                    edge_dim=hidden_dim,
+                    heads=heads_1,
+                ),
+                ("branch", "edge", "branch"): GATConv(
+                    -1,
+                    hidden_dim,
+                    dropout=dropout,
+                    edge_dim=hidden_dim,
+                    heads=heads_1,
+                ),
+                ("branch", "edge", "proposal"): GATConv(
+                    (hidden_dim, hidden_dim),
+                    hidden_dim,
+                    add_self_loops=False,
+                    edge_dim=hidden_dim,
+                    heads=heads_1,
+                ),
+            },
+            aggr="sum",
+        )
+        edge_dim = hidden_dim
+        hidden_dim = heads_1 * hidden_dim
+
+        self.conv2 = HeteroConv(
+            {
+                ("proposal", "edge", "proposal"): GATConv(
+                    -1,
+                    hidden_dim,
+                    dropout=dropout,
+                    edge_dim=edge_dim,
+                    heads=heads_2,
+                ),
+                ("branch", "edge", "branch"): GATConv(
+                    -1,
+                    hidden_dim,
+                    dropout=dropout,
+                    edge_dim=edge_dim,
+                    heads=heads_2,
+                ),
+                ("branch", "edge", "proposal"): GATConv(
+                    (hidden_dim, hidden_dim),
+                    hidden_dim,
+                    add_self_loops=False,
+                    edge_dim=edge_dim,
+                    heads=heads_2,
+                ),
+            },
+            aggr="sum",
+        )
+        hidden_dim = heads_2 * hidden_dim
+
+        # Nonlinear activation
+        self.dropout = Dropout(dropout)
+        self.leaky_relu = LeakyReLU()
+
+        # Initialize weights
+        self.init_weights()
+
+    def init_weights(self):
+        """
+        Initializes linear layers.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        for layer in [self.input_nodes, self.output]:
+            for param in layer.parameters():
+                if len(param.shape) > 1:
+                    init.kaiming_normal_(param)
+                else:
+                    init.zeros_(param)
+
+    def forward(self, x_dict, edge_index_dict, edge_attr_dict):
+        # Input - Nodes
+        x_dict = {key: f(x_dict[key]) for key, f in self.input_nodes.items()}
+        x_dict = self.activation(x_dict)
+
+        # Input - Edges
+        edge_attr_dict = {
+            key: f(edge_attr_dict[key]) for key, f in self.input_edges.items()
+        }
+        edge_attr_dict = self.activation(edge_attr_dict)
+
+        # Convolutional layers
+        x_dict = self.conv1(
+            x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict
+        )
+        x_dict = self.conv2(
+            x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict
+        )
+
+        # Output
+        x_dict = self.output(x_dict["proposal"])
+        return x_dict
+
+    def activation(self, x_dict):
+        """
+        Applies nonlinear activation
+
+        Parameters
+        ----------
+        x_dict : dict
+            Dictionary that maps node/edge types to feature matrices.
+
+        Returns
+        -------
+        dict
+            Feature matrices with activation applied.
+
+        """
+        x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
+        x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+        return x_dict
 
 
 class HAN(torch.nn.Module):

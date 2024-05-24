@@ -338,7 +338,7 @@ class HeteroGraphDataset:
             v = node_intersection(idx_map, e1, e2)
             attrs.append(x_nodes[v])
         arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
-        self.data[edge_type].x = arrs
+        self.data[edge_type].edge_attr = arrs
 
     def set_hetero_edge_attrs(self, x_nodes, edge_type, idx_map_1, idx_map_2):
         """
@@ -359,7 +359,7 @@ class HeteroGraphDataset:
             v = hetero_node_intersection(idx_map_1, idx_map_2, e1, e2)
             attrs.append(x_nodes[v])
         arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
-        self.data[edge_type].x = arrs
+        self.data[edge_type].edge_attr = arrs
 
 
 # -- utils --
