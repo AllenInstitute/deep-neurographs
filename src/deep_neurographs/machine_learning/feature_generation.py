@@ -25,11 +25,12 @@ import tensorstore as ts
 from deep_neurographs import geometry, img_utils, utils
 
 CHUNK_SIZE = [64, 64, 64]
-WINDOW = [5, 5, 5]
+EDGE_FEATURES = ["skel", "profiles"]
 N_BRANCH_PTS = 50
 N_PROFILE_PTS = 10
 N_SKEL_FEATURES = 23
 NODE_PROFILE_DEPTH = 15
+WINDOW = [5, 5, 5]
 SUPPORTED_MODELS = [
     "AdaBoost",
     "RandomForest",
@@ -58,8 +59,8 @@ def run(
     # Generate features
     if "Graph" in model_type:
         features = dict()
-        features["branches"] = run_on_branches(neurograph)
-        features["proposals"] = run_on_proposals(
+        features["branch"] = run_on_branches(neurograph)
+        features["proposal"] = run_on_proposals(
             neurograph,
             img,
             model_type,
