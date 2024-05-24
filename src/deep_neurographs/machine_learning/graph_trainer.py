@@ -23,8 +23,8 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.utils import subgraph
 
-from deep_neurographs.machine_learning import ml_utils
-from deep_neurographs.machine_learning.gnn_utils import toCPU, toGPU
+from deep_neurographs.machine_learning import gnn_utils, ml_utils
+
 
 # Training
 LR = 1e-3

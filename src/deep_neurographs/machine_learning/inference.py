@@ -20,8 +20,8 @@ from torch.utils.data import DataLoader
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import reconstruction as build
 from deep_neurographs import utils
-from deep_neurographs.machine_learning import feature_generation, ml_utils
-from deep_neurographs.machine_learning.gnn_utils import toCPU, toGPU
+from deep_neurographs.machine_learning import feature_generation, gnn_utils, ml_utils
+from deep_neurographs.machine_learning.gnn_utils import toCPU
 from deep_neurographs.neurograph import NeuroGraph
 
 BATCH_SIZE_PROPOSALS = 1000
@@ -272,7 +272,7 @@ def ingest_subgraph(neurograph_1, neurograph_2, node_subset):
 # -- Inference --
 def run_model(dataset, model, model_type):
     if "Graph" in model_type:
-        return run_graph_model(dataset, model, model_type)
+        return run_graph_model(dataset.data, model, model_type)
     elif "Net" in model_type:
         model.eval()
         hat_y = []
@@ -292,15 +292,15 @@ def run_model(dataset, model, model_type):
     return np.array(hat_y)
 
 
-def run_graph_model(dataset, model, model_type):
-    # Run model
+def run_graph_model(data, model, model_type):
     model.eval()
-    is_dict = True if "Hetero" in model_type else False
-    x, edge_index = toGPU(dataset.data, is_dict=is_dict)
     with torch.no_grad():
-        hat_y = sigmoid(model(x, edge_index))
-
-    # Reformat prediction
-    idx = len(dataset.proposals)
-    hat_y = toCPU(hat_y[0:idx, 0])
-    return hat_y
+        if "Hetero":
+            x_dict, edge_index_dict = gnn_utils.get_inputs(data, model_type)
+            hat_y = sigmoid(model(x_dict, edge_index_dict))
+            idx = len(data["proposal"]["y"])
+        else:
+            x, edge_index = gnn_utils.get_inputs(data, model_type)
+            hat_y = sigmoid(model(x, edge_index))
+            idx = len(data.proposals)
+    return toCPU(hat_y[0:idx, 0])

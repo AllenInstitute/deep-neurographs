@@ -40,14 +40,14 @@ def init(neurograph, features):
     """
     # Extract features
     x_branches, _, idxs_branches = feature_generation.get_matrix(
-        neurograph, features["branches"], "GraphNeuralNet"
+        neurograph, features["branch"], "GraphNeuralNet"
     )
     x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
-        neurograph, features["proposals"], "GraphNeuralNet"
+        neurograph, features["proposal"], "GraphNeuralNet"
     )
 
     # Initialize data
-    proposals = features["proposals"]["skel"].keys()
+    proposals = features["proposal"]["skel"].keys()
     graph_dataset = GraphDataset(
         neurograph,
         proposals,

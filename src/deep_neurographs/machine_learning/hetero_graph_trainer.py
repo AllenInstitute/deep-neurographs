@@ -24,11 +24,12 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.utils import subgraph
 
-from deep_neurographs.machine_learning import ml_utils
+from deep_neurographs.machine_learning import gnn_utils, ml_utils
 from deep_neurographs.machine_learning.gnn_utils import toCPU
 
 # Training
 FEATURE_DTYPE = torch.float32
+MODEL_TYPE = "HeteroGNN"
 LR = 1e-3
 N_EPOCHS = 200
 SCHEDULER_GAMMA = 0.5
@@ -219,12 +220,8 @@ class HeteroGraphTrainer:
             Prediction.
 
         """
-        # Move data to GPU
-        x_dict = data.x_dict
-        edge_index_dict = data.edge_index_dict
-        edge_attr_dict = data.edge_attr_dict
-
         # Run model
+        x_dict, edge_index_dict = gnn_utils.get_inputs(data, MODEL_TYPE)
         self.optimizer.zero_grad()
         if self.use_edge_attrs:
             hat_y = self.model(x_dict, edge_index_dict, edge_attr_dict)
