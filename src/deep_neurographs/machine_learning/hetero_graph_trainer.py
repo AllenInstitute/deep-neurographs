@@ -25,7 +25,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.utils import subgraph
 
 from deep_neurographs.machine_learning import ml_utils
-from deep_neurographs.machine_learning.gnn_utils import toCPU, toGPU
+from deep_neurographs.machine_learning.gnn_utils import toCPU
 
 # Training
 FEATURE_DTYPE = torch.float32
@@ -55,6 +55,7 @@ class HeteroGraphTrainer:
         n_epochs=N_EPOCHS,
         max_proposal_dropout=MAX_PROPOSAL_DROPOUT,
         scaling_factor=SCALING_FACTOR,
+        use_edge_attrs=False,
         weight_decay=WEIGHT_DECAY,
     ):
         """
@@ -70,6 +71,8 @@ class HeteroGraphTrainer:
             Learning rate. The default is the global variable LR.
         n_epochs : int
             Number of epochs. The default is the global variable N_EPOCHS.
+        use_edge_attrs : bool
+            Indication of whether to use edge attributes. The default is False.
         weight_decay : float
             Weight decay used in optimizer. The default is the global variable
             WEIGHT_DECAY.
@@ -86,6 +89,7 @@ class HeteroGraphTrainer:
         self.optimizer = torch.optim.Adam(
             model.parameters(), lr=lr, weight_decay=weight_decay
         )
+        self.use_edge_attrs = use_edge_attrs
         self.init_scheduler()
         self.writer = SummaryWriter()
 
@@ -194,15 +198,9 @@ class HeteroGraphTrainer:
 
         """
         # if augment:
-        #    dataset = self.augment(dataset)
         y, hat_y = self.forward(dataset.data)
         self.backpropagate(y, hat_y, epoch)
         return y, hat_y
-
-    def augment(self, dataset):
-        augmented_dataset = rescale_data(dataset, self.scaling_factor)
-        # augmented_data = proposal_dropout(dataset, self.max_proposal_dropout)
-        return augmented_dataset
 
     def forward(self, data):
         """
@@ -215,15 +213,25 @@ class HeteroGraphTrainer:
 
         Returns
         -------
-        y : torch.Tensor
+        torch.Tensor
             Ground truth.
-        hat_y : torch.Tensor
+        torch.Tensor
             Prediction.
 
         """
+        # Move data to GPU
+        x_dict = data.x_dict
+        edge_index_dict = data.edge_index_dict
+        edge_attr_dict = data.edge_attr_dict
+
+        # Run model
         self.optimizer.zero_grad()
-        x_dict, edge_index_dict = toGPU(data, is_dict=True)
-        hat_y = self.model(x_dict, edge_index_dict)
+        if self.use_edge_attrs:
+            hat_y = self.model(x_dict, edge_index_dict, edge_attr_dict)
+        else:
+            hat_y = self.model(x_dict, edge_index_dict)
+
+        # Output
         y = data["proposal"]["y"]
         return y, truncate(hat_y, y)
 
@@ -267,7 +275,7 @@ class HeteroGraphTrainer:
 
         Returns
         -------
-        f1 : float
+        float
             F1 score.
 
         """
@@ -303,7 +311,7 @@ def shuffler(my_list):
 
     Returns
     -------
-    my_list : list
+    list
         Shuffled list.
 
     """
@@ -322,9 +330,9 @@ def train_test_split(graph_ids):
 
     Returns
     -------
-    train_ids : list
+    list
         A list containing IDs for the training set.
-    test_ids : list
+    list
         A list containing IDs for the testing set.
 
     """

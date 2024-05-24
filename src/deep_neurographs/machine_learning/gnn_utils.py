@@ -48,15 +48,19 @@ def toGPU(data, is_dict=False):
         Feature vectors on GPU
     torch.Tensor
         Edge indices on GPU.
+    torch.Tensor, optional
+        Edge features on GPU.
 
     """
     if is_dict:
         x = toGPU_dict(data.x_dict)
         edge_index = toGPU_dict(data.edge_index_dict)
+        edge_attrs = toGPU_dict(data.edge_attrs)
+        return x, edge_index, edge_attrs
     else:
         x = data.x  # .to("cuda:0", dtype=torch.float32)
         edge_index = data.edge_index  # .to("cuda:0")
-    return x, edge_index
+        return x, edge_index
 
 
 def toGPU_dict(data_dict):

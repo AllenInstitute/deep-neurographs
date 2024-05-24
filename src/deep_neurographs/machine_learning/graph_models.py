@@ -25,6 +25,7 @@ class GNN(torch.nn.Module):
     Class of graph neural networks.
 
     """
+
     def __init__(
         self,
         input_dim,
@@ -143,6 +144,7 @@ class MLP(torch.nn.Module):
     Class of multi-layer perceptrons.
 
     """
+
     def __init__(self, input_dim):
         super().__init__()
         # Linear layers
