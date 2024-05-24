@@ -209,10 +209,6 @@ class HeteroEGNN(torch.nn.Module):
         self.input_edges = {
             key: nn.Linear(d, hidden_dim) for key, d in edge_dict.items()
         }
-
-        # nn.ModuleDict(
-        #    {str(key): nn.Linear(d, hidden_dim) for key, d in edge_dict.items()}
-        # )
         self.output = Linear(output_dim, 1)
 
         # Convolutional layers
