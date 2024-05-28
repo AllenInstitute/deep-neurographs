@@ -56,7 +56,6 @@ class HeteroGraphTrainer:
         n_epochs=N_EPOCHS,
         max_proposal_dropout=MAX_PROPOSAL_DROPOUT,
         scaling_factor=SCALING_FACTOR,
-        use_edge_attrs=False,
         weight_decay=WEIGHT_DECAY,
     ):
         """
@@ -72,8 +71,6 @@ class HeteroGraphTrainer:
             Learning rate. The default is the global variable LR.
         n_epochs : int
             Number of epochs. The default is the global variable N_EPOCHS.
-        use_edge_attrs : bool
-            Indication of whether to use edge attributes. The default is False.
         weight_decay : float
             Weight decay used in optimizer. The default is the global variable
             WEIGHT_DECAY.
@@ -90,7 +87,6 @@ class HeteroGraphTrainer:
         self.optimizer = torch.optim.Adam(
             model.parameters(), lr=lr, weight_decay=weight_decay
         )
-        self.use_edge_attrs = use_edge_attrs
         self.init_scheduler()
         self.writer = SummaryWriter()
 
@@ -221,12 +217,9 @@ class HeteroGraphTrainer:
 
         """
         # Run model
-        x_dict, edge_index_dict = gnn_utils.get_inputs(data, MODEL_TYPE)
+        x_dict, edge_index_dict, edge_attr_dict = gnn_utils.get_inputs(data, MODEL_TYPE)
         self.optimizer.zero_grad()
-        if self.use_edge_attrs:
-            hat_y = self.model(x_dict, edge_index_dict, edge_attr_dict)
-        else:
-            hat_y = self.model(x_dict, edge_index_dict)
+        hat_y = self.model(x_dict, edge_index_dict, edge_attr_dict)
 
         # Output
         y = data["proposal"]["y"]
@@ -379,42 +372,3 @@ def get_predictions(hat_y, threshold=0.5):
 
     """
     return (ml_utils.sigmoid(np.array(hat_y)) > threshold).tolist()
-
-
-def connected_components(data):
-    cc_list = []
-    cc_idxs = torch.unique(data.edge_index[0], return_inverse=True)[1]
-    for i in range(cc_idxs.max().item() + 1):
-        cc_list.append(torch.nonzero(cc_idxs == i, as_tuple=False).view(-1))
-    return cc_list
-
-
-def rescale_data(dataset, scaling_factor):
-    # Get scaling factor
-    low = 1.0 - scaling_factor
-    high = 1.0 + scaling_factor
-    scaling_factor = torch.tensor(np.random.uniform(low=low, high=high))
-
-    # Rescale
-    n = count_proposals(dataset)
-    dataset.data.x[0:n, 1] = scaling_factor * dataset.data.x[0:n, 1]
-    return dataset
-
-
-def proposal_dropout(data, max_proposal_dropout):
-    n_dropout_edges = len(data.dropout_edges) // 2
-    dropout_prob = np.random.uniform(low=0, high=max_proposal_dropout)
-    n_remove = int(dropout_prob * n_dropout_edges)
-    remove_edges = sample(data.dropout_edges, n_remove)
-    for edge in remove_edges:
-        reversed_edge = [edge[1], edge[0]]
-        edges_to_remove = torch.tensor([edge, reversed_edge], dtype=torch.long)
-        edges_mask = torch.all(
-            data.data.edge_index.T == edges_to_remove[:, None], dim=2
-        ).any(dim=0)
-        data.data.edge_index = data.data.edge_index[:, ~edges_mask]
-    return data
-
-
-def count_proposals(dataset):
-    return dataset.data.y.size(0)
