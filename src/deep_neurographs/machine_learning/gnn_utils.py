@@ -34,8 +34,8 @@ def get_inputs(data, model_type):
     if "Hetero" in model_type:
         x = data.x_dict
         edge_index = data.edge_index_dict
-        #edge_attr_dict = data.edge_attr_dict
-        return x, edge_index #, edge_attr_dict
+        edge_attr_dict = data.edge_attr_dict
+        return x, edge_index, edge_attr_dict
     else:
         x = data.x
         edge_index = data.edge_index

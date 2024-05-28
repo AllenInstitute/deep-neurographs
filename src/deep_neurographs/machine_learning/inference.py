@@ -296,8 +296,8 @@ def run_graph_model(data, model, model_type):
     model.eval()
     with torch.no_grad():
         if "Hetero":
-            x_dict, edge_index_dict = gnn_utils.get_inputs(data, model_type)
-            hat_y = sigmoid(model(x_dict, edge_index_dict))
+            x_dict, edge_index_dict, edge_attr_dict = gnn_utils.get_inputs(data, model_type)
+            hat_y = sigmoid(model(x_dict, edge_index_dict, edge_attr_dict))
             idx = len(data["proposal"]["y"])
         else:
             x, edge_index = gnn_utils.get_inputs(data, model_type)
