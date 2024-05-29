@@ -20,7 +20,11 @@ from torch.utils.data import DataLoader
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import reconstruction as build
 from deep_neurographs import utils
-from deep_neurographs.machine_learning import feature_generation, gnn_utils, ml_utils
+from deep_neurographs.machine_learning import (
+    feature_generation,
+    gnn_utils,
+    ml_utils,
+)
 from deep_neurographs.machine_learning.gnn_utils import toCPU
 from deep_neurographs.neurograph import NeuroGraph
 
@@ -296,7 +300,9 @@ def run_graph_model(data, model, model_type):
     model.eval()
     with torch.no_grad():
         if "Hetero":
-            x_dict, edge_index_dict, edge_attr_dict = gnn_utils.get_inputs(data, model_type)
+            x_dict, edge_index_dict, edge_attr_dict = gnn_utils.get_inputs(
+                data, model_type
+            )
             hat_y = sigmoid(model(x_dict, edge_index_dict, edge_attr_dict))
             idx = len(data["proposal"]["y"])
         else:

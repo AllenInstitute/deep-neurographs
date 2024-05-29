@@ -94,8 +94,8 @@ def build_neurograph_from_local(
 
     Returns
     -------
-    neurograph : NeuroGraph
-        Neurograph generated from zips of swc files stored on local machine.
+    NeuroGraph
+        Neurograph generated from swc files stored on local machine.
 
     """
     # Process swc files
@@ -186,7 +186,7 @@ def build_neurograph_from_gcs_zips(
 
     Returns
     -------
-    neurograph : NeuroGraph
+    NeuroGraph
         Neurograph generated from zips of swc files stored in a GCS bucket.
 
     """
@@ -237,13 +237,13 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
 
     Returns
     -------
-    swc_dicts : list
+    list
 
     """
     # Initializations
     bucket = storage.Client().bucket(bucket_name)
     zip_paths = utils.list_gcs_filenames(bucket, gcs_path, ".zip")
-    chunk_size = int(len(zip_paths) * 0.02)
+    chunk_size = 50  # int(len(zip_paths) * 0.02)
 
     # Parse
     cnt = 1
@@ -259,6 +259,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
             cnt, t1 = report_progress(
                 i, len(zip_paths), chunk_size, cnt, t0, t1
             )
+            break
     return swc_dicts
 
 

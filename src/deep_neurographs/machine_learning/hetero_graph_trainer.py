@@ -114,7 +114,7 @@ class HeteroGraphTrainer:
 
         Returns
         -------
-        model : torch.nn.Module
+        torch.nn.Module
             Graph neural network that has been fit onto "datasets".
 
         """
@@ -217,7 +217,9 @@ class HeteroGraphTrainer:
 
         """
         # Run model
-        x_dict, edge_index_dict, edge_attr_dict = gnn_utils.get_inputs(data, MODEL_TYPE)
+        x_dict, edge_index_dict, edge_attr_dict = gnn_utils.get_inputs(
+            data, MODEL_TYPE
+        )
         self.optimizer.zero_grad()
         hat_y = self.model(x_dict, edge_index_dict, edge_attr_dict)
 
