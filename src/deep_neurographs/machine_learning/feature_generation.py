@@ -28,7 +28,7 @@ CHUNK_SIZE = [64, 64, 64]
 EDGE_FEATURES = ["skel", "profiles"]
 N_BRANCH_PTS = 50
 N_PROFILE_PTS = 10
-N_SKEL_FEATURES = 23
+N_SKEL_FEATURES = 25
 NODE_PROFILE_DEPTH = 15
 WINDOW = [5, 5, 5]
 SUPPORTED_MODELS = [
@@ -345,6 +345,8 @@ def proposal_skeletal(neurograph, proposals, search_radius):
                 neurograph.proposal_length(proposal),
                 neurograph.degree[i],
                 neurograph.degree[j],
+                len(neurograph.nodes[i]["proposals"]),
+                len(neurograph.nodes[j]["proposals"]),
                 n_nearby_leafs(neurograph, proposal, search_radius),
                 get_radii(neurograph, proposal),
                 get_avg_radii(neurograph, proposal),
