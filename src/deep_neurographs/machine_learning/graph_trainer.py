@@ -25,7 +25,6 @@ from torch_geometric.utils import subgraph
 
 from deep_neurographs.machine_learning import gnn_utils, ml_utils
 
-
 # Training
 LR = 1e-3
 N_EPOCHS = 200
@@ -111,7 +110,7 @@ class GraphTrainer:
 
         Returns
         -------
-        model : torch.nn.Module
+        torch.nn.Module
             Graph neural network that has been fit onto "datasets".
 
         """
@@ -129,8 +128,8 @@ class GraphTrainer:
                 y_i, hat_y_i = self.train(
                     datasets[graph_id], epoch, augment=augment
                 )
-                y.extend(toCPU(y_i))
-                hat_y.extend(toCPU(hat_y_i))
+                y.extend(gnn_utils.toCPU(y_i))
+                hat_y.extend(gnn_utils.toCPU(hat_y_i))
             self.compute_metrics(y, hat_y, "train", epoch)
             self.scheduler.step()
 
@@ -140,8 +139,8 @@ class GraphTrainer:
                 self.model.eval()
                 for graph_id in test_ids:
                     y_i, hat_y_i = self.forward(datasets[graph_id].data)
-                    y.extend(toCPU(y_i))
-                    hat_y.extend(toCPU(hat_y_i))
+                    y.extend(gnn_utils.toCPU(y_i))
+                    hat_y.extend(gnn_utils.toCPU(hat_y_i))
                 test_score = self.compute_metrics(y, hat_y, "val", epoch)
 
                 # Check for best
@@ -185,9 +184,9 @@ class GraphTrainer:
 
         Returns
         -------
-        y : torch.Tensor
+        torch.Tensor
             Ground truth.
-        hat_y : torch.Tensor
+        torch.Tensor
             Prediction.
 
         """
@@ -218,9 +217,9 @@ class GraphTrainer:
 
         Returns
         -------
-        y : torch.Tensor
+        torch.Tensor
             Ground truth.
-        hat_y : torch.Tensor
+        torch.Tensor
             Prediction.
 
         """
@@ -270,7 +269,7 @@ class GraphTrainer:
 
         Returns
         -------
-        f1 : float
+        float
             F1 score.
 
         """
@@ -306,7 +305,7 @@ def shuffler(my_list):
 
     Returns
     -------
-    my_list : list
+    list
         Shuffled list.
 
     """

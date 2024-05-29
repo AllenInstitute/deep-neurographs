@@ -24,9 +24,9 @@ def process_local_paths(
     paths, anisotropy=[1.0, 1.0, 1.0], min_size=3, img_bbox=None
 ):
     """
-    Iterates over a list of paths to swc files and calls a routine that builds
-    a dictionary where the keys are swc attributes (i.e. id, xyz, radius, pid)
-    and values are the corresponding contents within the swc file.
+    Iterates over a list of swc paths to swc file, then builds a dictionary
+    where the keys are swc attributes (i.e. id, xyz, radius, pid) and values
+    are the corresponding contents within the swc file.
 
     Parameters
     ----------
@@ -35,10 +35,10 @@ def process_local_paths(
     min_size : int, optional
         Threshold on the number of nodes contained in an swc file. Only swc
         files with more than "min_size" nodes are stored in "swc_dicts". The
-        default is 0.
+        default is 3.
     img_bbox : dict, optional
         Dictionary with the keys "min" and "max" which specify a bounding box
-        in the image. Only swc files with at least one node contained in
+        in an image. Only swc files with at least one node contained in
         "img_bbox" are stored in "swc_dicts". The default is None.
 
     Returns
