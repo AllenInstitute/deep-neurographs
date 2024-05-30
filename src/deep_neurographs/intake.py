@@ -18,6 +18,8 @@ from deep_neurographs import utils
 from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.swc_utils import process_gcs_zip, process_local_paths
 
+import pickle
+
 MIN_SIZE = 30
 NODE_SPACING = 2
 SMOOTH = True
@@ -237,29 +239,31 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
 
     Returns
     -------
-    list
+    swc_dicts : list
 
     """
-    # Initializations
+    # Assign processes
     bucket = storage.Client().bucket(bucket_name)
     zip_paths = utils.list_gcs_filenames(bucket, gcs_path, ".zip")
-    chunk_size = 50  # int(len(zip_paths) * 0.02)
-
-    # Parse
-    cnt = 1
-    t0, t1 = utils.init_timers()
-    swc_dicts = []
-    for i, path in enumerate(zip_paths):
-        swc_dicts.extend(
-            process_gcs_zip(
-                bucket, path, anisotropy=anisotropy, min_size=min_size
+    with ProcessPoolExecutor() as executor:
+        processes = []
+        for path in zip_paths:
+            zip_content = bucket.blob(path).download_as_bytes()
+            processes.append(
+                executor.submit(process_gcs_zip, zip_content, anisotropy, min_size)
             )
-        )
+
+    # Store results
+    chunk_size = int(len(zip_paths) * 0.02)
+    cnt = 1
+    swc_dicts = []
+    t0, t1 = utils.init_timers()
+    for i, process in enumerate(as_completed(processes)):
+        swc_dicts.extend(process.result())
         if i > cnt * chunk_size:
             cnt, t1 = report_progress(
                 i, len(zip_paths), chunk_size, cnt, t0, t1
             )
-            break
     return swc_dicts
 
 
