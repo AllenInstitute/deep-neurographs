@@ -23,12 +23,13 @@ import numpy as np
 import tensorstore as ts
 
 from deep_neurographs import geometry, img_utils, utils
+from deep_neurographs.machine_learning import hetero_feature_generation
 
 CHUNK_SIZE = [64, 64, 64]
 EDGE_FEATURES = ["skel", "profiles"]
 N_BRANCH_PTS = 50
 N_PROFILE_PTS = 10
-N_SKEL_FEATURES = 25
+N_SKEL_FEATURES = 22
 NODE_PROFILE_DEPTH = 15
 WINDOW = [5, 5, 5]
 SUPPORTED_MODELS = [
@@ -57,7 +58,11 @@ def run(
     proposals = neurograph.get_proposals() if proposals is None else proposals
 
     # Generate features
-    if "Graph" in model_type:
+    if "Hetero" in model_type:
+        features = hetero_feature_generation.run(
+            neurograph, img_path, search_radius, proposals=proposals
+        )
+    elif "Graph" in model_type:
         features = dict()
         features["branch"] = run_on_branches(neurograph)
         features["proposal"] = run_on_proposals(
@@ -341,12 +346,11 @@ def proposal_skeletal(neurograph, proposals, search_radius):
         i, j = tuple(proposal)
         features[proposal] = np.concatenate(
             (
-                1,  # edge type
                 neurograph.proposal_length(proposal),
                 neurograph.degree[i],
                 neurograph.degree[j],
-                len(neurograph.nodes[i]["proposals"]),
-                len(neurograph.nodes[j]["proposals"]),
+                #len(neurograph.nodes[i]["proposals"]),
+                #len(neurograph.nodes[j]["proposals"]),
                 n_nearby_leafs(neurograph, proposal, search_radius),
                 get_radii(neurograph, proposal),
                 get_avg_radii(neurograph, proposal),

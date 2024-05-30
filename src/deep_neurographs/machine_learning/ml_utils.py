@@ -18,6 +18,7 @@ from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from deep_neurographs.machine_learning import (
     feature_generation,
     graph_datasets,
+    hetero_graph_datasets,
 )
 from deep_neurographs.machine_learning.datasets import (
     ImgProposalDataset,
@@ -156,7 +157,9 @@ def get_dataset(inputs, targets, model_type, transform, lengths):
 def init_dataset(
     neurographs, features, model_type, block_ids=None, transform=False
 ):
-    if "Graph" in model_type:
+    if "Hetero" in model_type:
+        dataset = hetero_graph_datasets.init(neurographs, features)
+    elif "Graph" in model_type:
         dataset = graph_datasets.init(neurographs, features)
     else:
         dataset = init_proposal_dataset(

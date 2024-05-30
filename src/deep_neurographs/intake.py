@@ -242,28 +242,30 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
     swc_dicts : list
 
     """
-    # Assign processes
+    # Initializations
     bucket = storage.Client().bucket(bucket_name)
     zip_paths = utils.list_gcs_filenames(bucket, gcs_path, ".zip")
+
+    # Assign processes
+    cnt = 1
+    t0, t1 = utils.init_timers()
+    chunk_size = int(len(zip_paths) * 0.02)
     with ProcessPoolExecutor() as executor:
         processes = []
-        for path in zip_paths:
+        for i, path in enumerate(zip_paths):
             zip_content = bucket.blob(path).download_as_bytes()
             processes.append(
                 executor.submit(process_gcs_zip, zip_content, anisotropy, min_size)
             )
+            if i > cnt * chunk_size:
+                cnt, t1 = report_progress(
+                    i, len(zip_paths), chunk_size, cnt, t0, t1
+                )
 
     # Store results
-    chunk_size = int(len(zip_paths) * 0.02)
-    cnt = 1
     swc_dicts = []
-    t0, t1 = utils.init_timers()
-    for i, process in enumerate(as_completed(processes)):
+    for process in as_completed(processes):
         swc_dicts.extend(process.result())
-        if i > cnt * chunk_size:
-            cnt, t1 = report_progress(
-                i, len(zip_paths), chunk_size, cnt, t0, t1
-            )
     return swc_dicts
 
 
