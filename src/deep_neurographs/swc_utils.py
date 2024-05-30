@@ -62,8 +62,7 @@ def process_local_paths(
     return swc_dicts, valid_paths
 
 
-def process_gcs_zip(bucket, zip_path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
-    zip_content = bucket.blob(zip_path).download_as_bytes()
+def process_gcs_zip(zip_content, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     with ZipFile(BytesIO(zip_content)) as zip_file:
         with ThreadPoolExecutor() as executor:
             # Assign threads
