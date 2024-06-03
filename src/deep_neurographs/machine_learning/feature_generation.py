@@ -212,7 +212,7 @@ def get_chunk(img, labels, coord_0, coord_1, thread_id=None):
         labels_chunk = img_utils.read_chunk(labels, midpoint, CHUNK_SIZE)
 
     # Coordinate transform
-    chunk = utils.normalize_img(chunk)
+    chunk = utils.normalize(chunk)
     patch_coord_0 = utils.voxels_to_patch(coord_0, midpoint, CHUNK_SIZE)
     patch_coord_1 = utils.voxels_to_patch(coord_1, midpoint, CHUNK_SIZE)
 
@@ -300,7 +300,8 @@ def get_profile(img, coords, thread_id):
     """
     coords["bbox"]["max"] = [coords["bbox"]["max"][i] + 1 for i in range(3)]
     chunk = img_utils.read_tensorstore_with_bbox(img, coords["bbox"])
-    profile = [chunk[tuple(xyz)] / 100 for xyz in coords["profile_path"]]
+    chunk = img_utils.normalize(chunk)
+    profile = [chunk[tuple(xyz)] for xyz in coords["profile_path"]]
     avg, std = utils.get_avg_std(profile)
     profile.extend([avg, std])
     return thread_id, profile
