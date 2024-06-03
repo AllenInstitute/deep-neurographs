@@ -23,12 +23,13 @@ import numpy as np
 import tensorstore as ts
 
 from deep_neurographs import geometry, img_utils, utils
+from deep_neurographs.machine_learning import hetero_feature_generation
 
 CHUNK_SIZE = [64, 64, 64]
 EDGE_FEATURES = ["skel", "profiles"]
 N_BRANCH_PTS = 50
 N_PROFILE_PTS = 10
-N_SKEL_FEATURES = 25
+N_SKEL_FEATURES = 22
 NODE_PROFILE_DEPTH = 15
 WINDOW = [5, 5, 5]
 SUPPORTED_MODELS = [
@@ -57,7 +58,11 @@ def run(
     proposals = neurograph.get_proposals() if proposals is None else proposals
 
     # Generate features
-    if "Graph" in model_type:
+    if "Hetero" in model_type:
+        features = hetero_feature_generation.run(
+            neurograph, img_path, search_radius, proposals=proposals
+        )
+    elif "Graph" in model_type:
         features = dict()
         features["branch"] = run_on_branches(neurograph)
         features["proposal"] = run_on_proposals(
@@ -207,7 +212,7 @@ def get_chunk(img, labels, coord_0, coord_1, thread_id=None):
         labels_chunk = img_utils.read_chunk(labels, midpoint, CHUNK_SIZE)
 
     # Coordinate transform
-    chunk = utils.normalize_img(chunk)
+    chunk = utils.normalize(chunk)
     patch_coord_0 = utils.voxels_to_patch(coord_0, midpoint, CHUNK_SIZE)
     patch_coord_1 = utils.voxels_to_patch(coord_1, midpoint, CHUNK_SIZE)
 
@@ -295,7 +300,8 @@ def get_profile(img, coords, thread_id):
     """
     coords["bbox"]["max"] = [coords["bbox"]["max"][i] + 1 for i in range(3)]
     chunk = img_utils.read_tensorstore_with_bbox(img, coords["bbox"])
-    profile = [chunk[tuple(xyz)] / 100 for xyz in coords["profile_path"]]
+    chunk = img_utils.normalize(chunk)
+    profile = [chunk[tuple(xyz)] for xyz in coords["profile_path"]]
     avg, std = utils.get_avg_std(profile)
     profile.extend([avg, std])
     return thread_id, profile
@@ -341,7 +347,6 @@ def proposal_skeletal(neurograph, proposals, search_radius):
         i, j = tuple(proposal)
         features[proposal] = np.concatenate(
             (
-                1,  # edge type
                 neurograph.proposal_length(proposal),
                 neurograph.degree[i],
                 neurograph.degree[j],

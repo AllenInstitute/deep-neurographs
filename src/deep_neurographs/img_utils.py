@@ -281,7 +281,7 @@ def get_superchunk(path, driver, xyz, shape, from_center=True):
 
 
 # -- Image Operations --
-def normalize_img(img):
+def normalize(img):
     """
     Normalizes an image so that the minimum and maximum intensity values are 0
     and 1.
@@ -298,7 +298,7 @@ def normalize_img(img):
 
     """
     img -= np.min(img)
-    return img / np.max(img)
+    return img / max(1, np.max(img))
 
 
 def get_mip(img, axis=0):
