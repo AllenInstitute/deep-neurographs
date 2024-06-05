@@ -31,7 +31,7 @@ def get_accepted_propoals_blocks(
     accepts = dict()
     for block_id in blocks:
         # Threshold prediction
-        preds_upd = filter(
+        preds_upd = filter_preds(
             preds,
             idx_to_edge,
             low_threshold,
