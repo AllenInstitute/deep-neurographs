@@ -64,7 +64,7 @@ def get_accepted_proposals(
     structure_aware=True,
 ):
     # Get positive edge predictions
-    preds = filter(preds, idx_to_edge, threshold)
+    preds = filter_preds(preds, idx_to_edge, threshold)
     if structure_aware:
         return get_structure_aware_accepts(
             neurograph, graph, preds, max_length, high_threshold=high_threshold
@@ -73,7 +73,7 @@ def get_accepted_proposals(
         return preds.keys()
 
 
-def filter(preds, idx_to_edge, threshold, valid_idxs=[]):
+def filter_preds(preds, idx_to_edge, threshold, valid_idxs=[]):
     """
     Filters predictions by iterating over "preds" and checking whether a
     given predicted probability is above "threshold".
