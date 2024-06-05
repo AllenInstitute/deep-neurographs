@@ -180,7 +180,7 @@ def predict(
         proposal_probs,
         idx_to_edge,
         search_radius,
-        high_threshold=0.95,
+        high_threshold=0.9,
         threshold=confidence_threshold,
     )
     return accepts, graph

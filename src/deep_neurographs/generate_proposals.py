@@ -153,7 +153,7 @@ def get_best_candidates(neurograph, candidates, dists):
 def get_conection(neurograph, leaf, xyz, search_radius):
     edge = neurograph.xyz_to_edge[xyz]
     node, d = get_closer_endpoint(neurograph, edge, xyz)
-    if d > search_radius:
+    if d > ENDPOINT_DIST:
         #or neurograph.dist(leaf, node) > search_radius:
         attrs = neurograph.get_edge_data(*edge)
         idx = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0][0]
