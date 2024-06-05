@@ -77,7 +77,7 @@ def process_gcs_zip(zip_content, anisotropy=[1.0, 1.0, 1.0], min_size=0):
             swc_dicts = []
             for thread in as_completed(threads):
                 result = thread.result()
-                if len(result["id"]) > min_size:
+                if len(result["id"]) > 0:
                     swc_dicts.append(result)
     return swc_dicts
 
@@ -88,7 +88,7 @@ def parse_gcs_zip(zip_file, path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     if len(contents) > min_size:
         swc_dict = parse(contents, anisotropy=anisotropy)
     else:
-        swc_dict = {"id": [-1]}
+        swc_dict = {"id": []}
 
     # Store id
     swc_id = utils.get_swc_id(path)

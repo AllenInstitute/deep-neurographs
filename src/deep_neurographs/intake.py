@@ -261,6 +261,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
                 cnt, t1 = report_progress(
                     i, len(zip_paths), chunk_size, cnt, t0, t1
                 )
+                break
 
     # Store results
     swc_dicts = []
@@ -314,7 +315,7 @@ def build_neurograph(
         swc_paths=swc_paths,
     )
     t0, t1 = utils.init_timers()
-    chunk_size = max(int(n_components * 0.05), 1)
+    chunk_size = max(int(n_components * 0.02), 1)
     cnt, i = 1, 0
     while len(irreducibles):
         irreducible_set = irreducibles.pop()
