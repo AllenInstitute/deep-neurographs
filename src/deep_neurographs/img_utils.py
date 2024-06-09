@@ -132,12 +132,16 @@ def read_tensorstore_with_bbox(img, bbox):
     """
     start = bbox["min"]
     end = bbox["max"]
-    return (
-        img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
-        .read()
-        .result()
-    )
-
+    try:
+        return (
+            img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+            .read()
+            .result()
+        )
+    except Exception as e:
+        print(type(e), e)
+        shape = [end[i] - start[i] +1 for i in range(3)]
+        return np.zeros(shape)
 
 def read_chunk(img, xyz, shape, from_center=True):
     """

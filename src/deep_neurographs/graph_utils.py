@@ -86,8 +86,6 @@ def get_irreducibles(
         connector_length=connector_length,
         prune_depth=prune_depth,
     )
-    if graph.number_of_nodes() < min_size:
-        return [], []
 
     # Extract irreducibles
     irreducibles = []
@@ -308,7 +306,7 @@ def inspect_branch(graph, leaf, depth):
             return path
         elif graph.degree(j) == 2:
             path.append(j)
-    return []
+    return path[0:max(10, len(path))]
 
 
 def prune_short_connectors(graph, length=8):
