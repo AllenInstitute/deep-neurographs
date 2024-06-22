@@ -40,7 +40,7 @@ def run(neurograph, search_radius, complex_bool=True):
         neurograph, connections = run_on_leaf(
             neurograph, connections, leaf, search_radius, complex_bool
         )
-    neurograph.filter_nodes()
+    # neurograph.filter_nodes()
     return neurograph
 
 
@@ -154,7 +154,7 @@ def get_conection(neurograph, leaf, xyz, search_radius):
     edge = neurograph.xyz_to_edge[xyz]
     node, d = get_closer_endpoint(neurograph, edge, xyz)
     if d > ENDPOINT_DIST:
-        #or neurograph.dist(leaf, node) > search_radius:
+        # or neurograph.dist(leaf, node) > search_radius:
         attrs = neurograph.get_edge_data(*edge)
         idx = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0][0]
         node = neurograph.split_edge(edge, attrs, idx)

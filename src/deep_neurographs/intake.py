@@ -18,14 +18,12 @@ from deep_neurographs import utils
 from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.swc_utils import process_gcs_zip, process_local_paths
 
-import pickle
-
 MIN_SIZE = 30
 NODE_SPACING = 2
 SMOOTH = True
 PRUNE_CONNECTORS = False
-PRUNE_SPURIOUS = True
 PRUNE_DEPTH = 16
+TRIM_DEPTH = 0
 CONNECTOR_LENGTH = 16
 
 
@@ -39,9 +37,9 @@ def build_neurograph_from_local(
     node_spacing=NODE_SPACING,
     progress_bar=False,
     prune_connectors=PRUNE_CONNECTORS,
-    prune_spurious=PRUNE_SPURIOUS,
     connector_length=CONNECTOR_LENGTH,
     prune_depth=PRUNE_DEPTH,
+    trim_depth=TRIM_DEPTH,
     smooth=SMOOTH,
     swc_dir=None,
     swc_paths=None,
@@ -76,10 +74,6 @@ def build_neurograph_from_local(
         Indication of whether to prune connectors (see graph_utils.py), sites
         that are likely to be false merges. The default is the global variable
         "PRUNE_CONNECTORS".
-    prune_spurious : bool, optional
-        Indication of whether to prune spurious branches, these are short
-        branches which are an artifical from skeletonization. The default is
-        the global variable "PRUNE_SPURIOUS".
     connector_length : int, optional
         Maximum length of connecting paths pruned (see graph_utils.py). The
         default is the global variable "CONNECTOR_LENGTH".
@@ -125,9 +119,9 @@ def build_neurograph_from_local(
         node_spacing=node_spacing,
         progress_bar=progress_bar,
         prune_connectors=prune_connectors,
-        prune_spurious=prune_spurious,
         connector_length=connector_length,
         prune_depth=prune_depth,
+        trim_depth=trim_depth,
         smooth=smooth,
         swc_paths=paths,
     )
@@ -142,9 +136,9 @@ def build_neurograph_from_gcs_zips(
     min_size=MIN_SIZE,
     node_spacing=NODE_SPACING,
     prune_connectors=PRUNE_CONNECTORS,
-    prune_spurious=PRUNE_SPURIOUS,
     connector_length=CONNECTOR_LENGTH,
     prune_depth=PRUNE_DEPTH,
+    trim_depth=TRIM_DEPTH,
     smooth=SMOOTH,
 ):
     """
@@ -172,10 +166,6 @@ def build_neurograph_from_gcs_zips(
         Indication of whether to prune connectors (see graph_utils.py), sites
         that are likely to be false merges. The default is the global variable
         "PRUNE_CONNECTORS".
-    prune_spurious : bool, optional
-        Indication of whether to prune spurious branches, these are short
-        branches which are an artifical from skeletonization. The default is
-        the global variable "PRUNE_SPURIOUS".
     connector_length : int, optional
         Maximum length of connecting paths pruned (see graph_utils.py). The
         default is the global variable "CONNECTOR_LENGTH".
@@ -208,9 +198,9 @@ def build_neurograph_from_gcs_zips(
         min_size=min_size,
         node_spacing=node_spacing,
         prune_connectors=prune_connectors,
-        prune_spurious=prune_spurious,
         connector_length=connector_length,
         prune_depth=prune_depth,
+        trim_depth=trim_depth,
         smooth=smooth,
     )
     t, unit = utils.time_writer(time() - t0)
@@ -249,13 +239,16 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
     # Assign processes
     cnt = 1
     t0, t1 = utils.init_timers()
-    chunk_size = int(len(zip_paths) * 0.02)
+    chunk_size = int(len(zip_paths) * 0.1)
     with ProcessPoolExecutor() as executor:
         processes = []
+        print("# zips:", len(zip_paths))
         for i, path in enumerate(zip_paths):
             zip_content = bucket.blob(path).download_as_bytes()
             processes.append(
-                executor.submit(process_gcs_zip, zip_content, anisotropy, min_size)
+                executor.submit(
+                    process_gcs_zip, zip_content, anisotropy, min_size
+                )
             )
             if i > cnt * chunk_size:
                 cnt, t1 = report_progress(
@@ -279,9 +272,9 @@ def build_neurograph(
     swc_paths=None,
     progress_bar=True,
     prune_connectors=PRUNE_CONNECTORS,
-    prune_spurious=PRUNE_SPURIOUS,
     connector_length=CONNECTOR_LENGTH,
     prune_depth=PRUNE_DEPTH,
+    trim_depth=TRIM_DEPTH,
     smooth=SMOOTH,
 ):
     # Extract irreducibles
@@ -295,9 +288,9 @@ def build_neurograph(
         min_size=min_size,
         progress_bar=progress_bar,
         prune_connectors=prune_connectors,
-        prune_spurious=prune_spurious,
         connector_length=connector_length,
         prune_depth=prune_depth,
+        trim_depth=trim_depth,
         smooth=smooth,
     )
 
@@ -308,10 +301,7 @@ def build_neurograph(
         print("# edges:", utils.reformat_number(n_edges))
 
     neurograph = NeuroGraph(
-        img_bbox=img_bbox,
-        img_path=img_path,
-        node_spacing=node_spacing,
-        swc_paths=swc_paths,
+        img_path=img_path, node_spacing=node_spacing, swc_paths=swc_paths
     )
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_components * 0.02), 1)
@@ -325,6 +315,7 @@ def build_neurograph(
     if progress_bar:
         t, unit = utils.time_writer(time() - t0)
         print("\n" + f"add_irreducibles(): {round(t, 4)} {unit}")
+
     return neurograph
 
 
@@ -334,13 +325,13 @@ def get_irreducibles(
     min_size=MIN_SIZE,
     progress_bar=True,
     prune_connectors=PRUNE_CONNECTORS,
-    prune_spurious=PRUNE_SPURIOUS,
     connector_length=CONNECTOR_LENGTH,
     prune_depth=PRUNE_DEPTH,
+    trim_depth=TRIM_DEPTH,
     smooth=SMOOTH,
 ):
     n_components = len(swc_dicts)
-    chunk_size = max(int(n_components * 0.02), 1)
+    chunk_size = max(int(n_components * 0.25), 1)
     with ProcessPoolExecutor() as executor:
         # Assign Processes
         i = 0
@@ -351,11 +342,10 @@ def get_irreducibles(
                 gutils.get_irreducibles,
                 swc_dict,
                 bbox,
-                min_size,
                 prune_connectors,
-                prune_spurious,
                 connector_length,
                 prune_depth,
+                trim_depth,
                 smooth,
             )
             i += 1

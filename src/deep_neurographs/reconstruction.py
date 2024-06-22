@@ -208,7 +208,7 @@ def save_prediction(neurograph, accepted_proposals, output_dir):
 
     # Write Result
     neurograph.to_swc(swc_dir)
-    #save_corrections(neurograph, accepted_proposals, corrections_dir)
+    # save_corrections(neurograph, accepted_proposals, corrections_dir)
     save_connections(neurograph, accepted_proposals, connections_path)
 
 

@@ -210,8 +210,6 @@ class HEATGNN(torch.nn.Module):
         self.output = Linear(heads_1 * heads_2 * hidden_dim)
 
         # Convolutional layers
-        n_node_types = len(node_dict.keys())
-        n_edge_type = len(edge_dict.keys())
         self.conv1 = HEATConv(
             hidden_dim,
             hidden_dim,
@@ -300,9 +298,7 @@ class HEATGNN(torch.nn.Module):
 
         # Convolutional layers
         x_dict = self.conv1(x_dict, edge_index_dict, metadata)
-        x_dict = self.conv2(
-            x_dict, edge_index_dict, metadata
-        )
+        x_dict = self.conv2(x_dict, edge_index_dict, metadata)
 
         # Output
         x_dict = self.output(x_dict["proposal"])
