@@ -136,6 +136,7 @@ def run_without_seeds(
         )
 
         # Merge proposals
+        print("# components:", len(list(nx.connected_components(neurograph))))
         neurograph = build.fuse_branches(neurograph, accepts_i)
         accepts.extend(accepts_i)
 

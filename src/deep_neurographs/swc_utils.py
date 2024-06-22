@@ -21,7 +21,7 @@ from deep_neurographs import geometry, utils
 
 # -- io utils --
 def process_local_paths(
-    paths, anisotropy=[1.0, 1.0, 1.0], min_size=3, img_bbox=None
+    paths, anisotropy=[1.0, 1.0, 1.0], min_size=5, img_bbox=None
 ):
     """
     Iterates over a list of swc paths to swc file, then builds a dictionary

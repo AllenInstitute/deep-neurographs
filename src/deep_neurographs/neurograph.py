@@ -42,7 +42,7 @@ class NeuroGraph(nx.Graph):
         swc_paths=None,
         img_path=None,
         label_mask=None,
-        node_spacing=2,
+        node_spacing=1,
         train_model=False,
     ):
         super(NeuroGraph, self).__init__()
@@ -703,21 +703,10 @@ class NeuroGraph(nx.Graph):
                     queue.append((j, k))
         return cardinality
 
-    def filter_nodes(self):
-        # Find nodes to filter
-        ingest_nodes = set()
-        for i in [i for i in self.nodes if self.degree[i] == 2]:
-            if len(self.nodes[i]["proposals"]) == 0:
-                ingest_nodes.add(i)
-
-        # Ingest nodes to be filtered
-        for i in ingest_nodes:
-            nbs = list(self.neighbors(i))
-            self.absorb_node(i, nbs[0], nbs[1])
-
     def to_swc(self, path):
         with ThreadPoolExecutor() as executor:
             threads = []
+            print("# swcs:", len(list(nx.connected_components(self))))
             for i, component in enumerate(nx.connected_components(self)):
                 node = sample(component, 1)[0]
                 swc_id = self.nodes[node]["swc_id"]
@@ -743,7 +732,7 @@ class NeuroGraph(nx.Graph):
             node_to_idx[j] = len(entry_list)
 
         # Write
-        if len(entry_list) > 30:
+        if len(entry_list) > 0:
             swc_utils.write(path, entry_list)
 
     def branch_to_entries(self, entry_list, i, j, parent):
