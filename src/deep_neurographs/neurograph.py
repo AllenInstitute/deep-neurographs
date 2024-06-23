@@ -275,6 +275,7 @@ class NeuroGraph(nx.Graph):
         self,
         search_radius,
         complex_bool=True,
+        long_range_proposals=False,
         proposals_per_leaf=3,
         optimize=False,
         optimization_depth=10,
@@ -294,7 +295,10 @@ class NeuroGraph(nx.Graph):
 
         # Main
         self = generate_proposals.run(
-            self, search_radius, complex_bool=complex_bool
+            self,
+            search_radius,
+            complex_bool=complex_bool,
+            long_range_proposals=long_range_proposals,
         )
 
         # Finish

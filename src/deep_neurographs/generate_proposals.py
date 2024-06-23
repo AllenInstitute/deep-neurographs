@@ -15,7 +15,9 @@ from deep_neurographs import geometry
 ENDPOINT_DIST = 10
 
 
-def run(neurograph, search_radius, complex_bool=True):
+def run(
+    neurograph, search_radius, complex_bool=True, long_range_proposals=False
+):
     """
     Generates proposals emanating from "leaf".
 
@@ -28,6 +30,9 @@ def run(neurograph, search_radius, complex_bool=True):
     complex_bool : bool, optional
         Indication of whether to generate complex proposals. The default is
         True.
+    long_range_proposals : bool
+        Indication of whether to generate simple proposals within distance of
+        2 * search_radius of leaf.
 
     Returns
     -------
@@ -38,13 +43,24 @@ def run(neurograph, search_radius, complex_bool=True):
     connections = dict()
     for leaf in neurograph.leafs:
         neurograph, connections = run_on_leaf(
-            neurograph, connections, leaf, search_radius, complex_bool
+            neurograph,
+            connections,
+            leaf,
+            search_radius,
+            complex_bool,
+            long_range_proposals,
         )
-    # neurograph.filter_nodes()
     return neurograph
 
 
-def run_on_leaf(neurograph, connections, leaf, search_radius, complex_bool):
+def run_on_leaf(
+    neurograph,
+    connections,
+    leaf,
+    search_radius,
+    complex_bool,
+    long_range_proposals,
+):
     """
     Generates proposals emanating from "leaf".
 
@@ -62,6 +78,9 @@ def run_on_leaf(neurograph, connections, leaf, search_radius, complex_bool):
         Maximum Euclidean distance between endpoints of proposal.
     complex_bool : bool
         Indication of whether to generate complex proposals.
+    long_range_proposals : bool
+        Indication of whether to generate simple proposals within distance of
+        2 * search_radius of leaf.
 
     Returns
     -------
@@ -72,10 +91,17 @@ def run_on_leaf(neurograph, connections, leaf, search_radius, complex_bool):
         were added to "neurograph".
 
     """
+    # Get candidates
     leaf_swc_id = neurograph.nodes[leaf]["swc_id"]
-    for xyz in get_candidates(neurograph, leaf, search_radius):
+    candidates = get_candidates(neurograph, leaf, search_radius)
+    if len(candidates) == 0 and long_range_proposals:
+        candidates = get_candidates(neurograph, leaf, 2 * search_radius)
+        candidates = parse_long_range(neurograph, candidates, leaf)
+
+    # Parse candidates
+    for xyz in candidates:
         # Get connection
-        neurograph, node = get_conection(neurograph, leaf, xyz, search_radius)
+        neurograph, node = get_conection(neurograph, leaf, xyz)
         if not complex_bool and neurograph.degree[node] > 1:
             continue
 
@@ -98,6 +124,19 @@ def run_on_leaf(neurograph, connections, leaf, search_radius, complex_bool):
         neurograph.add_proposal(leaf, node)
         connections[pair_id] = frozenset({leaf, node})
     return neurograph, connections
+
+
+def parse_long_range(neurograph, candidates, leaf):
+    hit_swc_ids = set()
+    filtered_candidates = []
+    for xyz in candidates:
+        neurograph, i = get_conection(neurograph, leaf, xyz)
+        if neurograph.degree[i] > 1:
+            continue
+        else:
+            filtered_candidates.append(xyz)
+            hit_swc_ids.add(neurograph.nodes[i]["swc_id"])
+    return filtered_candidates if len(hit_swc_ids) == 1 else []
 
 
 def get_candidates(neurograph, leaf, search_radius):
@@ -150,11 +189,10 @@ def get_best_candidates(neurograph, candidates, dists):
         return list(candidates.values())
 
 
-def get_conection(neurograph, leaf, xyz, search_radius):
+def get_conection(neurograph, leaf, xyz):
     edge = neurograph.xyz_to_edge[xyz]
     node, d = get_closer_endpoint(neurograph, edge, xyz)
     if d > ENDPOINT_DIST:
-        # or neurograph.dist(leaf, node) > search_radius:
         attrs = neurograph.get_edge_data(*edge)
         idx = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0][0]
         node = neurograph.split_edge(edge, attrs, idx)
