@@ -16,7 +16,7 @@ from deep_neurographs import utils
 
 
 # Directional Vectors
-def get_directional(neurograph, i, origin, window_size):
+def get_directional(neurograph, i, origin, depth):
     """
     Computes the directional vector of a branch or bifurcation in a neurograph
     relative to a specified origin.
@@ -30,9 +30,9 @@ def get_directional(neurograph, i, origin, window_size):
     origin : numpy.ndarray
         The origin point xyz relative to which the directional vector is
         computed.
-    window_size : numpy.ndarry
-        The size of the window around the branch or bifurcation to consider
-        for computing the directional vector.
+    depth : numpy.ndarry
+        The size of the window in microns around the branch or bifurcation to
+        consider for computing the directional vector.
 
     Returns
     -------
@@ -44,17 +44,17 @@ def get_directional(neurograph, i, origin, window_size):
     branches = neurograph.get_branches(i, ignore_reducibles=True)
     branches = shift_branches(branches, origin)
     if len(branches) == 1:
-        return compute_tangent(get_subarray(branches[0], window_size))
+        return compute_tangent(get_subarray(branches[0], depth))
     elif len(branches) == 2:
-        branch_1 = get_subarray(branches[0], window_size)
-        branch_2 = get_subarray(branches[1], window_size)
+        branch_1 = get_subarray(branches[0], depth)
+        branch_2 = get_subarray(branches[1], depth)
         branch = np.concatenate((branch_1, branch_2))
         return compute_tangent(branch)
     else:
         return np.array([0, 0, 0])
 
 
-def get_subarray(arr, window_size):
+def get_subarray(arr, depth):
     """
     Extracts a sub-array of a specified window size from a given input array.
 
@@ -62,8 +62,8 @@ def get_subarray(arr, window_size):
     ----------
     branch : numpy.ndarray
         Array from which the sub-branch will be extracted.
-    window_size : int
-        Size of the window to extract from "arr".
+    depth : int
+        Size of the window in microns to extract from "arr".
 
     Returns
     -------
@@ -72,10 +72,12 @@ def get_subarray(arr, window_size):
         smaller than the window size, the entire branch array is returned.
 
     """
-    if arr.shape[0] < window_size:
-        return arr
-    else:
-        return arr[0:window_size, :]
+    length = 0
+    for i in range(1, arr.shape[0]):
+        length += dist(arr[i - 1], arr[i])
+        if length > depth:
+            return arr[0:i, :]
+    return arr
 
 
 def compute_svd(xyz):

@@ -27,6 +27,7 @@ from deep_neurographs.machine_learning import gnn_utils, ml_utils
 
 # Training
 LR = 1e-3
+MODEL_TYPE = "GraphNeuralNet"
 N_EPOCHS = 200
 SCHEDULER_GAMMA = 0.5
 SCHEDULER_STEP_SIZE = 1000
@@ -224,7 +225,7 @@ class GraphTrainer:
 
         """
         self.optimizer.zero_grad()
-        x, edge_index = toGPU(data)
+        x, edge_index = gnn_utils.get_inputs(data, MODEL_TYPE)
         hat_y = self.model(x, edge_index)
         y = data.y  # .to("cuda:0", dtype=torch.float32)
         return y, truncate(hat_y, y)

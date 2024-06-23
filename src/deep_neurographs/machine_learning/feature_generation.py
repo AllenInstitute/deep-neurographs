@@ -273,10 +273,6 @@ def proposal_profiles(neurograph, proposals, img):
     return profiles
 
 
-def generate_edge_profiles(neurograph, img):
-    pass
-
-
 def get_profile(img, coords, thread_id):
     """
     Gets the image intensity profile for a given proposal.
@@ -301,10 +297,22 @@ def get_profile(img, coords, thread_id):
     coords["bbox"]["max"] = [coords["bbox"]["max"][i] + 1 for i in range(3)]
     chunk = img_utils.read_tensorstore_with_bbox(img, coords["bbox"])
     chunk = img_utils.normalize(chunk)
-    profile = [chunk[tuple(xyz)] for xyz in coords["profile_path"]]
+    profile = read_intensities(chunk, coords)
     avg, std = utils.get_avg_std(profile)
     profile.extend([avg, std])
     return thread_id, profile
+
+
+def read_intensities(img, coords):
+    profile = []
+    for xyz in coords["profile_path"]:
+        start = xyz - 1
+        end = xyz + 2
+        val = np.max(
+            img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+        )
+        profile.append(val)
+    return profile
 
 
 def get_proposal_profile_coords(neurograph, proposal):
@@ -330,10 +338,14 @@ def get_proposal_profile_coords(neurograph, proposal):
     coord_0 = utils.to_voxels(xyz_0)
     coord_1 = utils.to_voxels(xyz_1)
 
-    # Store coordinates
+    # Store local coordinates
     bbox = utils.get_minimal_bbox(coord_0, coord_1)
-    start = [coord_0[i] - bbox["min"][i] for i in range(3)]
-    end = [coord_1[i] - bbox["min"][i] for i in range(3)]
+    start = [coord_0[i] - bbox["min"][i] + 1 for i in range(3)]
+    end = [coord_1[i] - bbox["min"][i] + 1 for i in range(3)]
+
+    # Shift bbox
+    bbox["min"] = [bbox["min"][i] - 1 for i in range(3)]
+    bbox["max"] = [bbox["max"][i] + 2 for i in range(3)]
     coords = {
         "bbox": bbox,
         "profile_path": geometry.make_line(start, end, N_PROFILE_PTS),
