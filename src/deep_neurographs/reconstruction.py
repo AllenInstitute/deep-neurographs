@@ -197,19 +197,23 @@ def fuse_branches(neurograph, edges):
 
 
 # -- Save result --
-def save_prediction(neurograph, accepted_proposals, output_dir):
+def save_prediction(
+    neurograph, accepted_proposals, output_dir, save_results=False
+):
     # Initializations
     connections_path = os.path.join(output_dir, "connections.txt")
     corrections_dir = os.path.join(output_dir, "corrections")
-    swc_dir = os.path.join(output_dir, "corrected-processed-swcs")
-    utils.mkdir(output_dir, delete=True)
+    swc_zip_path = os.path.join(output_dir, "corrected-processed-swcs.zip")
     utils.mkdir(corrections_dir, delete=True)
-    utils.mkdir(swc_dir, delete=True)
 
     # Write Result
-    neurograph.to_swc(swc_dir)
-    save_corrections(neurograph, accepted_proposals, corrections_dir)
+    n_swcs = gutils.count_components(neurograph)
     save_connections(neurograph, accepted_proposals, connections_path)
+    if save_results:
+        neurograph.to_zipped_swcs(swc_zip_path)
+        # save_corrections(neurograph, accepted_proposals, corrections_dir)
+    else:
+        print(f"Result contains {n_swcs} swcs!")
 
 
 def save_corrections(neurograph, accepted_proposals, output_dir):
