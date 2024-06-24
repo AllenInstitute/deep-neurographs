@@ -85,7 +85,7 @@ def get_irreducibles(
     # Extract irreducibles
     irreducibles = []
     for node_subset in nx.connected_components(graph):
-        if len(node_subset) > 10:
+        if len(node_subset) > 30:
             subgraph = graph.subgraph(node_subset)
             irreducibles_i = __get_irreducibles(subgraph, swc_dict, smooth)
             if irreducibles_i:
@@ -800,3 +800,20 @@ def get_component(graph, root):
             if (i, j) in graph.edges:
                 queue.append(j)
     return component
+
+
+def count_components(graph):
+    """
+    Counts the number of connected components in a graph.
+
+    Paramters
+    ---------
+    graph : networkx.Graph
+        Graph to be searched.
+
+    Returns
+    -------
+    Number of connected components.
+
+    """
+    return len(list(nx.connected_components(graph)))
