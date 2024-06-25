@@ -142,7 +142,7 @@ def run_without_seeds(
         # Report progress
         if i > progress_cnt * chunk_size and progress_bar:
             progress_cnt, t1 = utils.report_progress(
-                i, n_batches, chunk_size, progress_cnt, t0, t1
+                i + 1, n_batches, chunk_size, progress_cnt, t0, t1
             )
             t0, t1 = utils.init_timers()
 

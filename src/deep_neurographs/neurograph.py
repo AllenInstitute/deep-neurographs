@@ -12,7 +12,6 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from io import StringIO
-from random import sample
 
 import networkx as nx
 import numpy as np
@@ -59,6 +58,7 @@ class NeuroGraph(nx.Graph):
         self.junctions = set()
         self.proposals = dict()
         self.target_edges = set()
+        self.node_cnt = 0
         self.node_spacing = node_spacing
 
         # Initialize data structures for proposals
@@ -105,19 +105,20 @@ class NeuroGraph(nx.Graph):
         None
 
         """
-        # Nodes
-        ids = self.__add_nodes(irreducibles, "leafs", dict())
-        ids = self.__add_nodes(irreducibles, "junctions", ids)
-
-        # Edges
         swc_id = irreducibles["swc_id"]
-        self.swc_ids.add(swc_id)
-        for (i, j), attrs in irreducibles["edges"].items():
-            edge = (ids[i], ids[j])
-            idxs = np.arange(0, attrs["xyz"].shape[0], self.node_spacing)
-            if idxs[-1] != attrs["xyz"].shape[0] - 1:
-                idxs = np.append(idxs, attrs["xyz"].shape[0] - 1)
-            self.__add_edge(edge, attrs, idxs, swc_id)
+        if swc_id not in self.swc_ids:
+            # Nodes
+            self.swc_ids.add(swc_id)
+            ids = self.__add_nodes(irreducibles, "leafs", dict())
+            ids = self.__add_nodes(irreducibles, "junctions", ids)
+
+            # Edges
+            for (i, j), attrs in irreducibles["edges"].items():
+                edge = (ids[i], ids[j])
+                idxs = np.arange(0, attrs["xyz"].shape[0], self.node_spacing)
+                if idxs[-1] != attrs["xyz"].shape[0] - 1:
+                    idxs = np.append(idxs, attrs["xyz"].shape[0] - 1)
+                self.__add_edge(edge, attrs, idxs, swc_id)
 
     def __add_nodes(self, irreducibles, node_type, node_ids):
         """
@@ -142,7 +143,7 @@ class NeuroGraph(nx.Graph):
 
         """
         for i in irreducibles[node_type].keys():
-            cur_id = self.number_of_nodes() + 1
+            cur_id = self.node_cnt + 1
             self.add_node(
                 cur_id,
                 proposals=set(),
@@ -150,6 +151,7 @@ class NeuroGraph(nx.Graph):
                 swc_id=irreducibles["swc_id"],
                 xyz=irreducibles[node_type][i]["xyz"],
             )
+            self.node_cnt += 1
             if node_type == "leafs":
                 self.leafs.add(cur_id)
             else:
@@ -230,7 +232,7 @@ class NeuroGraph(nx.Graph):
         self.remove_edge(i, j)
 
         # Create node
-        node_id = len(self.nodes) + 1
+        node_id = self.node_cnt + 1
         swc_id = attrs["swc_id"]
         self.add_node(
             node_id,
@@ -239,6 +241,7 @@ class NeuroGraph(nx.Graph):
             swc_id=swc_id,
             xyz=tuple(attrs["xyz"][idx]),
         )
+        self.node_cnt += 1
 
         # Create edges
         idxs_1 = np.arange(0, idx + 1)
@@ -637,52 +640,6 @@ class NeuroGraph(nx.Graph):
                 i, j, xyz=self.proposals[i, j]["xyz"], radius=[r_i, r_j]
             )
         return reconstruction
-
-    def upd_doubles(self, i):
-        swc_id_i = self.nodes[i]["swc_id"]
-        if swc_id_i not in self.doubles:
-            if self.is_double(i):
-                self.doubles.add(swc_id_i)
-
-    def is_double(self, i):
-        """
-        Determines whether the connected component corresponding to "root" is
-        a double of another connected component.
-
-        Paramters
-        ---------
-        root : int
-            Node of connected component to be evaluated.
-
-        Returns
-        -------
-        bool
-            Indication of whether connected component is a double.
-
-        """
-        nb = list(self.neighbors(i))[0]
-        if self.degree[i] == 1 and self.degree[nb] == 1:
-            # Find near components
-            swc_id_i = self.nodes[i]["swc_id"]
-            hits = dict()  # near components
-            segment_i = self.get_branches(i)[0]
-            for xyz_i in segment_i:
-                for xyz_j in self.query_kdtree(xyz_i, 8):
-                    swc_id_j, node = self.xyz_to_swc(xyz_j, return_node=True)
-                    if swc_id_i != swc_id_j:
-                        hits = utils.append_dict_value(hits, swc_id_j, node)
-                        break
-
-            # Parse queried components
-            swc_id_j, n_close = utils.find_best(hits)
-            percent_close = n_close / len(segment_i)
-            if swc_id_j is not None and percent_close > 0.5:
-                j = sample(hits[swc_id_j], 1)[0]
-                length_i = len(segment_i)
-                length_j = self.component_cardinality(j)
-                if length_i / length_j < 0.6:
-                    return True
-        return False
 
     def xyz_to_swc(self, xyz, return_node=False):
         edge = self.xyz_to_edge[tuple(xyz)]

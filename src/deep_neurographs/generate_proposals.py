@@ -199,35 +199,6 @@ def get_conection(neurograph, leaf, xyz):
     return neurograph, node
 
 
-def is_valid(neurograph, i, filter_doubles):
-    """
-    Determines whether is a valid node to generate proposals from. A node is
-    considered valid if it is not contained in a doubled connected component
-    (if applicable).
-
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        Graph built from swc files.
-    i : int
-        Node to be validated.
-    filter_doubles : bool
-        Indication of whether to prevent proposals from being connected to a
-        doubled connected component.
-
-    Returns
-    -------
-    bool
-        Indication of whether node is valid.
-
-    """
-    if filter_doubles:
-        neurograph.upd_doubles(i)
-    swc_id = neurograph.nodes[i]["swc_id"]
-    return True if swc_id in neurograph.doubles else False
-
-
-# -- utils --
 def get_closer_endpoint(neurograph, edge, xyz):
     i, j = tuple(edge)
     d_i = geometry.dist(neurograph.nodes[i]["xyz"], xyz)
