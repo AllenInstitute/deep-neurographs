@@ -252,7 +252,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
             )
             if i > cnt * chunk_size:
                 cnt, t1 = report_progress(
-                    i, len(zip_paths), chunk_size, cnt, t0, t1
+                    i + 1, len(zip_paths), chunk_size, cnt, t0, t1
                 )
 
     # Store results
@@ -306,11 +306,14 @@ def build_neurograph(
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_components * 0.02), 1)
     cnt, i = 1, 0
+    n_components = len(irreducibles)
     while len(irreducibles):
         irreducible_set = irreducibles.pop()
         neurograph.add_component(irreducible_set)
         if i > cnt * chunk_size and progress_bar:
-            cnt, t1 = report_progress(i, n_components, chunk_size, cnt, t0, t1)
+            cnt, t1 = report_progress(
+                i + 2, n_components, chunk_size, cnt, t0, t1
+            )
         i += 1
     if progress_bar:
         t, unit = utils.time_writer(time() - t0)
@@ -364,7 +367,7 @@ def get_irreducibles(
             n_edges += count_edges(irreducibles_i)
             if i > progress_cnt * chunk_size and progress_bar:
                 progress_cnt, t1 = report_progress(
-                    i, n_components, chunk_size, progress_cnt, t0, t1
+                    i + 1, n_components, chunk_size, progress_cnt, t0, t1
                 )
     if progress_bar:
         t, unit = utils.time_writer(time() - t0)
