@@ -666,18 +666,23 @@ class NeuroGraph(nx.Graph):
                     queue.append((j, k))
         return cardinality
 
-    def to_zipped_swcs(self, zip_path):
+    def to_zipped_swcs(self, zip_path, color=None):
         n_components = gutils.count_components(self)
         print(f"Writing {n_components} swcs to local machine!")
         with zipfile.ZipFile(zip_path, "w") as zipf:
             for nodes in nx.connected_components(self):
-                self.to_zipped_swc(zipf, nodes)
+                self.to_zipped_swc(zipf, nodes, color)
 
-    def to_zipped_swc(self, zipf, nodes):
+    def to_zipped_swc(self, zipf, nodes, color):
         with StringIO() as text_buffer:
+            # Preamble
             n_entries = 0
             node_to_idx = dict()
+            if color:
+                text_buffer.write("# COLOR " + color)
             text_buffer.write("# id, type, z, y, x, r, pid")
+
+            # Write entries
             for i, j in nx.dfs_edges(self.subgraph(nodes)):
                 # Initialize
                 if n_entries == 0:
@@ -718,16 +723,18 @@ class NeuroGraph(nx.Graph):
             for i, nodes in enumerate(nx.connected_components(self)):
                 threads.append(executor.submit(self.to_swc, swc_dir, nodes))
 
-    def to_swc(self, swc_dir, nodes):
+    def to_swc(self, swc_dir, nodes, color=None):
         """
         Generates list of swc entries for a given connected component.
 
         Parameters
         ----------
-        path : str
-            Path that swc for component will be written to.
-        Component : list[int]
-            List of nodes contained in "component".
+        swc_dir : str
+            Directory that swc will be written to.
+        nodes : list[int]
+            Nodes to be written to an swc file.
+        color : None or str
+            Color that swc files should be given.
 
         Returns
         -------
@@ -753,7 +760,7 @@ class NeuroGraph(nx.Graph):
             node_to_idx[j] = len(entry_list)
 
         # Write
-        swc_utils.write(path, entry_list)
+        swc_utils.write(path, entry_list, color=color)
 
     def branch_to_entries(self, entry_list, i, j, parent):
         # Orient branch

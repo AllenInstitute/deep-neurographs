@@ -235,7 +235,7 @@ def write_list(path, entry_list, color=None):
     with open(path, "w") as f:
         # Preamble
         if color is not None:
-            f.write("# COLOR" + color)
+            f.write("# COLOR " + color)
         else:
             f.write("# id, type, z, y, x, r, pid")
 
