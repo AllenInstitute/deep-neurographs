@@ -34,18 +34,25 @@ def run(neurograph, min_size, max_size, node_spacing, output_dir=None):
         Graph with doubles removed.
 
     """
-    # Assign processes
+    # Initializations
+    cnt = 1
+    t0, t1 = utils.init_timers()
+    components = list(nx.connected_components(neurograph))
+    n_components = len(components)
+    chunk_size = int(n_components * 0.02)
+    
+    # Main
     doubles_cnt = 0
     neurograph.init_kdtree()
     not_doubles = set()
-    for nodes in list(nx.connected_components(neurograph)):
+    for i, nodes in enumerate(components):
         # Determine whether to inspect fragment
         swc_id = get_swc_id(neurograph, nodes)
         if swc_id not in not_doubles:
             xyz_arr = inspect_component(neurograph, nodes)
-            upper_bound = len(xyz_arr) * node_spacing < max_size
-            lower_bound = len(xyz_arr) * node_spacing > min_size
-            if upper_bound and lower_bound:
+            upper = len(xyz_arr) * node_spacing < max_size
+            lower = len(xyz_arr) * node_spacing > min_size
+            if upper and lower:
                 not_double_id = is_double(neurograph, xyz_arr, swc_id)
                 if not_double_id:
                     doubles_cnt += 1
@@ -53,7 +60,13 @@ def run(neurograph, min_size, max_size, node_spacing, output_dir=None):
                         neurograph.to_swc(output_dir, nodes, color="1.0 0.0 0.0")
                     neurograph = remove_component(neurograph, nodes, swc_id)
                     not_doubles.add(not_double_id)
-    print("# Doubles detected:", doubles_cnt)
+
+        # Update progress bar
+        if i > cnt * chunk_size:
+            cnt, t1 = utils.report_progress(
+                i + 1, n_components, chunk_size, cnt, t0, t1
+            )
+    print("\n# Doubles detected:", doubles_cnt)
 
 
 def is_double(neurograph, fragment, swc_id_i):

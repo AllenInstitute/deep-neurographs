@@ -382,6 +382,7 @@ def prune_short_connectors(graph, length=8):
     junctions = [j for j in graph.nodes if graph.degree[j] > 2]
     pruned_centroids = []
     pruned_nodes = set()
+    cnt = 0
     while len(junctions):
         # Search nbhd
         j = junctions.pop()
@@ -402,7 +403,10 @@ def prune_short_connectors(graph, length=8):
         if len(junction_nbs) > 0:
             nbhd = set(nx.dfs_tree(graph, source=j, depth_limit=5))
             pruned_nodes.update(nbhd)
+            cnt += 1
 
+    # Finish
+    print("# Potential Merge Sites Detected:", cnt)
     graph.remove_nodes_from(list(pruned_nodes))
     return graph, pruned_centroids
 
@@ -816,4 +820,4 @@ def count_components(graph):
     Number of connected components.
 
     """
-    return len(list(nx.connected_components(graph)))
+    return nx.number_connected_components(graph)

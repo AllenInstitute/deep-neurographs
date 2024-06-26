@@ -24,7 +24,7 @@ SMOOTH = True
 PRUNE_CONNECTORS = False
 PRUNE_DEPTH = 16
 TRIM_DEPTH = 0
-CONNECTOR_LENGTH = 16
+CONNECTOR_LENGTH = 8
 
 
 # --- Build graph wrappers ---
@@ -239,7 +239,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
     # Assign processes
     cnt = 1
     t0, t1 = utils.init_timers()
-    chunk_size = int(len(zip_paths) * 0.1)
+    chunk_size = int(len(zip_paths) * 0.02)
     with ProcessPoolExecutor() as executor:
         processes = []
         print("# zips:", len(zip_paths))
@@ -251,7 +251,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
                 )
             )
             if i > cnt * chunk_size:
-                cnt, t1 = report_progress(
+                cnt, t1 = utils.report_progress(
                     i + 1, len(zip_paths), chunk_size, cnt, t0, t1
                 )
 
@@ -304,15 +304,15 @@ def build_neurograph(
         img_path=img_path, node_spacing=node_spacing, swc_paths=swc_paths
     )
     t0, t1 = utils.init_timers()
-    chunk_size = max(int(n_components * 0.02), 1)
+    chunk_size = int(n_components * 0.02)
     cnt, i = 1, 0
     n_components = len(irreducibles)
     while len(irreducibles):
         irreducible_set = irreducibles.pop()
         neurograph.add_component(irreducible_set)
         if i > cnt * chunk_size and progress_bar:
-            cnt, t1 = report_progress(
-                i + 2, n_components, chunk_size, cnt, t0, t1
+            cnt, t1 = utils.report_progress(
+                i + 1, n_components, chunk_size, cnt, t0, t1
             )
         i += 1
     if progress_bar:
@@ -334,7 +334,7 @@ def get_irreducibles(
     smooth=SMOOTH,
 ):
     n_components = len(swc_dicts)
-    chunk_size = max(int(n_components * 0.25), 1)
+    chunk_size = int(n_components * 0.02)
     with ProcessPoolExecutor() as executor:
         # Assign Processes
         i = 0
@@ -366,7 +366,7 @@ def get_irreducibles(
             n_nodes += count_nodes(irreducibles_i)
             n_edges += count_edges(irreducibles_i)
             if i > progress_cnt * chunk_size and progress_bar:
-                progress_cnt, t1 = report_progress(
+                progress_cnt, t1 = utils.report_progress(
                     i + 1, n_components, chunk_size, progress_cnt, t0, t1
                 )
     if progress_bar:
@@ -387,26 +387,3 @@ def count_edges(irreducibles):
     for irr_i in irreducibles:
         cnt += len(irr_i["edges"])
     return cnt
-
-
-# -- Utils --
-def report_progress(current, total, chunk_size, cnt, t0, t1):
-    eta = get_eta(current, total, chunk_size, t1)
-    runtime = get_runtime(current, total, chunk_size, t0, t1)
-    utils.progress_bar(current, total, eta=eta, runtime=runtime)
-    return cnt + 1, time()
-
-
-def get_eta(current, total, chunk_size, t0, return_str=True):
-    chunk_runtime = time() - t0
-    remaining = total - current
-    eta = remaining * (chunk_runtime / chunk_size)
-    t, unit = utils.time_writer(eta)
-    return f"{round(t, 4)} {unit}" if return_str else eta
-
-
-def get_runtime(current, total, chunk_size, t0, t1):
-    eta = get_eta(current, total, chunk_size, t1, return_str=False)
-    total_runtime = time() - t0 + eta
-    t, unit = utils.time_writer(total_runtime)
-    return f"{round(t, 4)} {unit}"
