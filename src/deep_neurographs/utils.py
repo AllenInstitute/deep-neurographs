@@ -652,15 +652,6 @@ def init_timers():
     return time(), time()
 
 
-def progress_bar(current, total, bar_length=50, eta=None, runtime=None):
-    progress = int(current / total * bar_length)
-    n_completed = f"Completed: {current}/{total}"
-    bar = f"[{'=' * progress}{' ' * (bar_length - progress)}]"
-    eta = f"Time Remaining: {eta}" if eta else ""
-    runtime = f"Estimated Total Runtime: {runtime}" if runtime else ""
-    print(f"\r{bar} {n_completed} | {eta} | {runtime}    ", end="", flush=True)
-
-
 def time_writer(t, unit="seconds"):
     assert unit in ["seconds", "minutes", "hours"]
     upd_unit = {"seconds": "minutes", "minutes": "hours"}
@@ -673,6 +664,15 @@ def time_writer(t, unit="seconds"):
     return t, unit
 
 
+def progress_bar(current, total, bar_length=50, eta=None, runtime=None):
+    progress = int(current / total * bar_length)
+    n_completed = f"Completed: {current}/{total}"
+    bar = f"[{'=' * progress}{' ' * (bar_length - progress)}]"
+    eta = f"Time Remaining: {eta}" if eta else ""
+    runtime = f"Estimated Total Runtime: {runtime}" if runtime else ""
+    print(f"\r{bar} {n_completed} | {eta} | {runtime}    ", end="", flush=True)
+
+
 def report_progress(current, total, chunk_size, cnt, t0, t1):
     eta = get_eta(current, total, chunk_size, t1)
     runtime = get_runtime(current, total, chunk_size, t0, t1)
@@ -683,7 +683,7 @@ def report_progress(current, total, chunk_size, cnt, t0, t1):
 def get_eta(current, total, chunk_size, t0, return_str=True):
     chunk_runtime = time() - t0
     remaining = total - current
-    eta = remaining * (chunk_runtime / chunk_size)
+    eta = remaining * (chunk_runtime / max(chunk_size, 1))
     t, unit = time_writer(eta)
     return f"{round(t, 4)} {unit}" if return_str else eta
 
@@ -693,26 +693,6 @@ def get_runtime(current, total, chunk_size, t0, t1):
     total_runtime = time() - t0 + eta
     t, unit = time_writer(total_runtime)
     return f"{round(t, 4)} {unit}"
-
-
-def toGPU(graph_data):
-    """
-    Moves "graph_data" from CPU to GPU.
-
-    Parameters
-    ----------
-    graph_data : torch.dataset.GraphData
-        Graph data to be moved to GPU.
-
-    Returns
-    -------
-    torch.Tensor, torch.Tensor
-        Items from "graph_data" moved to GPU.
-
-    """
-    x = graph_data.x.to("cuda:0", dtype=torch.float32)
-    edge_index = graph_data.edge_index.to("cuda:0")
-    return x, edge_index
 
 
 # --- miscellaneous ---
