@@ -138,7 +138,7 @@ def run_without_seeds(
         # Merge proposals
         neurograph = build.fuse_branches(neurograph, accepts_i)
         accepts.extend(accepts_i)
-
+        
         # Report progress
         if i > progress_cnt * chunk_size and progress_bar:
             progress_cnt, t1 = utils.report_progress(
@@ -193,7 +193,7 @@ def get_idxs(dataset, model_type):
         return dataset["idx_to_edge"]
 
 
-# -- Whole Brain Seed-Based Inference --
+# -- seed-based inference --
 def build_from_soma(
     neurograph, labels_path, chunk_origin, chunk_shape=CHUNK_SHAPE, n_hops=1
 ):
