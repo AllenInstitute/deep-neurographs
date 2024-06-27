@@ -60,6 +60,7 @@ class NeuroGraph(nx.Graph):
         self.target_edges = set()
         self.node_cnt = 0
         self.node_spacing = node_spacing
+        self.soma_ids = set()
 
         # Initialize data structures for proposals
         self.complex_proposals = set()
@@ -87,6 +88,26 @@ class NeuroGraph(nx.Graph):
         else:
             graph.add_edges_from(deepcopy(self.edges))
         return graph
+
+    def set_soma_ids(self, k):
+        """
+        Sets class attribute called "self.soma_ids" as the swc ids of the "k"
+        largest components. These components are used as a proxy for soma
+        locations.
+
+        Paramters
+        ---------
+        k : int
+            Number of largest components to be set as proxy soma locations.
+
+        Returns
+        -------
+        None
+
+        """
+        node_ids = gutils.largest_components(self, k)
+        for i in node_ids:
+            self.soma_ids.add(self.nodes[i]["swc_id"])
 
     # --- Edit Graph --
     def add_component(self, irreducibles):
@@ -250,31 +271,6 @@ class NeuroGraph(nx.Graph):
         self.__add_edge((node_id, j), attrs, idxs_2, swc_id)
         return node_id
 
-    def add_proposal(self, i, j):
-        """
-        Adds proposal between nodes "i" and "j".
-
-        Parameters
-        ----------
-        i : int
-            Node id.
-        j : int
-            Node id
-
-        Returns
-        -------
-        None
-
-        """
-        edge = frozenset((i, j))
-        self.nodes[i]["proposals"].add(j)
-        self.nodes[j]["proposals"].add(i)
-        self.xyz_to_proposal[tuple(self.nodes[i]["xyz"])] = edge
-        self.xyz_to_proposal[tuple(self.nodes[j]["xyz"])] = edge
-        self.proposals[edge] = {
-            "xyz": np.array([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
-        }
-
     # --- Proposal Generation ---
     def generate_proposals(
         self,
@@ -314,13 +310,63 @@ class NeuroGraph(nx.Graph):
             self.run_optimization()
 
     def reset_proposals(self):
+        """
+        Deletes all previously generated proposals.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
         self.proposals = dict()
         self.xyz_to_proposal = dict()
         for i in self.nodes:
             self.nodes[i]["proposals"] = set()
 
     def set_proposals_per_leaf(self, proposals_per_leaf):
+        """
+        Sets the maximum number of proposals per leaf as a class attribute.
+
+        Parameters
+        ----------
+        proposals_per_leaf : int
+            Maximum number of proposals per leaf.
+
+        Returns
+        -------
+        None
+
+        """
         self.proposals_per_leaf = proposals_per_leaf
+
+    def add_proposal(self, i, j):
+        """
+        Adds proposal between nodes "i" and "j".
+
+        Parameters
+        ----------
+        i : int
+            Node id.
+        j : int
+            Node id
+
+        Returns
+        -------
+        None
+
+        """
+        edge = frozenset((i, j))
+        self.nodes[i]["proposals"].add(j)
+        self.nodes[j]["proposals"].add(i)
+        self.xyz_to_proposal[tuple(self.nodes[i]["xyz"])] = edge
+        self.xyz_to_proposal[tuple(self.nodes[j]["xyz"])] = edge
+        self.proposals[edge] = {
+            "xyz": np.array([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
+        }
 
     def init_targets(self, target_neurograph):
         target_neurograph.init_kdtree()
@@ -431,6 +477,19 @@ class NeuroGraph(nx.Graph):
         return len(self.proposals)
 
     def get_proposals(self):
+        """
+        Gets the proposal ids (i.e. node pairs).
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        list
+            Proposal ids
+
+        """
         return list(self.proposals.keys())
 
     def get_simple_proposals(self):
@@ -491,15 +550,52 @@ class NeuroGraph(nx.Graph):
         return get_midpoint(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
     def merge_proposal(self, edge):
-        # Attributes
         i, j = tuple(edge)
-        xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
-        radius = np.array([self.nodes[i]["radius"], self.nodes[j]["radius"]])
-        swc_id = self.nodes[i]["swc_id"]
+        soma_bool_1 = self.nodes[i]["swc_id"] in self.soma_ids
+        soma_bool_2 = self.nodes[j]["swc_id"] in self.soma_ids
+        if not (soma_bool_1 and soma_bool_1):
+            # Attributes
+            xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
+            radius = np.array([self.nodes[i]["radius"], self.nodes[j]["radius"]])
+            if self.nodes[i]["swc_id"] in self.soma_ids:
+                r = j
+                swc_id = self.nodes[i]["swc_id"]
+            else:
+                r = i
+                swc_id = self.nodes[j]["swc_id"]
 
-        # Add
-        self.add_edge(i, j, xyz=xyz, radius=radius, swc_id=swc_id)
-        del self.proposals[edge]
+            # Update graph
+            self.upd_ids(swc_id, r)
+            self.add_edge(i, j, xyz=xyz, radius=radius, swc_id=swc_id)
+            if i in self.leafs:
+                self.leafs.remove(i)
+            if j in self.leafs:
+                self.leafs.remove(j)
+            del self.proposals[edge]
+
+    def upd_ids(self, swc_id, r):
+        """
+        Updates the swc_id of all nodes connected to "r".
+
+        Parameters
+        ----------
+        swc_id : str
+            Segment id.
+        r : int
+            Node.
+
+        Returns
+        -------
+        None
+
+        """
+        queue = [r]
+        visited = []
+        while len(queue) > 0:
+            i = queue.pop()
+            self.nodes[i]["swc_id"] = swc_id
+            for j in [j for j in self.neighbors(i) if j not in visited]:
+                queue.append(j)
 
     # --- Utils ---
     def dist(self, i, j):
