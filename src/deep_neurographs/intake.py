@@ -280,8 +280,7 @@ def build_neurograph(
     # Extract irreducibles
     n_components = len(swc_dicts)
     if progress_bar:
-        print("(1) Extract irreducible nodes and edges")
-        print("# connected components:", utils.reformat_number(n_components))
+        print("# swcs downloaded:", utils.reformat_number(n_components))
     irreducibles, n_nodes, n_edges = get_irreducibles(
         swc_dicts,
         bbox=img_bbox,
@@ -296,29 +295,17 @@ def build_neurograph(
 
     # Build neurograph
     if progress_bar:
-        print("\n(2) Combine irreducibles...")
+        print("\nGraph Overview...")
+        print("# connected components":, len(irreducibles))
         print("# nodes:", utils.reformat_number(n_nodes))
         print("# edges:", utils.reformat_number(n_edges))
 
     neurograph = NeuroGraph(
         img_path=img_path, node_spacing=node_spacing, swc_paths=swc_paths
     )
-    t0, t1 = utils.init_timers()
-    chunk_size = int(n_components * 0.02)
-    cnt, i = 1, 0
-    n_components = len(irreducibles)
     while len(irreducibles):
         irreducible_set = irreducibles.pop()
         neurograph.add_component(irreducible_set)
-        if i > cnt * chunk_size and progress_bar:
-            cnt, t1 = utils.report_progress(
-                i + 1, n_components, chunk_size, cnt, t0, t1
-            )
-        i += 1
-    if progress_bar:
-        t, unit = utils.time_writer(time() - t0)
-        print("\n" + f"add_irreducibles(): {round(t, 4)} {unit}")
-
     return neurograph
 
 
@@ -369,9 +356,6 @@ def get_irreducibles(
                 progress_cnt, t1 = utils.report_progress(
                     i + 1, n_components, chunk_size, progress_cnt, t0, t1
                 )
-    if progress_bar:
-        t, unit = utils.time_writer(time() - t0)
-        print("\n" + f"get_irreducibles(): {round(t, 4)} {unit}")
     return irreducibles, n_nodes, n_edges
 
 
