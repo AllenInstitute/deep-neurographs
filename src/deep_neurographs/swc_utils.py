@@ -225,7 +225,7 @@ def write_list(path, entry_list, color=None):
     ----------
     path : str
         Path that swc will be written to.
-    entry_list : list[list[int]]
+    entry_list : list[str]
         List of entries that will be written to an swc file.
     color : str, optional
         Color of nodes. The default is None.
@@ -373,11 +373,26 @@ def make_entry(graph, i, parent, node_to_idx):
 
 
 def set_radius(graph, i):
+    """
+    Sets the radius of node "i".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph containing node "i".
+    i : int
+        Node.
+
+    Returns
+    -------
+    float
+        Radius of node "i".
+    """
     try:
         radius = graph[i]["radius"]
         return radius
     except:
-        return 1
+        return 1.0
 
 
 def make_simple_entry(node, parent, xyz, radius=8):

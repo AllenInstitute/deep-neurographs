@@ -8,8 +8,9 @@ Module that removes doubled fragments from a NeuroGraph.
 
 """
 
-from deep_neurographs import utils
 import networkx as nx
+
+from deep_neurographs import utils
 
 
 def run(neurograph, min_size, max_size, node_spacing, output_dir=None):
@@ -40,7 +41,7 @@ def run(neurograph, min_size, max_size, node_spacing, output_dir=None):
     components = list(nx.connected_components(neurograph))
     n_components = len(components)
     chunk_size = int(n_components * 0.02)
-    
+
     # Main
     doubles_cnt = 0
     neurograph.init_kdtree()
@@ -57,7 +58,9 @@ def run(neurograph, min_size, max_size, node_spacing, output_dir=None):
                 if not_double_id:
                     doubles_cnt += 1
                     if output_dir:
-                        neurograph.to_swc(output_dir, nodes, color="1.0 0.0 0.0")
+                        neurograph.to_swc(
+                            output_dir, nodes, color="1.0 0.0 0.0"
+                        )
                     neurograph = remove_component(neurograph, nodes, swc_id)
                     not_doubles.add(not_double_id)
 

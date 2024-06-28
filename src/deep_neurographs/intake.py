@@ -4,7 +4,7 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Builds neurograph for neuron reconstruction.
+Builds a neurograph for neuron reconstruction.
 
 """
 
@@ -22,7 +22,7 @@ MIN_SIZE = 30
 NODE_SPACING = 2
 SMOOTH = True
 PRUNE_CONNECTORS = False
-PRUNE_DEPTH = 16
+PRUNE_DEPTH = 10
 TRIM_DEPTH = 0
 CONNECTOR_LENGTH = 8
 
@@ -262,7 +262,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
             result = process.result()
             swc_dicts.extend(result)
         except Exception as e:
-            print(type(e), e)
+            print(type(e), e)              
     return swc_dicts
 
 
@@ -284,8 +284,7 @@ def build_neurograph(
     # Extract irreducibles
     n_components = len(swc_dicts)
     if progress_bar:
-        print("(1) Extract irreducible nodes and edges")
-        print("# connected components:", utils.reformat_number(n_components))
+        print("# swcs downloaded:", utils.reformat_number(n_components))
     irreducibles, n_nodes, n_edges = get_irreducibles(
         swc_dicts,
         bbox=img_bbox,
@@ -300,29 +299,19 @@ def build_neurograph(
 
     # Build neurograph
     if progress_bar:
-        print("\n(2) Combine irreducibles...")
+        print("\n\nGraph Overview...")
+        print(
+            "# connected components:", utils.reformat_number(len(irreducibles))
+        )
         print("# nodes:", utils.reformat_number(n_nodes))
         print("# edges:", utils.reformat_number(n_edges))
 
     neurograph = NeuroGraph(
         img_path=img_path, node_spacing=node_spacing, swc_paths=swc_paths
     )
-    t0, t1 = utils.init_timers()
-    chunk_size = int(n_components * 0.02)
-    cnt, i = 1, 0
-    n_components = len(irreducibles)
     while len(irreducibles):
         irreducible_set = irreducibles.pop()
         neurograph.add_component(irreducible_set)
-        if i > cnt * chunk_size and progress_bar:
-            cnt, t1 = utils.report_progress(
-                i + 1, n_components, chunk_size, cnt, t0, t1
-            )
-        i += 1
-    if progress_bar:
-        t, unit = utils.time_writer(time() - t0)
-        print("\n" + f"add_irreducibles(): {round(t, 4)} {unit}")
-
     return neurograph
 
 
@@ -348,6 +337,7 @@ def get_irreducibles(
             processes[i] = executor.submit(
                 gutils.get_irreducibles,
                 swc_dict,
+                min_size,
                 bbox,
                 prune_connectors,
                 connector_length,
@@ -360,26 +350,35 @@ def get_irreducibles(
         # Store results
         t0, t1 = utils.init_timers()
         n_nodes, n_edges = 0, 0
-        progress_cnt = 1
+        cnt = 1
         irreducibles = []
-        connector_centroids = []
         for i, process in enumerate(as_completed(processes)):
-            irreducibles_i, connector_centroids_i = process.result()
+            irreducibles_i = process.result()
             irreducibles.extend(irreducibles_i)
-            connector_centroids.extend(connector_centroids_i)
             n_nodes += count_nodes(irreducibles_i)
             n_edges += count_edges(irreducibles_i)
-            if i > progress_cnt * chunk_size and progress_bar:
-                progress_cnt, t1 = utils.report_progress(
-                    i + 1, n_components, chunk_size, progress_cnt, t0, t1
+            if i >= cnt * chunk_size and progress_bar:
+                cnt, t1 = utils.report_progress(
+                    i + 1, n_components, chunk_size, cnt, t0, t1
                 )
-    if progress_bar:
-        t, unit = utils.time_writer(time() - t0)
-        print("\n" + f"get_irreducibles(): {round(t, 4)} {unit}")
     return irreducibles, n_nodes, n_edges
 
 
 def count_nodes(irreducibles):
+    """
+    Counts the number of nodes in "irreducibles".
+
+    Parameters
+    ----------
+    irreducibles : dict
+        Dictionary that contains the irreducible components of a graph.
+
+    Returns
+    -------
+    int
+        Number of nodes in "irreducibles".
+
+    """
     cnt = 0
     for irr_i in irreducibles:
         cnt += len(irr_i["leafs"]) + len(irr_i["junctions"])
@@ -387,6 +386,20 @@ def count_nodes(irreducibles):
 
 
 def count_edges(irreducibles):
+    """
+    Counts the number of edges in "irreducibles".
+
+    Parameters
+    ----------
+    irreducibles : dict
+        Dictionary that contains the irreducible components of a graph.
+
+    Returns
+    -------
+    int
+        Number of edges in "irreducibles".
+
+    """
     cnt = 0
     for irr_i in irreducibles:
         cnt += len(irr_i["edges"])

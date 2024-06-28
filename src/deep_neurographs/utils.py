@@ -19,7 +19,6 @@ from zipfile import ZipFile
 
 import numpy as np
 import psutil
-import torch
 
 ANISOTROPY = np.array([0.748, 0.748, 1.0])
 

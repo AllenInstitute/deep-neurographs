@@ -32,6 +32,7 @@ from deep_neurographs import geometry, swc_utils, utils
 
 def get_irreducibles(
     swc_dict,
+    min_size,
     bbox=None,
     prune_connectors=False,
     connector_length=8,
@@ -74,7 +75,7 @@ def get_irreducibles(
     swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
     graph, _ = swc_utils.to_graph(swc_dict, set_attrs=True)
     graph = clip_branches(graph, bbox)
-    graph, connector_centroids = prune_branches(
+    graph, n_nodes_trimmed = prune_branches(
         graph,
         connector_length=connector_length,
         prune_connectors=prune_connectors,
@@ -85,12 +86,12 @@ def get_irreducibles(
     # Extract irreducibles
     irreducibles = []
     for node_subset in nx.connected_components(graph):
-        if len(node_subset) > 30:
+        if len(node_subset) + n_nodes_trimmed > min_size:
             subgraph = graph.subgraph(node_subset)
             irreducibles_i = __get_irreducibles(subgraph, swc_dict, smooth)
             if irreducibles_i:
                 irreducibles.append(irreducibles_i)
-    return irreducibles, []
+    return irreducibles
 
 
 def clip_branches(graph, bbox):
@@ -150,19 +151,21 @@ def prune_branches(
     -------
     networkx.Graph
         Pruned graph.
-    list[numpy.ndarray]
-        List of xyz coordinates of the centerpoint of the connector path.
+    int
+        Number of nodes that were trimmed.
 
     """
     # Prune/Trim branches
-    if prune_depth > 0 or prune_connectors:
-        graph = prune_trim_branches(graph, prune_depth, trim_depth)
+    assert prune_depth > 0 if prune_connectors else True, "prune_depth == 0"
+    if prune_depth > 0:
+        graph, n_nodes_trimmed = prune_trim_branches(
+            graph, prune_depth, trim_depth
+        )
 
     # Prune connectors
-    connector_xyz = []
     if prune_connectors:
-        graph, connector_xyz = prune_short_connectors(graph, connector_length)
-    return graph, connector_xyz
+        graph = prune_short_connectors(graph, connector_length)
+    return graph, n_nodes_trimmed
 
 
 def __get_irreducibles(graph, swc_dict, smooth):
@@ -275,10 +278,13 @@ def prune_trim_branches(graph, depth, trim_depth):
 
     """
     remove_nodes = []
+    n_nodes_trimmed = 0
     for leaf in get_leafs(graph):
-        remove_nodes.extend(inspect_branch(graph, leaf, depth, trim_depth))
+        nodes, n_trimmed = inspect_branch(graph, leaf, depth, trim_depth)
+        remove_nodes.extend(nodes)
+        n_nodes_trimmed += n_trimmed
     graph.remove_nodes_from(remove_nodes)
-    return graph
+    return graph, n_nodes_trimmed
 
 
 def inspect_branch(graph, leaf, depth, trim_depth):
@@ -312,7 +318,7 @@ def inspect_branch(graph, leaf, depth, trim_depth):
     for (i, j) in nx.dfs_edges(graph, source=leaf, depth_limit=depth):
         node_spacing.append(compute_dist(graph, i, j))
         if graph.degree(j) > 2:
-            return path
+            return path, 0
         elif graph.degree(j) == 2:
             path.append(j)
         elif np.sum(node_spacing) > depth:
@@ -321,9 +327,10 @@ def inspect_branch(graph, leaf, depth, trim_depth):
     # Check whether to trim
     spacing = np.mean(node_spacing)
     if trim_depth > 0 and graph.number_of_nodes() > 3 * trim_depth / spacing:
-        return trim_branch(graph, path, trim_depth)
+        trim_nodes = trim_branch(graph, path, trim_depth)
+        return trim_nodes, len(trim_nodes)
     else:
-        return []
+        return [], 0
 
 
 def trim_branch(graph, path, trim_depth):
@@ -408,7 +415,7 @@ def prune_short_connectors(graph, length=8):
     # Finish
     print("# Potential Merge Sites Detected:", cnt)
     graph.remove_nodes_from(list(pruned_nodes))
-    return graph, pruned_centroids
+    return graph
 
 
 def ignore_connector(graph, root, depth):
@@ -821,3 +828,37 @@ def count_components(graph):
 
     """
     return nx.number_connected_components(graph)
+
+
+def largest_components(neurograph, k):
+    """
+    Finds the "k" largest connected components in "neurograph".
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph to be searched.
+    k : int
+        Number of largest connected components to return.
+
+    Returns
+    -------
+    list
+        List where each entry is a random node from one of the k largest
+        connected components.
+
+    """
+    component_cardinalities = k * [-1]
+    node_ids = k * [-1]
+    for nodes in nx.connected_components(neurograph):
+        if len(nodes) > component_cardinalities[-1]:
+            i = 0
+            while i < k:
+                if len(nodes) > component_cardinalities[i]:
+                    component_cardinalities.insert(i, len(nodes))
+                    component_cardinalities.pop(-1)
+                    node_ids.insert(i, utils.sample_singleton(nodes))
+                    node_ids.pop(-1)
+                    break
+                i += 1
+    return node_ids
