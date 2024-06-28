@@ -158,7 +158,9 @@ def prune_branches(
     # Prune/Trim branches
     assert prune_depth > 0 if prune_connectors else True, "prune_depth == 0"
     if prune_depth > 0:
-        graph, n_nodes_trimmed = prune_trim_branches(graph, prune_depth, trim_depth)
+        graph, n_nodes_trimmed = prune_trim_branches(
+            graph, prune_depth, trim_depth
+        )
 
     # Prune connectors
     if prune_connectors:
@@ -844,7 +846,7 @@ def largest_components(neurograph, k):
     list
         List where each entry is a random node from one of the k largest
         connected components.
-        
+
     """
     component_cardinalities = k * [-1]
     node_ids = k * [-1]
@@ -855,8 +857,8 @@ def largest_components(neurograph, k):
                 if len(nodes) > component_cardinalities[i]:
                     component_cardinalities.insert(i, len(nodes))
                     component_cardinalities.pop(-1)
-                    nodes_ids.insert(i, utils.sample_singleton(nodes))
-                    nodes_ids.pop(-1)
+                    node_ids.insert(i, utils.sample_singleton(nodes))
+                    node_ids.pop(-1)
                     break
                 i += 1
     return node_ids
