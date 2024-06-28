@@ -107,8 +107,8 @@ def run_on_leaf(
 
         # Check for somas
         swc_id = neurograph.nodes[node]["swc_id"]
-        hit_1 = swc_id in neurograph.soma_ids
-        hit_2 = leaf_swc_id in neurograph.soma_ids
+        soma_bool_1 = swc_id in neurograph.soma_ids.keys()
+        soma_bool_2 = leaf_swc_id in neurograph.soma_ids.keys()
         if hit_1 and hit_2:
             continue
 
