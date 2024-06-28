@@ -105,8 +105,15 @@ def run_on_leaf(
         if not complex_bool and neurograph.degree[node] > 1:
             continue
 
+        # Check for somas
+        swc_id = neurograph.nodes[node]["swc_id"]
+        hit_1 = swc_id in neurograph.soma_ids
+        hit_2 = leaf_swc_id in neurograph.soma_ids
+        if hit_1 and hit_2:
+            continue
+
         # Check whether already connection exists
-        pair_id = frozenset((leaf_swc_id, neurograph.nodes[node]["swc_id"]))
+        pair_id = frozenset((leaf_swc_id, swc_id))
         if pair_id in connections.keys():
             proposal = connections[pair_id]
             dist_1 = neurograph.dist(leaf, node)

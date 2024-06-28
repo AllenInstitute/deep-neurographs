@@ -826,3 +826,37 @@ def count_components(graph):
 
     """
     return nx.number_connected_components(graph)
+
+
+def largest_components(neurograph, k):
+    """
+    Finds the "k" largest connected components in "neurograph".
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph to be searched.
+    k : int
+        Number of largest connected components to return.
+
+    Returns
+    -------
+    list
+        List where each entry is a random node from one of the k largest
+        connected components.
+        
+    """
+    component_cardinalities = k * [-1]
+    node_ids = k * [-1]
+    for nodes in nx.connected_components(neurograph):
+        if len(nodes) > component_cardinalities[-1]:
+            i = 0
+            while i < k:
+                if len(nodes) > component_cardinalities[i]:
+                    component_cardinalities.insert(i, len(nodes))
+                    component_cardinalities.pop(-1)
+                    nodes_ids.insert(i, utils.sample_singleton(nodes))
+                    nodes_ids.pop(-1)
+                    break
+                i += 1
+    return node_ids
