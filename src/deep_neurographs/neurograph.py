@@ -60,7 +60,7 @@ class NeuroGraph(nx.Graph):
         self.target_edges = set()
         self.node_cnt = 0
         self.node_spacing = node_spacing
-        self.soma_ids = set()
+        self.soma_ids = dict()
 
         # Initialize data structures for proposals
         self.complex_proposals = set()
@@ -89,11 +89,11 @@ class NeuroGraph(nx.Graph):
             graph.add_edges_from(deepcopy(self.edges))
         return graph
 
-    def set_soma_ids(self, k):
+    def set_proxy_soma_ids(self, k):
         """
-        Sets class attribute called "self.soma_ids" as the swc ids of the "k"
-        largest components. These components are used as a proxy for soma
-        locations.
+        Sets class attribute called "self.soma_swc_ids" which stores the swc
+        ids of the "k" largest components. These components are used as a proxy
+        for soma locations. 
 
         Paramters
         ---------
@@ -105,9 +105,8 @@ class NeuroGraph(nx.Graph):
         None
 
         """
-        node_ids = gutils.largest_components(self, k)
-        for i in node_ids:
-            self.soma_ids.add(self.nodes[i]["swc_id"])
+        for i in gutils.largest_components(self, k):
+            self.soma_ids[self.nodes[i]["swc_id"]] = i
 
     # --- Edit Graph --
     def add_component(self, irreducibles):
@@ -566,13 +565,13 @@ class NeuroGraph(nx.Graph):
 
     def merge_proposal(self, edge):
         i, j = tuple(edge)
-        soma_bool_1 = self.nodes[i]["swc_id"] in self.soma_ids
-        soma_bool_2 = self.nodes[j]["swc_id"] in self.soma_ids
+        soma_bool_1 = self.nodes[i]["swc_id"] in self.soma_ids.keys()
+        soma_bool_2 = self.nodes[j]["swc_id"] in self.soma_ids.keys()
         if not (soma_bool_1 and soma_bool_1):
             # Attributes
             xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
             radius = np.array([self.nodes[i]["radius"], self.nodes[j]["radius"]])
-            if self.nodes[i]["swc_id"] in self.soma_ids:
+            if self.nodes[i]["swc_id"] in self.soma_ids.keys():
                 r = j
                 swc_id = self.nodes[i]["swc_id"]
             else:

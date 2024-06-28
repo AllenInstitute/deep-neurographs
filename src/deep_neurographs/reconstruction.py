@@ -63,7 +63,6 @@ def get_accepted_proposals(
     threshold=0.6,
     structure_aware=True,
 ):
-    # Get positive edge predictions
     preds = filter_preds(preds, idx_to_edge, threshold)
     if structure_aware:
         return get_structure_aware_accepts(
@@ -92,7 +91,7 @@ def filter_preds(preds, idx_to_edge, threshold, valid_idxs=[]):
 
     Returns
     -------
-    thresholded_preds
+    dict
         Dictionary generated from "preds" whose probability is above
         threshold, where each item is an edge proposal id and corresponding
         predicted probability.
@@ -177,7 +176,18 @@ def get_best(neurograph, preds, threshold, max_length):
 
     Parameters
     ----------
+    neurograph : NeuroGraph
+        Graph that inference is being performed on.
+    preds : dict
+        Dictionary that maps proposal ids to acceptance probability.
+    threshold : float
+        Threshold on acceptance probability for proposals.
+    max_length : float
+        Maximum length of a proposal that will be accepted. Note that long
+        range proposals may be generated to provide additional context.
 
+    Returns
+    -------
     """
     edges = []
     probs = []
