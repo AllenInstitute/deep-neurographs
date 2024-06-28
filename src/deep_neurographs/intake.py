@@ -255,10 +255,14 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
                     i + 1, len(zip_paths), chunk_size, cnt, t0, t1
                 )
 
-        # Store results
-        swc_dicts = []
-        for process in as_completed(processes):
-            swc_dicts.extend(process.result())
+    # Store results
+    swc_dicts = []
+    for process in as_completed(processes):
+        try:
+            result = process.result()
+            swc_dicts.extend(result)
+        except Exception as e:
+            print(type(e), e)              
     return swc_dicts
 
 

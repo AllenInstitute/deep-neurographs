@@ -63,6 +63,7 @@ def process_local_paths(
 
 
 def process_gcs_zip(zip_content, anisotropy=[1.0, 1.0, 1.0], min_size=0):
+    swc_dicts = []
     with ZipFile(BytesIO(zip_content)) as zip_file:
         with ThreadPoolExecutor() as executor:
             # Assign threads
@@ -74,7 +75,6 @@ def process_gcs_zip(zip_content, anisotropy=[1.0, 1.0, 1.0], min_size=0):
             ]
 
             # Process results
-            swc_dicts = []
             for thread in as_completed(threads):
                 result = thread.result()
                 if len(result["id"]) > 0:
@@ -176,11 +176,14 @@ def read_from_gcs_zip(zip_file, path):
 
     """
     try:
-        with zip_file.open(path) as text_file:
-            return text_file.read().decode("utf-8").splitlines()
+        with zip_file.open(path) as txt_file:
+            return txt_file.read().decode("utf-8").splitlines()
     except:
+        with zip_file.open(path) as txt_file:
+            return txt_file.read().decode("utf-8").splitlines()
+    else:
         print(f"Failed to read {path}")
-        return ""
+        return []
 
 
 def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
