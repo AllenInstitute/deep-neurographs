@@ -288,6 +288,21 @@ class NeuroGraph(nx.Graph):
         """
         Generates proposals from leaf nodes in "self".
 
+        Parameters
+        ----------
+        search_radius : float
+            Search radius used to generate proposals.
+        complex_bool : bool
+            Indication of whether to generate complex proposals.
+        long_range_proposals : bool
+            Indication of whether to generate long range proposals.
+        proposals_per_leaf : int
+            Maximum number of proposals generated for each leaf.
+        optimize : bool
+            Indication of whether to optimize proposal alignment to image.
+        optimization_depth : int
+            Depth to check during optimization.
+
         Returns
         -------
         None
