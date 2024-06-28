@@ -250,7 +250,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
                     process_gcs_zip, zip_content, anisotropy, min_size
                 )
             )
-            if i > cnt * chunk_size:
+            if i >= cnt * chunk_size:
                 cnt, t1 = utils.report_progress(
                     i + 1, len(zip_paths), chunk_size, cnt, t0, t1
                 )
@@ -258,7 +258,11 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
     # Store results
     swc_dicts = []
     for process in as_completed(processes):
-        swc_dicts.extend(process.result())
+        try:
+            result = process.result()
+            swc_dicts.extend(result)
+        except Exception as e:
+            print(type(e), e)
     return swc_dicts
 
 
