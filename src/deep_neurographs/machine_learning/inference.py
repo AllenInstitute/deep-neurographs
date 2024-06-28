@@ -8,10 +8,6 @@ Routines for running inference with a model that classifies edge proposals.
 
 """
 
-from copy import deepcopy
-
-import fastremap
-import networkx as nx
 import numpy as np
 import torch
 from torch.nn.functional import sigmoid
@@ -26,10 +22,8 @@ from deep_neurographs.machine_learning import (
     ml_utils,
 )
 from deep_neurographs.machine_learning.gnn_utils import toCPU
-from deep_neurographs.neurograph import NeuroGraph
 
 BATCH_SIZE_PROPOSALS = 1000
-CHUNK_SHAPE = (256, 256, 256)
 
 
 def run(
@@ -76,8 +70,8 @@ def run(
         Accepted proposals.
 
     """
-    assert not gutils.cycle_exists(graph), "NeuroGraph contains cycle!"
     # Initializations
+    assert not gutils.cycle_exists(neurograph), "NeuroGraph contains cycle!"
     graph = neurograph.copy_graph()
     dists = [neurograph.proposal_length(edge) for edge in proposals]
     batches = utils.get_batches(np.argsort(dists), batch_size_proposals)
@@ -107,7 +101,7 @@ def run(
         # Merge proposals
         neurograph = build.fuse_branches(neurograph, accepts_i)
         accepts.extend(accepts_i)
-        
+
         # Report progress
         if i > progress_cnt * chunk_size:
             progress_cnt, t1 = utils.report_progress(

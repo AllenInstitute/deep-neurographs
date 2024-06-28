@@ -109,7 +109,7 @@ def run_on_leaf(
         swc_id = neurograph.nodes[node]["swc_id"]
         soma_bool_1 = swc_id in neurograph.soma_ids.keys()
         soma_bool_2 = leaf_swc_id in neurograph.soma_ids.keys()
-        if hit_1 and hit_2:
+        if soma_bool_1 and soma_bool_2:
             continue
 
         # Check whether already connection exists

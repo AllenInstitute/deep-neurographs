@@ -296,7 +296,9 @@ def build_neurograph(
     # Build neurograph
     if progress_bar:
         print("\n\nGraph Overview...")
-        print("# connected components:", utils.reformat_number(len(irreducibles)))
+        print(
+            "# connected components:", utils.reformat_number(len(irreducibles))
+        )
         print("# nodes:", utils.reformat_number(n_nodes))
         print("# edges:", utils.reformat_number(n_edges))
 

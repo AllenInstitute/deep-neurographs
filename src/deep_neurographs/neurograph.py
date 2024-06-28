@@ -93,7 +93,7 @@ class NeuroGraph(nx.Graph):
         """
         Sets class attribute called "self.soma_swc_ids" which stores the swc
         ids of the "k" largest components. These components are used as a proxy
-        for soma locations. 
+        for soma locations.
 
         Paramters
         ---------
@@ -567,10 +567,12 @@ class NeuroGraph(nx.Graph):
         i, j = tuple(edge)
         soma_bool_1 = self.nodes[i]["swc_id"] in self.soma_ids.keys()
         soma_bool_2 = self.nodes[j]["swc_id"] in self.soma_ids.keys()
-        if not (soma_bool_1 and soma_bool_1):
+        if not (soma_bool_1 and soma_bool_2):
             # Attributes
             xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
-            radius = np.array([self.nodes[i]["radius"], self.nodes[j]["radius"]])
+            radius = np.array(
+                [self.nodes[i]["radius"], self.nodes[j]["radius"]]
+            )
             if self.nodes[i]["swc_id"] in self.soma_ids.keys():
                 r = j
                 swc_id = self.nodes[i]["swc_id"]
@@ -612,6 +614,23 @@ class NeuroGraph(nx.Graph):
                 queue.append(j)
 
     # --- Utils ---
+    def is_soma(self, swc_id):
+        """
+        Determines whether "swc_id" corresponds to a soma.
+
+        Parameters
+        ----------
+        swc_id : str
+            swc id to be checked.
+
+        Returns
+        -------
+        bool
+            Indication of whether "swc_id" corresponds to a soma.
+
+        """
+        return swc_id in self.soma_ids.keys()
+
     def dist(self, i, j):
         """
         Computes the Euclidean distance between nodes "i" and "j".
