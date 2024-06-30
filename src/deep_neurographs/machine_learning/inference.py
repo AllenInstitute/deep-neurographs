@@ -83,7 +83,7 @@ def run(
     progress_cnt = 1
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_batches * 0.02), 1)
-    for i, batch in enumerate(batches):
+    for i, batch in enumerate(batches):        
         # Prediction
         proposals_i = [proposals[j] for j in batch]
         accepts_i, graph = predict(
@@ -103,7 +103,7 @@ def run(
         accepts.extend(accepts_i)
 
         # Report progress
-        if i > progress_cnt * chunk_size:
+        if i >= progress_cnt * chunk_size:
             progress_cnt, t1 = utils.report_progress(
                 i + 1, n_batches, chunk_size, progress_cnt, t0, t1
             )
@@ -142,7 +142,7 @@ def predict(
         proposal_probs,
         idx_to_edge,
         search_radius,
-        high_threshold=0.95,
+        high_threshold=0.9,
         threshold=confidence_threshold,
     )
     return accepts, graph

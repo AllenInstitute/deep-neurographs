@@ -606,10 +606,11 @@ class NeuroGraph(nx.Graph):
 
         """
         queue = [r]
-        visited = []
+        visited = set()
         while len(queue) > 0:
             i = queue.pop()
             self.nodes[i]["swc_id"] = swc_id
+            visited.add(i)
             for j in [j for j in self.neighbors(i) if j not in visited]:
                 queue.append(j)
 

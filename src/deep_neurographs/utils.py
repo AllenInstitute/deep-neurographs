@@ -163,7 +163,7 @@ def find_best(my_dict):
     best_vote_cnt = 0
     for key in my_dict.keys():
         val_type = type(my_dict[key])
-        vote_cnt = my_dict[key] if val_type == int else len(my_dict[key])
+        vote_cnt = my_dict[key] if val_type == float else len(my_dict[key])
         if vote_cnt > best_vote_cnt:
             best_key = key
             best_vote_cnt = vote_cnt
