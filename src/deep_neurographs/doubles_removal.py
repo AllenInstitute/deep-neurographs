@@ -41,7 +41,6 @@ def run(neurograph, max_size, node_spacing, output_dir=None):
     # Initializations
     components = list(nx.connected_components(neurograph))
     doubles_cnt = 0
-    not_doubles = set()
     neurograph.init_kdtree()
 
     cnt = 1
@@ -56,12 +55,10 @@ def run(neurograph, max_size, node_spacing, output_dir=None):
         if swc_id not in not_doubles:
             xyz_arr = inspect_component(neurograph, nodes)
             if len(xyz_arr) * node_spacing < max_size:
-                not_double_id = is_double(neurograph, xyz_arr, swc_id)
-                if not_double_id:
+                if is_double(neurograph, xyz_arr, swc_id):
                     doubles_cnt += 1
                     if output_dir:
                         neurograph.to_swc(output_dir, nodes, color=COLOR)
-                    #not_doubles.add(not_double_id)
                     neurograph = remove_component(neurograph, nodes, swc_id)
 
         # Update progress bar
@@ -118,9 +115,9 @@ def is_double(neurograph, fragment, swc_id_i):
         percent_hit = len(dists) / len(fragment)
         std = np.std(dists)
         if percent_hit > 0.5 and std < 2:
-            return swc_id_j
+            return True
         elif percent_hit > 0.7 and std < 1:
-            return swc_id_j
+            return True
     return False
 
 
