@@ -413,7 +413,6 @@ def prune_short_connectors(graph, length=8):
             cnt += 1
 
     # Finish
-    print("# Potential Merge Sites Detected:", cnt)
     graph.remove_nodes_from(list(pruned_nodes))
     return graph
 
