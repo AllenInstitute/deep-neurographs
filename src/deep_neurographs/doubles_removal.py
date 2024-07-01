@@ -14,8 +14,9 @@ import numpy as np
 from deep_neurographs import geometry
 from deep_neurographs import utils
 
+COLOR = "1.0 0.0 0.0"
 
-def run(neurograph, min_size, max_size, node_spacing, output_dir=None):
+def run(neurograph, max_size, node_spacing, output_dir=None):
     """
     Removes connected components from "neurgraph" that are likely to be a
     double.
@@ -38,41 +39,35 @@ def run(neurograph, min_size, max_size, node_spacing, output_dir=None):
 
     """
     # Initializations
+    components = list(nx.connected_components(neurograph))
+    doubles_cnt = 0
+    not_doubles = set()
+    neurograph.init_kdtree()
+
     cnt = 1
     t0, t1 = utils.init_timers()
-    components = list(nx.connected_components(neurograph))
-    n_components = len(components)
-    chunk_size = int(n_components * 0.02)
+    chunk_size = int(len(components) * 0.02)
 
     # Main
-    doubles_cnt = 0
-    neurograph.init_kdtree()
-    not_doubles = set()
     for i, idx in enumerate(np.argsort([len(c) for c in components])):
         # Determine whether to inspect fragment
-        swc_id = get_swc_id(neurograph, components[idx])
+        nodes = components[idx]
+        swc_id = get_swc_id(neurograph, nodes)
         if swc_id not in not_doubles:
-            xyz_arr = inspect_component(neurograph, components[idx])
-            upper = len(xyz_arr) * node_spacing < max_size
-            lower = len(xyz_arr) * node_spacing > min_size
-            if upper and lower:
+            xyz_arr = inspect_component(neurograph, nodes)
+            if len(xyz_arr) * node_spacing < max_size:
                 not_double_id = is_double(neurograph, xyz_arr, swc_id)
                 if not_double_id:
                     doubles_cnt += 1
                     if output_dir:
-                        neurograph.to_swc(
-                            output_dir, components[idx], color="1.0 0.0 0.0"
-                        )
-                    not_doubles.add(not_double_id)
-                    neurograph = remove_component(
-                        neurograph, components[idx], swc_id
-                    )
-                    
+                        neurograph.to_swc(output_dir, nodes, color=COLOR)
+                    #not_doubles.add(not_double_id)
+                    neurograph = remove_component(neurograph, nodes, swc_id)
 
         # Update progress bar
         if i >= cnt * chunk_size:
             cnt, t1 = utils.report_progress(
-                i + 1, n_components, chunk_size, cnt, t0, t1
+                i + 1, len(components), chunk_size, cnt, t0, t1
             )
     print("\n# Doubles detected:", doubles_cnt)
 
@@ -105,7 +100,7 @@ def is_double(neurograph, fragment, swc_id_i):
     hits = dict()
     for xyz_i in fragment:
         hits_i = dict()
-        for xyz_j in neurograph.query_kdtree(xyz_i, 25):
+        for xyz_j in neurograph.query_kdtree(xyz_i, 15):
             try:
                 swc_id_j = neurograph.xyz_to_swc(xyz_j)
                 if swc_id_i != swc_id_j:
@@ -114,20 +109,17 @@ def is_double(neurograph, fragment, swc_id_i):
             except:
                 pass
         if len(hits_i) > 0:
-            best_swc_id = utils.find_best(hits_i)
+            best_swc_id = utils.find_best(hits_i, maximize=False)
             best_dist = hits_i[best_swc_id]
             hits = utils.append_dict_value(hits, best_swc_id, best_dist)
 
     # Check criteria
     for swc_id_j, dists in hits.items():
-        median = np.median(dists)
         percent_hit = len(dists) / len(fragment)
         std = np.std(dists)
-        if percent_hit > 0.4 and (median < 20 and std < 2):
+        if percent_hit > 0.5 and std < 2:
             return swc_id_j
-        elif percent_hit > 0.3 and (median < 15 and std < 1.5):
-            return swc_id_j
-        elif percent_hit > 0.6 and std < 1:
+        elif percent_hit > 0.7 and std < 1:
             return swc_id_j
     return False
 

@@ -143,7 +143,7 @@ def append_dict_value(my_dict, key, value):
     return my_dict
 
 
-def find_best(my_dict):
+def find_best(my_dict, maximize=True):
     """
     Given a dictionary where each value is either a list or int (i.e. cnt),
     finds the key associated with the longest list or largest integer.
@@ -152,6 +152,8 @@ def find_best(my_dict):
     ----------
     my_dict : dict
         Dictionary to be searched.
+    maximize : bool, optional
+        Indication of whether to find the largest value or highest vote cnt.
 
     Returns
     -------
@@ -160,11 +162,14 @@ def find_best(my_dict):
 
     """
     best_key = None
-    best_vote_cnt = 0
+    best_vote_cnt = 0 if maximize else np.inf
     for key in my_dict.keys():
         val_type = type(my_dict[key])
         vote_cnt = my_dict[key] if val_type == float else len(my_dict[key])
-        if vote_cnt > best_vote_cnt:
+        if vote_cnt > best_vote_cnt and maximize:
+            best_key = key
+            best_vote_cnt = vote_cnt
+        elif vote_cnt < best_vote_cnt and not maximize:
             best_key = key
             best_vote_cnt = vote_cnt
     return best_key
