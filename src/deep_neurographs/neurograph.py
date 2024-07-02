@@ -654,12 +654,12 @@ class NeuroGraph(nx.Graph):
     def get_branches(self, i, ignore_reducibles=False, key="xyz"):
         branches = []
         for j in self.neighbors(i):
-            branch = self.orient_edge((i, j), i, key=key)
+            branch = self.oriented_edge((i, j), i, key=key)
             if ignore_reducibles:
                 root = i
                 while self.degree[j] == 2:
                     k = self.get_other_nb(j, root)
-                    branch_jk = self.orient_edge((j, k), j, key=key)
+                    branch_jk = self.oriented_edge((j, k), j, key=key)
                     if key == "xyz":
                         branch = np.vstack([branch, branch_jk])
                     else:
@@ -692,7 +692,7 @@ class NeuroGraph(nx.Graph):
         nbs.remove(j)
         return nbs[0]
 
-    def orient_edge(self, edge, i, key="xyz"):
+    def oriented_edge(self, edge, i, key="xyz"):
         if (self.edges[edge][key][0] == self.nodes[i][key]).all():
             return self.edges[edge][key]
         else:
