@@ -332,4 +332,4 @@ def compute_length(path):
         Length of "path".
 
     """
-    return np.sum([dist(path[i], path[i - 1]) for i range(1, len(path))])
+    return np.sum([dist(path[i], path[i - 1]) for i in range(1, len(path))])
