@@ -4,7 +4,8 @@ Created on Sat June 25 9:00:00 2024
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Module that removes doubled fragments from a NeuroGraph.
+Module that removes doubled fragments and trims branches that pass by each
+other from a NeuroGraph.
 
 """
 import networkx as nx
@@ -12,13 +13,15 @@ import numpy as np
 from time import time
 import sys
 
-from deep_neurographs import geometry
 from deep_neurographs import utils
-
+from deep_neurographs.geometry import dist
 
 COLOR = "1.0 0.0 0.0"
+MAX_DEPTH = 16
 
-def run(neurograph, max_size, node_spacing, output_dir=None):
+
+# --- Doubles Removal ---
+def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
     """
     Removes connected components from "neurgraph" that are likely to be a
     double.
@@ -42,6 +45,7 @@ def run(neurograph, max_size, node_spacing, output_dir=None):
     """
     # Initializations
     components = list(nx.connected_components(neurograph))
+    deleted = set()
     doubles_cnt = 0
     
     cnt = 1
@@ -49,17 +53,19 @@ def run(neurograph, max_size, node_spacing, output_dir=None):
     chunk_size = int(len(components) * 0.02)
 
     # Main
+    neurograph.init_kdtree()
     for i, idx in enumerate(np.argsort([len(c) for c in components])):
         # Determine whether to inspect fragment
         nodes = components[idx]
+        swc_id = get_swc_id(neurograph, nodes)
         xyz_arr = inspect_component(neurograph, nodes)
-        if len(xyz_arr) * node_spacing < max_size:
-            swc_id = get_swc_id(neurograph, nodes)
+        if len(xyz_arr) * node_spacing < max_size and swc_id not in deleted:
             if is_double(neurograph, xyz_arr, swc_id):
                 if output_dir:
                     neurograph.to_swc(output_dir, nodes, color=COLOR)
                 neurograph = remove_component(neurograph, nodes, swc_id)
                 doubles_cnt += 1
+                deleted.add(swc_id)
 
         # Update progress bar
         if i >= cnt * chunk_size:
@@ -101,7 +107,7 @@ def is_double(neurograph, fragment, swc_id_i):
             try:
                 swc_id_j = neurograph.xyz_to_swc(xyz_j)
                 if swc_id_i != swc_id_j:
-                    d = geometry.dist(xyz_i, xyz_j)
+                    d = dist(xyz_i, xyz_j)
                     hits_i = upd_hits(hits_i, swc_id_j, d)
             except:
                 pass
@@ -111,7 +117,7 @@ def is_double(neurograph, fragment, swc_id_i):
             hits = utils.append_dict_value(hits, best_swc_id, best_dist)
 
     # Check criteria
-    for dists in hits.value():
+    for dists in hits.values():
         percent_hit = len(dists) / len(fragment)
         std = np.std(dists)
         if percent_hit > 0.5 and std < 2:
@@ -119,28 +125,6 @@ def is_double(neurograph, fragment, swc_id_i):
         elif percent_hit > 0.7 and std < 1:
             return True
     return False
-
-
-# --- utils ---
-def get_swc_id(neurograph, nodes):
-    """
-    Gets the swc id corresponding to "nodes".
-
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        Graph containing "nodes".
-    nodes : list[int]
-        Nodes to be checked.
-
-    Returns
-    -------
-    str
-        swc id of "nodes".
-
-    """
-    i = utils.sample_singleton(nodes)
-    return neurograph.nodes[i]["swc_id"]
 
 
 def inspect_component(neurograph, nodes):
@@ -232,3 +216,120 @@ def upd_hits(hits, key, value):
     else:
         hits[key] = value
     return hits
+
+
+# --- Trim Passings ---
+def trim_passings(neurograph):
+    # Initializations
+    cnt = 1
+    t0, t1 = utils.init_timers()
+    chunk_size = int(len(neurograph.leafs) * 0.02)
+
+    # Main
+    n_endpoints_trimmed = 0
+    for leaf in neurograph.leafs:
+        trim_bool = inspect_branch(neurograph, leaf)
+        if trim_bool:
+            n_endpoints_trimmed += 1
+    print("# hits:", n_endpoints_trimmed)
+
+
+def inspect_branch(neurograph, i):
+    trim_bool = False
+    swc_id = neurograph.nodes[i]["swc_id"]
+    for xyz, radius in get_branch(neurograph, i):
+        hits = search_along_branch(neurograph, swc_id, xyz, radius)
+        if len(hits) > 0:
+            trim_bool = True
+
+        hits = keep_passings(hits)
+        
+    if trim_bool:
+        print("")
+    return False
+
+
+def search_along_branch(neurograph, swc_id_leaf, xyz_leaf, radius):
+    hits = dict()
+    for xyz in neurograph.query_kdtree(xyz_leaf, radius):
+        try:
+            swc_id = neurograph.xyz_to_swc(xyz)
+            if swc_id != swc_id_leaf:
+                hits = utils.append_dict_value(hits, swc_id, xyz)
+                d = dist(xyz, xyz_leaf)
+                print(swc_id_leaf, swc_id, d, xyz)
+        except:
+            pass
+    return hits
+
+
+def keep_passings(hits):
+    rm_keys = list()
+    for swc_id, xyz_coords in hits.items():
+        if compute_length(xyz_coords) < 5:
+            rm_keys.append(swc_id)
+    return utils.remove_items(hits, rm_keys)
+
+
+# --- utils ---
+def get_swc_id(neurograph, nodes):
+    """
+    Gets the swc id corresponding to "nodes".
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph containing "nodes".
+    nodes : list[int]
+        Nodes to be checked.
+
+    Returns
+    -------
+    str
+        swc id of "nodes".
+
+    """
+    i = utils.sample_singleton(nodes)
+    return neurograph.nodes[i]["swc_id"]
+
+
+def get_branch(neurograph, i):
+    """
+    Gets the xyz coordinates of the branch emanating from "i".
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph containing node "i".
+    i : int
+        Leaf node in "neurograph".
+
+    Returns
+    -------
+    numpy.ndarray
+        xyz coordinates of branch emanating from "i".
+
+    """
+    j = list(neurograph.neighbors(i))[0]
+    xyz_coords = neurograph.oriented_edge((i, j), i)
+    radii = neurograph.oriented_edge((i, j), i, key="radius")
+    n = max(len(xyz_coords), MAX_DEPTH)
+    return zip(xyz_coords[0:n], radii[0:n])
+
+
+def compute_length(path):
+    """
+    Computes the length of "path".
+
+    Parameters
+    ----------
+    path : list
+        xyz coordinates that form a path.
+
+    Returns
+    -------
+    float
+        Length of "path".
+
+    """
+    return np.sum([dist(path[i], path[i - 1]) for i range(1, len(path))])
