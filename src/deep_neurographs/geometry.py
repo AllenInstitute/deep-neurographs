@@ -486,6 +486,24 @@ def dist(v_1, v_2, metric="l2"):
         return distance.euclidean(v_1, v_2)
 
 
+def length(path):
+    """
+    Computes the length of "path".
+
+    Parameters
+    ----------
+    path : list
+        xyz coordinates that form a path.
+
+    Returns
+    -------
+    float
+        Length of "path".
+
+    """
+    return np.sum([dist(path[i], path[i - 1]) for i in range(1, len(path))])
+
+
 def make_line(xyz_1, xyz_2, n_steps):
     """
     Generates a series of points representing a straight line between two 3D

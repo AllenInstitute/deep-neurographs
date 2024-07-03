@@ -702,12 +702,21 @@ class NeuroGraph(nx.Graph):
         return get_dist(xyz, self.nodes[node]["xyz"])
 
     def edge_length(self, edge):
-        length = 0
-        for i in range(1, len(self.edges[edge]["xyz"])):
-            length += get_dist(
-                self.edges[edge]["xyz"][i - 1], self.edges[edge]["xyz"][i]
-            )
-        return length
+        """
+        Computes length of path stored as xyz coordinates in "edge".
+
+        Parameters
+        ----------
+        edge : tuple
+            Edge in self.
+
+        Returns
+        -------
+        float
+            Path length of edge.
+
+        """
+        return geometry.length(self.edges[edge]["xyz"])
 
     def is_contained(self, node_or_xyz, buffer=0):
         if self.bbox:
