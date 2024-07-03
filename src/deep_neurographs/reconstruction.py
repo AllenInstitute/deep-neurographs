@@ -218,7 +218,7 @@ def save_prediction(
 
     # Write Result
     n_swcs = gutils.count_components(neurograph)
-    save_connections(neurograph, accepted_proposals, connections_path)
+    save_connections(neurograph, connections_path)
     if save_results:
         neurograph.to_zipped_swcs(swc_zip_path)
         # save_corrections(neurograph, accepted_proposals, corrections_dir)
@@ -239,7 +239,7 @@ def save_corrections(neurograph, accepted_proposals, output_dir):
         swc_utils.save_edge(path, xyz_i, xyz_j, color=color, radius=3)
 
 
-def save_connections(neurograph, accepted_proposals, path):
+def save_connections(neurograph, path):
     """
     Saves predicted connections between connected components in a txt file.
 
@@ -259,5 +259,5 @@ def save_connections(neurograph, accepted_proposals, path):
 
     """
     with open(path, "w") as f:
-        for swc_id_i, swc_id_j in self.merged_ids:
+        for swc_id_i, swc_id_j in neurograph.merged_ids:
             f.write(f"{swc_id_i}, {swc_id_j}" + "\n")
