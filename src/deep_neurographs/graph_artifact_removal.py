@@ -327,6 +327,7 @@ def trim(neurograph, leaf, j, xyz_coords, idx):
     neurograph.edges[e]["radius"] = neurograph.edges[e]["radius"][idx::]
     return neurograph    
 
+ 
 # --- utils ---
 def get_swc_id(neurograph, nodes):
     """
@@ -407,5 +408,3 @@ def get_edge(neurograph, xyz_coords):
         except:
             pass
     return tuple(utils.find_best(hits))
-
-    
