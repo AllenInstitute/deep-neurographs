@@ -716,7 +716,7 @@ class NeuroGraph(nx.Graph):
             Path length of edge.
 
         """
-        return geometry.length(self.edges[edge]["xyz"])
+        return geometry.path_length(self.edges[edge]["xyz"])
 
     def is_contained(self, node_or_xyz, buffer=0):
         if self.bbox:
@@ -829,8 +829,7 @@ class NeuroGraph(nx.Graph):
                     x, y, z = tuple(self.nodes[i]["xyz"])
                     r = self.nodes[i]["radius"]
                     if color == "0.0 1.0 0.0":
-                        r += 1
-
+                        r += 2
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
                     n_entries += 1

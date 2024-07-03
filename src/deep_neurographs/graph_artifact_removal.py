@@ -15,7 +15,7 @@ import sys
 
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
-from deep_neurographs.geometry import dist, length
+from deep_neurographs.geometry import dist, path_length
 
 COLOR = "1.0 0.0 0.0"
 MAX_DEPTH = 16
@@ -243,7 +243,7 @@ def search_along_branch(neurograph, leaf):
     hits = dict()
     swc_id_leaf = neurograph.nodes[leaf]["swc_id"]
     for xyz_leaf, radius in get_branch(neurograph, leaf):
-        for xyz in neurograph.query_kdtree(xyz_leaf, radius):
+        for xyz in neurograph.query_kdtree(xyz_leaf, radius + 0.5):
             try:
                 swc_id = neurograph.xyz_to_swc(xyz)
                 if swc_id != swc_id_leaf:
@@ -256,7 +256,7 @@ def search_along_branch(neurograph, leaf):
 def keep_passings(hits):
     rm_keys = list()
     for swc_id, xyz_coords in hits.items():
-        if length(xyz_coords) < 3:
+        if path_length(xyz_coords) < 5:
             rm_keys.append(swc_id)
     return utils.remove_items(hits, rm_keys)
 
@@ -266,25 +266,32 @@ def simple_trim(neurograph, leaf, hits):
     swc_id, xyz_coords = unpack_dict(hits)
     i, j = get_edge(neurograph, xyz_coords)
     if not (neurograph.is_leaf(i) or neurograph.is_leaf(j)):
+        print("trimming:", neurograph.nodes[leaf]["swc_id"])
+        print("not trimming:", swc_id)
+        print("")
         trim_from_leaf(neurograph, leaf, xyz_coords)
 
     # Check for significant difference in radii
-    radius_leaf = get_branch_avg_radii(neurograph, leaf)
+    radius_leaf = neurograph.nodes[leaf]["radius"]
     radius_edge = np.mean(neurograph.edges[i, j]["radius"])
     if radius_leaf < radius_edge - 1:
+        print("trimming:", neurograph.nodes[leaf]["swc_id"])
+        print("not trimming:", swc_id)
         trim_from_leaf(neurograph, leaf, xyz_coords)
     elif radius_edge < radius_leaf - 1:
         i = get_endpoint(neurograph, leaf, (i, j))
-        trim_from_edge(neurograph, i, (i, j))
+        #trim_from_edge(neurograph, i, (i, j))
     else:
         # Determine smaller fragment
         leaf_component_size = len(gutils.get_component(neurograph, leaf))
         edge_component_size = len(gutils.get_component(neurograph, i))
         if leaf_component_size < edge_component_size:
+            print("trimming:", neurograph.nodes[leaf]["swc_id"])
+            print("not trimming:", swc_id)
             trim_from_leaf(neurograph, leaf, xyz_coords)
         else:
             i = get_endpoint(neurograph, leaf, (i, j))
-            trim_from_edge(neurograph, i, (i, j))
+            #trim_from_edge(neurograph, i, (i, j))
     return neurograph
 
 
@@ -304,17 +311,19 @@ def trim_from_leaf(neurograph, leaf, xyz_coords):
     idx = 0
     while len(xyz_coords) > 0:
         for xyz_query, radius in get_branch(neurograph, leaf):
-            for xyz in neurograph.query_kdtree(xyz_query, radius):
+            for xyz in neurograph.query_kdtree(xyz_query, radius + 0.5):
                 if tuple(xyz) in xyz_coords:
                     xyz_coords.remove(tuple(xyz))
         idx += 1
     xyz_coords = neurograph.oriented_edge((leaf, j), leaf)
-    idx = max(len(xyz_coords) + 2, idx)
+    idx = min(len(xyz_coords), idx + 2)
 
     # Trim points
-    if length(xyz_coords[idx::]) > 16:
+    if path_length(xyz_coords[idx::]) > 15:
+        print(f"--> trimmed {round(path_length(xyz_coords[0:idx]), 2)} microns \n")
         neurograph = trim(neurograph, leaf, j, xyz_coords, idx)
     else:
+        print("--> deleting\n")
         neurograph.remove_node(leaf)
         if neurograph.degree[j] == 0:
             neurograph.remove_node(j)

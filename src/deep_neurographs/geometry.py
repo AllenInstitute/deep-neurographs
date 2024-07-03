@@ -486,9 +486,9 @@ def dist(v_1, v_2, metric="l2"):
         return distance.euclidean(v_1, v_2)
 
 
-def length(path):
+def path_length(path):
     """
-    Computes the length of "path".
+    Computes the path length of "path".
 
     Parameters
     ----------
@@ -498,7 +498,7 @@ def length(path):
     Returns
     -------
     float
-        Length of "path".
+        Path length of "path".
 
     """
     return np.sum([dist(path[i], path[i - 1]) for i in range(1, len(path))])
