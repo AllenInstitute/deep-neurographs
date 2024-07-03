@@ -232,9 +232,8 @@ def trim_passings(neurograph):
         if leaf in neurograph.nodes:
             hits = search_along_branch(neurograph, leaf)
             if len(hits) == 1:
-                simple_trim(neurograph, leaf, hits)
+                neurograph = simple_trim(neurograph, leaf, hits)
                 n_endpoints_trimmed += 1
-                print("")
             elif len(hits) > 1:
                 print("complex trim")
     print("# hits:", n_endpoints_trimmed)
@@ -273,21 +272,27 @@ def simple_trim(neurograph, leaf, hits):
     radius_leaf = get_branch_avg_radii(neurograph, leaf)
     radius_edge = np.mean(neurograph.edges[i, j]["radius"])
     if radius_leaf < radius_edge - 1:
-        print("1 - trim from leaf")
         trim_from_leaf(neurograph, leaf, xyz_coords)
     elif radius_edge < radius_leaf - 1:
-        print("1 - trim_from_edge")
-        #trim_from_edge(neurograph, leaf, (i, j))
+        i = get_endpoint(neurograph, leaf, (i, j))
+        trim_from_edge(neurograph, i, (i, j))
     else:
         # Determine smaller fragment
         leaf_component_size = len(gutils.get_component(neurograph, leaf))
         edge_component_size = len(gutils.get_component(neurograph, i))
         if leaf_component_size < edge_component_size:
-            print("2 - trim from leaf")
             trim_from_leaf(neurograph, leaf, xyz_coords)
         else:
-            print("2 - trim_from_edge")
-            #trim_from_edge(neurograph, leaf, edge)
+            i = get_endpoint(neurograph, leaf, (i, j))
+            trim_from_edge(neurograph, i, (i, j))
+    return neurograph
+
+
+def get_endpoint(neurograph, leaf, edge):
+    i, j = tuple(edge)
+    d_i = dist(neurograph.nodes[i]["xyz"], neurograph.nodes[leaf]["xyz"])
+    d_j = dist(neurograph.nodes[j]["xyz"], neurograph.nodes[leaf]["xyz"])
+    return i if d_i < d_j else j
 
 
 def trim_from_leaf(neurograph, leaf, xyz_coords):

@@ -828,6 +828,9 @@ class NeuroGraph(nx.Graph):
                     swc_id = self.nodes[i]["swc_id"]
                     x, y, z = tuple(self.nodes[i]["xyz"])
                     r = self.nodes[i]["radius"]
+                    if color == "0.0 1.0 0.0":
+                        r += 1
+
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
                     n_entries += 1
