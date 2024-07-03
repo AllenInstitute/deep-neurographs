@@ -259,8 +259,5 @@ def save_connections(neurograph, accepted_proposals, path):
 
     """
     with open(path, "w") as f:
-        for edge in accepted_proposals:
-            i, j = tuple(edge)
-            swc_id_i = neurograph.nodes[i]["swc_id"]
-            swc_id_j = neurograph.nodes[j]["swc_id"]
+        for swc_id_i, swc_id_j in self.merged_ids:
             f.write(f"{swc_id_i}, {swc_id_j}" + "\n")

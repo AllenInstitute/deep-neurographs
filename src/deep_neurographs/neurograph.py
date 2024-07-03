@@ -67,6 +67,7 @@ class NeuroGraph(nx.Graph):
         self.simple_proposals = set()
         self.xyz_to_edge = dict()
         self.kdtree = None
+        self.merged_ids = set()
 
         # Initialize bounding box (if exists)
         self.bbox = img_bbox
@@ -565,23 +566,21 @@ class NeuroGraph(nx.Graph):
 
     def merge_proposal(self, edge):
         i, j = tuple(edge)
-        soma_bool_1 = self.nodes[i]["swc_id"] in self.soma_ids.keys()
-        soma_bool_2 = self.nodes[j]["swc_id"] in self.soma_ids.keys()
-        if not (soma_bool_1 and soma_bool_2):
+        swc_id_i = self.nodes[i]["swc_id"]
+        swc_id_j = self.nodes[j]["swc_id"]
+        soma_bool_i = swc_id_i in self.soma_ids.keys()
+        soma_bool_j = swc_id_j in self.soma_ids.keys()
+        if not (soma_bool_i and soma_bool_j):
             # Attributes
             xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
             radius = np.array(
                 [self.nodes[i]["radius"], self.nodes[j]["radius"]]
             )
-            if self.nodes[i]["swc_id"] in self.soma_ids.keys():
-                r = j
-                swc_id = self.nodes[i]["swc_id"]
-            else:
-                r = i
-                swc_id = self.nodes[j]["swc_id"]
+            swc_id = swc_id_i if soma_bool_i else swc_id_j
 
             # Update graph
-            self.upd_ids(swc_id, r)
+            self.merged_ids.add((swc_id_i, swc_id_j))
+            self.upd_ids(swc_id, j if swc_id == swc_id_i else i)
             self.add_edge(i, j, xyz=xyz, radius=radius, swc_id=swc_id)
             if i in self.leafs:
                 self.leafs.remove(i)
