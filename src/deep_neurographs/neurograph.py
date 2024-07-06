@@ -805,7 +805,7 @@ class NeuroGraph(nx.Graph):
         return cardinality
 
     def to_zipped_swcs(self, zip_path, color=None):
-        n_components = gutils.count_components(self)
+        n_components = utils.reformat_number(gutils.count_components(self))
         print(f"Writing {n_components} swcs to local machine!")
         with zipfile.ZipFile(zip_path, "w") as zipf:
             for nodes in nx.connected_components(self):
@@ -822,21 +822,21 @@ class NeuroGraph(nx.Graph):
 
             # Write entries
             for i, j in nx.dfs_edges(self.subgraph(nodes)):
-                # Initialize
+                # Root entry
                 if n_entries == 0:
                     swc_id = self.nodes[i]["swc_id"]
                     x, y, z = tuple(self.nodes[i]["xyz"])
                     r = self.nodes[i]["radius"]
                     if color == "0.0 1.0 0.0":
-                        r += 2
+                        r += 1.5
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
                     n_entries += 1
 
-                # Create entry
+                # Entry
                 parent = node_to_idx[i]
                 text_buffer, n_entries = self.branch_to_zip(
-                    text_buffer, n_entries, i, j, parent
+                    text_buffer, n_entries, i, j, parent, color
                 )
                 node_to_idx[j] = n_entries
             zipf.writestr(f"{swc_id}.swc", text_buffer.getvalue())
@@ -920,7 +920,7 @@ class NeuroGraph(nx.Graph):
             entry_list.append(entry)
         return entry_list
 
-    def branch_to_zip(self, text_buffer, n_entries, i, j, parent):
+    def branch_to_zip(self, text_buffer, n_entries, i, j, parent, color):
         # Orient branch
         branch_xyz = self.edges[i, j]["xyz"]
         branch_radius = self.edges[i, j]["radius"]
@@ -932,6 +932,8 @@ class NeuroGraph(nx.Graph):
         for k in range(1, len(branch_xyz)):
             x, y, z = tuple(branch_xyz[k])
             r = branch_radius[k]
+            if color == "0.0 1.0 0.0":
+                r += 1.5
             node_id = n_entries + 1
             parent = n_entries if k > 1 else parent
             text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")

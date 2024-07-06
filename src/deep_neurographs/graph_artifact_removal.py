@@ -46,38 +46,65 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
 
     """
     # Initializations
-    components = list(nx.connected_components(neurograph))
     deleted = set()
-    doubles_cnt = 0
-    
-    cnt = 1
-    t0, t1 = utils.init_timers()
-    chunk_size = int(len(components) * 0.02)
+    neurograph.init_kdtree()
+    nodes = list(nx.connected_components(neurograph))
 
     # Main
-    neurograph.init_kdtree()
-    for i, idx in enumerate(np.argsort([len(c) for c in components])):
-        # Determine whether to inspect fragment
-        nodes = components[idx]
-        swc_id = get_swc_id(neurograph, nodes)
-        xyz_arr = inspect_component(neurograph, nodes)
-        if len(xyz_arr) * node_spacing < max_size and swc_id not in deleted:
-            if is_double(neurograph, xyz_arr, swc_id):
-                if output_dir:
-                    neurograph.to_swc(output_dir, nodes, color=COLOR)
-                neurograph = remove_component(neurograph, nodes, swc_id)
-                doubles_cnt += 1
-                deleted.add(swc_id)
+    cnt = 1
+    t0, t1 = utils.init_timers()
+    for i, idx in enumerate(np.argsort([len(c) for c in nodes])):
+        # Determine whether to check component
+        node = utils.sample_singleton(nodes[idx])
+        swc_id = neurograph.nodes[node]["swc_id"]
+        if len(nodes[idx]) == 2 and swc_id not in deleted:
+            fragment_size = len(neurograph.edges[tuple(nodes[idx])]["xyz"])
+            if fragment_size * node_spacing < max_size:
+                # Check doubles criteria
+                n_points = len(neurograph.edges[tuple(nodes[idx])]["xyz"])
+                hits = compute_hits(neurograph, tuple(nodes[idx]), swc_id)
+                if check_doubles_criteria(hits, n_points, swc_id):
+                    if output_dir:
+                        neurograph.to_swc(output_dir, nodes[idx], color=COLOR)
+                    neurograph = delete_nodes(neurograph, nodes[idx], swc_id)
+                    deleted.add(swc_id)
 
         # Update progress bar
-        if i >= cnt * chunk_size:
+        if i >= cnt * len(nodes) * 0.02:
             cnt, t1 = utils.report_progress(
-                i + 1, len(components), chunk_size, cnt, t0, t1
+                i + 1, len(nodes), len(nodes) * 0.02, cnt, t0, t1
             )
-    print("\n# Doubles detected:", doubles_cnt)
+    print("\n# Doubles detected:", len(deleted))
 
 
-def is_double(neurograph, fragment, swc_id_i):
+def compute_hits(neurograph, edge, query_id):
+    hits = dict()
+    for i, xyz in enumerate(neurograph.edges[edge]["xyz"]):
+        # Compute projections
+        best_id = None
+        best_dist = np.inf
+        for hit_xyz in neurograph.query_kdtree(xyz, 15):
+            try:
+                hit_id = neurograph.xyz_to_swc(hit_xyz)
+                if hit_id != query_id:
+                    if dist(hit_xyz, xyz) < best_dist:
+                        best_dist = dist(hit_xyz, xyz)
+                        best_id = hit_id
+            except:
+                pass
+
+        # Store best
+        if best_id is not None:
+            hits = utils.append_dict_value(hits, best_id, best_dist)
+
+        # Check whether to stop
+        if i == 8:
+            if len(hits) == 0:
+                return hits
+    return hits
+
+
+def check_doubles_criteria(hits, n_points, swc_id):
     """
     Determines whether the connected component corresponding to "root" is a
     double of another connected component.
@@ -101,61 +128,35 @@ def is_double(neurograph, fragment, swc_id_i):
         double.
 
     """
-    # Compute projections
-    hits = dict()
-    for xyz_i in fragment:
-        hits_i = dict()
-        for xyz_j in neurograph.query_kdtree(xyz_i, 15):
-            try:
-                swc_id_j = neurograph.xyz_to_swc(xyz_j)
-                if swc_id_i != swc_id_j:
-                    d = dist(xyz_i, xyz_j)
-                    hits_i = upd_hits(hits_i, swc_id_j, d)
-            except:
-                pass
-        if len(hits_i) > 0:
-            best_swc_id = utils.find_best(hits_i, maximize=False)
-            best_dist = hits_i[best_swc_id]
-            hits = utils.append_dict_value(hits, best_swc_id, best_dist)
-
-    # Check criteria
-    for dists in hits.values():
-        percent_hit = len(dists) / len(fragment)
-        std = np.std(dists)
-        if percent_hit > 0.5 and std < 2:
-            return True
-        elif percent_hit > 0.7 and std < 1:
-            return True
+    for hit_id, dists in hits.items():
+        if len(dists) > 5:
+            percent_hit = len(dists) / n_points
+            dist_std = np.std(dists)
+            if percent_hit > 0.5 and dist_std < 2:
+                return True
+            elif percent_hit > 0.75 and dist_std < 2.5:
+                return True
+            """
+            elif len(dists) > 10:
+                dists = np.array(dists)
+                if np.mean(dists[0:10]) < 5:
+                    print(swc_id, hit_id)
+                    print(percent_hit, dist_std)
+                    print(
+                        len(dists),
+                        np.sum(dists < 5),
+                        np.mean(dists),
+                        np.mean(dists[0:10]),
+                        np.sum(dists < 5) / n_points
+                    )
+                    print("")
+            """
     return False
 
 
-def inspect_component(neurograph, nodes):
+def delete_nodes(neurograph, nodes, swc_id):
     """
-    Determines whether to inspect component for doubles.
-
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        Graph to be searched.
-    nodes : iterable
-        Nodes that comprise a connected component.
-
-    Returns
-    -------
-    numpy.ndarray or list
-        Array containing xyz coordinates of nodes.
-
-    """
-    if len(nodes) == 2:
-        i, j = tuple(nodes)
-        return neurograph.edges[i, j]["xyz"]
-    else:
-        return []
-
-
-def remove_component(neurograph, nodes, swc_id):
-    """
-    Removes "nodes" from "neurograph".
+    Deletes "nodes" from "neurograph".
 
     Parameters
     ----------
@@ -210,7 +211,24 @@ def remove_xyz_entries(neurograph, i, j):
 def upd_hits(hits, key, value):
     """
     Updates "hits" by adding ("key", "value") if this item does not exist.
-    Otherwise, checks whether "value" is less than "hits[key"]".
+    Otherwise, checks if "value" is less than "hits[key"]".
+
+    Parameters
+    ----------
+    hits : dict
+        Stores swd_ids of fragments that are within a certain distance a query
+        fragment along with the corresponding distances.
+    key : str
+        swc id of some fragment.
+    value : float
+        Distance in microns that fragment corresponding to "key" is from the
+        query fragment.
+
+    Returns
+    -------
+    dict
+        Updated version of hits.
+
     """
     if key in hits.keys():
         if value < hits[key]:
@@ -244,7 +262,7 @@ def search_along_branch(neurograph, leaf):
     hits = dict()
     swc_id_leaf = neurograph.nodes[leaf]["swc_id"]
     for xyz_leaf, radius in get_branch(neurograph, leaf):
-        for xyz in neurograph.query_kdtree(xyz_leaf, radius + 0.5):
+        for xyz in neurograph.query_kdtree(xyz_leaf, radius + 1):
             try:
                 swc_id = neurograph.xyz_to_swc(xyz)
                 if swc_id != swc_id_leaf:
@@ -263,36 +281,38 @@ def keep_passings(hits):
 
 
 def simple_trim(neurograph, leaf, hits):
-    # Initializations
     swc_id, xyz_coords = unpack_dict(hits)
     i, j = get_edge(neurograph, xyz_coords)
-    if not (neurograph.is_leaf(i) or neurograph.is_leaf(j)):
-        print("trimming:", neurograph.nodes[leaf]["swc_id"])
-        print("not trimming:", swc_id)
-        print("")
-        trim_from_leaf(neurograph, leaf, xyz_coords)
-
-    # Check for significant difference in radii
-    radius_leaf = neurograph.nodes[leaf]["radius"]
-    radius_edge = np.mean(neurograph.edges[i, j]["radius"])
-    if radius_leaf < radius_edge - 1:
-        print("trimming:", neurograph.nodes[leaf]["swc_id"])
-        print("not trimming:", swc_id)
-        trim_from_leaf(neurograph, leaf, xyz_coords)
-    elif radius_edge < radius_leaf - 1:
+    if neurograph.is_leaf(i) or neurograph.is_leaf(j):
+        # Check for significant difference in radii
         i = get_endpoint(neurograph, leaf, (i, j))
-        #trim_from_edge(neurograph, i, (i, j))
-    else:
-        # Determine smaller fragment
-        leaf_component_size = len(gutils.get_component(neurograph, leaf))
-        edge_component_size = len(gutils.get_component(neurograph, i))
-        if leaf_component_size < edge_component_size:
+        radius_leaf = neurograph.nodes[leaf]["radius"]
+        radius_edge = neurograph.nodes[i]["radius"]
+        
+        if radius_leaf < radius_edge - 1 or radius_leaf / radius_edge < 0.75:
+            print("Case 1:")
             print("trimming:", neurograph.nodes[leaf]["swc_id"])
             print("not trimming:", swc_id)
-            trim_from_leaf(neurograph, leaf, xyz_coords)
+            neurograph = trim_from_leaf(neurograph, leaf, xyz_coords)
+        elif radius_edge < radius_leaf - 1 or radius_edge / radius_leaf < 0.75:
+            print("Case 2:")
+            print("trimming:", neurograph.nodes[leaf]["swc_id"])
+            print("not trimming:", swc_id)
+            neurograph = trim_from_leaf(neurograph, i, xyz_coords)
         else:
-            i = get_endpoint(neurograph, leaf, (i, j))
-            #trim_from_edge(neurograph, i, (i, j))
+            # Determine smaller fragment
+            leaf_component_size = len(gutils.get_component(neurograph, leaf))
+            edge_component_size = len(gutils.get_component(neurograph, i))
+            if leaf_component_size < edge_component_size:
+                print("Case 3a:")
+                print("trimming:", neurograph.nodes[leaf]["swc_id"])
+                print("not trimming:", swc_id)
+                neurograph = trim_from_leaf(neurograph, leaf, xyz_coords)
+            else:
+                print("Case 3b:")
+                print("trimming:", neurograph.nodes[leaf]["swc_id"])
+                print("not trimming:", swc_id)
+                neurograph = trim_from_leaf(neurograph, i, xyz_coords)
     return neurograph
 
 
@@ -310,12 +330,15 @@ def trim_from_leaf(neurograph, leaf, xyz_coords):
 
     # Determine points to trim
     idx = 0
+    zipped_branch = get_branch(neurograph, leaf)
     while len(xyz_coords) > 0:
-        for xyz_query, radius in get_branch(neurograph, leaf):
+        for xyz_query, radius in zipped_branch:
             for xyz in neurograph.query_kdtree(xyz_query, radius + 0.5):
                 if tuple(xyz) in xyz_coords:
                     xyz_coords.remove(tuple(xyz))
         idx += 1
+        if idx > len(neurograph.edges[leaf, j]["xyz"]):
+            break
     xyz_coords = neurograph.oriented_edge((leaf, j), leaf)
     idx = min(len(xyz_coords), idx + 2)
 
@@ -331,10 +354,6 @@ def trim_from_leaf(neurograph, leaf, xyz_coords):
     return neurograph
 
 
-def trim_from_edge(neurograph, leaf, xyz_coords):
-    pass
-
-
 def trim(neurograph, leaf, j, xyz_coords, idx):
     e = (leaf, j)
     neurograph.nodes[leaf]["xyz"] = xyz_coords[idx]
@@ -344,27 +363,6 @@ def trim(neurograph, leaf, j, xyz_coords, idx):
 
  
 # --- utils ---
-def get_swc_id(neurograph, nodes):
-    """
-    Gets the swc id corresponding to "nodes".
-
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        Graph containing "nodes".
-    nodes : list[int]
-        Nodes to be checked.
-
-    Returns
-    -------
-    str
-        swc id of "nodes".
-
-    """
-    i = utils.sample_singleton(nodes)
-    return neurograph.nodes[i]["swc_id"]
-
-
 def get_branch(neurograph, i):
     """
     Gets the xyz coordinates of the branch emanating from "i".
