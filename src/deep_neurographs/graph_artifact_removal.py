@@ -8,6 +8,9 @@ Module that removes doubled fragments and trims branches that pass by each
 other from a NeuroGraph.
 
 """
+import sys
+from time import time
+
 import networkx as nx
 import numpy as np
 
