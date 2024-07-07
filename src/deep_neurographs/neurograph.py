@@ -310,12 +310,13 @@ class NeuroGraph(nx.Graph):
         self.set_proposals_per_leaf(proposals_per_leaf)
 
         # Main
-        self = generate_proposals.run(
+        generate_proposals.run(
             self,
             search_radius,
             complex_bool=complex_bool,
             long_range_proposals=long_range_proposals,
         )
+        # absorb reducible nodes
 
         # Finish
         self.init_kdtree(node_type="junction")
@@ -668,6 +669,26 @@ class NeuroGraph(nx.Graph):
             branches.append(branch)
         return branches
 
+    def get_branch(self, leaf, key="xyz"):
+        """
+        Gets the xyz coordinates or radii contained in the edge emanating from
+        "leaf".
+
+        Parameters
+        ----------
+        leaf : int
+            Leaf node.
+
+        Returns
+        ----------
+        numpy.ndarray
+            xyz coordinates or radii contained in the edge emanating from
+            "leaf".
+
+        """
+        assert self.is_leaf(leaf)
+        return self.get_branches(leaf, key=key)[0]
+
     def get_other_nb(self, i, j):
         """
         Gets the other neighbor of node "i" which is not "j" such that "j" is
@@ -755,6 +776,10 @@ class NeuroGraph(nx.Graph):
 
         """
         return True if self.degree[i] == 1 else False
+
+    def leaf_neighbor(self, i):
+        assert self.is_leaf(i)
+        return list(self.neighbors(i))[0]
 
     def get_edge_attr(self, edge, key):
         xyz_arr = gutils.get_edge_attr(self, edge, key)
