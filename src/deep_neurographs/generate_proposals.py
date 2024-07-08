@@ -220,6 +220,9 @@ def trim_endpoints(neurograph, i, j):
         tangent_i = compute_tangent(branch_i, idx_i)
         tangent_j = compute_tangent(branch_j, idx_j)
         if np.dot(tangent_i, tangent_j) < -0.5:
+            print("Location:", neurograph.nodes[i]["xyz"])
+            print(geometry.dist(branch_i[0], branch_j[0]), "-->", min(d1, d2))
+            print("")
             if d1 < d2:
                 trim_to_idx(neurograph, i, idx_i)
                 trim_to_idx(neurograph, j, idx_j)
