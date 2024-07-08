@@ -957,8 +957,8 @@ class NeuroGraph(nx.Graph):
         for k in range(1, len(branch_xyz)):
             x, y, z = tuple(branch_xyz[k])
             r = branch_radius[k]
-            if color == "0.0 1.0 0.0":
-                r += 1.5
+            if color != "1.0 0.0 0.0":
+                r += 1
             node_id = n_entries + 1
             parent = n_entries if k > 1 else parent
             text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
