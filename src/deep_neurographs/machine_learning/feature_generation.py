@@ -309,7 +309,7 @@ def read_intensities(img, coords):
         start = xyz - 1
         end = xyz + 2
         val = np.max(
-            img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+            img[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
         )
         profile.append(val)
     return profile

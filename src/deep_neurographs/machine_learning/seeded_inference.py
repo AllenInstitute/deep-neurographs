@@ -109,7 +109,8 @@ def init_seed_graph(neurograph, proposals, root):
 def predict(
     neurograph,
     seed_graph,
-    graph, model,
+    graph,
+    model,
     model_type,
     img_path,
     labels_path,

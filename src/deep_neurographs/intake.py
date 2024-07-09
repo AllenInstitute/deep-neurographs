@@ -262,7 +262,7 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
             result = process.result()
             swc_dicts.extend(result)
         except Exception as e:
-            print(type(e), e)       
+            print(type(e), e)
     return swc_dicts
 
 

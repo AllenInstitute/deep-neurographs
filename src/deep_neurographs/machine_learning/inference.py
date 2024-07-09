@@ -83,7 +83,7 @@ def run(
     progress_cnt = 1
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_batches * 0.02), 1)
-    for i, batch in enumerate(batches):        
+    for i, batch in enumerate(batches):
         # Prediction
         proposals_i = [proposals[j] for j in batch]
         accepts_i, graph = predict(
