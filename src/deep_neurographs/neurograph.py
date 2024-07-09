@@ -280,6 +280,7 @@ class NeuroGraph(nx.Graph):
         proposals_per_leaf=3,
         optimize=False,
         optimization_depth=10,
+        trim_endpoints_bool=False,
     ):
         """
         Generates proposals from leaf nodes in "self".
@@ -302,6 +303,8 @@ class NeuroGraph(nx.Graph):
             default is False.
         optimization_depth : int, optional
             Depth to check during optimization. The default is False.
+        trim_endpoints_bool : bool, optional
+            Indication of whether to trim endpoints. The default is False.
 
         Returns
         -------
@@ -316,6 +319,7 @@ class NeuroGraph(nx.Graph):
             search_radius,
             complex_bool=complex_bool,
             long_range_bool=long_range_bool,
+            trim_endpoints_bool=trim_endpoints_bool,
         )
 
         # Finish
@@ -403,6 +407,28 @@ class NeuroGraph(nx.Graph):
         self.nodes[i]["proposals"].remove(j)
         self.nodes[j]["proposals"].remove(i)
         del self.proposals[proposal]
+
+    def is_single_proposal(self, proposal):
+        """
+        Determines whether "proposal" is the only proposal generated for the
+        corresponding nodes.
+
+        Parameters
+        ----------
+        proposal : frozenset
+            Pair of node ids corresponding to a proposal.
+
+        Returns
+        -------
+        bool
+            Indiciation of "proposal" is the only proposal generated for the
+        corresponding nodes.
+
+        """
+        i, j = tuple(proposal)
+        single_i = len(self.nodes[i]["proposals"]) == 1
+        single_j = len(self.nodes[j]["proposals"]) == 1
+        return single_i and single_j
 
     def is_invalid_proposal(self, i, leaf, complex_proposal_bool):
         skip_soma = self.is_soma(i) and self.is_soma(leaf)

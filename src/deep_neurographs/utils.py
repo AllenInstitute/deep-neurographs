@@ -745,6 +745,20 @@ def numpy_to_hashable(arr):
 
 
 def reformat_number(number):
+    """
+    Reformats large number to have commas.
+
+    Parameters
+    ----------
+    number : float
+        Number to be reformatted.
+
+    Returns
+    -------
+    str
+        Reformatted number.
+
+    """
     return f"{number:,}"
 
 

@@ -121,9 +121,12 @@ def check_doubles_criteria(hits, n_points):
     """
     for dists in hits.values():
         if len(dists) > 5:
-            if len(dists) / n_points > 0.5 and np.std(dists) < 2:
+            percent_hit = len(dists) / n_points
+            if percent_hit > 0.5 and np.std(dists) < 2:
                 return True
-            elif len(dists) / n_points > 0.75 and np.std(dists) < 2.5:
+            elif percent_hit > 0.7 and np.std(dists) < 2.5:
+                return True
+            elif percent_hit > 0.7 and np.median(dists) < 5:
                 return True
     return False
 
