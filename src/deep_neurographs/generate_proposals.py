@@ -238,26 +238,6 @@ def run_trimming(neurograph):
     print("# Endpoints Trimmed:", n_endpoints_trimmed)
 
 
-# --- Trim Endpoints ---
-def run_trimming(neurograph):
-    # Check whether to trim
-    if len(candidates) == 1 and neurograph.is_leaf(node):
-        # Check whether node is isolated
-        if len(neurograph.nodes[node]["proposals"]) != 1:
-            pass
-        else:
-            candidates = get_candidates(neurograph, node, 1.5 * radius)
-            if len(candidates) != 1:
-                pass
-
-        # Trim
-        trim_bool = trim_endpoints(neurograph, leaf, node)
-        if trim_bool:
-            n_endpoints_trimmed += 1
-            leafs.discard(node)
-    print("# Endpoints Trimmed:", n_endpoints_trimmed)
-
-
 def trim_endpoints(neurograph, i, j):
     # Initializations
     branch_i = neurograph.get_branch(i)
