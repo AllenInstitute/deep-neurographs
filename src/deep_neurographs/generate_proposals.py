@@ -72,7 +72,7 @@ def run(
         # Parse candidates
         for xyz in candidates:
             # Check whether candidate is valid
-            neurograph, i = get_conection(neurograph, leaf, xyz)
+            i = get_conection(neurograph, leaf, xyz)
             if neurograph.is_invalid_proposal(leaf, i, complex_bool):
                 continue
 
@@ -131,7 +131,7 @@ def get_candidates(neurograph, kdtree, leaf, radius, max_candidates):
             elif geometry.dist(leaf_xyz, xyz) < candidates[swc_id]["dist"]:
                 d = geometry.dist(leaf_xyz, xyz)
                 candidates[swc_id] = {"dist": d, "xyz": tuple(xyz)}
-    
+
     # Check whether to filter
     if max_candidates < 0:
         return [] if len(candidates) > 1 else list_candidates_xyz(candidates)
@@ -170,13 +170,31 @@ def get_best(candidates, max_candidates):
 
 
 def get_conection(neurograph, leaf, xyz):
+    """
+    Gets the node that proposal with leaf will connect to.
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph containing "leaf".
+    leaf : int
+        Leaf node.
+    xyz : numpy.ndarray
+        xyz coordinate.
+
+    Returns
+    -------
+    int
+        Node id.
+
+    """
     edge = neurograph.xyz_to_edge[xyz]
     node, d = get_closer_endpoint(neurograph, edge, xyz)
     if d > ENDPOINT_DIST:
         attrs = neurograph.get_edge_data(*edge)
         idx = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0][0]
         node = neurograph.split_edge(edge, attrs, idx)
-    return neurograph, node
+    return node
 
 
 def get_closer_endpoint(neurograph, edge, xyz):
@@ -204,6 +222,26 @@ def get_closer_endpoint(neurograph, edge, xyz):
     return (i, d_i) if d_i < d_j else (j, d_j)
 
             
+# --- Trim Endpoints ---
+def run_trimming(neurograph):
+    # Check whether to trim
+    if len(candidates) == 1 and neurograph.is_leaf(node):
+        # Check whether node is isolated
+        if len(neurograph.nodes[node]["proposals"]) != 1:
+            pass
+        else:
+            candidates = get_candidates(neurograph, node, 1.5 * radius)
+            if len(candidates) != 1:
+                pass
+
+        # Trim
+        trim_bool = trim_endpoints(neurograph, leaf, node)
+        if trim_bool:
+            n_endpoints_trimmed += 1
+            leafs.discard(node)
+    print("# Endpoints Trimmed:", n_endpoints_trimmed)
+
+
 # --- Trim Endpoints ---
 def run_trimming(neurograph):
     # Check whether to trim
