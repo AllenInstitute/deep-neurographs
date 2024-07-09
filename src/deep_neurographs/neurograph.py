@@ -275,8 +275,8 @@ class NeuroGraph(nx.Graph):
     def generate_proposals(
         self,
         search_radius,
-        complex_bool=True,
-        long_range_proposals=False,
+        complex_bool=False,
+        long_range_bool=False,
         proposals_per_leaf=3,
         optimize=False,
         optimization_depth=10,
@@ -288,37 +288,38 @@ class NeuroGraph(nx.Graph):
         ----------
         search_radius : float
             Search radius used to generate proposals.
-        complex_bool : bool
-            Indication of whether to generate complex proposals.
-        long_range_proposals : bool
-            Indication of whether to generate long range proposals.
-        proposals_per_leaf : int
-            Maximum number of proposals generated for each leaf.
-        optimize : bool
-            Indication of whether to optimize proposal alignment to image.
-        optimization_depth : int
-            Depth to check during optimization.
+        complex_bool : bool, optional
+            Indication of whether to generate complex proposals. The default
+            is False.
+        long_range_bool : bool, optional
+            Indication of whether to generate long range proposals. The
+            default is False.
+        proposals_per_leaf : int, optional
+            Maximum number of proposals generated for each leaf. The default
+            is False.
+        optimize : bool, optional
+            Indication of whether to optimize proposal alignment to image. The
+            default is False.
+        optimization_depth : int, optional
+            Depth to check during optimization. The default is False.
 
         Returns
         -------
         None
 
         """
-        # Initializations
-        self.init_kdtree()
+        # Main
         self.reset_proposals()
         self.set_proposals_per_leaf(proposals_per_leaf)
-
-        # Main
         generate_proposals.run(
             self,
             search_radius,
             complex_bool=complex_bool,
-            long_range_proposals=long_range_proposals,
+            long_range_bool=long_range_bool,
         )
-        # absorb reducible nodes
 
         # Finish
+        # absorb reducible nodes
         self.init_kdtree(node_type="junction")
         self.init_kdtree(node_type="leaf")
         self.init_kdtree(node_type="proposal")
@@ -384,6 +385,30 @@ class NeuroGraph(nx.Graph):
             "xyz": np.array([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
         }
 
+    def remove_proposal(self, proposal):
+        """
+        Removes an existing proposal between two nodes.
+
+        Parameters
+        ----------
+        proposal : frozenset
+            Pair of node ids corresponding to a proposal.
+
+        Returns
+        -------
+        None
+
+        """
+        i, j = tuple(proposal)
+        self.nodes[i]["proposals"].remove(j)
+        self.nodes[j]["proposals"].remove(i)
+        del self.proposals[proposal]
+
+    def is_invalid_proposal(self, i, leaf, complex_proposal_bool):
+        skip_soma = self.is_soma(i) and self.is_soma(leaf)
+        skip_complex = self.degree[i] > 1 and not complex_proposal_bool
+        return skip_soma or skip_complex
+
     def init_targets(self, target_neurograph):
         target_neurograph.init_kdtree()
         self.target_edges = init_targets(target_neurograph, self)
@@ -413,19 +438,38 @@ class NeuroGraph(nx.Graph):
         None
 
         """
+        # Build KD-Tree
         err_msg = "Invalid node_type in self.query_kdtree!"
         assert node_type in [None, "proposal", "leaf", "junction"], err_msg
         if node_type == "leaf":
-            xyz_list = [self.nodes[leaf]["xyz"] for leaf in self.leafs]
-            self.leaf_kdtree = KDTree(xyz_list)
+            self.leaf_kdtree = KDTree(self.get_node_xyz(self.leafs))
         elif node_type == "junction":
-            xyz_list = [self.nodes[j]["xyz"] for j in self.junctions]
-            nonempty = len(xyz_list) > 0
-            self.junction_kdtree = KDTree(xyz_list) if nonempty else None
+            self.junction_kdtree = KDTree(self.get_node_xyz(self.junctions))
         elif node_type == "proposal":
             self.proposal_kdtree = KDTree(list(self.xyz_to_proposal.keys()))
         else:
             self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
+
+    def get_node_xyz(self, nodes):
+        """
+        Builds an array with all of the xyz coordinates from a subset of
+        nodes (e.g. leafs or junctions).
+
+        Parameters
+        ----------
+        nodes : set
+            Subset of nodes.
+
+        Returns
+        -------
+        numpy.ndarray
+            xyz coordiantes of node subset.
+
+        """
+        arr = np.zeros((len(nodes), 3))
+        for idx, i in enumerate(list(nodes)):
+            arr[idx] = self.nodes[i]["xyz"]
+        return arr
 
     def query_kdtree(self, xyz, d, node_type=None):
         """
@@ -615,13 +659,13 @@ class NeuroGraph(nx.Graph):
                 queue.append(j)
 
     # --- Utils ---
-    def is_soma(self, swc_id):
+    def is_soma(self, node_or_swc):
         """
         Determines whether "swc_id" corresponds to a soma.
 
         Parameters
         ----------
-        swc_id : str
+        node_or_swc : str
             swc id to be checked.
 
         Returns
@@ -630,7 +674,12 @@ class NeuroGraph(nx.Graph):
             Indication of whether "swc_id" corresponds to a soma.
 
         """
-        return swc_id in self.soma_ids.keys()
+        assert type(node_or_swc) in [int, str]
+        if type(node_or_swc) is int:
+            swc_id = self.nodes[node_or_swc]["swc_id"]
+            return swc_id in self.soma_ids.keys()
+        else:
+            return node_or_swc in self.soma_ids.keys()
 
     def dist(self, i, j):
         """
