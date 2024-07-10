@@ -46,6 +46,8 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
     deleted = set()
     neurograph.init_kdtree()
     nodes = list(nx.connected_components(neurograph))
+    if output_dir:
+        utils.mkdir(output_dir, delete=True)
 
     # Main
     cnt = 1
@@ -80,7 +82,7 @@ def compute_hits(neurograph, edge, query_id):
         # Compute projections
         best_id = None
         best_dist = np.inf
-        for hit_xyz in neurograph.query_kdtree(xyz, 15):
+        for hit_xyz in neurograph.query_kdtree(xyz, 10):
             try:
                 hit_id = neurograph.xyz_to_swc(hit_xyz)
                 if hit_id != query_id:
@@ -120,13 +122,11 @@ def check_doubles_criteria(hits, n_points):
 
     """
     for dists in hits.values():
-        if len(dists) > 5:
+        if len(dists) > 10:
             percent_hit = len(dists) / n_points
             if percent_hit > 0.5 and np.std(dists) < 2:
                 return True
-            elif percent_hit > 0.7 and np.std(dists) < 2.5:
-                return True
-            elif percent_hit > 0.7 and np.median(dists) < 5:
+            elif percent_hit > 0.75 and np.std(dists) < 2.5:
                 return True
     return False
 
