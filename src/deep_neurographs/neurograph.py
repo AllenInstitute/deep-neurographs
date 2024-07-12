@@ -314,7 +314,7 @@ class NeuroGraph(nx.Graph):
         # Main
         self.reset_proposals()
         self.set_proposals_per_leaf(proposals_per_leaf)
-        generate_proposals.run(
+        self = generate_proposals.run(
             self,
             search_radius,
             complex_bool=complex_bool,
@@ -430,7 +430,7 @@ class NeuroGraph(nx.Graph):
         single_j = len(self.nodes[j]["proposals"]) == 1
         return single_i and single_j
 
-    def is_invalid_proposal(self, i, leaf, complex_proposal_bool):
+    def is_invalid_proposal(self, leaf, i, complex_proposal_bool):
         skip_soma = self.is_soma(i) and self.is_soma(leaf)
         skip_complex = self.degree[i] > 1 and not complex_proposal_bool
         return skip_soma or skip_complex
