@@ -207,12 +207,12 @@ def plot_edges(graph, edges, color=None, line_width=3.5):
     )
     for i, j in edges:
         trace = go.Scatter3d(
-            x=graph.edges[(i, j)]["xyz"][:, 0],
-            y=graph.edges[(i, j)]["xyz"][:, 1],
-            z=graph.edges[(i, j)]["xyz"][:, 2],
+            x=graph.edges[i, j]["xyz"][:, 0],
+            y=graph.edges[i, j]["xyz"][:, 1],
+            z=graph.edges[i, j]["xyz"][:, 2],
             mode="lines",
             line=line,
-            name="({},{})".format(i, j),
+            name=f"({i},{j})",
         )
         traces.append(trace)
     return traces
