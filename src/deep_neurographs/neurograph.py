@@ -430,10 +430,13 @@ class NeuroGraph(nx.Graph):
         single_j = len(self.nodes[j]["proposals"]) == 1
         return single_i and single_j
 
-    def is_invalid_proposal(self, leaf, i, complex_proposal_bool):
-        skip_soma = self.is_soma(i) and self.is_soma(leaf)
-        skip_complex = self.degree[i] > 1 and not complex_proposal_bool
-        return skip_soma or skip_complex
+    def is_valid_proposal(self, leaf, i, complex_proposal_bool):
+        if i is not None:
+            skip_soma = self.is_soma(i) and self.is_soma(leaf)
+            skip_complex = self.degree[i] > 1 and not complex_proposal_bool
+            return not (skip_soma or skip_complex)
+        else:
+            return False
 
     def init_targets(self, target_neurograph):
         target_neurograph.init_kdtree()
