@@ -14,7 +14,6 @@ import numpy as np
 
 from deep_neurographs import geometry
 
-ENDPOINT_DIST = 15
 LONG_RANGE_FACTOR = 2
 TRIM_SEARCH_DIST = 10
 
@@ -54,31 +53,35 @@ def run(
     connections = dict()
     neurograph.init_kdtree()
     neurograph.init_kdtree(node_type="leaf")
-    if complex_bool or trim_endpoints_bool:
-        kdtree = neurograph.kdtree
-    else:
-        kdtree = neurograph.leaf_kdtree
+    kdtree = neurograph.kdtree if complex_bool else neurograph.leaf_kdtree
 
     # Main
-    limit = neurograph.proposals_per_leaf
+    long_radius = radius * LONG_RANGE_FACTOR
+    max_proposals = neurograph.proposals_per_leaf
     for leaf in neurograph.leafs:
-        # Generate candidates
-        leaf_swc_id = neurograph.nodes[leaf]["swc_id"]
-        candidates = get_candidates(neurograph, kdtree, leaf, radius, limit)
+        # Generate potential proposals
+        candidates = get_candidates(
+            neurograph,
+            leaf,
+            kdtree,
+            radius,
+            max_proposals,
+            complex_bool,
+        )
         if len(candidates) == 0 and long_range_bool:
-            print("trying long range")
             candidates = get_candidates(
-                neurograph, kdtree, leaf, radius * LONG_RANGE_FACTOR, -1
+                neurograph,
+                leaf,
+                kdtree,
+                long_radius,
+                -1,
+                True,
             )
 
-        # Parse candidates
-        for xyz in candidates:
-            # Check whether candidate is valid
-            i = get_conection(neurograph, leaf, xyz)
-            if neurograph.is_invalid_proposal(leaf, i, complex_bool):
-                continue
-            
+        # Determine which potential proposals to keep
+        for i in candidates:
             # Check whether connection between components already exists
+            leaf_swc_id = neurograph.nodes[leaf]["swc_id"]
             pair_id = frozenset((leaf_swc_id, neurograph.nodes[i]["swc_id"]))
             if pair_id in connections.keys():
                 cur_proposal = connections[pair_id]
@@ -99,7 +102,22 @@ def run(
     return neurograph
 
 
-def get_candidates(neurograph, kdtree, leaf, radius, max_candidates):
+def get_candidates(neurograph, leaf, kdtree, radius, max_proposals, complex_bool):
+    # Generate candidates
+    candidates = list()
+    for xyz in search_kdtree(neurograph, leaf, kdtree, radius, max_proposals):
+        i = get_connecting_node(neurograph, leaf, xyz, radius, complex_bool)
+        if neurograph.is_valid_proposal(leaf, i, complex_bool):
+            candidates.append(i)
+
+    # Process the results
+    if max_proposals < 0 and len(candidates) == 1:
+        return candidates if neurograph.is_leaf(candidates[0]) else [] 
+    else:
+        return [] if max_proposals < 0 else candidates 
+
+
+def search_kdtree(neurograph, leaf, kdtree, radius, max_proposals):
     """
     Generates proposals for node "leaf" in "neurograph" by finding candidate
     xyz points on distinct connected components nearby.
@@ -114,7 +132,7 @@ def get_candidates(neurograph, kdtree, leaf, radius, max_candidates):
         Leaf node that proposals are to be generated from.
     radius : float
         Maximum Euclidean distance between endpoints of proposal.
-    max_candidates : bool
+    max_proposals : int
         Maximum number of proposals that can be generated from a leaf node.
 
     Returns
@@ -137,13 +155,13 @@ def get_candidates(neurograph, kdtree, leaf, radius, max_candidates):
                 candidates[swc_id] = {"dist": d, "xyz": tuple(xyz)}
 
     # Check whether to filter
-    if max_candidates < 0:
+    if max_proposals < 0:
         return [] if len(candidates) > 1 else list_candidates_xyz(candidates)
     else:
-        return get_best(candidates, max_candidates)
+        return get_best(candidates, max_proposals)
 
 
-def get_best(candidates, max_candidates):
+def get_best(candidates, max_proposals):
     """
     Gets the best candidates to become edge proposals given a dictionary
     containing candidates.
@@ -153,7 +171,7 @@ def get_best(candidates, max_candidates):
     candidates : dict
         Dictionary that maps swc ids to a dictionary containing a distance and
         xyz coordinate.
-    max_candidates : int
+    max_proposals : int
         Maximum number of proposals that can be generated from a leaf node.
 
     Returns
@@ -162,7 +180,7 @@ def get_best(candidates, max_candidates):
         xyz coordinates of candidates.
 
     """
-    while len(candidates) > max_candidates:
+    while len(candidates) > max_proposals:
         worst_key = None
         for key in candidates.keys():
             if worst_key is None:
@@ -173,7 +191,7 @@ def get_best(candidates, max_candidates):
     return list_candidates_xyz(candidates)
 
 
-def get_conection(neurograph, leaf, xyz):
+def get_connecting_node(neurograph, leaf, xyz, radius, complex_bool):
     """
     Gets the node that proposal with leaf will connect to.
 
@@ -193,12 +211,16 @@ def get_conection(neurograph, leaf, xyz):
 
     """
     edge = neurograph.xyz_to_edge[xyz]
-    node, d = get_closer_endpoint(neurograph, edge, xyz)
-    if d > ENDPOINT_DIST:
-        attrs = neurograph.get_edge_data(*edge)
-        idx = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0][0]
-        node = neurograph.split_edge(edge, attrs, idx)
-    return node
+    node = get_closer_endpoint(neurograph, edge, xyz)
+    if neurograph.dist(leaf, node) < radius:
+        return node
+    else:
+        if complex_bool:
+            attrs = neurograph.get_edge_data(*edge)
+            idx = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0][0]
+            return neurograph.split_edge(edge, attrs, idx)
+        else:
+            return None        
 
 
 def get_closer_endpoint(neurograph, edge, xyz):
@@ -223,7 +245,7 @@ def get_closer_endpoint(neurograph, edge, xyz):
     i, j = tuple(edge)
     d_i = geometry.dist(neurograph.nodes[i]["xyz"], xyz)
     d_j = geometry.dist(neurograph.nodes[j]["xyz"], xyz)
-    return (i, d_i) if d_i < d_j else (j, d_j)
+    return i if d_i < d_j else j
 
 
 # --- Trim Endpoints ---
@@ -327,8 +349,8 @@ def trim_to_idx(neurograph, i, idx):
 
     # Update edge
     j = neurograph.leaf_neighbor(i)
-    neurograph.edges[i, j]["xyz"] = branch_xyz[idx:-1]
-    neurograph.edges[i, j]["radius"] = branch_radii[idx:-1]
+    neurograph.edges[i, j]["xyz"] = branch_xyz[idx::]
+    neurograph.edges[i, j]["radius"] = branch_radii[idx::]
     for k in range(idx):
         del neurograph.xyz_to_edge[tuple(branch_xyz[k])]
     return neurograph
