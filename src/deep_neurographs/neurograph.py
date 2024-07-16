@@ -314,7 +314,7 @@ class NeuroGraph(nx.Graph):
         # Main
         self.reset_proposals()
         self.set_proposals_per_leaf(proposals_per_leaf)
-        self = generate_proposals.run(
+        self, trimmed_proposals = generate_proposals.run(
             self,
             search_radius,
             complex_bool=complex_bool,
@@ -329,6 +329,8 @@ class NeuroGraph(nx.Graph):
         self.init_kdtree(node_type="proposal")
         if optimize:
             self.run_optimization()
+        return self, trimmed_proposals
+            
 
     def reset_proposals(self):
         """
