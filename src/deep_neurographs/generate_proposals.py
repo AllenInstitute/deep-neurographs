@@ -14,8 +14,8 @@ import numpy as np
 
 from deep_neurographs import geometry
 
-LONG_RANGE_FACTOR = 2
-TRIM_SEARCH_DIST = 10
+LONG_RANGE_FACTOR = 1.5
+TRIM_SEARCH_DIST = 15
 
 
 def run(
@@ -97,9 +97,10 @@ def run(
             connections[pair_id] = frozenset({leaf, i})
 
     # Trim Endpoints (if applicable)
+    trimmed_proposals = list()
     if trim_endpoints_bool:
-        neurograph = run_trimming(neurograph)
-    return neurograph
+        neurograph, trimmed_proposals = run_trimming(neurograph)
+    return neurograph, trimmed_proposals
 
 
 def get_candidates(neurograph, leaf, kdtree, radius, max_proposals, complex_bool):
@@ -251,6 +252,7 @@ def get_closer_endpoint(neurograph, edge, xyz):
 # --- Trim Endpoints ---
 def run_trimming(neurograph):
     n_endpoints_trimmed = 0
+    trimmed_proposals = list()
     for proposal in neurograph.proposals.keys():
         i, j = tuple(proposal)
         is_simple = neurograph.is_simple(proposal)
@@ -259,8 +261,9 @@ def run_trimming(neurograph):
             neurograph, trim_bool = trim_endpoints(neurograph, i, j)
             if trim_bool:
                 n_endpoints_trimmed += 1
+                trimmed_proposals.append(proposal)
     print("# Endpoints Trimmed:", n_endpoints_trimmed)
-    return neurograph
+    return neurograph, trimmed_proposals
 
 
 def trim_endpoints(neurograph, i, j):
@@ -273,29 +276,42 @@ def trim_endpoints(neurograph, i, j):
     idx_jj, idx_ii = trim_endpoints_ordered(branch_j, branch_i)
     d1 = geometry.dist(branch_i[idx_i], branch_j[idx_j])
     d2 = geometry.dist(branch_i[idx_ii], branch_j[idx_jj])
+    if d2 < d1:
+        idx_i = idx_ii
+        idx_j = idx_jj
+    
+    xyz = np.array([14254.111, 10923.638,  9907.275])
+    hit = geometry.dist(xyz, branch_i[0]) < 30 and geometry.dist(xyz, branch_j[0]) < 30
+    if hit:
+        print("node ids:", i, j)
+        print(d1, d2)
 
     # Update branches (if applicable)
+    trim_bool = False
     if min(d1, d2) + 2 < geometry.dist(branch_i[0], branch_j[0]):
-        tangent_i = compute_tangent(branch_i, idx_i)
-        tangent_j = compute_tangent(branch_j, idx_j)
-        if np.dot(tangent_i, tangent_j) < -0.4:
-            if d1 < d2:
-                neurograph = trim_to_idx(neurograph, i, idx_i)
-                neurograph = trim_to_idx(neurograph, j, idx_j)
-            else:
-                neurograph = trim_to_idx(neurograph, i, idx_ii)
-                neurograph = trim_to_idx(neurograph, j, idx_jj)
+        if hit:
+            print("dot", compute_dot(branch_i, branch_j, idx_i, idx_j))
+        if compute_dot(branch_i, branch_j, idx_i, idx_j) < -0.4:
+            neurograph = trim_to_idx(neurograph, i, idx_i)
+            neurograph = trim_to_idx(neurograph, j, idx_j)
             neurograph.proposals[frozenset((i, j))]["xyz"] = np.array([
                 neurograph.nodes[i]["xyz"],
                 neurograph.nodes[j]["xyz"],
             ])
+            if hit:
+                print("trimming", idx_i, idx_j)        
             return neurograph, True
     return neurograph, False
 
 
 def trim_endpoints_ordered(branch_1, branch_2):
+    xyz = np.array([14254.111, 10923.638,  9907.275])
+    hit = geometry.dist(xyz, branch_1[0]) < 30 and geometry.dist(xyz, branch_2[0]) < 30
+
     idx_1 = trim_endpoint(branch_1, branch_2)
     idx_2 = trim_endpoint(branch_2, branch_1[idx_1::])
+    if hit:
+        print("\n\n")
     return idx_1, idx_2
 
 
@@ -304,22 +320,34 @@ def trim_endpoint(branch_1, branch_2):
     path_length = 0
     best_dist = geometry.dist(branch_1[0], branch_2[0])
     best_idx = None
-    trim_search_dist = TRIM_SEARCH_DIST
+    best_upd = False
+    
+    xyz = np.array([14254.111, 10923.638,  9907.275])
+    hit = geometry.dist(xyz, branch_1[0]) < 30 and geometry.dist(xyz, branch_2[0]) < 30
+    if hit:
+        print("here")
+    
     while idx + 1 < len(branch_1):
         idx += 1
         path_length += geometry.dist(branch_1[idx - 1], branch_1[idx])
+        if hit:
+            print(idx, path_length, geometry.dist(branch_1[idx], branch_2[0]))
         if geometry.dist(branch_1[idx], branch_2[0]) < best_dist:
             best_idx = idx
             best_dist = geometry.dist(branch_1[idx], branch_2[0])
+            best_upd = True
+            if hit:
+                print("Improvement =>", idx, best_dist)
 
         # Determine whether to continue trimming
-        if path_length > trim_search_dist:
+        if path_length > TRIM_SEARCH_DIST:
             if best_idx is None:
                 break
-            elif idx - best_idx > 10:
+            elif not best_upd:
                 break
             else:
-                trim_search_dist += 10
+                best_upd = False
+                path_length = 0
     return 0 if best_idx is None else best_idx
 
 
@@ -393,5 +421,11 @@ def compute_tangent(branch, idx):
         Tangent vector of "branch".
 
     """
-    end = min(idx + 10, len(branch))
+    end = min(idx + 20, len(branch))
     return geometry.compute_tangent(branch[idx:end])
+
+
+def compute_dot(branch_1, branch_2, idx_1, idx_2):
+    tangent_1 = compute_tangent(branch_1, idx_1)
+    tangent_2 = compute_tangent(branch_2, idx_2)
+    return np.dot(tangent_1, tangent_2)

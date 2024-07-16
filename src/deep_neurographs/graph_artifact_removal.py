@@ -16,7 +16,6 @@ from deep_neurographs import utils
 from deep_neurographs.geometry import dist
 
 COLOR = "1.0 0.0 0.0"
-MAX_DEPTH = 16
 
 
 # --- Doubles Removal ---
@@ -82,7 +81,7 @@ def compute_hits(neurograph, edge, query_id):
         # Compute projections
         best_id = None
         best_dist = np.inf
-        for hit_xyz in neurograph.query_kdtree(xyz, 10):
+        for hit_xyz in neurograph.query_kdtree(xyz, 15):
             try:
                 hit_id = neurograph.xyz_to_swc(hit_xyz)
                 if hit_id != query_id:

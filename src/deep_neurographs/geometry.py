@@ -129,6 +129,11 @@ def compute_tangent(xyz):
     else:
         U, S, VT = compute_svd(xyz)
         tangent = VT[0]
+        
+        _, _, VT = compute_svd([xyz[0], xyz[-1]])
+        tangent_2pts = VT[0]
+        if np.dot(tangent, tangent_2pts) < 0:
+            tangent *= -1
     return tangent / np.linalg.norm(tangent)
 
 

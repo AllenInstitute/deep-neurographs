@@ -359,7 +359,7 @@ def proposal_skeletal(neurograph, proposals, search_radius):
         i, j = tuple(proposal)
         features[proposal] = np.concatenate(
             (
-                neurograph.proposal_length(proposal) / 2,
+                neurograph.proposal_length(proposal),
                 neurograph.degree[i],
                 neurograph.degree[j],
                 len(neurograph.nodes[i]["proposals"]),
