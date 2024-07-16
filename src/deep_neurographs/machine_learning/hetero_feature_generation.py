@@ -284,7 +284,7 @@ def get_leaf_profile_path(neurograph, i):
 
     """
     j = list(neurograph.neighbors(i))[0]
-    return get_profile_path(neurograph.orient_edge((i, j), i, key="xyz"))
+    return get_profile_path(neurograph.oriented_edge((i, j), i, key="xyz"))
 
 
 def get_junction_profile_path(neurograph, i):
@@ -306,8 +306,8 @@ def get_junction_profile_path(neurograph, i):
     """
     # Get branches
     nbs = list(neurograph.neighbors(i))
-    xyz_list_1 = neurograph.orient_edge((i, nbs[0]), i, key="xyz")
-    xyz_list_2 = neurograph.orient_edge((i, nbs[1]), i, key="xyz")
+    xyz_list_1 = neurograph.oriented_edge((i, nbs[0]), i, key="xyz")
+    xyz_list_2 = neurograph.oriented_edge((i, nbs[1]), i, key="xyz")
 
     # Get profile paths
     path_1 = get_profile_path(xyz_list_1)

@@ -459,7 +459,7 @@ def generate_branch_features(neurograph):
     for edge in neurograph.edges:
         i, j = tuple(edge)
         features[frozenset(edge)] = np.concatenate(
-            (1, np.zeros((32))), axis=None
+            (1, np.zeros((33))), axis=None
         )
     return features
 
