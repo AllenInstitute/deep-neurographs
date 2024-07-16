@@ -212,7 +212,7 @@ class NeuroGraph(nx.Graph):
         )
         for xyz in attrs["xyz"][idxs]:
             self.xyz_to_edge[tuple(xyz)] = edge
-
+    """
     def absorb_node(self, i, nb_1, nb_2):
         # Get attributes
         xyz = self.get_branches(i, key="xyz")
@@ -227,7 +227,7 @@ class NeuroGraph(nx.Graph):
             radius=np.concatenate((radius[0], np.flip(radius[1]))),
             swc_id=self.nodes[nb_1]["swc_id"],
         )
-
+    """
     def split_edge(self, edge, attrs, idx):
         """
         Splits "edge" into two distinct edges by making the subnode at "idx" a
@@ -907,6 +907,7 @@ class NeuroGraph(nx.Graph):
                     queue.append((j, k))
         return cardinality
 
+    # --- write graph to swcs ---
     def to_zipped_swcs(self, zip_path, color=None):
         n_components = utils.reformat_number(gutils.count_components(self))
         print(f"Writing {n_components} swcs to local machine!")
@@ -1043,6 +1044,7 @@ class NeuroGraph(nx.Graph):
             n_entries += 1
         return text_buffer, n_entries
 
+    """
     def near_proposal(self, root, depth):
         # Check root
         if len(self.nodes[root]["proposals"]) > 0:
@@ -1053,3 +1055,4 @@ class NeuroGraph(nx.Graph):
             if len(self.nodes[j]["proposals"]) > 0:
                 return True
         return False
+    """

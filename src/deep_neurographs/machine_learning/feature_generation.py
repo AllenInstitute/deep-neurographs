@@ -359,7 +359,7 @@ def proposal_skeletal(neurograph, proposals, search_radius):
         i, j = tuple(proposal)
         features[proposal] = np.concatenate(
             (
-                neurograph.proposal_length(proposal) / 2,
+                neurograph.proposal_length(proposal),
                 neurograph.degree[i],
                 neurograph.degree[j],
                 len(neurograph.nodes[i]["proposals"]),
@@ -407,7 +407,7 @@ def get_avg_radii(neurograph, proposal):
 def avg_radius(radii_list):
     avg = 0
     for radii in radii_list:
-        end = min(16, len(radii) - 1)
+        end = max(min(16, len(radii) - 1), 1)
         avg += np.mean(radii[0:end]) / len(radii_list)
     return avg
 
