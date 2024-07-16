@@ -30,6 +30,8 @@ CONNECTOR_LENGTH = 8
 # --- Build graph wrappers ---
 def build_neurograph_from_local(
     anisotropy=[1.0, 1.0, 1.0],
+    swc_dir=None,
+    swc_paths=None,
     img_patch_origin=None,
     img_patch_shape=None,
     img_path=None,
@@ -97,8 +99,8 @@ def build_neurograph_from_local(
     # Process swc files
     assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
     img_bbox = utils.get_img_bbox(img_patch_origin, img_patch_shape)
-    paths = utils.list_paths(swc_dir, ext=".swc") if swc_dir else swc_paths
-    swc_dicts, paths = process_local_paths(
+    paths = get_paths(swc_dir) if swc_dir else swc_paths
+    swc_dicts = process_local_paths(
         paths, anisotropy=anisotropy, min_size=min_size, img_bbox=img_bbox
     )
 
