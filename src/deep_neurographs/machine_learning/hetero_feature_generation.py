@@ -332,6 +332,8 @@ def get_profile_path(xyz_list):
 def get_node_profile_coords(neurograph, profile_path):
     profile_path = transform_path(profile_path)
     bbox = get_bbox(neurograph, profile_path)
+    bbox["min"] = [bbox["min"][i] - 1 for i in range(3)]
+    bbox["max"] = [bbox["max"][i] + 2 for i in range(3)]
     coords = {"bbox": bbox, "profile_path": shift_path(profile_path, bbox)}
     return coords
 
@@ -345,7 +347,7 @@ def transform_path(profile_path):
 
 
 def shift_path(profile_path, bbox):
-    return np.array([xyz - bbox["min"] for xyz in profile_path], dtype=int)
+    return np.array([xyz - bbox["min"] + 1 for xyz in profile_path], dtype=int)
 
 
 def check_degenerate(profile_path):

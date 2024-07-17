@@ -746,7 +746,7 @@ def get_img_bbox(origin, shape):
 def get_minimal_bbox(coord_0, coord_1):
     bbox = {
         "min": [min(coord_0[i], coord_1[i]) for i in range(3)],
-        "max": [max(coord_0[i], coord_1[i]) for i in range(3)],
+        "max": [max(coord_0[i], coord_1[i]) + 1 for i in range(3)],
     }
     return bbox
 

@@ -294,7 +294,6 @@ def get_profile(img, coords, thread_id):
         Image intensity profile.
 
     """
-    coords["bbox"]["max"] = [coords["bbox"]["max"][i] + 1 for i in range(3)]
     chunk = img_utils.read_tensorstore_with_bbox(img, coords["bbox"])
     chunk = img_utils.normalize(chunk)
     profile = read_intensities(chunk, coords)
