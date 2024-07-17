@@ -333,10 +333,11 @@ class HeteroGraphDataset:
 
         """
         attrs = []
-        for i in range(self.data[edge_type].edge_index.size(1)):
-            e1, e2 = self.data[edge_type].edge_index[:, i]
-            v = node_intersection(idx_map, e1, e2)
-            attrs.append(x_nodes[v])
+        if self.data[edge_type].edge_index.size(0) > 0:
+            for i in range(self.data[edge_type].edge_index.size(1)):
+                e1, e2 = self.data[edge_type].edge_index[:, i]
+                v = node_intersection(idx_map, e1, e2)
+                attrs.append(x_nodes[v])
         arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
         self.data[edge_type].edge_attr = arrs
 
