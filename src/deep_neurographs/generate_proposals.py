@@ -8,13 +8,12 @@ Module used to generate edge proposals.
 
 """
 
-from time import time
-
 import numpy as np
 
 from deep_neurographs import geometry
 
-LONG_RANGE_FACTOR = 1.5
+DOT_THRESHOLD = -0.4
+RADIUS_SCALING_FACTOR = 1.5
 TRIM_SEARCH_DIST = 15
 
 
@@ -49,15 +48,9 @@ def run(
     None
 
     """
-    # Initializations
     connections = dict()
-    neurograph.init_kdtree()
-    neurograph.init_kdtree(node_type="leaf")
-    kdtree = neurograph.kdtree if complex_bool else neurograph.leaf_kdtree
-
-    # Main
-    long_radius = radius * LONG_RANGE_FACTOR
-    max_proposals = neurograph.proposals_per_leaf
+    kdtree = init_kdtree(neurograph, complex_bool)
+    radius *= RADIUS_SCALING_FACTOR if trim_endpoints_bool else 1.0
     for leaf in neurograph.leafs:
         # Generate potential proposals
         candidates = get_candidates(
@@ -65,22 +58,23 @@ def run(
             leaf,
             kdtree,
             radius,
-            max_proposals,
+            neurograph.proposals_per_leaf,
             complex_bool,
         )
+
+        # Generate long range proposals (if applicable)
         if len(candidates) == 0 and long_range_bool:
             candidates = get_candidates(
                 neurograph,
                 leaf,
                 kdtree,
-                long_radius,
+                radius * RADIUS_SCALING_FACTOR,
                 -1,
                 True,
             )
 
         # Determine which potential proposals to keep
         for i in candidates:
-            # Check whether connection between components already exists
             leaf_swc_id = neurograph.nodes[leaf]["swc_id"]
             pair_id = frozenset((leaf_swc_id, neurograph.nodes[i]["swc_id"]))
             if pair_id in connections.keys():
@@ -96,14 +90,40 @@ def run(
             neurograph.add_proposal(leaf, i)
             connections[pair_id] = frozenset({leaf, i})
 
-    # Trim Endpoints (if applicable)
-    trimmed_proposals = list()
+    # Trim endpoints (if applicable)
     if trim_endpoints_bool:
-        neurograph, trimmed_proposals = run_trimming(neurograph)
-    return neurograph, trimmed_proposals
+        radius /= RADIUS_SCALING_FACTOR
+        run_trimming(neurograph, radius)
 
 
-def get_candidates(neurograph, leaf, kdtree, radius, max_proposals, complex_bool):
+def init_kdtree(neurograph, complex_bool):
+    """
+    Initializes a KD-Tree used to generate proposals.
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph that proposals will be generated for.
+    complex_bool : bool
+        Indication of whether to generate complex proposals.
+
+    Returns
+    -------
+    scipy.spatial.cKDTree
+        kdtree.
+
+    """
+    if complex_bool:
+        neurograph.init_kdtree()
+        return neurograph.kdtree
+    else:
+        neurograph.init_kdtree(node_type="leaf")
+        return neurograph.leaf_kdtree
+
+
+def get_candidates(
+    neurograph, leaf, kdtree, radius, max_proposals, complex_bool
+):
     # Generate candidates
     candidates = list()
     for xyz in search_kdtree(neurograph, leaf, kdtree, radius, max_proposals):
@@ -113,9 +133,9 @@ def get_candidates(neurograph, leaf, kdtree, radius, max_proposals, complex_bool
 
     # Process the results
     if max_proposals < 0 and len(candidates) == 1:
-        return candidates if neurograph.is_leaf(candidates[0]) else [] 
+        return candidates if neurograph.is_leaf(candidates[0]) else []
     else:
-        return [] if max_proposals < 0 else candidates 
+        return [] if max_proposals < 0 else candidates
 
 
 def search_kdtree(neurograph, leaf, kdtree, radius, max_proposals):
@@ -215,13 +235,11 @@ def get_connecting_node(neurograph, leaf, xyz, radius, complex_bool):
     node = get_closer_endpoint(neurograph, edge, xyz)
     if neurograph.dist(leaf, node) < radius:
         return node
-    else:
-        if complex_bool:
-            attrs = neurograph.get_edge_data(*edge)
-            idx = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0][0]
-            return neurograph.split_edge(edge, attrs, idx)
-        else:
-            return None        
+    elif complex_bool:
+        attrs = neurograph.get_edge_data(*edge)
+        idx = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0][0]
+        return neurograph.split_edge(edge, attrs, idx)
+    return None
 
 
 def get_closer_endpoint(neurograph, edge, xyz):
@@ -250,23 +268,35 @@ def get_closer_endpoint(neurograph, edge, xyz):
 
 
 # --- Trim Endpoints ---
-def run_trimming(neurograph):
+def run_trimming(neurograph, radius):
+    print("# proposals before:", len(neurograph.proposals))
     n_endpoints_trimmed = 0
-    trimmed_proposals = list()
-    for proposal in neurograph.proposals.keys():
+    proposals = list(neurograph.proposals.keys())
+    long_radius = radius * RADIUS_SCALING_FACTOR
+    for proposal in proposals:
         i, j = tuple(proposal)
         is_simple = neurograph.is_simple(proposal)
         is_single = neurograph.is_single_proposal(proposal)
+        trim_bool = False
         if is_simple and is_single:
-            neurograph, trim_bool = trim_endpoints(neurograph, i, j)
-            if trim_bool:
-                n_endpoints_trimmed += 1
-                trimmed_proposals.append(proposal)
+            d_before = neurograph.dist(i, j)
+            trim_bool = trim_endpoints(neurograph, i, j, long_radius)
+        elif neurograph.dist(i, j) > radius:
+            neurograph.remove_proposal(proposal)
+
+        if trim_bool:
+            print(
+                neurograph.proposal_midpoint(proposal),
+                d_before,
+                "==>",
+                neurograph.dist(i, j),
+            )
+            n_endpoints_trimmed += 1
+    print("# proposals after:", len(neurograph.proposals))
     print("# Endpoints Trimmed:", n_endpoints_trimmed)
-    return neurograph, trimmed_proposals
 
 
-def trim_endpoints(neurograph, i, j):
+def trim_endpoints(neurograph, i, j, radius):
     # Initializations
     branch_i = neurograph.get_branch(i)
     branch_j = neurograph.get_branch(j)
@@ -279,39 +309,24 @@ def trim_endpoints(neurograph, i, j):
     if d2 < d1:
         idx_i = idx_ii
         idx_j = idx_jj
-    
-    xyz = np.array([14254.111, 10923.638,  9907.275])
-    hit = geometry.dist(xyz, branch_i[0]) < 30 and geometry.dist(xyz, branch_j[0]) < 30
-    if hit:
-        print("node ids:", i, j)
-        print(d1, d2)
 
     # Update branches (if applicable)
-    trim_bool = False
-    if min(d1, d2) + 2 < geometry.dist(branch_i[0], branch_j[0]):
-        if hit:
-            print("dot", compute_dot(branch_i, branch_j, idx_i, idx_j))
-        if compute_dot(branch_i, branch_j, idx_i, idx_j) < -0.4:
+    if min(d1, d2) > radius:
+        neurograph.remove_proposal(frozenset((i, j)))
+        return False
+    elif min(d1, d2) + 2 < geometry.dist(branch_i[0], branch_j[0]):
+        if compute_dot(branch_i, branch_j, idx_i, idx_j) < DOT_THRESHOLD:
             neurograph = trim_to_idx(neurograph, i, idx_i)
             neurograph = trim_to_idx(neurograph, j, idx_j)
-            neurograph.proposals[frozenset((i, j))]["xyz"] = np.array([
-                neurograph.nodes[i]["xyz"],
-                neurograph.nodes[j]["xyz"],
-            ])
-            if hit:
-                print("trimming", idx_i, idx_j)        
-            return neurograph, True
-    return neurograph, False
+            neurograph.proposals[frozenset((i, j))]["xyz"] = np.array(
+                [neurograph.nodes[i]["xyz"], neurograph.nodes[j]["xyz"]]
+            )
+    return False
 
 
 def trim_endpoints_ordered(branch_1, branch_2):
-    xyz = np.array([14254.111, 10923.638,  9907.275])
-    hit = geometry.dist(xyz, branch_1[0]) < 30 and geometry.dist(xyz, branch_2[0]) < 30
-
     idx_1 = trim_endpoint(branch_1, branch_2)
     idx_2 = trim_endpoint(branch_2, branch_1[idx_1::])
-    if hit:
-        print("\n\n")
     return idx_1, idx_2
 
 
@@ -321,23 +336,13 @@ def trim_endpoint(branch_1, branch_2):
     best_dist = geometry.dist(branch_1[0], branch_2[0])
     best_idx = None
     best_upd = False
-    
-    xyz = np.array([14254.111, 10923.638,  9907.275])
-    hit = geometry.dist(xyz, branch_1[0]) < 30 and geometry.dist(xyz, branch_2[0]) < 30
-    if hit:
-        print("here")
-    
     while idx + 1 < len(branch_1):
         idx += 1
         path_length += geometry.dist(branch_1[idx - 1], branch_1[idx])
-        if hit:
-            print(idx, path_length, geometry.dist(branch_1[idx], branch_2[0]))
         if geometry.dist(branch_1[idx], branch_2[0]) < best_dist:
             best_idx = idx
             best_dist = geometry.dist(branch_1[idx], branch_2[0])
             best_upd = True
-            if hit:
-                print("Improvement =>", idx, best_dist)
 
         # Determine whether to continue trimming
         if path_length > TRIM_SEARCH_DIST:
@@ -404,7 +409,19 @@ def list_candidates_xyz(candidates):
     return [candidates[key]["xyz"] for key in candidates.keys()]
 
 
-def compute_tangent(branch, idx):
+def compute_dot(branch_1, branch_2, idx_1, idx_2):
+    # Initializations
+    origin = geometry.get_midpoint(branch_1[idx_1], branch_2[idx_2])
+    b1 = branch_1 - origin
+    b2 = branch_2 - origin
+
+    # Main
+    dot_10 = np.dot(tangent(b1, idx_1, 10), tangent(b2, idx_2, 10))
+    dot_20 = np.dot(tangent(b1, idx_1, 20), tangent(b2, idx_2, 20))
+    return min(dot_10, dot_20)
+
+
+def tangent(branch, idx, depth):
     """
     Computes tangent vector of "branch" after indexing from "idx".
 
@@ -421,11 +438,5 @@ def compute_tangent(branch, idx):
         Tangent vector of "branch".
 
     """
-    end = min(idx + 20, len(branch))
+    end = min(idx + depth, len(branch))
     return geometry.compute_tangent(branch[idx:end])
-
-
-def compute_dot(branch_1, branch_2, idx_1, idx_2):
-    tangent_1 = compute_tangent(branch_1, idx_1)
-    tangent_2 = compute_tangent(branch_2, idx_2)
-    return np.dot(tangent_1, tangent_2)
