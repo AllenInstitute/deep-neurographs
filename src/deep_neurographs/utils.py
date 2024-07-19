@@ -297,31 +297,6 @@ def list_paths(directory, ext=None):
     return paths
 
 
-# -- gcs utils --
-def list_files_in_gcs_zip(zip_content):
-    """
-    Lists all paths within "directory".
-
-    Parameters
-    ----------
-    directory : str
-        Directory to be searched.
-    ext : str, optional
-        If provided, only paths of files with the extension "ext" are
-        returned. The default is None.
-
-    Returns
-    -------
-    list[str]
-        List of all paths within "directory".
-
-    """
-    paths = []
-    for f in listdir(directory, ext=ext):
-        paths.append(os.path.join(directory, f))
-    return paths
-
-
 def set_path(dir_name, filename, ext):
     """
     Sets the path for a file in a directory. If a file with the same name
@@ -497,11 +472,6 @@ def write_txt(path, contents):
     f = open(path, "w")
     f.write(contents)
     f.close()
-
-
-def parse_metadata(path):
-    metadata = read_json(path)
-    return metadata["chunk_origin"], metadata["chunk_shape"]
 
 
 # --- coordinate conversions ---

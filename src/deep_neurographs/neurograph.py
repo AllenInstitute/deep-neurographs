@@ -212,6 +212,7 @@ class NeuroGraph(nx.Graph):
         )
         for xyz in attrs["xyz"][idxs]:
             self.xyz_to_edge[tuple(xyz)] = edge
+
     """
     def absorb_node(self, i, nb_1, nb_2):
         # Get attributes
@@ -228,6 +229,7 @@ class NeuroGraph(nx.Graph):
             swc_id=self.nodes[nb_1]["swc_id"],
         )
     """
+
     def split_edge(self, edge, attrs, idx):
         """
         Splits "edge" into two distinct edges by making the subnode at "idx" a
@@ -314,7 +316,7 @@ class NeuroGraph(nx.Graph):
         # Main
         self.reset_proposals()
         self.set_proposals_per_leaf(proposals_per_leaf)
-        self, trimmed_proposals = generate_proposals.run(
+        generate_proposals.run(
             self,
             search_radius,
             complex_bool=complex_bool,
@@ -324,13 +326,8 @@ class NeuroGraph(nx.Graph):
 
         # Finish
         # absorb reducible nodes
-        self.init_kdtree(node_type="junction")
-        self.init_kdtree(node_type="leaf")
-        self.init_kdtree(node_type="proposal")
         if optimize:
             self.run_optimization()
-        return self, trimmed_proposals
-            
 
     def reset_proposals(self):
         """
@@ -588,24 +585,6 @@ class NeuroGraph(nx.Graph):
 
     def get_complex_proposals(self):
         return set([e for e in self.get_proposals() if not self.is_simple(e)])
-
-    def isolated_proposals(self, r):
-        isolated_proposals = list()
-        for edge in self.proposals.keys():
-            xyz = self.proposal_midpoint(edge)
-            nearby_proposals = self.query_kdtree(xyz, r, node_type="proposal")
-            nearby_leafs = self.query_kdtree(xyz, r, node_type="leaf")
-            if len(nearby_proposals) <= 2 and len(nearby_leafs) <= 2:
-                isolated_proposals.append(edge)
-        return isolated_proposals
-
-    def nonisolated_proposals(self, max_depth, max_dist=100):
-        nonisolated_proposals = []
-        for edge in self.proposals.keys():
-            i, j = tuple(edge)
-            if self.proposal_search(i, j, max_depth, max_dist):
-                nonisolated_proposals.append(edge)
-        return nonisolated_proposals
 
     def proposal_search(self, root_1, root_2, max_depth, max_dist):
         queue = [(root_1, 0), (root_2, 0)]
@@ -913,11 +892,11 @@ class NeuroGraph(nx.Graph):
     def to_zipped_swcs(self, zip_path, color=None):
         n_components = utils.reformat_number(gutils.count_components(self))
         print(f"Writing {n_components} swcs to local machine!")
-        with zipfile.ZipFile(zip_path, "w") as zipf:
+        with zipfile.ZipFile(zip_path, "w") as zip_writer:
             for nodes in nx.connected_components(self):
-                self.to_zipped_swc(zipf, nodes, color)
+                self.to_zipped_swc(zip_writer, nodes, color)
 
-    def to_zipped_swc(self, zipf, nodes, color):
+    def to_zipped_swc(self, zip_writer, nodes, color):
         with StringIO() as text_buffer:
             # Preamble
             n_entries = 0
@@ -933,7 +912,7 @@ class NeuroGraph(nx.Graph):
                     swc_id = self.nodes[i]["swc_id"]
                     x, y, z = tuple(self.nodes[i]["xyz"])
                     r = self.nodes[i]["radius"]
-                    if color == "0.0 1.0 0.0":
+                    if color != "1.0 0.0 0.0":
                         r += 1.5
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
@@ -945,7 +924,7 @@ class NeuroGraph(nx.Graph):
                     text_buffer, n_entries, i, j, parent, color
                 )
                 node_to_idx[j] = n_entries
-            zipf.writestr(f"{swc_id}.swc", text_buffer.getvalue())
+            zip_writer.writestr(f"{swc_id}.swc", text_buffer.getvalue())
 
     def to_swcs(self, swc_dir):
         """
@@ -1045,16 +1024,3 @@ class NeuroGraph(nx.Graph):
             text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
             n_entries += 1
         return text_buffer, n_entries
-
-    """
-    def near_proposal(self, root, depth):
-        # Check root
-        if len(self.nodes[root]["proposals"]) > 0:
-            return True
-
-        # Check nbhd
-        for i, j in nx.bfs_edges(self, source=root, depth_limit=depth):
-            if len(self.nodes[j]["proposals"]) > 0:
-                return True
-        return False
-    """
