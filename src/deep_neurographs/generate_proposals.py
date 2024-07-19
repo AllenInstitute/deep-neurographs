@@ -269,7 +269,6 @@ def get_closer_endpoint(neurograph, edge, xyz):
 
 # --- Trim Endpoints ---
 def run_trimming(neurograph, radius):
-    print("# proposals before:", len(neurograph.proposals))
     n_endpoints_trimmed = 0
     proposals = list(neurograph.proposals.keys())
     long_radius = radius * RADIUS_SCALING_FACTOR
@@ -283,16 +282,7 @@ def run_trimming(neurograph, radius):
             trim_bool = trim_endpoints(neurograph, i, j, long_radius)
         elif neurograph.dist(i, j) > radius:
             neurograph.remove_proposal(proposal)
-
-        if trim_bool:
-            print(
-                neurograph.proposal_midpoint(proposal),
-                d_before,
-                "==>",
-                neurograph.dist(i, j),
-            )
-            n_endpoints_trimmed += 1
-    print("# proposals after:", len(neurograph.proposals))
+        n_endpoints_trimmed += 1 if trim_bool else 0
     print("# Endpoints Trimmed:", n_endpoints_trimmed)
 
 
@@ -321,6 +311,7 @@ def trim_endpoints(neurograph, i, j, radius):
             neurograph.proposals[frozenset((i, j))]["xyz"] = np.array(
                 [neurograph.nodes[i]["xyz"], neurograph.nodes[j]["xyz"]]
             )
+            return True
     return False
 
 
