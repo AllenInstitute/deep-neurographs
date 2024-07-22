@@ -56,15 +56,13 @@ class NeuroGraph(nx.Graph):
         # Initialize node and edge sets
         self.leafs = set()
         self.junctions = set()
-        self.proposals = dict()
+        self.proposals = set()
         self.target_edges = set()
         self.node_cnt = 0
         self.node_spacing = node_spacing
         self.soma_ids = dict()
 
         # Initialize data structures for proposals
-        self.complex_proposals = set()
-        self.simple_proposals = set()
         self.xyz_to_edge = dict()
         self.kdtree = None
         self.merged_ids = set()
@@ -342,7 +340,7 @@ class NeuroGraph(nx.Graph):
         None
 
         """
-        self.proposals = dict()
+        self.proposals = set()
         self.xyz_to_proposal = dict()
         for i in self.nodes:
             self.nodes[i]["proposals"] = set()
@@ -379,14 +377,12 @@ class NeuroGraph(nx.Graph):
         None
 
         """
-        edge = frozenset((i, j))
+        proposal = frozenset((i, j))
         self.nodes[i]["proposals"].add(j)
         self.nodes[j]["proposals"].add(i)
-        self.xyz_to_proposal[tuple(self.nodes[i]["xyz"])] = edge
-        self.xyz_to_proposal[tuple(self.nodes[j]["xyz"])] = edge
-        self.proposals[edge] = {
-            "xyz": np.array([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
-        }
+        self.xyz_to_proposal[tuple(self.nodes[i]["xyz"])] = proposal
+        self.xyz_to_proposal[tuple(self.nodes[j]["xyz"])] = proposal
+        self.proposals.add(proposal)
 
     def remove_proposal(self, proposal):
         """
@@ -405,7 +401,7 @@ class NeuroGraph(nx.Graph):
         i, j = tuple(proposal)
         self.nodes[i]["proposals"].remove(j)
         self.nodes[j]["proposals"].remove(i)
-        del self.proposals[proposal]
+        self.proposals.remove(proposal)
 
     def is_single_proposal(self, proposal):
         """
@@ -564,9 +560,9 @@ class NeuroGraph(nx.Graph):
         """
         return len(self.proposals)
 
-    def get_proposals(self):
+    def list_proposals(self):
         """
-        Gets the proposal ids (i.e. node pairs).
+        Lists the proposal ids (i.e. node pairs).
 
         Parameters
         ----------
@@ -578,13 +574,17 @@ class NeuroGraph(nx.Graph):
             Proposal ids
 
         """
-        return list(self.proposals.keys())
+        return list(self.proposals)
 
     def get_simple_proposals(self):
-        return set([e for e in self.get_proposals() if self.is_simple(e)])
+        return set([e for e in self.proposals if self.is_simple(e)])
 
     def get_complex_proposals(self):
-        return set([e for e in self.get_proposals() if not self.is_simple(e)])
+        return set([e for e in self.proposals if not self.is_simple(e)])
+
+    def proposal_xyz(self, proposal):
+        i, j = tuple(proposal)
+        return np.vstack([self.nodes[i]["xyz"], self.nodes[i]["xyz"]])
 
     def proposal_search(self, root_1, root_2, max_depth, max_dist):
         queue = [(root_1, 0), (root_2, 0)]
@@ -608,9 +608,6 @@ class NeuroGraph(nx.Graph):
     def is_simple(self, edge):
         i, j = tuple(edge)
         return True if self.is_leaf(i) and self.is_leaf(j) else False
-
-    def proposal_xyz(self, proposal):
-        return tuple(self.proposals[proposal]["xyz"])
 
     def proposal_length(self, proposal):
         return self.dist(*tuple(proposal))
@@ -641,7 +638,7 @@ class NeuroGraph(nx.Graph):
                 self.leafs.remove(i)
             if j in self.leafs:
                 self.leafs.remove(j)
-            del self.proposals[edge]
+            self.proposals.remove(edge)
 
     def upd_ids(self, swc_id, r):
         """
@@ -852,6 +849,7 @@ class NeuroGraph(nx.Graph):
             patch_coords.append(local_coord)
         return patch_coords
 
+    """
     def get_reconstruction(self, proposals, upd_self=False):
         reconstruction = self.copy_graph(add_attrs=True)
         for edge in proposals:
@@ -862,6 +860,7 @@ class NeuroGraph(nx.Graph):
                 i, j, xyz=self.proposals[i, j]["xyz"], radius=[r_i, r_j]
             )
         return reconstruction
+    """
 
     def xyz_to_swc(self, xyz, return_node=False):
         edge = self.xyz_to_edge[tuple(xyz)]

@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import reconstruction as build
-from deep_neurographs import utils
+from deep_neurographs import img_utils, utils
 from deep_neurographs.machine_learning import (
     feature_generation,
     gnn_utils,
@@ -23,7 +23,10 @@ from deep_neurographs.machine_learning import (
 )
 from deep_neurographs.machine_learning.gnn_utils import toCPU
 
-BATCH_SIZE_PROPOSALS = 1000
+
+from time import time
+
+BATCH_SIZE_PROPOSALS = 1600
 
 
 def run(
@@ -48,8 +51,8 @@ def run(
         Type of machine learning model used to perform inference.
     model_path : str
         Path to model parameters.
-    img_path : str
-        Path to raw image stored in a GCS bucket.
+    img : str
+        Image stored in a GCS bucket.
     labels_path : str
         Path to a segmentation mask stored in a GCS bucket.
     proposals : dict
@@ -78,6 +81,12 @@ def run(
     model = ml_utils.load_model(model_type, model_path)
     n_batches = 1 + len(proposals) // BATCH_SIZE_PROPOSALS
 
+    # Open images
+    img_driver = "n5" if ".n5" in img_path else "zarr"
+    img = img_utils.open_tensorstore(img_path, img_driver)
+    labels_driver = "neuroglancer_precomputed"
+    labels = img_utils.open_tensorstore(labels_path, labels_driver)
+
     # Run
     accepts = []
     progress_cnt = 1
@@ -89,8 +98,8 @@ def run(
         accepts_i, graph = predict(
             neurograph,
             graph,
-            img_path,
-            labels_path,
+            img,
+            labels,
             proposals_i,
             model,
             model_type,
@@ -114,8 +123,8 @@ def run(
 def predict(
     neurograph,
     graph,
-    img_path,
-    labels_path,
+    img,
+    labels,
     proposals,
     model,
     model_type,
@@ -127,15 +136,15 @@ def predict(
         neurograph,
         model_type,
         search_radius,
-        img_path,
-        labels_path=labels_path,
+        img,
+        labels=labels,
         proposals=proposals,
     )
     dataset = ml_utils.init_dataset(neurograph, features, model_type)
 
     # Run model
     idx_to_edge = get_idxs(dataset, model_type)
-    proposal_probs = run_model(dataset, model, model_type)
+    proposal_probs = run_inference(dataset, model, model_type)
     accepts, graph = build.get_accepted_proposals(
         neurograph,
         graph,
@@ -148,7 +157,7 @@ def predict(
     return accepts, graph
 
 
-def run_model(dataset, model, model_type):
+def run_inference(dataset, model, model_type):
     if "Graph" in model_type:
         return run_graph_model(dataset.data, model, model_type)
     elif "Net" in model_type:
