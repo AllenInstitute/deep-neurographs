@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from deep_neurographs import geometry, img_utils, utils
+from deep_neurographs import geometry, utils
 from deep_neurographs.machine_learning import feature_generation as feats
 
 WINDOW = [5, 5, 5]
@@ -254,7 +254,9 @@ def node_profiles(neurograph, img):
     with ThreadPoolExecutor() as executor:
         threads = []
         for i, coords_i in coords.items():
-            threads.append(executor.submit(feats.get_profile, img, coords_i, i))
+            threads.append(
+                executor.submit(feats.get_profile, img, coords_i, i)
+            )
 
     # Process results
     profiles = dict()

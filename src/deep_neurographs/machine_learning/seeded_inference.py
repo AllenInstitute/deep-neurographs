@@ -62,6 +62,8 @@ def run(
         #   --> merge accepts
         #   --> attempt to grow
 
+    # Run graph-based infererence
+
     # check whether any proposals remain
     # --> call run_without_seeds
 

@@ -9,7 +9,7 @@ Routines for training graph neural networks that classify edge proposals.
 """
 
 from copy import deepcopy
-from random import sample, shuffle
+from random import shuffle
 
 import numpy as np
 import torch

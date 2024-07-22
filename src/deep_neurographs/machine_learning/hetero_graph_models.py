@@ -13,7 +13,7 @@ import torch.nn.init as init
 from torch import nn
 from torch.nn import Dropout, LeakyReLU
 from torch_geometric.nn import GATv2Conv as GATConv
-from torch_geometric.nn import GCNConv, HEATConv, HeteroConv, Linear
+from torch_geometric.nn import HEATConv, HeteroConv, Linear
 
 CONV_TYPES = ["GATConv", "GCNConv"]
 DROPOUT = 0.3
