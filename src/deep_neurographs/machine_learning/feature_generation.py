@@ -15,18 +15,18 @@ Conventions:   (1) "xyz" refers to a real world coordinate such as those from
 
 """
 
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import (
+    ThreadPoolExecutor,
+    as_completed,
+)
 from copy import deepcopy
 from random import sample
 
 import numpy as np
-import os
 import tensorstore as ts
 
 from deep_neurographs import geometry, img_utils, utils
 from deep_neurographs.machine_learning import hetero_feature_generation
-
-from time import time
 
 CHUNK_SIZE = [64, 64, 64]
 EDGE_FEATURES = ["skel", "profiles"]
@@ -323,7 +323,6 @@ def get_profile_coords(xyz_1, xyz_2):
 
     """
     # Compute coordinates
-    
     coord_0 = utils.to_voxels(xyz_1)
     coord_1 = utils.to_voxels(xyz_2)
 

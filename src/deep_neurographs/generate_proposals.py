@@ -278,7 +278,6 @@ def run_trimming(neurograph, radius):
         is_single = neurograph.is_single_proposal(proposal)
         trim_bool = False
         if is_simple and is_single:
-            d_before = neurograph.dist(i, j)
             trim_bool = trim_endpoints(neurograph, i, j, long_radius)
         elif neurograph.dist(i, j) > radius:
             neurograph.remove_proposal(proposal)

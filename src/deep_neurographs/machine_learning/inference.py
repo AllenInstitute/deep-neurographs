@@ -14,8 +14,9 @@ from torch.nn.functional import sigmoid
 from torch.utils.data import DataLoader
 
 from deep_neurographs import graph_utils as gutils
+from deep_neurographs import img_utils
 from deep_neurographs import reconstruction as build
-from deep_neurographs import img_utils, utils
+from deep_neurographs import utils
 from deep_neurographs.machine_learning import (
     feature_generation,
     gnn_utils,
@@ -23,10 +24,7 @@ from deep_neurographs.machine_learning import (
 )
 from deep_neurographs.machine_learning.gnn_utils import toCPU
 
-
-from time import time
-
-BATCH_SIZE_PROPOSALS = 1600
+BATCH_SIZE = 1600
 
 
 def run(
@@ -37,7 +35,7 @@ def run(
     labels_path,
     proposals,
     search_radius,
-    batch_size_proposals=BATCH_SIZE_PROPOSALS,
+    batch_size=BATCH_SIZE,
     confidence_threshold=0.7,
 ):
     """
@@ -59,7 +57,7 @@ def run(
         Proposals to be classified as accept or reject.
     search_radius : float
         Search radius used to generate proposals.
-    batch_size_proposals : int
+    batch_size : int
         Number of proposals to generate features for and classify at a given
         time
     confidence_threshold : float
@@ -76,31 +74,29 @@ def run(
     # Initializations
     assert not gutils.cycle_exists(neurograph), "NeuroGraph contains cycle!"
     graph = neurograph.copy_graph()
-    dists = [neurograph.proposal_length(edge) for edge in proposals]
-    batches = utils.get_batches(np.argsort(dists), batch_size_proposals)
     model = ml_utils.load_model(model_type, model_path)
-    n_batches = 1 + len(proposals) // BATCH_SIZE_PROPOSALS
+    n_batches = 1 + len(proposals) // batch_size
 
     # Open images
     img_driver = "n5" if ".n5" in img_path else "zarr"
-    img = img_utils.open_tensorstore(img_path, img_driver)
     labels_driver = "neuroglancer_precomputed"
+    img = img_utils.open_tensorstore(img_path, img_driver)
     labels = img_utils.open_tensorstore(labels_path, labels_driver)
 
     # Run
     accepts = []
-    progress_cnt = 1
+    cnt = 1
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_batches * 0.02), 1)
-    for i, batch in enumerate(batches):
+    dists = np.argsort([neurograph.proposal_length(p) for p in proposals])
+    for i, batch in enumerate(utils.get_batches(dists, batch_size)):
         # Prediction
-        proposals_i = [proposals[j] for j in batch]
         accepts_i, graph = predict(
             neurograph,
             graph,
             img,
             labels,
-            proposals_i,
+            [proposals[j] for j in batch],
             model,
             model_type,
             search_radius,
@@ -112,9 +108,9 @@ def run(
         accepts.extend(accepts_i)
 
         # Report progress
-        if i >= progress_cnt * chunk_size:
-            progress_cnt, t1 = utils.report_progress(
-                i + 1, n_batches, chunk_size, progress_cnt, t0, t1
+        if i >= cnt * chunk_size:
+            cnt, t1 = utils.report_progress(
+                i + 1, n_batches, chunk_size, cnt, t0, t1
             )
             t0, t1 = utils.init_timers()
     return neurograph, accepts
@@ -197,6 +193,23 @@ def run_graph_model(data, model, model_type):
 
 # --- utils ---
 def get_idxs(dataset, model_type):
+    """
+    Gets dictionary from "dataset" that maps indices (from feature matrix) to
+    proposal ids.
+
+    Parameters
+    ----------
+    dataset : ProposalDataset
+        Dataset that contains features generated from proposals.
+    model_type : str
+        Type of model used to perform inference.
+
+    Returns
+    -------
+    dict
+        Dictionary that maps indices (from feature matrix) to proposal ids.
+
+    """
     if "Graph" in model_type:
         return dataset.idxs_proposals["idx_to_edge"]
     else:
