@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import img_utils
 from deep_neurographs import reconstruction as build
-from deep_neurographs import utils
+from deep_neurographs import img_utils, utils
 from deep_neurographs.machine_learning import (
     feature_generation,
     gnn_utils,
@@ -81,6 +81,12 @@ def run(
     img_driver = "n5" if ".n5" in img_path else "zarr"
     labels_driver = "neuroglancer_precomputed"
     img = img_utils.open_tensorstore(img_path, img_driver)
+    labels = img_utils.open_tensorstore(labels_path, labels_driver)
+
+    # Open images
+    img_driver = "n5" if ".n5" in img_path else "zarr"
+    img = img_utils.open_tensorstore(img_path, img_driver)
+    labels_driver = "neuroglancer_precomputed"
     labels = img_utils.open_tensorstore(labels_path, labels_driver)
 
     # Run
