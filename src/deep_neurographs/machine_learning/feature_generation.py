@@ -15,15 +15,18 @@ Conventions:   (1) "xyz" refers to a real world coordinate such as those from
 
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from random import sample
 
 import numpy as np
+import os
 import tensorstore as ts
 
 from deep_neurographs import geometry, img_utils, utils
 from deep_neurographs.machine_learning import hetero_feature_generation
+
+from time import time
 
 CHUNK_SIZE = [64, 64, 64]
 EDGE_FEATURES = ["skel", "profiles"]
@@ -36,7 +39,6 @@ SUPPORTED_MODELS = [
     "AdaBoost",
     "RandomForest",
     "FeedForwardNet",
-    "ConvNet",
     "MultiModalNet",
     "GraphNeuralNet",
 ]
@@ -47,20 +49,15 @@ def run(
     neurograph,
     model_type,
     search_radius,
-    img_path,
-    labels_path=None,
+    img,
+    labels=None,
     proposals=None,
 ):
-    # Initializations
     features = dict()
-    img_driver = "n5" if ".n5" in img_path else "zarr"
-    img = img_utils.open_tensorstore(img_path, img_driver)
     proposals = neurograph.get_proposals() if proposals is None else proposals
-
-    # Generate features
     if "Hetero" in model_type:
         features = hetero_feature_generation.run(
-            neurograph, img_path, search_radius, proposals=proposals
+            neurograph, img, search_radius, proposals=proposals
         )
     elif "Graph" in model_type:
         features = dict()
@@ -71,7 +68,7 @@ def run(
             model_type,
             proposals,
             search_radius,
-            labels_path=labels_path,
+            labels=labels,
         )
     else:
         features = run_on_proposals(
@@ -80,13 +77,13 @@ def run(
             model_type,
             proposals,
             search_radius,
-            labels_path=labels_path,
+            labels=labels,
         )
     return features
 
 
 def run_on_proposals(
-    neurograph, img, model_type, proposals, search_radius, labels_path=None
+    neurograph, img, model_type, proposals, search_radius, labels=None
 ):
     """
     Generates feature vectors for every proposal in a neurograph.
@@ -100,14 +97,13 @@ def run_on_proposals(
         Image stored in a GCS bucket.
     model_type : str
         Type of model to be trained. Options include: AdaBoost, RandomForest,
-        FeedForwardNet, ConvNet, MultiModalNet.
+        FeedForwardNet, MultiModalNet.
     proposals : list[frozenset]
         List of proposals for which features will be generated.
     search_radius : float
         Search radius used to generate proposals.
-    labels_path : str, optional
-        Path to predicted segmentation stored in a GCS bucket. The default is
-        None.
+    labels : tensorstore.TensorStore, optional
+        Segmentation mask stored in a GCS bucket. The default is None.
 
     Returns
     -------
@@ -116,16 +112,10 @@ def run_on_proposals(
         vector and the numerical vector.
 
     """
-    # Initializations
     features = dict()
-    if labels_path:
-        labels_driver = "neuroglancer_precomputed"
-        labels = img_utils.open_tensorstore(labels_path, labels_driver)
-
-    # Generate features
     features["skel"] = proposal_skeletal(neurograph, proposals, search_radius)
-    if model_type in ["ConvNet", "MultiModalNet"]:
-        assert labels_path, "Must provide label_path for model_type!"
+    if model_type in ["MultiModalNet"]:
+        assert labels, "Must provide label_path for model_type!"
         features["chunks"], features["profiles"] = generate_chunks(
             neurograph, proposals, img, labels
         )
@@ -255,7 +245,8 @@ def proposal_profiles(neurograph, proposals, img):
     # Generate coordinates
     coords = dict()
     for i, proposal in enumerate(proposals):
-        coords[proposal] = get_proposal_profile_coords(neurograph, proposal)
+        xyz_1, xyz_2 = neurograph.proposal_xyz(proposal)
+        coords[proposal] = get_profile_coords(xyz_1, xyz_2)
 
     # Generate profiles
     with ThreadPoolExecutor() as executor:
@@ -314,17 +305,16 @@ def read_intensities(img, coords):
     return profile
 
 
-def get_proposal_profile_coords(neurograph, proposal):
+def get_profile_coords(xyz_1, xyz_2):
     """
     Gets coordinates needed to compute an image intensity profile.
 
     Parameters
     ----------
-    neurograph : NeuroGarph
-        NeuroGraph generated from a directory of swcs generated from a
-        predicted segmentation.
-    proposal : frozenset
-        Proposal that image intensity profile will be generated for.
+    xyz_1 : numpy.ndarray
+        xyz coordinate of starting point of profile.
+    xyz_2 : numpy.ndarray
+        xyz coordinate of ending point of profile.
 
     Returns
     -------
@@ -333,9 +323,9 @@ def get_proposal_profile_coords(neurograph, proposal):
 
     """
     # Compute coordinates
-    xyz_0, xyz_1 = neurograph.proposal_xyz(proposal)
-    coord_0 = utils.to_voxels(xyz_0)
-    coord_1 = utils.to_voxels(xyz_1)
+    
+    coord_0 = utils.to_voxels(xyz_1)
+    coord_1 = utils.to_voxels(xyz_2)
 
     # Store local coordinates
     bbox = utils.get_minimal_bbox(coord_0, coord_1)
@@ -379,7 +369,7 @@ def proposal_skeletal(neurograph, proposals, search_radius):
 def get_directionals(neurograph, proposal, window):
     # Compute tangent vectors
     i, j = tuple(proposal)
-    direction = geometry.compute_tangent(neurograph.proposals[proposal]["xyz"])
+    direction = geometry.compute_tangent(neurograph.proposal_xyz(proposal))
     origin = neurograph.proposal_midpoint(proposal)
     direction_i = geometry.get_directional(neurograph, i, origin, window)
     direction_j = geometry.get_directional(neurograph, j, origin, window)
@@ -512,10 +502,6 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
             X_i, x_i, y_i, idx_transforms_i = get_multimodal_features(
                 neurographs[block_id], features[block_id], shift=idx_shift
             )
-        elif model_type == "ConvNet":
-            X_i, y_i, idx_transforms_i = stack_chunks(
-                neurographs[block_id], features[block_id], shift=idx_shift
-            )
         else:
             X_i, y_i, idx_transforms_i = get_feature_vectors(
                 neurographs[block_id], features[block_id], shift=idx_shift
@@ -548,8 +534,6 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
 def __feature_matrix(neurographs, features, model_type):
     if model_type == "MultiModalNet":
         return get_multimodal_features(neurographs, features)
-    elif model_type == "ConvNet":
-        return stack_chunks(neurographs, features)
     else:
         return get_feature_vectors(neurographs, features)
 
@@ -615,15 +599,14 @@ def count_features(model_type):
     ----------
     model_type : str
         Indication of model to be trained. Options include: AdaBoost,
-        RandomForest, FeedForwardNet, ConvNet, MultiModalNet.
+        RandomForest, FeedForwardNet, MultiModalNet.
 
     Returns
     -------
     int
         Number of features.
     """
-    if model_type != "ConvNet":
-        return N_SKEL_FEATURES + N_PROFILE_PTS + 2
+    return N_SKEL_FEATURES + N_PROFILE_PTS + 2
 
 
 def combine_features(features):

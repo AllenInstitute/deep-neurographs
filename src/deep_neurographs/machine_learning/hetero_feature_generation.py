@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 
 from deep_neurographs import geometry, img_utils, utils
-from deep_neurographs.machine_learning import feature_generation as fg
+from deep_neurographs.machine_learning import feature_generation as feats
 
 WINDOW = [5, 5, 5]
 N_PROFILE_PTS = 10
@@ -21,7 +21,7 @@ NODE_PROFILE_DEPTH = 16
 
 
 # -- Wrappers --
-def run(neurograph, img_path, search_radius, proposals=None):
+def run(neurograph, img, search_radius, proposals=None):
     """
     Generates features for proposals, edges, and nodes.
 
@@ -29,8 +29,8 @@ def run(neurograph, img_path, search_radius, proposals=None):
     ----------
     neurograph : NeuroGraph
         NeuroGraph generated from a predicted segmentation.
-    img_path : str
-        Path to an image on a GCS bucket.
+    img : str
+        Image stored on a GCS bucket.
     search_radius : float
         Search radius used to generate proposals.
     proposals : list[frozenset], optional
@@ -46,8 +46,6 @@ def run(neurograph, img_path, search_radius, proposals=None):
     """
     # Initializations
     features = dict()
-    img_driver = "n5" if ".n5" in img_path else "zarr"
-    img = img_utils.open_tensorstore(img_path, img_driver)
     proposals = neurograph.get_proposals() if proposals is None else proposals
 
     # Generate features
@@ -128,7 +126,7 @@ def run_on_proposals(neurograph, img, proposals, search_radius):
     """
     features = dict()
     features["skel"] = proposal_skeletal(neurograph, proposals, search_radius)
-    features["profiles"] = fg.proposal_profiles(neurograph, proposals, img)
+    features["profiles"] = feats.proposal_profiles(neurograph, proposals, img)
     return features
 
 
@@ -213,12 +211,12 @@ def proposal_skeletal(neurograph, proposals, search_radius):
         features[proposal] = np.concatenate(
             (
                 neurograph.proposal_length(proposal),
-                fg.n_nearby_leafs(neurograph, proposal, search_radius),
-                fg.get_radii(neurograph, proposal),
-                fg.get_directionals(neurograph, proposal, 8),
-                fg.get_directionals(neurograph, proposal, 16),
-                fg.get_directionals(neurograph, proposal, 32),
-                fg.get_directionals(neurograph, proposal, 64),
+                feats.n_nearby_leafs(neurograph, proposal, search_radius),
+                feats.get_radii(neurograph, proposal),
+                feats.get_directionals(neurograph, proposal, 8),
+                feats.get_directionals(neurograph, proposal, 16),
+                feats.get_directionals(neurograph, proposal, 32),
+                feats.get_directionals(neurograph, proposal, 64),
             ),
             axis=None,
         )
@@ -250,13 +248,13 @@ def node_profiles(neurograph, img):
             profile_path = get_leaf_profile_path(neurograph, i)
         else:
             profile_path = get_junction_profile_path(neurograph, i)
-        coords[i] = get_node_profile_coords(neurograph, profile_path)
+        coords[i] = get_node_profile_coords(profile_path)
 
     # Generate profiles
     with ThreadPoolExecutor() as executor:
         threads = []
         for i, coords_i in coords.items():
-            threads.append(executor.submit(fg.get_profile, img, coords_i, i))
+            threads.append(executor.submit(feats.get_profile, img, coords_i, i))
 
     # Process results
     profiles = dict()
@@ -318,6 +316,7 @@ def get_junction_profile_path(neurograph, i):
 def get_profile_path(xyz_list):
     # Get path
     path_length = 0
+    i = 1
     for i in range(1, len(xyz_list)):
         path_length += geometry.dist(xyz_list[i - 1], xyz_list[i])
         if path_length >= NODE_PROFILE_DEPTH and i > 2:
@@ -329,24 +328,38 @@ def get_profile_path(xyz_list):
     return xyz_list[0:i, :]
 
 
-def get_node_profile_coords(neurograph, profile_path):
+def get_node_profile_coords(profile_path):
     profile_path = transform_path(profile_path)
-    bbox = get_bbox(neurograph, profile_path)
+    bbox = get_bbox(profile_path)
     bbox["min"] = [bbox["min"][i] - 1 for i in range(3)]
     bbox["max"] = [bbox["max"][i] + 2 for i in range(3)]
-    coords = {"bbox": bbox, "profile_path": shift_path(profile_path, bbox)}
-    return coords
+    return {"bbox": bbox, "profile_path": shift_path(profile_path, bbox)}
 
 
 def transform_path(profile_path):
     profile_path = np.array([utils.to_voxels(xyz) for xyz in profile_path])
     if profile_path.shape[0] < 5:
         profile_path = check_degenerate(profile_path)
-    profile_path = geometry.sample_curve(profile_path, N_PROFILE_PTS)
-    return profile_path
+    return geometry.sample_curve(profile_path, N_PROFILE_PTS)
 
 
 def shift_path(profile_path, bbox):
+    """
+    Shifts "profile_path" by subtracting the min coordinate in "bbox".
+
+    Parameters
+    ----------
+    profile_path : numpy.ndarray
+        Array containing xyz coordinates to be shifted.
+    bbox : dict
+        Coordinates of a bounding box that contains "profile_path".
+
+    Returns
+    -------
+    numpy.ndarray
+        Shifted "profile_path".
+
+    """
     return np.array([xyz - bbox["min"] + 1 for xyz in profile_path], dtype=int)
 
 
@@ -373,7 +386,21 @@ def check_degenerate(profile_path):
     return profile_path
 
 
-def get_bbox(neurograph, xyz_arr):
+def get_bbox(xyz_arr):
+    """
+    Gets the xyz coordinates of a bounding box that contains "xyz_arr".
+
+    Parameters
+    ----------
+    xyz_arr : numpy.ndarray
+        Array containing xyz coordinates.
+
+    Returns
+    -------
+    dict
+        Bounding box.
+
+    """
     return {
         "min": np.floor(np.min(xyz_arr, axis=0)).astype(int),
         "max": np.ceil(np.max(xyz_arr, axis=0)).astype(int),
