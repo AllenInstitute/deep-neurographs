@@ -777,8 +777,3 @@ def get_memory_usage():
 
     """
     return psutil.virtual_memory().used / 1e9
-
-
-def get_batches(iterable, batch_size):
-    for start in range(0, len(iterable), batch_size):
-        yield iterable[start: min(start + batch_size, len(iterable))]

@@ -15,18 +15,17 @@ Conventions:   (1) "xyz" refers to a real world coordinate such as those from
 
 """
 
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from random import sample
+from time import time
 
 import numpy as np
-import os
 import tensorstore as ts
 
 from deep_neurographs import geometry, img_utils, utils
 from deep_neurographs.machine_learning import hetero_feature_generation
-
-from time import time
 
 CHUNK_SIZE = [64, 64, 64]
 EDGE_FEATURES = ["skel", "profiles"]

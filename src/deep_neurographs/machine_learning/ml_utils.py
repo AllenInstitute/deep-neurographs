@@ -18,7 +18,7 @@ from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from deep_neurographs.machine_learning import (
     feature_generation,
     graph_datasets,
-    hetero_graph_datasets,
+    heterograph_datasets,
 )
 from deep_neurographs.machine_learning.datasets import (
     ImgProposalDataset,
@@ -41,36 +41,7 @@ SUPPORTED_MODELS = [
 ]
 
 
-def get_kfolds(filenames, k):
-    """
-    Partitions "filenames" into k-folds to perform cross validation.
-
-    Parameters
-    ----------
-    filenames : list[str]
-        List of filenames of samples for training.
-    k : int
-        Number of folds to be used in k-fold cross validation.
-
-    Returns
-    -------
-    folds : list[list[str]]
-        Partition of "filesnames" into k-folds.
-
-    """
-    folds = []
-    samples = set(filenames)
-    n_samples = int(np.floor(len(filenames) / k))
-    assert n_samples > 0, "Sample size is too small for {}-folds".format(k)
-    for i in range(k):
-        samples_i = sample(samples, n_samples)
-        samples = samples.difference(samples_i)
-        folds.append(samples_i)
-        if n_samples > len(samples):
-            break
-    return folds
-
-
+# --- model utils ---
 def init_model(model_type):
     """
     Initializes a machine learning model.
@@ -93,8 +64,6 @@ def init_model(model_type):
     elif model_type == "FeedForwardNet":
         n_features = feature_generation.count_features(model_type)
         return FeedForwardNet(n_features)
-    elif model_type == "ConvNet":
-        return ConvNet()
     elif model_type == "MultiModalNet":
         n_features = feature_generation.count_features(model_type)
         return MultiModalNet(n_features)
@@ -121,6 +90,7 @@ def load_model(model_type, path):
         return torch.load(path)
 
 
+# --- dataset utils ---
 def get_dataset(inputs, targets, model_type, transform, lengths):
     """
     Gets classification model to be fit.
@@ -146,8 +116,6 @@ def get_dataset(inputs, targets, model_type, transform, lengths):
         return ProposalDataset(
             inputs, targets, transform=transform, lengths=lengths
         )
-    elif model_type == "ConvNet":
-        return ImgProposalDataset(inputs, targets, transform=transform)
     elif model_type == "MultiModalNet":
         return MultiModalDataset(inputs, targets, transform=transform)
     else:
@@ -158,7 +126,7 @@ def init_dataset(
     neurographs, features, model_type, block_ids=None, transform=False
 ):
     if "Hetero" in model_type:
-        dataset = hetero_graph_datasets.init(neurographs, features)
+        dataset = heterograph_datasets.init(neurographs, features)
     elif "Graph" in model_type:
         dataset = graph_datasets.init(neurographs, features)
     else:
@@ -192,6 +160,7 @@ def init_proposal_dataset(
     return dataset
 
 
+# --- miscellaneous ---
 def get_lengths(neurograph):
     lengths = []
     for edge in neurograph.proposals.keys():
@@ -214,3 +183,38 @@ def sigmoid(x):
 
     """
     return 1.0 / (1.0 + np.exp(-x))
+
+
+def get_kfolds(filenames, k):
+    """
+    Partitions "filenames" into k-folds to perform cross validation.
+
+    Parameters
+    ----------
+    filenames : list[str]
+        List of filenames of samples for training.
+    k : int
+        Number of folds to be used in k-fold cross validation.
+
+    Returns
+    -------
+    folds : list[list[str]]
+        Partition of "filesnames" into k-folds.
+
+    """
+    folds = []
+    samples = set(filenames)
+    n_samples = int(np.floor(len(filenames) / k))
+    assert n_samples > 0, "Sample size is too small for {}-folds".format(k)
+    for i in range(k):
+        samples_i = sample(samples, n_samples)
+        samples = samples.difference(samples_i)
+        folds.append(samples_i)
+        if n_samples > len(samples):
+            break
+    return folds
+
+
+def get_batches(iterable, batch_size):
+    for start in range(0, len(iterable), batch_size):
+        yield iterable[start: min(start + batch_size, len(iterable))]

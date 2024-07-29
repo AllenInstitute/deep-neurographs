@@ -8,10 +8,13 @@ Helper routines for training graph neural networks.
 
 """
 
+from copy import deepcopy
+
 import networkx as nx
 import numpy as np
 import torch
 
+GRAPH_BATCH_SIZE = 5000
 
 def toCPU(tensor):
     """
@@ -79,3 +82,22 @@ def init_line_graph(edges):
     graph = nx.Graph()
     graph.add_edges_from(edges)
     return nx.line_graph(graph)
+
+
+def get_batches(graph, proposals, batch_size=GRAPH_BATCH_SIZE):
+    cur_batch = list()
+    graph.add_edges_from(proposals)
+    for nodes in nx.connected_components(graph):
+        subgraph = graph.subgraph(nodes)
+        subgraph_proposals = list_subgraph_proposals(subgraph, proposals)
+        if len(subgraph_proposals) > 0:
+            if subgraph.number_of_nodes() + len(cur_batch) < batch_size:
+                cur_batch.extend(subgraph_proposals)
+            else:
+                yield cur_batch
+                cur_batch = deepcopy(subgraph_proposals)
+    yield cur_batch 
+
+
+def list_subgraph_proposals(subgraph, proposals):
+    return [e for e in subgraph.edges if frozenset(e) in proposals]
