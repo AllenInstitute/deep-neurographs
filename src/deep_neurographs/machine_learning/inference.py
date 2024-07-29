@@ -179,7 +179,7 @@ def run_without_seeds(
     t0, t1 = utils.init_timers()
     chunk_size = max(n_batches * 0.02, 1)
     for i, batch in enumerate(batches):
-        # Batch proposals
+        # Init proposals
         if "Graph" in model_type:
             proposals_i = batch
         else:
