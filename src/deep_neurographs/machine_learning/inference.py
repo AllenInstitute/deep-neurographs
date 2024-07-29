@@ -21,10 +21,12 @@ from deep_neurographs.machine_learning import (
     feature_generation,
     gnn_utils,
     ml_utils,
+    seeded_inference,
 )
 from deep_neurographs.machine_learning.gnn_utils import toCPU
 
 BATCH_SIZE = 1600
+CONFIDENCE_THRESHOLD = 0.7
 
 
 def run(
@@ -36,10 +38,11 @@ def run(
     proposals,
     search_radius,
     batch_size=BATCH_SIZE,
-    confidence_threshold=0.7,
+    confidence_threshold=CONFIDENCE_THRESHOLD,
 ):
     """
-    ...
+    Wrapper routine that calls the appropriate inference subroutine based on
+    whether "neurograph" has nonempty "neurograph.soma_ids".
 
     Parameters
     ----------
@@ -57,11 +60,100 @@ def run(
         Proposals to be classified as accept or reject.
     search_radius : float
         Search radius used to generate proposals.
-    batch_size : int
-        Number of proposals to generate features for and classify at a given
-        time
-    confidence_threshold : float
-        Threshold on acceptance probability for proposals.
+    batch_size : int, optional
+        Number of proposals to generate features and classify per batch. The
+        default is the global varaible "BATCH_SIZE".
+    confidence_threshold : float, optional
+        Threshold on acceptance probability for proposals. The default is the
+        global variable "CONFIDENCE_THRESHOLD".
+
+    Returns
+    -------
+    NeuroGraph
+        Updated graph with accepted proposals added as edges.
+    list
+        Accepted proposals.  
+    
+    """
+    # Initializations
+    assert not gutils.cycle_exists(neurograph), "NeuroGraph contains cycle!"
+    model = ml_utils.load_model(model_type, model_path)
+
+    # Open images
+    driver = "n5" if ".n5" in img_path else "zarr"
+    img = img_utils.open_tensorstore(img_path, driver)
+
+    driver = "neuroglancer_precomputed"
+    labels = img_utils.open_tensorstore(labels_path, driver)
+
+    # Call inference routine
+    if len(neurograph.soma_ids) > 0:
+        neurograph, accepts = seeded_inference.run(
+            neurograph,
+            model,
+            model_type,
+            img,
+            labels,
+            proposals,
+            search_radius,
+            batch_size=batch_size,
+            confidence_threshold=confidence_threshold,
+        )
+    else:
+        neurograph, accepts = run_without_seeds(
+            neurograph,
+            model,
+            model_type,
+            img,
+            labels,
+            proposals,
+            search_radius,
+            batch_size=batch_size,
+            confidence_threshold=confidence_threshold,
+        )
+
+    # Report Results
+    print("\n# proposals added:", utils.reformat_number(len(accepts)))
+    print("% proposals added:", round(len(accepts) / len(proposals), 4))
+    return neurograph, accepts
+
+
+def run_without_seeds(
+    neurograph,
+    model,
+    model_type,
+    img,
+    labels,
+    proposals,
+    search_radius,
+    batch_size=BATCH_SIZE,
+    confidence_threshold=0.7,
+):
+    """
+    ...
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph that inference will be performed on.
+    model : ..
+        Machine learning model used to perform inference.
+    model_type : str
+        Type of machine learning model used to perform inference.
+    img : str
+        Image stored in a GCS bucket.
+    labels : str
+        Segmentation mask stored in a GCS bucket.
+    proposals : list
+        Proposals to be classified as accept or reject.
+    search_radius : float
+        Search radius used to generate proposals.
+    batch_size : int, optional
+        Number of proposals to generate features and classify per batch. The
+        default is the global varaible "BATCH_SIZE".
+    confidence_threshold : float, optional
+        Threshold on acceptance probability for proposals. The default is the
+        global variable "CONFIDENCE_THRESHOLD".
 
     Returns
     -------
@@ -72,29 +164,15 @@ def run(
 
     """
     # Initializations
-    assert not gutils.cycle_exists(neurograph), "NeuroGraph contains cycle!"
+    accepts = []
+    dists = np.argsort([neurograph.proposal_length(p) for p in proposals])
     graph = neurograph.copy_graph()
-    model = ml_utils.load_model(model_type, model_path)
     n_batches = 1 + len(proposals) // batch_size
 
-    # Open images
-    img_driver = "n5" if ".n5" in img_path else "zarr"
-    labels_driver = "neuroglancer_precomputed"
-    img = img_utils.open_tensorstore(img_path, img_driver)
-    labels = img_utils.open_tensorstore(labels_path, labels_driver)
-
-    # Open images
-    img_driver = "n5" if ".n5" in img_path else "zarr"
-    img = img_utils.open_tensorstore(img_path, img_driver)
-    labels_driver = "neuroglancer_precomputed"
-    labels = img_utils.open_tensorstore(labels_path, labels_driver)
-
-    # Run
-    accepts = []
+    # Main
     cnt = 1
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_batches * 0.02), 1)
-    dists = np.argsort([neurograph.proposal_length(p) for p in proposals])
     for i, batch in enumerate(utils.get_batches(dists, batch_size)):
         # Prediction
         accepts_i, graph = predict(
@@ -118,7 +196,6 @@ def run(
             cnt, t1 = utils.report_progress(
                 i + 1, n_batches, chunk_size, cnt, t0, t1
             )
-            t0, t1 = utils.init_timers()
     return neurograph, accepts
 
 
@@ -146,7 +223,7 @@ def predict(
 
     # Run model
     idx_to_edge = get_idxs(dataset, model_type)
-    proposal_probs = run_inference(dataset, model, model_type)
+    proposal_probs = run_model(dataset, model, model_type)
     accepts, graph = build.get_accepted_proposals(
         neurograph,
         graph,
@@ -159,7 +236,7 @@ def predict(
     return accepts, graph
 
 
-def run_inference(dataset, model, model_type):
+def run_model(dataset, model, model_type):
     if "Graph" in model_type:
         return run_graph_model(dataset.data, model, model_type)
     elif "Net" in model_type:

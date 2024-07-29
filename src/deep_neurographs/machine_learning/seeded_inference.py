@@ -13,10 +13,9 @@ from copy import deepcopy
 import fastremap
 import networkx as nx
 
-from deep_neurographs import feature_generation
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import utils
-from deep_neurographs.machine_learning import ml_utils
+from deep_neurographs.machine_learning import feature_generation, ml_utils
 from deep_neurographs.neurograph import NeuroGraph
 
 BATCH_SIZE_PROPOSALS = 1000
