@@ -618,17 +618,20 @@ class NeuroGraph(nx.Graph):
 
     def merge_proposal(self, edge):
         i, j = tuple(edge)
-        swc_id_i = self.nodes[i]["swc_id"]
-        swc_id_j = self.nodes[j]["swc_id"]
-        soma_bool_i = swc_id_i in self.soma_ids.keys()
-        soma_bool_j = swc_id_j in self.soma_ids.keys()
-        if not (soma_bool_i and soma_bool_j):
+        soma_bool_1 = self.nodes[i]["swc_id"] in self.soma_ids.keys()
+        soma_bool_2 = self.nodes[j]["swc_id"] in self.soma_ids.keys()
+        if not (soma_bool_1 and soma_bool_2):
             # Attributes
             xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
             radius = np.array(
                 [self.nodes[i]["radius"], self.nodes[j]["radius"]]
             )
-            swc_id = swc_id_i if soma_bool_i else swc_id_j
+            if self.nodes[i]["swc_id"] in self.soma_ids.keys():
+                r = j
+                swc_id = self.nodes[i]["swc_id"]
+            else:
+                r = i
+                swc_id = self.nodes[j]["swc_id"]
 
             # Update graph
             self.merged_ids.add((swc_id_i, swc_id_j))
@@ -848,19 +851,6 @@ class NeuroGraph(nx.Graph):
             local_coord = utils.voxels_to_patch(coord, midpoint, chunk_size)
             patch_coords.append(local_coord)
         return patch_coords
-
-    """
-    def get_reconstruction(self, proposals, upd_self=False):
-        reconstruction = self.copy_graph(add_attrs=True)
-        for edge in proposals:
-            i, j = tuple(edge)
-            r_i = self.nodes[i]["radius"]
-            r_j = self.nodes[j]["radius"]
-            reconstruction.add_edge(
-                i, j, xyz=self.proposals[i, j]["xyz"], radius=[r_i, r_j]
-            )
-        return reconstruction
-    """
 
     def xyz_to_swc(self, xyz, return_node=False):
         edge = self.xyz_to_edge[tuple(xyz)]
