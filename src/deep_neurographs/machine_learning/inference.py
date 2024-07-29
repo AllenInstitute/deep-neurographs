@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import img_utils
 from deep_neurographs import reconstruction as build
-from deep_neurographs import img_utils, utils
+from deep_neurographs import utils
 from deep_neurographs.machine_learning import (
     feature_generation,
     gnn_utils,
@@ -48,15 +48,15 @@ def run(
     ----------
     neurograph : NeuroGraph
         Graph that inference will be performed on.
+    img_path : str
+        Path to image stored in a GCS bucket.
+    labels_path : str
+        Path to a segmentation mask stored in a GCS bucket.
     model_type : str
         Type of machine learning model used to perform inference.
     model_path : str
         Path to model parameters.
-    img : str
-        Image stored in a GCS bucket.
-    labels_path : str
-        Path to a segmentation mask stored in a GCS bucket.
-    proposals : dict
+    proposals : list
         Proposals to be classified as accept or reject.
     search_radius : float
         Search radius used to generate proposals.
@@ -76,7 +76,7 @@ def run(
     
     """
     # Initializations
-    assert not gutils.cycle_exists(neurograph), "NeuroGraph contains cycle!"
+    assert not gutils.cycle_exists(neurograph), "Graph contains cycle!"
     model = ml_utils.load_model(model_type, model_path)
 
     # Open images
@@ -137,9 +137,9 @@ def run_without_seeds(
     ----------
     neurograph : NeuroGraph
         Graph that inference will be performed on.
-    img : str
+    img : tensorstore.TensorStore
         Image stored in a GCS bucket.
-    labels : str
+    labels : tensorstore.TensorStore
         Segmentation mask stored in a GCS bucket.
     model : ..
         Machine learning model used to perform inference.
@@ -166,15 +166,25 @@ def run_without_seeds(
     """
     # Initializations
     accepts = []
-    dists = np.argsort([neurograph.proposal_length(p) for p in proposals])
     graph = neurograph.copy_graph()
-    n_batches = 1 + len(proposals) // batch_size
+    n_batches = len(proposals) + 1 // batch_size
+    if "Graph" in model_type:
+        batches = gnn_utils.get_batches(graph.copy(), proposals)
+    else:
+        dists = np.argsort([neurograph.proposal_length(p) for p in proposals])
+        batches = ml_utils.get_batches(dists, batch_size)
 
     # Main
     cnt = 1
     t0, t1 = utils.init_timers()
-    chunk_size = max(int(n_batches * 0.02), 1)
-    for i, batch in enumerate(utils.get_batches(dists, batch_size)):
+    chunk_size = max(n_batches * 0.02, 1)
+    for i, batch in enumerate(batches):
+        # Batch proposals
+        if "Graph" in model_type:
+            proposals_i = batch
+        else:
+            proposals_i = [proposals[j] for j in batch]
+
         # Predict
         accepts_i, graph = predict(
             neurograph,
@@ -183,7 +193,7 @@ def run_without_seeds(
             labels,
             model,
             model_type,
-            [proposals[j] for j in batch],
+            proposals_i,
             search_radius,
             confidence_threshold=confidence_threshold,
         )
@@ -195,7 +205,7 @@ def run_without_seeds(
         # Report progress
         if i >= cnt * chunk_size:
             cnt, t1 = utils.report_progress(
-                i + 1, n_batches, chunk_size, cnt, t0, t1
+                i + 1, len(batches), chunk_size, cnt, t0, t1
             )
     return neurograph, accepts
 
@@ -220,9 +230,9 @@ def predict(
         Graph that inference will be performed on.
     graph : networkx.Graph
         Copy of "neurograph" that does not contain attributes.
-    img : str
+    img : tensorstore.TensorStore
         Image stored in a GCS bucket.
-    labels : str
+    labels : tensorstore.TensorStore
         Segmentation mask stored in a GCS bucket.
     model : ..
         Machine learning model used to perform inference.
@@ -276,7 +286,7 @@ def run_model(dataset, model, model_type):
         return np.array(hat_y[:, 1])
 
 
-def run_nn_model(data, model):
+def run_nn_model(dataset, model):
     hat_y = []
     model.eval()
     with torch.no_grad():

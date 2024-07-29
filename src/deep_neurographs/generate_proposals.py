@@ -8,6 +8,8 @@ Module used to generate edge proposals.
 
 """
 
+from copy import deepcopy
+
 import numpy as np
 
 from deep_neurographs import geometry
@@ -270,9 +272,8 @@ def get_closer_endpoint(neurograph, edge, xyz):
 # --- Trim Endpoints ---
 def run_trimming(neurograph, radius):
     n_endpoints_trimmed = 0
-    proposals = list(neurograph.proposals.keys())
     long_radius = radius * RADIUS_SCALING_FACTOR
-    for proposal in proposals:
+    for proposal in deepcopy(neurograph.proposals):
         i, j = tuple(proposal)
         is_simple = neurograph.is_simple(proposal)
         is_single = neurograph.is_single_proposal(proposal)
@@ -307,9 +308,6 @@ def trim_endpoints(neurograph, i, j, radius):
         if compute_dot(branch_i, branch_j, idx_i, idx_j) < DOT_THRESHOLD:
             neurograph = trim_to_idx(neurograph, i, idx_i)
             neurograph = trim_to_idx(neurograph, j, idx_j)
-            neurograph.proposals[frozenset((i, j))]["xyz"] = np.array(
-                [neurograph.nodes[i]["xyz"], neurograph.nodes[j]["xyz"]]
-            )
             return True
     return False
 
