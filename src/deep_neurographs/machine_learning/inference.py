@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import img_utils
 from deep_neurographs import reconstruction as build
-from deep_neurographs import utils
+from deep_neurographs import img_utils, utils
 from deep_neurographs.machine_learning import (
     feature_generation,
     gnn_utils,
