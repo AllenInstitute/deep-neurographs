@@ -31,10 +31,10 @@ CONFIDENCE_THRESHOLD = 0.7
 
 def run(
     neurograph,
-    model_type,
-    model_path,
     img_path,
     labels_path,
+    model_type,
+    model_path,
     proposals,
     search_radius,
     batch_size=BATCH_SIZE,
@@ -86,14 +86,14 @@ def run(
     driver = "neuroglancer_precomputed"
     labels = img_utils.open_tensorstore(labels_path, driver)
 
-    # Call inference routine
+    # Call inference subroutine
     if len(neurograph.soma_ids) > 0:
         neurograph, accepts = seeded_inference.run(
             neurograph,
-            model,
-            model_type,
             img,
             labels,
+            model,
+            model_type,
             proposals,
             search_radius,
             batch_size=batch_size,
@@ -102,10 +102,10 @@ def run(
     else:
         neurograph, accepts = run_without_seeds(
             neurograph,
-            model,
-            model_type,
             img,
             labels,
+            model,
+            model_type,
             proposals,
             search_radius,
             batch_size=batch_size,
@@ -120,30 +120,31 @@ def run(
 
 def run_without_seeds(
     neurograph,
-    model,
-    model_type,
     img,
     labels,
+    model,
+    model_type,
     proposals,
     search_radius,
     batch_size=BATCH_SIZE,
     confidence_threshold=0.7,
 ):
     """
-    ...
+    Runs inference without using seeds, where batches of proposals are chosen
+    with respect to their length.
 
     Parameters
     ----------
     neurograph : NeuroGraph
         Graph that inference will be performed on.
-    model : ..
-        Machine learning model used to perform inference.
-    model_type : str
-        Type of machine learning model used to perform inference.
     img : str
         Image stored in a GCS bucket.
     labels : str
         Segmentation mask stored in a GCS bucket.
+    model : ..
+        Machine learning model used to perform inference.
+    model_type : str
+        Type of machine learning model used to perform inference.
     proposals : list
         Proposals to be classified as accept or reject.
     search_radius : float
@@ -174,15 +175,15 @@ def run_without_seeds(
     t0, t1 = utils.init_timers()
     chunk_size = max(int(n_batches * 0.02), 1)
     for i, batch in enumerate(utils.get_batches(dists, batch_size)):
-        # Prediction
+        # Predict
         accepts_i, graph = predict(
             neurograph,
             graph,
             img,
             labels,
-            [proposals[j] for j in batch],
             model,
             model_type,
+            [proposals[j] for j in batch],
             search_radius,
             confidence_threshold=confidence_threshold,
         )
@@ -204,12 +205,40 @@ def predict(
     graph,
     img,
     labels,
-    proposals,
     model,
     model_type,
+    proposals,
     search_radius,
-    confidence_threshold=0.7,
+    confidence_threshold=CONFIDENCE_THRESHOLD,
 ):
+    """
+    Generates features and runs model on a batch of proposals.
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph that inference will be performed on.
+    graph : networkx.Graph
+        Copy of "neurograph" that does not contain attributes.
+    img : str
+        Image stored in a GCS bucket.
+    labels : str
+        Segmentation mask stored in a GCS bucket.
+    model : ..
+        Machine learning model used to perform inference.
+    model_type : str
+        Type of machine learning model used to perform inference.
+    proposals : list
+        Proposals to be classified as accept or reject.
+    search_radius : float
+        Search radius used to generate proposals.
+    confidence_threshold : float, optional
+        Threshold on acceptance probability for proposals. The default is the
+        global variable "CONFIDENCE_THRESHOLD".
+
+    Returns
+    -------
+    """
     # Generate features
     features = feature_generation.run(
         neurograph,
@@ -236,29 +265,33 @@ def predict(
     return accepts, graph
 
 
+# --- run machine learning model ---
 def run_model(dataset, model, model_type):
     if "Graph" in model_type:
-        return run_graph_model(dataset.data, model, model_type)
+        return run_gnn_model(dataset.data, model, model_type)
     elif "Net" in model_type:
-        model.eval()
-        hat_y = []
-        data = dataset["dataset"]
-        for batch in DataLoader(data, batch_size=32, shuffle=False):
+        return run_nn_model(dataset, model)
+    else:
+        hat_y = model.predict_proba(dataset["dataset"]["inputs"])
+        return np.array(hat_y[:, 1])
+
+
+def run_nn_model(data, model):
+    hat_y = []
+    model.eval()
+    with torch.no_grad():
+        for batch in DataLoader(dataset["dataset"], batch_size=32):
             # Run model
-            with torch.no_grad():
-                x_i = batch["inputs"]
-                hat_y_i = sigmoid(model(x_i))
+            x_i = batch["inputs"]
+            hat_y_i = sigmoid(model(x_i))
 
             # Postprocess
             hat_y_i = np.array(hat_y_i)
             hat_y.extend(hat_y_i[:, 0].tolist())
-    else:
-        data = dataset["dataset"]
-        hat_y = model.predict_proba(data["inputs"])[:, 1]
     return np.array(hat_y)
 
 
-def run_graph_model(data, model, model_type):
+def run_gnn_model(data, model, model_type):
     model.eval()
     with torch.no_grad():
         if "Hetero":
