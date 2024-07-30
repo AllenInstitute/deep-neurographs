@@ -10,6 +10,7 @@ Routines for running inference with a model that classifies edge proposals.
 
 import numpy as np
 import torch
+from time import time
 from torch.nn.functional import sigmoid
 from torch.utils.data import DataLoader
 
@@ -248,6 +249,10 @@ def predict(
 
     Returns
     -------
+    list
+        Accepted proposals
+    networkx.Graph
+            
     """
     # Generate features
     features = feature_generation.run(
@@ -271,12 +276,9 @@ def predict(
         graph,
         proposal_probs,
         idx_to_edge,
-        search_radius,
         high_threshold=0.9,
         threshold=confidence_threshold,
     )
-    print("# accepts:", len(accepts))
-    print("% accepts:", len(accepts) / len(batch["proposals"]))
     return accepts, graph
 
 

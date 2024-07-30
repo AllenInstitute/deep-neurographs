@@ -16,8 +16,28 @@ from plotly.subplots import make_subplots
 
 
 def visualize_connected_components(
-    graph, line_width=4, return_data=False, title=""
+    graph, line_width=5, return_data=False, title=""
 ):
+    """
+    Visualizes the connected components in "graph".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be visualized.
+    line_width : int, optional
+        Line width used to plot "subset". The default is 5.
+    return_data : bool, optional
+        Indication of whether to return data object that is used to generate
+        plot. The default is False.
+    title : str
+        Title of plot. The default is "".
+
+    Returns
+    -------
+    None or list[graph_objects]
+
+    """
     # Make plot
     data = []
     colors = plc.qualitative.Bold
@@ -50,14 +70,14 @@ def visualize_graph(graph, title=""):
 
     Parameters
     ----------
-        graph : networkx.Graph
-            Graph to be visualized.
-        title : str, optional
-            Title of the plot. Default is "".
+    graph : networkx.Graph
+        Graph to be visualized.
+    title : str, optional
+        Title of the plot. Default is "".
 
     Returns
     -------
-        None
+    None
 
     """
     data = plot_edges(graph, graph.edges)
@@ -187,14 +207,15 @@ def plot_proposals(graph, proposals, color=None, line_width=3.5):
     line = (
         dict(width=5) if color is None else dict(color=color, width=line_width)
     )
-    for edge in proposals:
+    for p in proposals:
+        xyz = graph.proposal_xyz(p)
         trace = go.Scatter3d(
-            x=graph.proposals[edge]["xyz"][:, 0],
-            y=graph.proposals[edge]["xyz"][:, 1],
-            z=graph.proposals[edge]["xyz"][:, 2],
+            x=xyz[:, 0],
+            y=xyz[:, 1],
+            z=xyz[:, 2],
             mode="lines",
             line=line,
-            name="{}".format(edge),
+            name="{}".format(tuple(p)),
         )
         traces.append(trace)
     return traces
