@@ -21,12 +21,10 @@ from deep_neurographs.machine_learning import (
     heterograph_datasets,
 )
 from deep_neurographs.machine_learning.datasets import (
-    ImgProposalDataset,
     MultiModalDataset,
     ProposalDataset,
 )
 from deep_neurographs.machine_learning.models import (
-    ConvNet,
     FeedForwardNet,
     MultiModalNet,
 )
@@ -91,6 +89,70 @@ def load_model(model_type, path):
 
 
 # --- dataset utils ---
+def init_dataset(
+    neurograph,
+    features,
+    model_type,
+    computation_graph=None,
+    sample_ids=None,
+):
+    """
+    Initializes a dataset given features generated from some set of proposals
+    and neurograph.
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph that "features" were generated from.
+    features : dict
+        Feaures generated from some set of proposals and "neurograph".
+    model_type : str
+        Type of machine learning model used to perform inference.
+    computation_graph : networkx.Graph, optional
+        Computation graph used by gnn if the "model_type" is either
+        "GraphNeuralNet" or "HeteroGraphNeuralNet". The default is None.
+    sample_ids : list[str], optional
+        List of ids of samples if features were generated from distinct
+        predictions. The default is None.
+
+    Returns
+    -------
+    custom dataset type
+        Dataset that stores features.
+
+    """
+    if "Hetero" in model_type:
+        assert computation_graph, "Must provide computation graph!"
+        dataset = heterograph_datasets.init(
+            neurograph, computation_graph, features
+        )
+    elif "Graph" in model_type:
+        dataset = graph_datasets.init(neurograph, features)
+    else:
+        dataset = init_proposal_dataset(
+            neurograph,
+            features,
+            model_type,
+            sample_ids=sample_ids,
+        )
+    return dataset
+
+
+def init_proposal_dataset(
+    neurographs, features, model_type, sample_ids=None,
+):
+    # Extract features
+    inputs, targets, idx_transforms = feature_generation.get_matrix(
+        neurographs, features, model_type, sample_ids=sample_ids
+    )
+    dataset = {
+        "dataset": get_dataset(inputs, targets, model_type),
+        "block_to_idxs": idx_transforms["block_to_idxs"],
+        "idx_to_edge": idx_transforms["idx_to_edge"],
+    }
+    return dataset
+
+
 def get_dataset(inputs, targets, model_type):
     """
     Gets classification model to be fit.
@@ -120,44 +182,6 @@ def get_dataset(inputs, targets, model_type):
         dataset = {"inputs": inputs, "targets": targets}
     return dataset
 
-def init_dataset(
-    neurograph,
-    features,
-    model_type,
-    computation_graph=None,
-    block_ids=None,
-    transform=False,
-):
-    if "Hetero" in model_type:
-        assert computation_graph, "Must provide computation graph!"
-        dataset = heterograph_datasets.init(neurograph, computation_graph, features)
-    elif "Graph" in model_type:
-        dataset = graph_datasets.init(neurograph, computation_graph, features)
-    else:
-        dataset = init_proposal_dataset(
-            neurograph,
-            features,
-            model_type,
-            block_ids=block_ids,
-            transform=transform,
-        )
-    return dataset
-
-
-def init_proposal_dataset(
-    neurographs, features, model_type, block_ids=None,
-):
-    # Extract features
-    inputs, targets, idx_transforms = feature_generation.get_matrix(
-        neurographs, features, model_type, block_ids=block_ids
-    )
-    dataset = {
-        "dataset": get_dataset(inputs, targets, model_type),
-        "block_to_idxs": idx_transforms["block_to_idxs"],
-        "idx_to_edge": idx_transforms["idx_to_edge"],
-    }
-    return dataset
-
 
 # --- miscellaneous ---
 def sigmoid(x):
@@ -171,7 +195,8 @@ def sigmoid(x):
 
     Return
     ------
-    Sigmoid applied to "x".
+    numpy.ndarray
+        Sigmoid applied to "x".
 
     """
     return 1.0 / (1.0 + np.exp(-x))

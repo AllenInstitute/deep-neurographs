@@ -15,11 +15,9 @@ Conventions:   (1) "xyz" refers to a real world coordinate such as those from
 
 """
 
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from random import sample
-from time import time
 
 import numpy as np
 import tensorstore as ts
@@ -88,7 +86,7 @@ def run_on_graph(
     labels=None
 ):
     features = {
-        "branch": run_on_branches(neurograph, proposals_dict),
+        "branches": run_on_branches(neurograph, proposals_dict),
         "proposals": run_on_proposals(
             neurograph,
             img,
@@ -169,7 +167,7 @@ def run_on_branches(neurograph, proposals_dict):
             features[frozenset(edge)] = np.concatenate(
                 (1, np.zeros((33))), axis=None
             )
-    return {"skel": generate_branch_features(neurograph)}
+    return {"skel": features}
 
 
 # -- Proposal Feature Extraction --
