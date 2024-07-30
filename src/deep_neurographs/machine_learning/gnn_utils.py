@@ -8,6 +8,8 @@ Helper routines for training graph neural networks.
 
 """
 
+from copy import deepcopy
+
 import networkx as nx
 import numpy as np
 import torch

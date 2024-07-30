@@ -15,9 +15,11 @@ Conventions:   (1) "xyz" refers to a real world coordinate such as those from
 
 """
 
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from random import sample
+from time import time
 
 import numpy as np
 import tensorstore as ts
