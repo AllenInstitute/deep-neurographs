@@ -23,7 +23,6 @@ def get_accepted_propoals_blocks(
     blocks,
     block_to_idxs,
     idx_to_edge,
-    max_length,
     high_threshold=0.9,
     low_threshold=0.6,
     structure_aware=True,
@@ -45,7 +44,6 @@ def get_accepted_propoals_blocks(
                 neurographs[block_id],
                 graph,
                 preds_upd,
-                max_length,
                 high_threshold=high_threshold,
             )
         else:
@@ -58,7 +56,6 @@ def get_accepted_proposals(
     graph,
     preds,
     idx_to_edge,
-    max_length,
     high_threshold=0.9,
     threshold=0.6,
     structure_aware=True,
@@ -66,7 +63,7 @@ def get_accepted_proposals(
     preds = filter_preds(preds, idx_to_edge, threshold)
     if structure_aware:
         return get_structure_aware_accepts(
-            neurograph, graph, preds, max_length, high_threshold=high_threshold
+            neurograph, graph, preds, high_threshold=high_threshold
         )
     else:
         return preds.keys()
@@ -105,12 +102,10 @@ def filter_preds(preds, idx_to_edge, threshold, valid_idxs=[]):
     return filtered_preds
 
 
-def get_structure_aware_accepts(
-    neurograph, graph, preds, max_length, high_threshold=0.9
-):
+def get_structure_aware_accepts(neurograph, graph, preds, high_threshold=0.9):
     # Add best preds
     best_preds, best_confidences = get_best(
-        neurograph, preds, high_threshold, max_length
+        neurograph, preds, high_threshold
     )
     accepts, graph = check_cycles(graph, best_preds, best_confidences)
     if len(best_preds) == len(preds.keys()):
@@ -121,8 +116,7 @@ def get_structure_aware_accepts(
     good_preds = []
     good_confidence = []
     for proposal, confidence in preds.items():
-        length = neurograph.proposal_length(proposal)
-        if proposal not in best_preds and length < max_length:
+        if proposal not in best_preds:
             good_preds.append(proposal)
             good_confidence.append(confidence)
 
@@ -170,7 +164,7 @@ def check_cycles(graph, edges, probs):
     return accepts, graph
 
 
-def get_best(neurograph, preds, threshold, max_length):
+def get_best(neurograph, preds, threshold):
     """
     Gets the best proposals (i.e. simple proposals with high confidence).
 
@@ -182,9 +176,6 @@ def get_best(neurograph, preds, threshold, max_length):
         Dictionary that maps proposal ids to acceptance probability.
     threshold : float
         Threshold on acceptance probability for proposals.
-    max_length : float
-        Maximum length of a proposal that will be accepted. Note that long
-        range proposals may be generated to provide additional context.
 
     Returns
     -------
@@ -192,9 +183,7 @@ def get_best(neurograph, preds, threshold, max_length):
     edges = []
     probs = []
     for edge, prob in preds.items():
-        length = neurograph.proposal_length(edge)
-        accept = prob > threshold and length < max_length
-        if neurograph.is_simple(edge) and accept:
+        if neurograph.is_simple(edge) and prob > threshold:
             edges.append(edge)
             probs.append(prob)
     return edges, probs

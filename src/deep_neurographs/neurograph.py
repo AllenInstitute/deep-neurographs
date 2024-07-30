@@ -426,6 +426,12 @@ class NeuroGraph(nx.Graph):
         return single_i and single_j
 
     def is_valid_proposal(self, leaf, i, complex_proposal_bool):
+        """
+        Determines whether a pair of nodes would form a "valid" proposal. A
+        proposal is said to be valid if (1) "leaf" and "i" do not have 
+        swc_ids contained in "self.soma_ids" and (2) "i" is a leaf node if
+        "complex_proposal_bool" is False.
+        """
         if i is not None:
             skip_soma = self.is_soma(i) and self.is_soma(leaf)
             skip_complex = self.degree[i] > 1 and not complex_proposal_bool
@@ -560,22 +566,6 @@ class NeuroGraph(nx.Graph):
         """
         return len(self.proposals)
 
-    def list_proposals(self):
-        """
-        Lists the proposal ids (i.e. node pairs).
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        list
-            Proposal ids
-
-        """
-        return list(self.proposals)
-
     def get_simple_proposals(self):
         return set([e for e in self.proposals if self.is_simple(e)])
 
@@ -583,6 +573,20 @@ class NeuroGraph(nx.Graph):
         return set([e for e in self.proposals if not self.is_simple(e)])
 
     def proposal_xyz(self, proposal):
+        """
+        Gets the xyz coordinates of the nodes that comprise "proposal".
+
+        Parameters
+        ----------
+        proposal : frozenset
+            Pair of nodes that form a proposal.
+
+        Returns
+        -------
+        numpy.ndarray
+            xyz coordinates of nodes that comprise "proposal".
+
+        """
         i, j = tuple(proposal)
         return np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
 
@@ -620,15 +624,13 @@ class NeuroGraph(nx.Graph):
         i, j = tuple(edge)
         swc_id_i = self.nodes[i]["swc_id"]
         swc_id_j = self.nodes[j]["swc_id"]
-        soma_bool_i = swc_id_i in self.soma_ids.keys()
-        soma_bool_j = swc_id_j in self.soma_ids.keys()
-        if not (soma_bool_i and soma_bool_j):
+        if not (self.is_soma(i) and self.is_soma(j)):
             # Attributes
             xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
             radius = np.array(
                 [self.nodes[i]["radius"], self.nodes[j]["radius"]]
             )
-            swc_id = swc_id_i if soma_bool_i else swc_id_j
+            swc_id = swc_id_i if self.is_soma(i) else swc_id_j
 
             # Update graph
             self.merged_ids.add((swc_id_i, swc_id_j))
@@ -668,17 +670,17 @@ class NeuroGraph(nx.Graph):
     # --- Utils ---
     def is_soma(self, node_or_swc):
         """
-        Determines whether "swc_id" corresponds to a soma.
+        Determines whether "node_or_swc" corresponds to a soma.
 
         Parameters
         ----------
         node_or_swc : str
-            swc id to be checked.
+            node or swc id to be checked.
 
         Returns
         -------
         bool
-            Indication of whether "swc_id" corresponds to a soma.
+            Indication of whether "node_or_swc" corresponds to a soma.
 
         """
         assert type(node_or_swc) in [int, str]
