@@ -72,8 +72,8 @@ def run(
     NeuroGraph
         Updated graph with accepted proposals added as edges.
     list
-        Accepted proposals.  
-    
+        Accepted proposals.
+
     """
     # Initializations
     assert not gutils.cycle_exists(neurograph), "Graph contains cycle!"
@@ -180,10 +180,8 @@ def run_without_seeds(
     chunk_size = max(n_batches * 0.02, 1)
     for i, batch in enumerate(batches):
         # Init proposals
-        if "Graph" in model_type:
-            proposals_i = batch
-        else:
-            proposals_i = [proposals[j] for j in batch]
+        if "Graph" not in model_type:
+            batch = [proposals[j] for j in batch]
 
         # Predict
         accepts_i, graph = predict(
@@ -193,7 +191,7 @@ def run_without_seeds(
             labels,
             model,
             model_type,
-            proposals_i,
+            batch,
             search_radius,
             confidence_threshold=confidence_threshold,
         )
@@ -217,7 +215,7 @@ def predict(
     labels,
     model,
     model_type,
-    proposals,
+    batch,
     search_radius,
     confidence_threshold=CONFIDENCE_THRESHOLD,
 ):
@@ -238,8 +236,10 @@ def predict(
         Machine learning model used to perform inference.
     model_type : str
         Type of machine learning model used to perform inference.
-    proposals : list
-        Proposals to be classified as accept or reject.
+    batch : dict or list
+        If type(batch) is list, proposals to be classified as accept or
+        reject. If type(batch) is dict, proposals to be classified as accept
+        and computation graph to be used by gnn during inference.
     search_radius : float
         Search radius used to generate proposals.
     confidence_threshold : float, optional
@@ -253,12 +253,15 @@ def predict(
     features = feature_generation.run(
         neurograph,
         model_type,
+        batch,
         search_radius,
         img,
         labels=labels,
-        proposals=proposals,
     )
-    dataset = ml_utils.init_dataset(neurograph, features, model_type)
+    computation_graph = batch["graph"] if type(batch) is dict else None
+    dataset = ml_utils.init_dataset(
+        neurograph, features, model_type, computation_graph=computation_graph
+    )
 
     # Run model
     idx_to_edge = get_idxs(dataset, model_type)
@@ -272,6 +275,8 @@ def predict(
         high_threshold=0.9,
         threshold=confidence_threshold,
     )
+    print("# accepts:", len(accepts))
+    print("% accepts:", len(accepts) / len(batch["proposals"]))
     return accepts, graph
 
 

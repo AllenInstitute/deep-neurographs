@@ -15,17 +15,17 @@ Conventions:   (1) "xyz" refers to a real world coordinate such as those from
 
 """
 
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from random import sample
-from time import time
 
 import numpy as np
 import tensorstore as ts
 
 from deep_neurographs import geometry, img_utils, utils
-from deep_neurographs.machine_learning import hetero_feature_generation
+from deep_neurographs.machine_learning.heterograph_feature_generation import (
+    run as run_on_heterograph,
+)
 
 CHUNK_SIZE = [64, 64, 64]
 EDGE_FEATURES = ["skel", "profiles"]
@@ -43,25 +43,21 @@ SUPPORTED_MODELS = [
 ]
 
 
-# -- Wrappers --
+# -- Wrapper --
 def run(
     neurograph,
     model_type,
+    proposals,
     search_radius,
     img,
     labels=None,
-    proposals=None,
 ):
-    features = dict()
-    proposals = neurograph.get_proposals() if proposals is None else proposals
     if "Hetero" in model_type:
-        features = hetero_feature_generation.run(
-            neurograph, img, search_radius, proposals=proposals
+        features = run_on_heterograph(
+            neurograph, img, search_radius, proposals
         )
     elif "Graph" in model_type:
-        features = dict()
-        features["branch"] = run_on_branches(neurograph)
-        features["proposal"] = run_on_proposals(
+        features = run_on_graph(
             neurograph,
             img,
             model_type,
@@ -78,6 +74,28 @@ def run(
             search_radius,
             labels=labels,
         )
+    return features
+
+
+def run_on_graph(
+    neurograph,
+    img,
+    model_type,
+    proposals_dict,
+    search_radius,
+    labels=None
+):
+    features = {
+        "branch": run_on_branches(neurograph, proposals_dict),
+        "proposals": run_on_proposals(
+            neurograph,
+            img,
+            model_type,
+            proposals_dict["proposals"],
+            search_radius,
+            labels=labels,
+        )
+    }
     return features
 
 
@@ -123,7 +141,7 @@ def run_on_proposals(
     return features
 
 
-def run_on_branches(neurograph):
+def run_on_branches(neurograph, proposals_dict):
     """
     Generates feature vectors for every edge in a neurograph.
 
@@ -132,6 +150,9 @@ def run_on_branches(neurograph):
     neurograph : NeuroGraph
         NeuroGraph generated from a directory of swcs generated from a
         predicted segmentation.
+    proposals_dict
+        Dictionary containing the computation graph used by gnn and proposals
+        to be classified.
 
     Returns
     -------
@@ -140,6 +161,12 @@ def run_on_branches(neurograph):
         vector and the numerical vector.
 
     """
+    features = dict()
+    for edge in proposals_dict["graph"].edges:
+        if frozenset(edge) not in proposals_dict["proposals"]:
+            features[frozenset(edge)] = np.concatenate(
+                (1, np.zeros((33))), axis=None
+            )
     return {"skel": generate_branch_features(neurograph)}
 
 
@@ -441,16 +468,6 @@ def count_junctions(neurograph, i, r):
 
 
 # --- Edge Feature Generation --
-def generate_branch_features(neurograph):
-    features = dict()
-    for edge in neurograph.edges:
-        i, j = tuple(edge)
-        features[frozenset(edge)] = np.concatenate(
-            (1, np.zeros((33))), axis=None
-        )
-    return features
-
-
 def compute_curvature(neurograph, edge):
     kappa = curvature(neurograph.edges[edge]["xyz"])
     n_pts = len(kappa)
