@@ -8,13 +8,12 @@ Helper routines for training graph neural networks.
 
 """
 
-from copy import deepcopy
-
 import networkx as nx
 import numpy as np
 import torch
 
 GRAPH_BATCH_SIZE = 10000
+
 
 def toCPU(tensor):
     """
@@ -117,7 +116,6 @@ def get_batches(graph, proposals, batch_size=GRAPH_BATCH_SIZE):
             # Determine whether to start new batch
             cur_batch_size = batch["graph"].number_of_nodes()
             if cur_batch_size + cc_graph.number_of_nodes() > batch_size:
-                print("yield", len(cc_proposals))
                 yield batch
                 batch = reset_batch()
 

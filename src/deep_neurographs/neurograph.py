@@ -584,7 +584,7 @@ class NeuroGraph(nx.Graph):
 
     def proposal_xyz(self, proposal):
         i, j = tuple(proposal)
-        return np.vstack([self.nodes[i]["xyz"], self.nodes[i]["xyz"]])
+        return np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
 
     def proposal_search(self, root_1, root_2, max_depth, max_dist):
         queue = [(root_1, 0), (root_2, 0)]
