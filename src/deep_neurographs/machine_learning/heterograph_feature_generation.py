@@ -21,7 +21,7 @@ NODE_PROFILE_DEPTH = 16
 
 
 # -- Wrappers --
-def run(neurograph, img, search_radius, proposals=None):
+def run(neurograph, img, search_radius, proposals_dict):
     """
     Generates features for proposals, edges, and nodes.
 
@@ -33,9 +33,9 @@ def run(neurograph, img, search_radius, proposals=None):
         Image stored on a GCS bucket.
     search_radius : float
         Search radius used to generate proposals.
-    proposals : list[frozenset], optional
-        List of proposals for which features will be generated. The default
-        is None.
+    proposals_dict : dict
+        Dictionary containing the computation graph used by gnn and proposals
+        to be classified.
 
     Returns
     -------
@@ -44,20 +44,17 @@ def run(neurograph, img, search_radius, proposals=None):
         proposals, edges, and nodes.
 
     """
-    # Initializations
-    features = dict()
-    proposals = neurograph.get_proposals() if proposals is None else proposals
-
-    # Generate features
-    features["nodes"] = run_on_nodes(neurograph, img)
-    features["branches"] = run_on_branches(neurograph, img)
-    features["proposals"] = run_on_proposals(
-        neurograph, img, proposals, search_radius
-    )
+    features = {
+        "nodes": run_on_nodes(neurograph, proposals_dict["graph"], img),
+        "branches": run_on_branches(neurograph, proposals_dict["graph"]),
+        "proposals": run_on_proposals(
+            neurograph, proposals_dict["proposals"], img, search_radius
+        )
+    }
     return features
 
 
-def run_on_nodes(neurograph, img):
+def run_on_nodes(neurograph, computation_graph, img):
     """
     Generates feature vectors for every node in "neurograph".
 
@@ -65,6 +62,8 @@ def run_on_nodes(neurograph, img):
     ----------
     neurograph : NeuroGraph
         NeuroGraph generated from a predicted segmentation.
+    computation_graph : networkx.Graph
+        Graph used by gnn to classify proposals.
     img : str
         Image stored in a GCS bucket.
 
@@ -76,12 +75,12 @@ def run_on_nodes(neurograph, img):
 
     """
     features = dict()
-    features["skel"] = node_skeletal(neurograph)
-    features["profiles"] = node_profiles(neurograph, img)
+    features["skel"] = node_skeletal(neurograph, computation_graph)
+    features["profiles"] = node_profiles(neurograph, computation_graph, img)
     return features
 
 
-def run_on_branches(neurograph, img):
+def run_on_branches(neurograph, computation_graph):
     """
     Generates feature vectors for every edge in "neurograph".
 
@@ -89,20 +88,20 @@ def run_on_branches(neurograph, img):
     ----------
     neurograph : NeuroGraph
         NeuroGraph generated from a predicted segmentation.
-    img : str
-        Image stored in a GCS bucket.
+    computation_graph : networkx.Graph
+        Graph used by gnn to classify proposals.
 
     Returns
     -------
     dict
-        Dictionary that maps edges to a dictionary of
-        different types of feature vector.
+        Dictionary that maps edges to a dictionary of different types of
+        feature vector.
 
     """
-    return {"skel": branch_skeletal(neurograph)}
+    return {"skel": branch_skeletal(neurograph, computation_graph)}
 
 
-def run_on_proposals(neurograph, img, proposals, search_radius):
+def run_on_proposals(neurograph, proposals, img, search_radius):
     """
     Generates feature vectors for every proposal in "neurograph".
 
@@ -131,7 +130,7 @@ def run_on_proposals(neurograph, img, proposals, search_radius):
 
 
 # -- Skeletal Features --
-def node_skeletal(neurograph):
+def node_skeletal(neurograph, computation_graph):
     """
     Generates skeleton-based features for nodes in "neurograph".
 
@@ -139,6 +138,8 @@ def node_skeletal(neurograph):
     ----------
     neurograph : NeuroGraph
         NeuroGraph generated from a predicted segmentation.
+    computation_graph : networkx.Graph
+        Graph used by gnn to classify proposals.
 
     Returns
     -------
@@ -147,7 +148,7 @@ def node_skeletal(neurograph):
 
     """
     features = dict()
-    for i in neurograph.nodes:
+    for i in computation_graph.nodes:
         features[i] = np.concatenate(
             (
                 neurograph.degree[i],
@@ -159,7 +160,7 @@ def node_skeletal(neurograph):
     return features
 
 
-def branch_skeletal(neurograph):
+def branch_skeletal(neurograph, computation_graph):
     """
     Generates skeleton-based features for edges in "neurograph".
 
@@ -167,6 +168,8 @@ def branch_skeletal(neurograph):
     ----------
     neurograph : NeuroGraph
         NeuroGraph generated from a predicted segmentation.
+    computation_graph : networkx.Graph
+        Graph used by gnn to classify proposals.
 
     Returns
     -------
@@ -224,7 +227,7 @@ def proposal_skeletal(neurograph, proposals, search_radius):
 
 
 # -- Image features --
-def node_profiles(neurograph, img):
+def node_profiles(neurograph, computation_graph, img):
     """
     Generates proposals for nodes in "neurograph".
 
@@ -232,6 +235,8 @@ def node_profiles(neurograph, img):
     ----------
     neurograph : NeuroGraph
         NeuroGraph generated from a predicted segmentation.
+    computation_graph : networkx.Graph
+        Graph used by gnn to classify proposals.
     img : str
         Image stored in a GCS bucket.
 
@@ -243,7 +248,7 @@ def node_profiles(neurograph, img):
     """
     # Generate coordinates
     coords = dict()
-    for i in neurograph.nodes:
+    for i in computation_graph.nodes:
         if neurograph.degree[i] == 1:
             profile_path = get_leaf_profile_path(neurograph, i)
         else:

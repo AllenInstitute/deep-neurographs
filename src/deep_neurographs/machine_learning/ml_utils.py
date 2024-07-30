@@ -91,7 +91,7 @@ def load_model(model_type, path):
 
 
 # --- dataset utils ---
-def get_dataset(inputs, targets, model_type, transform, lengths):
+def get_dataset(inputs, targets, model_type):
     """
     Gets classification model to be fit.
 
@@ -113,25 +113,29 @@ def get_dataset(inputs, targets, model_type, transform, lengths):
 
     """
     if model_type == "FeedForwardNet":
-        return ProposalDataset(
-            inputs, targets, transform=transform, lengths=lengths
-        )
+        dataset = ProposalDataset(inputs, targets)
     elif model_type == "MultiModalNet":
-        return MultiModalDataset(inputs, targets, transform=transform)
+        dataset = MultiModalDataset(inputs, targets)
     else:
-        return {"inputs": inputs, "targets": targets}
-
+        dataset = {"inputs": inputs, "targets": targets}
+    return dataset
 
 def init_dataset(
-    neurographs, features, model_type, block_ids=None, transform=False
+    neurograph,
+    features,
+    model_type,
+    computation_graph=None,
+    block_ids=None,
+    transform=False,
 ):
     if "Hetero" in model_type:
-        dataset = heterograph_datasets.init(neurographs, features)
+        assert computation_graph, "Must provide computation graph!"
+        dataset = heterograph_datasets.init(neurograph, computation_graph, features)
     elif "Graph" in model_type:
-        dataset = graph_datasets.init(neurographs, features)
+        dataset = graph_datasets.init(neurograph, computation_graph, features)
     else:
         dataset = init_proposal_dataset(
-            neurographs,
+            neurograph,
             features,
             model_type,
             block_ids=block_ids,
@@ -141,19 +145,14 @@ def init_dataset(
 
 
 def init_proposal_dataset(
-    neurographs, features, model_type, block_ids=None, transform=False
+    neurographs, features, model_type, block_ids=None,
 ):
     # Extract features
     inputs, targets, idx_transforms = feature_generation.get_matrix(
         neurographs, features, model_type, block_ids=block_ids
     )
-    lens = []
-    if transform:
-        for block_id in block_ids:
-            lens.extend(get_lengths(neurographs[block_id]))
-
     dataset = {
-        "dataset": get_dataset(inputs, targets, model_type, transform, lens),
+        "dataset": get_dataset(inputs, targets, model_type),
         "block_to_idxs": idx_transforms["block_to_idxs"],
         "idx_to_edge": idx_transforms["idx_to_edge"],
     }
@@ -161,13 +160,6 @@ def init_proposal_dataset(
 
 
 # --- miscellaneous ---
-def get_lengths(neurograph):
-    lengths = []
-    for edge in neurograph.proposals.keys():
-        lengths.append(neurograph.proposal_length(edge))
-    return lengths
-
-
 def sigmoid(x):
     """
     Sigmoid function.

@@ -23,7 +23,7 @@ DTYPE = torch.float32
 
 
 # Wrapper
-def init(neurograph, features):
+def init(neurograph, computation_graph, features):
     """
     Initializes a dataset that can be used to train a graph neural network.
 
@@ -31,6 +31,8 @@ def init(neurograph, features):
     ----------
     neurograph : NeuroGraph
         Graph that dataset is built from.
+    computation_graph : networkx.Graph
+        Graph used by gnn to classify proposals.
     features : dict
         Feature vectors corresponding to branches such that the keys are
         "proposals" and "branches". The values are a dictionary containing
@@ -38,7 +40,7 @@ def init(neurograph, features):
 
     Returns
     -------
-    GraphDataset
+    HeteroGraphDataset
         Custom dataset.
 
     """
@@ -53,8 +55,8 @@ def init(neurograph, features):
 
     # Initialize data
     proposals = list(features["proposals"]["skel"].keys())
-    graph_dataset = HeteroGraphDataset(
-        neurograph,
+    heterograph_dataset = HeteroGraphDataset(
+        computation_graph,
         proposals,
         x_nodes,
         x_branches,
@@ -63,7 +65,7 @@ def init(neurograph, features):
         idxs_branches,
         idxs_proposals,
     )
-    return graph_dataset
+    return heterograph_dataset
 
 
 # Datasets
@@ -75,7 +77,7 @@ class HeteroGraphDataset:
 
     def __init__(
         self,
-        neurograph,
+        computation_graph,
         proposals,
         x_nodes,
         x_branches,
@@ -89,20 +91,20 @@ class HeteroGraphDataset:
 
         Parameters
         ----------
-        neurograph : neurograph.NeuroGraph
-            Graph that represents a predicted segmentation.
+        computation_graph : networkx.Graph
+            Graph used by gnn to classify proposals.
         proposals : list
-            List of edge proposals.
+            List of proposals to be classified.
         x_nodes : numpy.ndarray
-            Feature matrix generated from nodes in "neurograph".
+            Feature matrix generated from nodes in "computation_graph".
         x_branches : numpy.ndarray
-            Feature matrix generated from branches in "neurograph".
+            Feature matrix generated from branches in "computation_graph".
         x_proposals : numpy.ndarray
-            Feature matrix generated from "proposals" in "neurograph".
+            Feature matrix generated from "proposals" in "computation_graph".
         y_proposals : numpy.ndarray
             Ground truth of proposals.
         idxs_branches : dict
-            Dictionary that maps edges in "neurograph" to an index that
+            Dictionary that maps edges in "computation_graph" to an index that
             represents the edge's position in "x_branches".
         idxs_proposals : dict
             Dictionary that maps "proposals" to an index that represents the
@@ -116,6 +118,7 @@ class HeteroGraphDataset:
         # Conversion idxs
         self.idxs_branches = init_idxs(idxs_branches)
         self.idxs_proposals = init_idxs(idxs_proposals)
+        self.computation_graph = computation_graph
         self.proposals = proposals
 
         # Types
@@ -133,18 +136,17 @@ class HeteroGraphDataset:
         self.data["proposal"].y = torch.tensor(y_proposals, dtype=DTYPE)
 
         # Edges
-        self.init_edges(neurograph)
+        self.init_edges()
         self.init_edge_attrs(x_nodes)
         self.n_edge_attrs = n_edge_features(x_nodes)
 
-    def init_edges(self, neurograph):
+    def init_edges(self):
         """
         Initializes edge index for a graph dataset.
 
         Parameters
         ----------
-        neurograph : neurograph.NeuroGraph
-            Graph that represents a predicted segmentation.
+        None
 
         Returns
         -------
@@ -153,8 +155,8 @@ class HeteroGraphDataset:
         """
         # Compute edges
         proposal_edges = self.proposal_to_proposal()
-        branch_edges = self.branch_to_branch(neurograph)
-        branch_proposal_edges = self.branch_to_proposal(neurograph)
+        branch_edges = self.branch_to_branch()
+        branch_proposal_edges = self.branch_to_proposal()
 
         # Store edges
         self.data["proposal", "edge", "proposal"].edge_index = proposal_edges
@@ -264,15 +266,14 @@ class HeteroGraphDataset:
             edge_index.extend([[v1, v2], [v2, v1]])
         return gnn_utils.to_tensor(edge_index)
 
-    def branch_to_branch(self, neurograph):
+    def branch_to_branch(self):
         """
         Generates edge indices between nodes corresponding to branches
         (i.e. edges in some neurograph).
 
         Parameters
         ----------
-        neurograph : neurograph.NeuroGraph
-            Graph that represents a predicted segmentation.
+        None
 
         Returns
         -------
@@ -282,21 +283,23 @@ class HeteroGraphDataset:
 
         """
         edge_index = []
-        for e1, e2 in nx.line_graph(neurograph).edges:
-            v1 = self.idxs_branches["edge_to_idx"][frozenset(e1)]
-            v2 = self.idxs_branches["edge_to_idx"][frozenset(e2)]
-            edge_index.extend([[v1, v2], [v2, v1]])
+        for e1, e2 in nx.line_graph(self.computation_graph).edges:
+            e1_edge_bool = frozenset(e1) not in self.proposals
+            e2_edge_bool = frozenset(e2) not in self.proposals
+            if e1_edge_bool and e2_edge_bool:
+                v1 = self.idxs_branches["edge_to_idx"][frozenset(e1)]
+                v2 = self.idxs_branches["edge_to_idx"][frozenset(e2)]
+                edge_index.extend([[v1, v2], [v2, v1]])
         return gnn_utils.to_tensor(edge_index)
 
-    def branch_to_proposal(self, neurograph):
+    def branch_to_proposal(self):
         """
         Generates edge indices between nodes that correspond to proposals and
         edges.
 
         Parameters
         ----------
-        neurograph : neurograph.NeuroGraph
-            Graph that represents a predicted segmentation.
+        None
 
         Returns
         -------
@@ -306,15 +309,17 @@ class HeteroGraphDataset:
 
         """
         edge_index = []
-        for e in self.proposals:
-            i, j = tuple(e)
-            v1 = self.idxs_proposals["edge_to_idx"][frozenset(e)]
-            for k in neurograph.neighbors(i):
-                v2 = self.idxs_branches["edge_to_idx"][frozenset((i, k))]
-                edge_index.extend([[v2, v1]])
-            for k in neurograph.neighbors(j):
-                v2 = self.idxs_branches["edge_to_idx"][frozenset((j, k))]
-                edge_index.extend([[v2, v1]])
+        for p in self.proposals:
+            i, j = tuple(p)
+            v1 = self.idxs_proposals["edge_to_idx"][frozenset(p)]
+            for k in self.computation_graph.neighbors(i):
+                if frozenset((i, k)) not in self.proposals:
+                    v2 = self.idxs_branches["edge_to_idx"][frozenset((i, k))]
+                    edge_index.extend([[v2, v1]])
+            for k in self.computation_graph.neighbors(j):
+                if frozenset((j, k)) not in self.proposals:
+                    v2 = self.idxs_branches["edge_to_idx"][frozenset((j, k))]
+                    edge_index.extend([[v2, v1]])
         return gnn_utils.to_tensor(edge_index)
 
     # Set Edge Attributes
