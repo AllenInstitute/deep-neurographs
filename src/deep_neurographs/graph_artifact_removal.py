@@ -82,14 +82,11 @@ def compute_hits(neurograph, edge, query_id):
         best_id = None
         best_dist = np.inf
         for hit_xyz in neurograph.query_kdtree(xyz, 15):
-            try:
-                hit_id = neurograph.xyz_to_swc(hit_xyz)
-                if hit_id != query_id:
-                    if dist(hit_xyz, xyz) < best_dist:
-                        best_dist = dist(hit_xyz, xyz)
-                        best_id = hit_id
-            except:
-                pass
+            hit_id = neurograph.xyz_to_swc(hit_xyz)
+            if hit_id is not None and hit_id != query_id:
+                if dist(hit_xyz, xyz) < best_dist:
+                    best_dist = dist(hit_xyz, xyz)
+                    best_id = hit_id
 
         # Store best
         if best_id is not None:

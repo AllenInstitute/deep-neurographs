@@ -744,7 +744,7 @@ def cycle_exists(graph):
     try:
         nx.find_cycle(graph)
         return True
-    except:
+    except nx.exception.NetworkXNoCycle:
         return False
 
 

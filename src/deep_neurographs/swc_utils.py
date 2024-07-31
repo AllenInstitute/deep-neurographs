@@ -179,9 +179,6 @@ def read_from_gcs_zip(zip_file, path):
         with zip_file.open(path) as txt_file:
             return txt_file.read().decode("utf-8").splitlines()
     except:
-        with zip_file.open(path) as txt_file:
-            return txt_file.read().decode("utf-8").splitlines()
-    else:
         print(f"Failed to read {path}")
         return []
 
@@ -390,10 +387,9 @@ def set_radius(graph, i):
     """
     try:
         radius = graph[i]["radius"]
-        return radius
     except:
-        return 1.0
-
+        radius = 1.0
+    return radius
 
 def make_simple_entry(node, parent, xyz, radius=8):
     """
