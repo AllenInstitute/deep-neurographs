@@ -458,6 +458,22 @@ class NeuroGraph(nx.Graph):
         else:
             return False
 
+    def list_proposals(self):
+        """
+        Lists proposals in self.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        list
+            Proposals.
+
+        """
+        return list(self.proposals)
+
     def init_targets(self, target_neurograph):
         target_neurograph.init_kdtree()
         self.target_edges = init_targets(target_neurograph, self)
