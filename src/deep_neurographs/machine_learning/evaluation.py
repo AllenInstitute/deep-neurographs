@@ -103,7 +103,7 @@ def run_evaluation_blocks(neurographs, blocks, accepts):
     Returns
     -------
     dict[dict]
-        Acuracy of the edge classification model on all edges, simple edges, 
+        Acuracy of the edge classification model on all edges, simple edges,
         and complex edges. The metrics contained in a sub-dictionary where the
         keys are identical to "METRICS_LIST"].
 

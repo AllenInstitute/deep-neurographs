@@ -280,6 +280,7 @@ class NeuroGraph(nx.Graph):
         proposals_per_leaf=3,
         optimize=False,
         optimization_depth=10,
+        return_trimmed_proposals=False,
         trim_endpoints_bool=False,
     ):
         """
@@ -303,6 +304,9 @@ class NeuroGraph(nx.Graph):
             default is False.
         optimization_depth : int, optional
             Depth to check during optimization. The default is False.
+        return_trimmed_proposals, optional
+            Indication of whether to return trimmed proposal ids. The default
+            is False.
         trim_endpoints_bool : bool, optional
             Indication of whether to trim endpoints. The default is False.
 
@@ -425,16 +429,31 @@ class NeuroGraph(nx.Graph):
         single_j = len(self.nodes[j]["proposals"]) == 1
         return single_i and single_j
 
-    def is_valid_proposal(self, leaf, i, complex_proposal_bool):
+    def is_valid_proposal(self, leaf, i, complex_bool):
         """
         Determines whether a pair of nodes would form a "valid" proposal. A
-        proposal is said to be valid if (1) "leaf" and "i" do not have 
-        swc_ids contained in "self.soma_ids" and (2) "i" is a leaf node if
-        "complex_proposal_bool" is False.
+        proposal is said to be valid if (1) "leaf" and "i" do not have swc_ids
+        contained in "self.soma_ids" and (2) "i" is a leaf if "complex_bool"
+        is False.
+
+        Parmeters
+        ---------
+        leaf : int
+            Leaf node id.
+        i : int
+            node id.
+        complex_bool : bool
+            Indication of whether complex proposals are should be generated.
+
+        Returns
+        -------
+        bool
+            Indication of whether proposal is valid.
+
         """
         if i is not None:
             skip_soma = self.is_soma(i) and self.is_soma(leaf)
-            skip_complex = self.degree[i] > 1 and not complex_proposal_bool
+            skip_complex = self.degree[i] > 1 and not complex_bool
             return not (skip_soma or skip_complex)
         else:
             return False
@@ -852,12 +871,15 @@ class NeuroGraph(nx.Graph):
         return patch_coords
 
     def xyz_to_swc(self, xyz, return_node=False):
-        edge = self.xyz_to_edge[tuple(xyz)]
-        i, j = tuple(edge)
-        if return_node:
-            return self.nodes[i]["swc_id"], i
+        if tuple(xyz) in self.xyz_to_edge.keys():
+            edge = self.xyz_to_edge[tuple(xyz)]
+            i, j = tuple(edge)
+            if return_node:
+                return self.nodes[i]["swc_id"], i
+            else:
+                return self.nodes[i]["swc_id"]
         else:
-            return self.nodes[i]["swc_id"]
+            return None
 
     def component_cardinality(self, root):
         cardinality = 0

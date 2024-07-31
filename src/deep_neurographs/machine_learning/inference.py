@@ -8,6 +8,8 @@ Routines for running inference with a model that classifies edge proposals.
 
 """
 
+from time import time
+
 import numpy as np
 import torch
 from time import time

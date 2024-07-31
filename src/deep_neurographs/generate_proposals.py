@@ -95,7 +95,9 @@ def run(
     # Trim endpoints (if applicable)
     if trim_endpoints_bool:
         radius /= RADIUS_SCALING_FACTOR
-        run_trimming(neurograph, radius)
+        long_range, in_range = separate_proposals(neurograph, radius)
+        neurograph = run_trimming(neurograph, long_range, radius)
+        neurograph = run_trimming(neurograph, in_range, radius)
 
 
 def init_kdtree(neurograph, complex_bool):
@@ -269,21 +271,36 @@ def get_closer_endpoint(neurograph, edge, xyz):
     return i if d_i < d_j else j
 
 
+def separate_proposals(neurograph, radius):
+    long_range_proposals = list()
+    proposals = list()
+    for proposal in neurograph.proposals:
+        i, j = tuple(proposal)
+        if neurograph.dist(i, j) > radius:
+            long_range_proposals.append(proposal)
+        else:
+            proposals.append(proposal)
+    return long_range_proposals, proposals
+
+
 # --- Trim Endpoints ---
-def run_trimming(neurograph, radius):
+def run_trimming(neurograph, proposals, radius):
     n_endpoints_trimmed = 0
     long_radius = radius * RADIUS_SCALING_FACTOR
-    for proposal in deepcopy(neurograph.proposals):
+    for proposal in deepcopy(proposals):
         i, j = tuple(proposal)
         is_simple = neurograph.is_simple(proposal)
         is_single = neurograph.is_single_proposal(proposal)
         trim_bool = False
         if is_simple and is_single:
-            trim_bool = trim_endpoints(neurograph, i, j, long_radius)
+            neurograph, trim_bool = trim_endpoints(
+                neurograph, i, j, long_radius
+            )
         elif neurograph.dist(i, j) > radius:
             neurograph.remove_proposal(proposal)
         n_endpoints_trimmed += 1 if trim_bool else 0
     print("# Endpoints Trimmed:", n_endpoints_trimmed)
+    return neurograph
 
 
 def trim_endpoints(neurograph, i, j, radius):
@@ -303,13 +320,13 @@ def trim_endpoints(neurograph, i, j, radius):
     # Update branches (if applicable)
     if min(d1, d2) > radius:
         neurograph.remove_proposal(frozenset((i, j)))
-        return False
+        return neurograph, False
     elif min(d1, d2) + 2 < geometry.dist(branch_i[0], branch_j[0]):
         if compute_dot(branch_i, branch_j, idx_i, idx_j) < DOT_THRESHOLD:
             neurograph = trim_to_idx(neurograph, i, idx_i)
             neurograph = trim_to_idx(neurograph, j, idx_j)
-            return True
-    return False
+            return neurograph, True
+    return neurograph, False
 
 
 def trim_endpoints_ordered(branch_1, branch_2):
@@ -398,6 +415,29 @@ def list_candidates_xyz(candidates):
 
 
 def compute_dot(branch_1, branch_2, idx_1, idx_2):
+    """
+    Computes dot product between principal components of "branch_1" and
+    "branch_2".
+
+    Parameters
+    ----------
+    branch_1 : numpy.ndarray
+        xyz coordinates of some branch from a neurograph.
+    branch_2 : numpy.ndarray
+        xyz coordinates of some branch from a neurograph.
+    idx_1 : int
+        Index that "branch_1" would be trimmed to (i.e. xyz coordinates from 0
+        to "idx_1" would be deleted from "branch_1").
+    idx_2 : int
+        Index that "branch_2" would be trimmed to (i.e. xyz coordinates from 0
+        to "idx_2" would be deleted from "branch_2").
+
+    Returns
+    -------
+    float
+        Dot product between principal components of "branch_1" and "branch_2".
+
+    """
     # Initializations
     origin = geometry.get_midpoint(branch_1[idx_1], branch_2[idx_2])
     b1 = branch_1 - origin
