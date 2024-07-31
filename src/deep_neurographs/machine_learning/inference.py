@@ -12,6 +12,7 @@ from time import time
 
 import numpy as np
 import torch
+from time import time
 from torch.nn.functional import sigmoid
 from torch.utils.data import DataLoader
 
