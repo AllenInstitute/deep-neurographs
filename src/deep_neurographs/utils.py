@@ -657,6 +657,24 @@ def init_timers():
 
 
 def time_writer(t, unit="seconds"):
+    """
+    Converts a runtime "t" to a larger unit of time if applicable.
+
+    Parameters
+    ----------
+    t : float
+        Runtime.
+    unit : str, optional
+        Unit of time that "t" is expressed in.
+
+    Returns
+    -------
+    float
+        Runtime
+    str
+        Unit of time.
+
+    """
     assert unit in ["seconds", "minutes", "hours"]
     upd_unit = {"seconds": "minutes", "minutes": "hours"}
     if t < 60 or unit == "hours":
@@ -702,7 +720,20 @@ def get_runtime(current, total, chunk_size, t0, t1):
 # --- miscellaneous ---
 def get_img_bbox(origin, shape):
     """
-    Origin is assumed to be top, front, left corner.
+    Gets the min and max coordinates of a bounding box based on "origin" and
+    "shape".
+
+    Parameters
+    ----------
+    origin : tuple
+        Origin of bounding box which is assumed to be top, front, left corner.
+    shape : tuple
+        Shape of bounding box.
+
+    Returns
+    -------
+    dict or None
+        Bounding box.
 
     """
     if origin and shape:
@@ -741,6 +772,20 @@ def get_swc_id(path):
 
 
 def numpy_to_hashable(arr):
+    """
+    Converts a numpy array to a hashable data structure.
+
+    Parameters
+    ----------
+    arr : numpy.ndarray
+        Array to be converted.
+
+    Returns
+    -------
+    list
+        Hashable items from "arr".
+
+    """
     return [tuple(item) for item in arr.tolist()]
 
 

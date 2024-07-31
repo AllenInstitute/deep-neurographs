@@ -490,11 +490,11 @@ def curvature(xyz_list):
 
 
 # -- Build feature matrix
-def get_matrix(neurographs, features, model_type, block_ids=None):
+def get_matrix(neurographs, features, model_type, sample_ids=None):
     assert model_type in SUPPORTED_MODELS, "Error! model_type not supported"
-    if block_ids:
+    if sample_ids:
         return __multiblock_feature_matrix(
-            neurographs, features, block_ids, model_type
+            neurographs, features, sample_ids, model_type
         )
     else:
         return __feature_matrix(neurographs, features, model_type)

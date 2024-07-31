@@ -28,7 +28,7 @@ from deep_neurographs.machine_learning import (
 )
 from deep_neurographs.machine_learning.gnn_utils import toCPU
 
-BATCH_SIZE = 1600
+BATCH_SIZE = 1000
 CONFIDENCE_THRESHOLD = 0.7
 
 
