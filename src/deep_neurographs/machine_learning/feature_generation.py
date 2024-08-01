@@ -28,7 +28,6 @@ from deep_neurographs.machine_learning.heterograph_feature_generation import (
 )
 
 CHUNK_SIZE = [64, 64, 64]
-EDGE_FEATURES = ["skel", "profiles"]
 N_BRANCH_PTS = 50
 N_PROFILE_PTS = 10
 N_SKEL_FEATURES = 22
@@ -52,6 +51,7 @@ def run(
     img,
     labels=None,
 ):
+    neurograph.init_kdtree(node_type="leaf")
     if "Hetero" in model_type:
         features = run_on_heterograph(
             neurograph, img, search_radius, proposals
@@ -446,25 +446,8 @@ def avg_radii(neurograph, edge):
 
 def n_nearby_leafs(neurograph, proposal, radius):
     xyz = neurograph.proposal_midpoint(proposal)
-    leafs = neurograph.query_kdtree(xyz, radius, node_type="leaf")
+    leafs = neurograph.query_kdtree(xyz, radius, "leaf")
     return len(leafs) - 1
-
-
-def n_nearby_junctions(neurograph, proposal, r):
-    i, j = tuple(proposal)
-    n_hits_i = count_junctions(neurograph, i, r)
-    n_hits_j = count_junctions(neurograph, j, r)
-    return np.array([n_hits_i, n_hits_j])
-
-
-def count_junctions(neurograph, i, r):
-    n_hits = 0
-    swc_id_i = neurograph.nodes[i]["xyz"]
-    xyz_i = neurograph.nodes[i]["xyz"]
-    for xyz in neurograph.query_kdtree(xyz_i, r, node_type="junction"):
-        if swc_id_i == neurograph.xyz_to_swc(xyz):
-            n_hits += 1
-    return n_hits
 
 
 # --- Edge Feature Generation --

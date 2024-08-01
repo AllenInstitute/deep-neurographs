@@ -118,11 +118,9 @@ def init_kdtree(neurograph, complex_bool):
 
     """
     if complex_bool:
-        neurograph.init_kdtree()
-        return neurograph.kdtree
+        return neurograph.get_kdtree()
     else:
-        neurograph.init_kdtree(node_type="leaf")
-        return neurograph.leaf_kdtree
+        return neurograph.get_kdtree(node_type="leaf")
 
 
 def get_candidates(

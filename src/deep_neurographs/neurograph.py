@@ -326,6 +326,7 @@ class NeuroGraph(nx.Graph):
             trim_endpoints_bool=trim_endpoints_bool,
         )
 
+        # Delete large data structures
         # Finish
         # absorb reducible nodes
         if optimize:
@@ -488,55 +489,52 @@ class NeuroGraph(nx.Graph):
             self.proposals[edge]["xyz"] = np.array([xyz_1, xyz_2])
 
     # -- KDTree --
-    def init_kdtree(self, node_type=None):
+    def init_kdtree(self, node_type):
         """
-        Builds a KD-Tree from the (x,y,z) coordinates of the subnodes of
-        each connected component in the graph.
+        Builds a KD-Tree from the xyz coordinates of the subset of nodes
+        indicated by "node_type".
 
         Parameters
         ----------
-        node_type : None or str, optional
-            Type of node used to build kdtree. The default is None.
+        node_type : None or str
+            Type of node used to build kdtree.
 
         Returns
         -------
         None
 
         """
-        # Build KD-Tree
-        err_msg = "Invalid node_type in self.query_kdtree!"
-        assert node_type in [None, "proposal", "leaf", "junction"], err_msg
+        assert node_type in ["leaf", "proposal"]
         if node_type == "leaf":
-            self.leaf_kdtree = KDTree(self.get_node_xyz(self.leafs))
-        elif node_type == "junction":
-            self.junction_kdtree = KDTree(self.get_node_xyz(self.junctions))
+            self.leaf_kdtree = self.get_kdtree(node_type="leaf")
         elif node_type == "proposal":
-            self.proposal_kdtree = KDTree(list(self.xyz_to_proposal.keys()))
-        else:
-            self.kdtree = KDTree(list(self.xyz_to_edge.keys()))
+            self.proposal_kdtree = self.get_kdtree(node_type="proposal")
 
-    def get_node_xyz(self, nodes):
+    def get_kdtree(self, node_type=None):
         """
-        Builds an array with all of the xyz coordinates from a subset of
-        nodes (e.g. leafs or junctions).
+        Builds KD-Tree from xyz coordinates across all nodes and edges.
 
         Parameters
         ----------
-        nodes : set
-            Subset of nodes.
+        node_type : None or str, optional
+            Type of nodes used to build kdtree.
 
         Returns
         -------
-        numpy.ndarray
-            xyz coordiantes of node subset.
+        KDTree
+            KD-Tree generated from xyz coordinates across all nodes and edges.
 
         """
-        arr = np.zeros((len(nodes), 3))
-        for idx, i in enumerate(list(nodes)):
-            arr[idx] = self.nodes[i]["xyz"]
-        return arr
+        # Get xyz coordinates
+        if node_type == "leaf":
+            xyz_list = [self.nodes[i]["xyz"] for i in self.leafs]
+        elif node_type == "proposal":
+            xyz_list = list(self.xyz_to_proposal.keys())
+        else:
+            xyz_list = list(self.xyz_to_edge.keys())
+        return KDTree(xyz_list)
 
-    def query_kdtree(self, xyz, d, node_type=None):
+    def query_kdtree(self, xyz, d, node_type):
         """
         Parameters
         ----------
@@ -552,19 +550,11 @@ class NeuroGraph(nx.Graph):
             nodes within a distance of "d" from "xyz".
 
         """
-        err_msg = "Invalid node_type in self.query_kdtree!"
-        assert node_type in [None, "leaf", "proposal", "junction"], err_msg
+        assert node_type in ["leaf", "proposal"]
         if node_type == "leaf":
             return geometry.query_ball(self.leaf_kdtree, xyz, d)
-        elif node_type == "junction":
-            if self.junction_kdtree:
-                return geometry.query_ball(self.junction_kdtree, xyz, d)
-            else:
-                return []
         elif node_type == "proposal":
             return geometry.query_ball(self.proposal_kdtree, xyz, d)
-        else:
-            return geometry.query_ball(self.kdtree, xyz, d)
 
     def get_projection(self, xyz):
         """
@@ -583,6 +573,24 @@ class NeuroGraph(nx.Graph):
         """
         _, idx = self.kdtree.query(xyz, k=1)
         return tuple(self.kdtree.data[idx])
+
+    def get_nodes_xyz(self, nodes):
+        """
+        Builds an array with all of the xyz coordinates from a subset of
+        nodes (e.g. leafs or junctions).
+
+        Parameters
+        ----------
+        nodes : set
+            Subset of nodes.
+
+        Returns
+        -------
+        numpy.ndarray
+            xyz coordiantes of node subset.
+
+        """
+        return 
 
     # --- Proposal Utils ---
     def n_proposals(self):
