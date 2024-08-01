@@ -28,7 +28,7 @@ from deep_neurographs.machine_learning import (
 )
 from deep_neurographs.machine_learning.gnn_utils import toCPU
 
-BATCH_SIZE = 1000
+BATCH_SIZE = 500
 CONFIDENCE_THRESHOLD = 0.7
 
 
@@ -170,7 +170,7 @@ def run_without_seeds(
     # Initializations
     accepts = []
     graph = neurograph.copy_graph()
-    n_batches = len(proposals) + 1 // batch_size
+    n_batches = len(proposals) // batch_size
     if "Graph" in model_type:
         batches = gnn_utils.get_batches(graph.copy(), proposals)
     else:
@@ -206,7 +206,7 @@ def run_without_seeds(
         # Report progress
         if i >= cnt * chunk_size:
             cnt, t1 = utils.report_progress(
-                i + 1, len(batches), chunk_size, cnt, t0, t1
+                i + 1, n_batches, chunk_size, cnt, t0, t1
             )
     return neurograph, accepts
 
