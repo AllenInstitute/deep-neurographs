@@ -12,10 +12,12 @@ other from a NeuroGraph.
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import utils
-from deep_neurographs.geometry import dist
+from networkx import connected_components
+
+from deep_neurographs import geometry, utils
 
 COLOR = "1.0 0.0 0.0"
+QUERY_DIST= 15
 
 
 # --- Doubles Removal ---
@@ -42,60 +44,57 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
 
     """
     # Initializations
+    components = [c for c in connected_components(neurograph) if len(c) == 2]
     deleted = set()
-    neurograph.init_kdtree()
-    nodes = list(nx.connected_components(neurograph))
+    kdtree = neurograph.get_kdtree()
     if output_dir:
         utils.mkdir(output_dir, delete=True)
 
     # Main
-    cnt = 1
+    chunk_cnt = 1
     t0, t1 = utils.init_timers()
-    for i, idx in enumerate(np.argsort([len(c) for c in nodes])):
-        # Determine whether to check component
-        node = utils.sample_singleton(nodes[idx])
-        swc_id = neurograph.nodes[node]["swc_id"]
-        if len(nodes[idx]) == 2 and swc_id not in deleted:
-            fragment_size = len(neurograph.edges[tuple(nodes[idx])]["xyz"])
-            if fragment_size * node_spacing < max_size:
+    for cnt, idx in enumerate(np.argsort([len(c) for c in components])):
+        i, j = tuple(components[idx])
+        swc_id = neurograph.nodes[i]["swc_id"]
+        if swc_id not in deleted:
+            if len(neurograph.edges[i, j]["xyz"]) * node_spacing < max_size:
                 # Check doubles criteria
-                n_points = len(neurograph.edges[tuple(nodes[idx])]["xyz"])
-                hits = compute_hits(neurograph, tuple(nodes[idx]), swc_id)
+                n_points = len(neurograph.edges[i, j]["xyz"])
+                hits = compute_hits(neurograph, kdtree, (i, j), swc_id)
                 if check_doubles_criteria(hits, n_points):
                     if output_dir:
-                        neurograph.to_swc(output_dir, nodes[idx], color=COLOR)
-                    neurograph = delete_nodes(neurograph, nodes[idx], swc_id)
+                        neurograph.to_swc(
+                            output_dir, components[idx], color=COLOR
+                        )
+                    neurograph = delete(neurograph, components[idx], swc_id)
                     deleted.add(swc_id)
 
         # Update progress bar
-        if i >= cnt * len(nodes) * 0.02:
-            cnt, t1 = utils.report_progress(
-                i + 1, len(nodes), len(nodes) * 0.02, cnt, t0, t1
+        if cnt >= chunk_cnt * len(components) * 0.02:
+            chunk_cnt, t1 = utils.report_progress(
+                cnt + 1, len(components), len(components) * 0.02, chunk_cnt, t0, t1
             )
     print("\n# Doubles detected:", len(deleted))
 
 
-def compute_hits(neurograph, edge, query_id):
+def compute_hits(neurograph, kdtree, edge, query_id):
     hits = dict()
     for i, xyz in enumerate(neurograph.edges[edge]["xyz"]):
         # Compute projections
         best_id = None
         best_dist = np.inf
-        for hit_xyz in neurograph.query_kdtree(xyz, 15):
+        for hit_xyz in geometry.query_ball(kdtree, xyz, QUERY_DIST):
             hit_id = neurograph.xyz_to_swc(hit_xyz)
             if hit_id is not None and hit_id != query_id:
-                if dist(hit_xyz, xyz) < best_dist:
-                    best_dist = dist(hit_xyz, xyz)
+                if geometry.dist(hit_xyz, xyz) < best_dist:
+                    best_dist = geometry.dist(hit_xyz, xyz)
                     best_id = hit_id
 
         # Store best
-        if best_id is not None:
+        if best_id:
             hits = utils.append_dict_value(hits, best_id, best_dist)
-
-        # Check whether to stop
-        if i == 8:
-            if len(hits) == 0:
-                return hits
+        elif i == 15 and len(hits) == 0:
+            return hits
     return hits
 
 
@@ -127,7 +126,7 @@ def check_doubles_criteria(hits, n_points):
     return False
 
 
-def delete_nodes(neurograph, nodes, swc_id):
+def delete(neurograph, nodes, swc_id):
     """
     Deletes "nodes" from "neurograph".
 
