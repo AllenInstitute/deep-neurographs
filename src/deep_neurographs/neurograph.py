@@ -574,24 +574,6 @@ class NeuroGraph(nx.Graph):
         _, idx = self.kdtree.query(xyz, k=1)
         return tuple(self.kdtree.data[idx])
 
-    def get_nodes_xyz(self, nodes):
-        """
-        Builds an array with all of the xyz coordinates from a subset of
-        nodes (e.g. leafs or junctions).
-
-        Parameters
-        ----------
-        nodes : set
-            Subset of nodes.
-
-        Returns
-        -------
-        numpy.ndarray
-            xyz coordiantes of node subset.
-
-        """
-        return 
-
     # --- Proposal Utils ---
     def n_proposals(self):
         """
