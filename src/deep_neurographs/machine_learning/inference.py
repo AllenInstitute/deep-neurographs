@@ -28,7 +28,7 @@ from deep_neurographs.machine_learning import (
 )
 from deep_neurographs.machine_learning.gnn_utils import toCPU
 
-BATCH_SIZE = 500
+BATCH_SIZE = 1000
 CONFIDENCE_THRESHOLD = 0.7
 
 
@@ -168,6 +168,7 @@ def run_without_seeds(
 
     """
     # Initializations
+    T0 = time()
     accepts = []
     graph = neurograph.copy_graph()
     n_batches = len(proposals) // batch_size
@@ -176,6 +177,7 @@ def run_without_seeds(
     else:
         dists = np.argsort([neurograph.proposal_length(p) for p in proposals])
         batches = ml_utils.get_batches(dists, batch_size)
+    print("\n Initializations:", time() - T0)
 
     # Main
     cnt = 1
@@ -183,8 +185,11 @@ def run_without_seeds(
     chunk_size = max(n_batches * 0.02, 1)
     for i, batch in enumerate(batches):
         # Init proposals
+        T0 = time()
+        print("batch", i)
         if "Graph" not in model_type:
             batch = [proposals[j] for j in batch]
+        print("init_proposals:", time() - T0)
 
         # Predict
         accepts_i, graph = predict(
@@ -200,8 +205,11 @@ def run_without_seeds(
         )
 
         # Merge proposals
+        T0 = time()
         neurograph = build.fuse_branches(neurograph, accepts_i)
         accepts.extend(accepts_i)
+        print("merge_proposals:", time() - T0)
+        print("")
 
         # Report progress
         if i >= cnt * chunk_size:
@@ -257,6 +265,7 @@ def predict(
             
     """
     # Generate features
+    T0 = time()
     features = feature_generation.run(
         neurograph,
         model_type,
@@ -269,10 +278,15 @@ def predict(
     dataset = ml_utils.init_dataset(
         neurograph, features, model_type, computation_graph=computation_graph
     )
+    print("feature_generation:", time() - T0)
 
     # Run model
+    T0 = time()
     idx_to_edge = get_idxs(dataset, model_type)
     proposal_probs = run_model(dataset, model, model_type)
+    print("run_model:", time() - T0)
+
+    T0 = time()
     accepts, graph = build.get_accepted_proposals(
         neurograph,
         graph,
@@ -281,6 +295,8 @@ def predict(
         high_threshold=0.9,
         threshold=confidence_threshold,
     )
+    print("get_accepted_proposals:", time() - T0)
+    
     return accepts, graph
 
 

@@ -65,6 +65,7 @@ class NeuroGraph(nx.Graph):
         # Initialize data structures for proposals
         self.xyz_to_edge = dict()
         self.kdtree = None
+        self.leaf_kdtree = None
         self.merged_ids = set()
 
         # Initialize bounding box (if exists)

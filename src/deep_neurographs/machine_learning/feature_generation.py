@@ -51,13 +51,17 @@ def run(
     img,
     labels=None,
 ):
-    neurograph.init_kdtree(node_type="leaf")
+    # Init leaf kd-tree (if applicable)
+    if neurograph.leaf_kdtree is None:
+        neurograph.init_kdtree(node_type="leaf")
+
+    # Feature generation
     if "Hetero" in model_type:
-        features = run_on_heterograph(
+        return run_on_heterograph(
             neurograph, img, search_radius, proposals
         )
     elif "Graph" in model_type:
-        features = run_on_graph(
+        return run_on_graph(
             neurograph,
             img,
             model_type,
@@ -66,7 +70,7 @@ def run(
             labels=labels,
         )
     else:
-        features = run_on_proposals(
+        return run_on_proposals(
             neurograph,
             img,
             model_type,
@@ -74,7 +78,6 @@ def run(
             search_radius,
             labels=labels,
         )
-    return features
 
 
 def run_on_graph(
