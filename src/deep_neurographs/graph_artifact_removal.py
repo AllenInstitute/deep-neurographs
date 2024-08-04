@@ -9,15 +9,13 @@ other from a NeuroGraph.
 
 """
 
-import networkx as nx
 import numpy as np
-
 from networkx import connected_components
 
 from deep_neurographs import geometry, utils
 
 COLOR = "1.0 0.0 0.0"
-QUERY_DIST= 15
+QUERY_DIST = 15
 
 
 # --- Doubles Removal ---
@@ -52,6 +50,7 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
 
     # Main
     chunk_cnt = 1
+    n_components = len(components)
     t0, t1 = utils.init_timers()
     for cnt, idx in enumerate(np.argsort([len(c) for c in components])):
         i, j = tuple(components[idx])
@@ -70,9 +69,9 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
                     deleted.add(swc_id)
 
         # Update progress bar
-        if cnt >= chunk_cnt * len(components) * 0.02:
+        if cnt >= chunk_cnt * n_components * 0.02:
             chunk_cnt, t1 = utils.report_progress(
-                cnt + 1, len(components), len(components) * 0.02, chunk_cnt, t0, t1
+                cnt + 1, n_components, n_components * 0.02, chunk_cnt, t0, t1
             )
     print("\n# Doubles detected:", len(deleted))
 

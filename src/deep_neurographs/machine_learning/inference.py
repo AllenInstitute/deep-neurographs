@@ -12,7 +12,6 @@ from time import time
 
 import numpy as np
 import torch
-from time import time
 from torch.nn.functional import sigmoid
 from torch.utils.data import DataLoader
 
@@ -84,10 +83,10 @@ def run(
 
     # Open images
     driver = "n5" if ".n5" in img_path else "zarr"
-    img = img_utils.open_tensorstore(img_path, driver)
+    img = img_utils.open(img_path, driver)
 
     driver = "neuroglancer_precomputed"
-    labels = img_utils.open_tensorstore(labels_path, driver)
+    labels = img_utils.open(labels_path, driver)
 
     # Call inference subroutine
     if len(neurograph.soma_ids) > 0:
@@ -168,7 +167,6 @@ def run_without_seeds(
 
     """
     # Initializations
-    T0 = time()
     accepts = []
     graph = neurograph.copy_graph()
     n_batches = len(proposals) // batch_size
@@ -177,7 +175,6 @@ def run_without_seeds(
     else:
         dists = np.argsort([neurograph.proposal_length(p) for p in proposals])
         batches = ml_utils.get_batches(dists, batch_size)
-    print("\n Initializations:", time() - T0)
 
     # Main
     cnt = 1
@@ -185,11 +182,9 @@ def run_without_seeds(
     chunk_size = max(n_batches * 0.02, 1)
     for i, batch in enumerate(batches):
         # Init proposals
-        T0 = time()
         print("batch", i)
         if "Graph" not in model_type:
             batch = [proposals[j] for j in batch]
-        print("init_proposals:", time() - T0)
 
         # Predict
         accepts_i, graph = predict(
@@ -262,16 +257,17 @@ def predict(
     list
         Accepted proposals
     networkx.Graph
-            
+        ...
+
     """
     # Generate features
     T0 = time()
     features = feature_generation.run(
         neurograph,
+        img,
         model_type,
         batch,
         search_radius,
-        img,
         labels=labels,
     )
     computation_graph = batch["graph"] if type(batch) is dict else None
@@ -296,7 +292,6 @@ def predict(
         threshold=confidence_threshold,
     )
     print("get_accepted_proposals:", time() - T0)
-    
     return accepts, graph
 
 

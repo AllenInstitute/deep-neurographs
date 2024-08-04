@@ -34,9 +34,8 @@ def init(neurograph, computation_graph, features):
     computation_graph : networkx.Graph
         Graph used by gnn to classify proposals.
     features : dict
-        Feature vectors corresponding to branches such that the keys are
-        "proposals" and "branches". The values are a dictionary containing
-        different types of features for edges and branches.
+        Dictionary that contains different types of feature vectors for
+        nodes, edges, and proposals.
 
     Returns
     -------
@@ -46,7 +45,7 @@ def init(neurograph, computation_graph, features):
     """
     # Extract features
     x_branches, _, idxs_branches = feature_generation.get_matrix(
-        neurograph, features["branches"], "GraphNeuralNet"
+        neurograph, features["edges"], "GraphNeuralNet"
     )
     x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
         neurograph, features["proposals"], "GraphNeuralNet"

@@ -20,7 +20,7 @@ from zipfile import ZipFile
 import numpy as np
 import psutil
 
-ANISOTROPY = np.array([0.748, 0.748, 1.0])
+from deep_neurographs import img_utils
 
 
 # --- dictionary utils ---
@@ -353,7 +353,7 @@ def list_gcs_filenames(bucket, cloud_path, extension):
 
     Parameters
     ----------
-    bucket : str
+    bucket : google.cloud.client
         Name of bucket to be read from.
     cloud_path : str
         Path to directory in "bucket".
@@ -429,7 +429,7 @@ def parse_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
     """
     metadata = read_json(path)
     origin = metadata["chunk_origin"]
-    chunk_origin = to_voxels(origin, anisotropy=anisotropy)
+    chunk_origin = img_utils.to_voxels(origin, anisotropy=anisotropy)
     return chunk_origin.tolist(), metadata["chunk_shape"]
 
 
@@ -474,95 +474,6 @@ def write_txt(path, contents):
     f.close()
 
 
-# --- coordinate conversions ---
-def img_to_patch(coord, patch_centroid, patch_shape):
-    """
-    Converts coordinates from global to local image coordinates.
-
-    Parameters
-    ----------
-    coord : numpy.ndarray
-        Coordinates to be converted.
-    patch_centroid : numpy.ndarray
-        Centroid of image patch.
-    patch_shape : numpy.ndarray
-        Shape of image patch.
-
-    Returns
-    -------
-    tuple
-        Converted coordinates.
-
-    """
-    half_patch_shape = [patch_shape[i] // 2 for i in range(3)]
-    patch_coord = coord - patch_centroid + half_patch_shape
-    return tuple(patch_coord.astype(int))
-
-
-def patch_to_img(coord, patch_centroid, patch_dims):
-    """
-    Converts coordinates from local to global image coordinates.
-
-    Parameters
-    ----------
-    coord : numpy.ndarray
-        Coordinates to be converted.
-    patch_centroid : numpy.ndarray
-        Centroid of image patch.
-    patch_shape : numpy.ndarray
-        Shape of image patch.
-
-    Returns
-    -------
-    tuple
-        Converted coordinates.
-
-    """
-    half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
-    return np.round(coord + patch_centroid - half_patch_dims).astype(int)
-
-
-def to_world(coord, shift=[0, 0, 0]):
-    """
-    Converts coordinates from voxels to world.
-
-    Parameters
-    ----------
-    coord : numpy.ndarray
-        Coordinate to be converted.
-    shift : list, optional
-        Shift to be applied to "coord". The default is [0, 0, 0].
-
-    Returns
-    -------
-    tuple
-        Converted coordinates.
-
-    """
-    return tuple([coord[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
-
-
-def to_voxels(xyz, anisotropy=ANISOTROPY):
-    """
-    Converts coordinates from world to voxel.
-
-    Parameters
-    ----------
-    xyz : numpy.ndarray
-        xyz coordinate to be converted to voxels.
-    anisotropy : list, optional
-        Anisotropy to be applied to values of interest. The default is
-        [1.0, 1.0, 1.0].
-
-    Returns
-    -------
-    numpy.ndarray
-        Coordinates converted to voxels.
-
-    """
-    return (xyz / np.array(anisotropy)).astype(int)
-
-
 # --- math utils ---
 def get_avg_std(data, weights=None):
     """
@@ -587,17 +498,17 @@ def get_avg_std(data, weights=None):
     return avg, math.sqrt(var)
 
 
-def is_contained(bbox, xyz, buffer=0):
+def is_contained(bbox, voxel):
     """
     Checks whether "xyz" is contained within "bbox".
 
     """
-    above = any(xyz > bbox["max"] - buffer)
-    below = any(xyz < bbox["min"] + buffer)
+    above = any(voxel >= bbox["max"])
+    below = any(voxel < bbox["min"])
     return False if above or below else True
 
 
-def is_list_contained(bbox, xyz_list):
+def is_list_contained(bbox, voxels):
     """
     Checks whether every element in "xyz_list" is contained in "bbox".
 
@@ -606,17 +517,17 @@ def is_list_contained(bbox, xyz_list):
     bbox : dict
         Dictionary with the keys "min" and "max" which specify a bounding box
         in the image.
-    xyz_list
+    voxels
         List of xyz coordinates to be checked.
 
     Returns
     -------
     bool
-        Indication of whether every element in "xyz_list" is contained in
+        Indication of whether every element in "voxels" is contained in
         "bbox".
 
     """
-    return any([is_contained(bbox, to_voxels(xyz)) for xyz in xyz_list])
+    return all([is_contained(bbox, voxel) for voxel in voxels])
 
 
 def sample_singleton(my_container):
@@ -718,40 +629,6 @@ def get_runtime(current, total, chunk_size, t0, t1):
 
 
 # --- miscellaneous ---
-def get_img_bbox(origin, shape):
-    """
-    Gets the min and max coordinates of a bounding box based on "origin" and
-    "shape".
-
-    Parameters
-    ----------
-    origin : tuple
-        Origin of bounding box which is assumed to be top, front, left corner.
-    shape : tuple
-        Shape of bounding box.
-
-    Returns
-    -------
-    dict or None
-        Bounding box.
-
-    """
-    if origin and shape:
-        origin = np.array(origin)
-        shape = np.array(shape)
-        return {"min": origin, "max": origin + shape}
-    else:
-        return None
-
-
-def get_minimal_bbox(coord_0, coord_1):
-    bbox = {
-        "min": [min(coord_0[i], coord_1[i]) for i in range(3)],
-        "max": [max(coord_0[i], coord_1[i]) + 1 for i in range(3)],
-    }
-    return bbox
-
-
 def get_swc_id(path):
     """
     Gets segment id of the swc file at "path".
