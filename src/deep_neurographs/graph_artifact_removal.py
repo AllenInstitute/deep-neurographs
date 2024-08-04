@@ -59,7 +59,7 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
             if len(neurograph.edges[i, j]["xyz"]) * node_spacing < max_size:
                 # Check doubles criteria
                 n_points = len(neurograph.edges[i, j]["xyz"])
-                hits = compute_hits(neurograph, kdtree, (i, j), swc_id)
+                hits = compute_projections(neurograph, kdtree, (i, j))
                 if check_doubles_criteria(hits, n_points):
                     if output_dir:
                         neurograph.to_swc(
@@ -76,8 +76,32 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
     print("\n# Doubles detected:", len(deleted))
 
 
-def compute_hits(neurograph, kdtree, edge, query_id):
+def compute_projections(neurograph, kdtree, edge):
+    """
+    Given a fragment defined by "edge", this routine iterates of every xyz in
+    the fragment and projects it onto the closest fragment. For each detected 
+    fragment, the fragment id and projection distance are stored in a
+    dictionary called "hits".
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph that contains "edge".
+    kdtree : KDTree
+        KD-Tree that contains all xyz coordinates of every fragment in
+        "neurograph".
+    edge : tuple
+        Pair of leaf nodes that define a fragment.
+
+    Returns
+    -------
+    dict
+        Dictionary that stores all fragments that were detected and the
+        projection distances.
+
+    """
     hits = dict()
+    query_id = neurograph.edges[edge]["swc_id"]
     for i, xyz in enumerate(neurograph.edges[edge]["xyz"]):
         # Compute projections
         best_id = None

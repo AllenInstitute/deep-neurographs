@@ -16,7 +16,7 @@ from deep_neurographs import utils
 
 
 # Directional Vectors
-def get_directional(neurograph, i, origin, depth):
+def get_directional(branches, i, origin, depth):
     """
     Computes the directional vector of a branch or bifurcation in a neurograph
     relative to a specified origin.
@@ -41,15 +41,14 @@ def get_directional(neurograph, i, origin, depth):
         specified origin.
 
     """
-    branches = neurograph.get_branches(i, ignore_reducibles=True)
     branches = shift_branches(branches, origin)
     if len(branches) == 1:
-        return compute_tangent(get_subarray(branches[0], depth))
+        return tangent(get_subarray(branches[0], depth))
     elif len(branches) == 2:
         branch_1 = get_subarray(branches[0], depth)
         branch_2 = get_subarray(branches[1], depth)
         branch = np.concatenate((branch_1, branch_2))
-        return compute_tangent(branch)
+        return tangent(branch)
     else:
         return np.array([0, 0, 0])
 
@@ -107,14 +106,14 @@ def compute_svd(xyz):
     return svd(xyz)
 
 
-def compute_tangent(xyz):
+def tangent(xyz_arr):
     """
     Computes the tangent vector at a given point or along a curve defined by
     an array of points.
 
     Parameters
     ----------
-    xyz : numpy.ndarray
+    xyz_arr : numpy.ndarray
         Array containing either two xyz coordinates or an arbitrary number of
         defining a curve.
 
@@ -124,20 +123,17 @@ def compute_tangent(xyz):
         Tangent vector at the specified point or along the curve.
 
     """
-    if xyz.shape[0] == 2:
-        tangent = (xyz[1] - xyz[0]) / dist(xyz[1], xyz[0])
+    if len(xyz_arr) == 2:
+        tangent_vec = (xyz_arr[1] - xyz_arr[0]) / dist(xyz_arr[1], xyz_arr[0])
     else:
-        U, S, VT = compute_svd(xyz)
-        tangent = VT[0]
-
-        _, _, VT = compute_svd([xyz[0], xyz[-1]])
-        tangent_2pts = VT[0]
-        if np.dot(tangent, tangent_2pts) < 0:
-            tangent *= -1
-    return tangent / np.linalg.norm(tangent)
+        _, _, VT = compute_svd(xyz_arr)
+        tangent_vec = VT[0]
+        if np.dot(tangent_vec, tangent([xyz_arr[0], xyz_arr[-1]])) < 0:
+            tangent_vec *= -1
+    return tangent_vec / np.linalg.norm(tangent_vec)
 
 
-def compute_normal(xyz):
+def normal(xyz):
     """
     Computes the normal vector of a plane defined by an array of xyz
     coordinates using Singular Value Decomposition (SVD).
@@ -154,8 +150,7 @@ def compute_normal(xyz):
 
     """
     U, S, VT = compute_svd(xyz)
-    normal = VT[-1]
-    return normal / np.linalg.norm(normal)
+    return VT[-1] / np.linalg.norm(VT[-1])
 
 
 def get_midpoint(xyz_1, xyz_2):
