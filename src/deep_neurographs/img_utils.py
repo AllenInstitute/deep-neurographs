@@ -8,21 +8,20 @@ Helper routines for working with images.
 
 """
 
-from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 import numpy as np
 import tensorstore as ts
-import zarr
 from skimage.color import label2rgb
 
+ANISOTROPY = np.array([0.748, 0.748, 1.0])
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
 
 # --- io utils ---
-def open_tensorstore(path, driver):
+def open(path, driver):
     """
-    Uploads segmentation mask stored as a directory of shard files.
+    Opens an image that is assumed to be stored as a directory of shard files.
 
     Parameters
     ----------
@@ -33,8 +32,8 @@ def open_tensorstore(path, driver):
 
     Returns
     -------
-    dict
-        Sparse image volume.
+    tensorstore.TensorStore
+        Pointer to image at "path".
 
     """
     assert driver in SUPPORTED_DRIVERS, "Error! Driver is not supported!"
@@ -63,55 +62,60 @@ def open_tensorstore(path, driver):
     return img
 
 
-def open_zarr(path):
+def read(img, voxel, shape, from_center=True):
     """
-    Opens zarr file at "path".
+    Reads a chunk of data from an image given a voxel coordinate and shape.
 
     Parameters
     ----------
-    path : str
-        Path to zarr file to be opened.
+    img : numpy.ndarray
+        Image to be read.
+    voxel : tuple
+        Voxel coordinate that specifies either the center or top, left, front
+        corner of the chunk to be read.
+    shape : tuple
+        Shape (dimensions) of the chunk to be read.
+    from_center : bool, optional
+        Indication of whether the provided coordinates represent the center of
+        the chunk or the top, left, front corner. The default is True.
 
     Returns
     -------
-    np.ndarray
-        Contents of zarr file at "path".
+    numpy.ndarray
+        Chunk of data read from an image.
 
     """
-    n5store = zarr.N5FSStore(path, "r")
-    if "653980" in path:
-        return zarr.open(n5store).ch488.s0
-    elif "653158" in path:
-        return zarr.open(n5store).s0
+    start, end = get_start_end(voxel, shape, from_center=from_center)
+    return deepcopy(
+        img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+    )
 
 
-def read_tensorstore(img, xyz, shape, from_center=True):
+def read_tensorstore(img, voxel, shape, from_center=True):
     """
-    Reads a chunk of data from the specified tensorstore array, given the xyz
-    coordinates and shape of the chunk.
+    Reads a chunk from an image given a voxel coordinate and the desired shape
+    of the chunk.
 
     Parameters
     ----------
     img : tensorstore.TensorStore
         Image to be read.
-    xyz : tuple
-        xyz coordinates of chunk to be read.
+    voxel : tuple
+        Voxel coordinate that specifies either the center or top, left, front
+        corner of the chunk to be read.
     shape : tuple
         Shape (dimensions) of the chunk to be read.
     from_center : bool, optional
         Indication of whether the provided coordinates represent the center of
-        the chunk or the starting point. If True, coordinates are the center;
-        if False, coordinates are the starting point of the chunk. The default
-        is True.
+        the chunk or the starting point. The default is True.
 
     Returns
     -------
     numpy.ndarray
-        Chunk of data read from the image.
+        Chunk of data read from an image.
 
     """
-    chunk = read_chunk(img, xyz, shape, from_center=from_center)
-    return chunk.read().result()
+    return read(img, voxel, shape, from_center=from_center).read().result()
 
 
 def read_tensorstore_with_bbox(img, bbox):
@@ -128,68 +132,73 @@ def read_tensorstore_with_bbox(img, bbox):
     Returns
     -------
     numpy.ndarray
-        Chunk of data read from the image.
+        Chunk of data read from an image.
+
     """
-    start = bbox["min"]
-    end = bbox["max"]
     try:
-        return (
-            img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
-            .read()
-            .result()
-        )
+        shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
+        return read_tensorstore(img, bbox["min"], shape, from_center=False)
     except Exception as e:
         print(type(e), e)
-        shape = [end[i] - start[i] + 1 for i in range(3)]
         return np.zeros(shape)
 
 
-def read_chunk(img, xyz, shape, from_center=True):
+def read_profile(img, specs):
     """
-    Reads a chunk of data from arr"", given the xyz coordinates and shape of
-    the chunk.
+    Reads an intensity profile from an image (i.e. image profile).
 
     Parameters
     ----------
-    img : numpy.ndarray or tensorstore.TensorStore
+    img : tensorstore.TensorStore
         Image to be read.
-    xyz : tuple
-        xyz coordinates of chunk to be read.
-    shape : tuple
-        Shape (dimensions) of the chunk to be read.
-    from_center : bool, optional
-        Indication of whether the provided coordinates represent the center of
-        the chunk or the starting point. If True, coordinates are the center;
-        if False, coordinates are the starting point of the chunk. The default
-        is True.
+    specs : dict
+        Dictionary that stores the bounding box of chunk to be read and the
+        voxel coordinates of the profile path.
 
     Returns
     -------
     numpy.ndarray
-        Chunk of data read from the array.
+        Image profile.
 
     """
-    start, end = get_start_end(xyz, shape, from_center=from_center)
-    return deepcopy(
-        img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
-    )
+    img_chunk = normalize(read_tensorstore_with_bbox(img, specs["bbox"]))
+    return read_intensities(img_chunk, specs["profile_path"])
 
 
-def get_start_end(xyz, shape, from_center=True):
+def read_intensities(img, voxels):
+    """
+    Reads the image intensities of voxels.
+
+    Parameters
+    ----------
+    img : tensorstore.TensorStore
+        Image to be read.
+    voxels : list
+        Voxels to be read.
+
+    Returns
+    -------
+    list
+        Image intensities.
+
+    """
+    return [img[tuple(voxel)] for voxel in voxels]
+
+
+def get_start_end(voxel, shape, from_center=True):
     """
     Gets the start and end indices of the chunk to be read.
 
     Parameters
     ----------
-    xyz : tuple
-        xyz coordinates of chunk to be read.
+    voxel : tuple
+        Voxel coordinate that specifies either the center or top, left, front
+        corner of the chunk to be read.
     shape : tuple
         Shape (dimensions) of the chunk to be read.
     from_center : bool, optional
         Indication of whether the provided coordinates represent the center of
-        the chunk or the starting point. If True, coordinates are the center;
-        if False, coordinates are the starting point of the chunk. The default
-        is True.
+        the chunk or the starting point. The default is True.
 
     Return
     ------
@@ -198,94 +207,15 @@ def get_start_end(xyz, shape, from_center=True):
 
     """
     if from_center:
-        start = [xyz[i] - shape[i] // 2 for i in range(3)]
-        end = [xyz[i] + shape[i] // 2 for i in range(3)]
+        start = [voxel[i] - shape[i] // 2 for i in range(3)]
+        end = [voxel[i] + shape[i] // 2 for i in range(3)]
     else:
-        start = xyz
-        end = [xyz[i] + shape[i] for i in range(3)]
+        start = voxel
+        end = [voxel[i] + shape[i] + 1 for i in range(3)]
     return start, end
 
 
-def read_superchunks(img_path, labels_path, xyz, shape, from_center=True):
-    """
-    Reads an image and label mask via multithreading.
-
-    Parameters
-    ----------
-    img_path : str
-        Path to an image on a GCS bucket.
-    labels_path : str
-        Path to a label mask on a GCS bucket.
-    xyz : tuple
-        xyz coordinates of chunk to be read.
-    shape : tuple
-        Shape (dimensions) of the chunk to be read.
-    from_center : bool, optional
-        Indication of whether the provided coordinates represent the center of
-        the chunk or the starting point. If True, coordinates are the center;
-        if False, coordinates are the starting point of the chunk. The default
-        is True.
-
-    Returns
-    -------
-    numpy.ndarray, numpy.ndarray
-        Image and label mask read from cloud bucket.
-
-    """
-    with ThreadPoolExecutor() as executor:
-        img_job = executor.submit(
-            get_superchunk,
-            img_path,
-            "n5" if ".n5" in img_path else "zarr",
-            xyz,
-            shape,
-            from_center=from_center,
-        )
-        labels_job = executor.submit(
-            get_superchunk,
-            labels_path,
-            "neuroglancer_precomputed",
-            xyz,
-            shape,
-            from_center=from_center,
-        )
-    img = img_job.result().astype(np.int16)
-    labels = labels_job.result().astype(np.int64)
-    assert img.shape == labels.shape, "img.shape != labels.shape"
-    return img, labels
-
-
-def get_superchunk(path, driver, xyz, shape, from_center=True):
-    """
-    Opens and reads a chunk from an image on a GCS bucket.
-
-    Parameters
-    ----------
-    path : str
-        Path to image on GCS bucket.
-    driver : str
-        Driver needed to open image.
-    xyz : tuple
-        xyz coordinates of chunk to be read.
-    shape : tuple
-        Shape (dimensions) of the chunk to be read.
-    from_center : bool, optional
-        Indication of whether the provided coordinates represent the center of
-        the chunk or the starting point. If True, coordinates are the center;
-        if False, coordinates are the starting point of the chunk. The default
-        is True.
-
-    Returns
-    -------
-    numpy.ndarray
-        Image read from GCS bucket.
-
-    """
-    img = open_tensorstore(path, driver)
-    return read_tensorstore(img, xyz, shape, from_center=from_center)
-
-
-# -- Image Operations --
+# -- operations --
 def normalize(img):
     """
     Normalizes an image so that the minimum and maximum intensity values are 0
@@ -348,3 +278,148 @@ def get_labels_mip(img, axis=0):
     mip = np.max(img, axis=axis)
     mip = label2rgb(mip)
     return (255 * mip).astype(np.uint8)
+
+
+# --- coordinate conversions ---
+def img_to_patch(voxel, patch_centroid, patch_shape):
+    """
+    Converts coordinates from global to local image coordinates.
+
+    Parameters
+    ----------
+    voxel : numpy.ndarray
+        Voxel coordinate to be converted.
+    patch_centroid : numpy.ndarray
+        Centroid of image patch.
+    patch_shape : numpy.ndarray
+        Shape of image patch.
+
+    Returns
+    -------
+    tuple
+        Converted coordinates.
+
+    """
+    half_patch_shape = [patch_shape[i] // 2 for i in range(3)]
+    patch_voxel = voxel - patch_centroid + half_patch_shape
+    return tuple(patch_voxel.astype(int))
+
+
+def patch_to_img(voxel, patch_centroid, patch_dims):
+    """
+    Converts coordinates from local to global image coordinates.
+
+    Parameters
+    ----------
+    coord : numpy.ndarray
+        Coordinates to be converted.
+    patch_centroid : numpy.ndarray
+        Centroid of image patch.
+    patch_shape : numpy.ndarray
+        Shape of image patch.
+
+    Returns
+    -------
+    tuple
+        Converted coordinates.
+
+    """
+    half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
+    return np.round(voxel + patch_centroid - half_patch_dims).astype(int)
+
+
+def to_world(voxel, shift=[0, 0, 0]):
+    """
+    Converts coordinates from voxels to world.
+
+    Parameters
+    ----------
+    coord : numpy.ndarray
+        Coordinate to be converted.
+    shift : list, optional
+        Shift to be applied to "coord". The default is [0, 0, 0].
+
+    Returns
+    -------
+    tuple
+        Converted coordinates.
+
+    """
+    return tuple([voxel[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
+
+
+def to_voxels(xyz, anisotropy=ANISOTROPY, downsample_factor=0):
+    """
+    Converts coordinates from world to voxel.
+
+    Parameters
+    ----------
+    xyz : numpy.ndarray
+        xyz coordinate to be converted to voxels.
+    anisotropy : list, optional
+        Anisotropy to be applied to values of interest. The default is
+        [1.0, 1.0, 1.0].
+    downsample_factor : int, optional
+        Downsampling factor that accounts for which level in the image pyramid
+        the voxel coordinates must index into. The default is 0.
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinates converted to voxels.
+
+    """
+    downsample_factor = 1 / 2 ** downsample_factor
+    return (downsample_factor * (xyz / np.array(anisotropy))).astype(int)
+
+
+# -- utils --
+def get_bbox(origin, shape):
+    """
+    Gets the min and max coordinates of a bounding box based on "origin" and
+    "shape".
+
+    Parameters
+    ----------
+    origin : tuple
+        Origin of bounding box which is assumed to be top, front, left corner.
+    shape : tuple
+        Shape of bounding box.
+
+    Returns
+    -------
+    dict or None
+        Bounding box.
+
+    """
+    if origin and shape:
+        origin = np.array(origin)
+        shape = np.array(shape)
+        return {"min": origin, "max": origin + shape}
+    else:
+        return None
+
+
+def get_minimal_bbox(voxels, buffer=0):
+    """
+    Gets the min and max coordinates of a bounding box that contains "voxels".
+
+    Parameters
+    ----------
+    voxels : numpy.ndarray
+        Array containing voxel coordinates.
+    buffer : int, optional
+        Constant value added/subtracted from the max/min coordinates of the
+        bounding box. The default is 0.
+
+    Returns
+    -------
+    dict
+        Bounding box.
+
+    """
+    bbox = {
+        "min": np.floor(np.min(voxels, axis=0) - 1).astype(int),
+        "max": np.ceil(np.max(voxels, axis=0) + buffer + 1).astype(int),
+    }
+    return bbox

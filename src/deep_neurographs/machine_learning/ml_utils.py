@@ -143,7 +143,7 @@ def init_proposal_dataset(
 ):
     # Extract features
     inputs, targets, idx_transforms = feature_generation.get_matrix(
-        neurographs, features, model_type, sample_ids=sample_ids
+        neurographs, features["proposals"], model_type, sample_ids=sample_ids
     )
     dataset = {
         "dataset": get_dataset(inputs, targets, model_type),

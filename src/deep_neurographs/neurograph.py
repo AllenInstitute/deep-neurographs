@@ -20,7 +20,7 @@ from scipy.spatial import KDTree
 
 from deep_neurographs import generate_proposals, geometry
 from deep_neurographs import graph_utils as gutils
-from deep_neurographs import swc_utils, utils
+from deep_neurographs import img_utils, swc_utils, utils
 from deep_neurographs.geometry import dist as get_dist
 from deep_neurographs.geometry import get_midpoint
 from deep_neurographs.machine_learning.groundtruth_generation import (
@@ -575,24 +575,6 @@ class NeuroGraph(nx.Graph):
         _, idx = self.kdtree.query(xyz, k=1)
         return tuple(self.kdtree.data[idx])
 
-    def get_nodes_xyz(self, nodes):
-        """
-        Builds an array with all of the xyz coordinates from a subset of
-        nodes (e.g. leafs or junctions).
-
-        Parameters
-        ----------
-        nodes : set
-            Subset of nodes.
-
-        Returns
-        -------
-        numpy.ndarray
-            xyz coordiantes of node subset.
-
-        """
-        return 
-
     # --- Proposal Utils ---
     def n_proposals(self):
         """
@@ -819,9 +801,10 @@ class NeuroGraph(nx.Graph):
             return self.edges[edge][key]
         else:
             return np.flip(self.edges[edge][key], axis=0)
-
+    """
     def node_xyz_dist(self, node, xyz):
         return get_dist(xyz, self.nodes[node]["xyz"])
+    """
 
     def edge_length(self, edge):
         """
@@ -842,8 +825,8 @@ class NeuroGraph(nx.Graph):
 
     def is_contained(self, node_or_xyz, buffer=0):
         if self.bbox:
-            img_coord = self.to_voxels(node_or_xyz)
-            return utils.is_contained(self.bbox, img_coord, buffer=buffer)
+            coord = self.to_voxels(node_or_xyz)
+            return utils.is_contained(self.bbox, coord, buffer=buffer)
         else:
             return True
 
@@ -858,10 +841,10 @@ class NeuroGraph(nx.Graph):
     def to_voxels(self, node_or_xyz, shift=False):
         shift = self.origin if shift else np.zeros((3))
         if type(node_or_xyz) == int:
-            img_coord = utils.to_voxels(self.nodes[node_or_xyz]["xyz"])
+            coord = img_utils.to_voxels(self.nodes[node_or_xyz]["xyz"])
         else:
-            img_coord = utils.to_voxels(node_or_xyz)
-        return img_coord - shift
+            coord = img_utils.to_voxels(node_or_xyz)
+        return coord - shift
 
     def is_leaf(self, i):
         """
@@ -880,6 +863,20 @@ class NeuroGraph(nx.Graph):
         return True if self.degree[i] == 1 else False
 
     def leaf_neighbor(self, i):
+        """
+        Gets the unique neighbor of the leaf node "i".
+
+        Parameters
+        ----------
+        i : int
+            Leaf  node.
+
+        Returns
+        -------
+        int
+             Unique neighbor of the leaf node "i".
+
+        """
         assert self.is_leaf(i)
         return list(self.neighbors(i))[0]
 

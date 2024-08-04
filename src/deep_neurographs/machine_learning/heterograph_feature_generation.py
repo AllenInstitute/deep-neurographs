@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from deep_neurographs import geometry, utils
+from deep_neurographs import geometry, img_utils, utils
 from deep_neurographs.machine_learning import feature_generation as feats
 
 WINDOW = [5, 5, 5]
@@ -20,10 +20,11 @@ N_PROFILE_PTS = 10
 NODE_PROFILE_DEPTH = 16
 
 
-# -- Wrappers --
-def run(neurograph, img, search_radius, proposals_dict):
+def generate_hgnn_features(
+    neurograph, img, proposals_dict, radius, downsample_factor
+):
     """
-    Generates features for proposals, edges, and nodes.
+    Generates features for a heterogeneous graph neural network model.
 
     Parameters
     ----------
@@ -31,32 +32,39 @@ def run(neurograph, img, search_radius, proposals_dict):
         NeuroGraph generated from a predicted segmentation.
     img : str
         Image stored on a GCS bucket.
-    search_radius : float
-        Search radius used to generate proposals.
     proposals_dict : dict
         Dictionary containing the computation graph used by gnn and proposals
         to be classified.
+    radius : float
+        Search radius used to generate proposals.
+    downsample_factor : int
+        Downsampling factor that accounts for which level in the image pyramid
+        the voxel coordinates must index into.
 
     Returns
     -------
     dict
         Dictionary that contains different types of feature vectors for
-        proposals, edges, and nodes.
+        nodes, edges, and proposals.
 
     """
+    computation_graph = proposals_dict["graph"]
+    proposals = proposals_dict["proposals"]
     features = {
-        "nodes": run_on_nodes(neurograph, proposals_dict["graph"], img),
-        "branches": run_on_branches(neurograph, proposals_dict["graph"]),
+        "nodes": run_on_nodes(
+            neurograph, computation_graph, img, downsample_factor
+        ),
+        "edges": run_on_edges(neurograph, computation_graph),
         "proposals": run_on_proposals(
-            neurograph, proposals_dict["proposals"], img, search_radius
+            neurograph, img, proposals, radius, downsample_factor
         )
     }
     return features
 
 
-def run_on_nodes(neurograph, computation_graph, img):
+def run_on_nodes(neurograph, computation_graph, img, downsample_factor):
     """
-    Generates feature vectors for every node in "neurograph".
+    Generates feature vectors for every node in "computation_graph".
 
     Parameters
     ----------
@@ -66,23 +74,30 @@ def run_on_nodes(neurograph, computation_graph, img):
         Graph used by gnn to classify proposals.
     img : str
         Image stored in a GCS bucket.
+    downsample_factor : int
+        Downsampling factor that accounts for which level in the image pyramid
+        the voxel coordinates must index into.
 
     Returns
     -------
     dict
-        Dictionary that maps nodes to a dictionary of different types of
+        Dictionary whose keys are feature types (i.e. skeletal and profiles)
+        and values are a dictionary that maps a node id to the corresponding
         feature vector.
 
     """
-    features = dict()
-    features["skel"] = node_skeletal(neurograph, computation_graph)
-    features["profiles"] = node_profiles(neurograph, computation_graph, img)
-    return features
+    node_features = {
+        "skel": node_skeletal(neurograph, computation_graph),
+        "profiles": node_profiles(
+            neurograph, computation_graph, img, downsample_factor
+        ),
+    }
+    return node_features
 
 
-def run_on_branches(neurograph, computation_graph):
+def run_on_edges(neurograph, computation_graph):
     """
-    Generates feature vectors for every edge in "neurograph".
+    Generates feature vectors for every edge in "computation_graph".
 
     Parameters
     ----------
@@ -94,14 +109,14 @@ def run_on_branches(neurograph, computation_graph):
     Returns
     -------
     dict
-        Dictionary that maps edges to a dictionary of different types of
-        feature vector.
+        Dictionary whose keys are feature types (i.e. skeletal) and values are
+        a dictionary that maps an edge id to the corresponding feature vector.
 
     """
-    return {"skel": branch_skeletal(neurograph, computation_graph)}
+    return {"skel": edge_skeletal(neurograph, computation_graph)}
 
 
-def run_on_proposals(neurograph, proposals, img, search_radius):
+def run_on_proposals(neurograph, img, proposals, radius, downsample_factor):
     """
     Generates feature vectors for every proposal in "neurograph".
 
@@ -113,26 +128,33 @@ def run_on_proposals(neurograph, proposals, img, search_radius):
         Image stored in a GCS bucket.
     proposals : list[frozenset]
         List of proposals for which features will be generated.
-    search_radius : float
+    radius : float
         Search radius used to generate proposals.
+    downsample_factor : int
+        Downsampling factor that accounts for which level in the image pyramid
+        the voxel coordinates must index into.
 
     Returns
     -------
     dict
-        Dictionary that maps proposals to a dictionary of
-        different types of feature vector.
+        Dictionary whose keys are feature types (i.e. skeletal and profiles)
+        and values are a dictionary that maps a proposal id to the
+        corresponding feature vector.
 
     """
-    features = dict()
-    features["skel"] = proposal_skeletal(neurograph, proposals, search_radius)
-    features["profiles"] = feats.proposal_profiles(neurograph, proposals, img)
-    return features
+    proposal_features = {
+        "skel": proposal_skeletal(neurograph, proposals, radius),
+        "profiles": feats.proposal_profiles(
+            neurograph, img, proposals, downsample_factor
+        ),
+    }
+    return proposal_features
 
 
 # -- Skeletal Features --
 def node_skeletal(neurograph, computation_graph):
     """
-    Generates skeleton-based features for nodes in "neurograph".
+    Generates skeleton-based features for nodes in "computation_graph".
 
     Parameters
     ----------
@@ -144,12 +166,12 @@ def node_skeletal(neurograph, computation_graph):
     Returns
     -------
     dict
-        Dictionary that maps nodes to the corresponding feature vectors.
+        Dictionary that maps a node id to the corresponding feature vector.
 
     """
-    features = dict()
+    node_skeletal_features = dict()
     for i in computation_graph.nodes:
-        features[i] = np.concatenate(
+        node_skeletal_features[i] = np.concatenate(
             (
                 neurograph.degree[i],
                 neurograph.nodes[i]["radius"],
@@ -157,12 +179,12 @@ def node_skeletal(neurograph, computation_graph):
             ),
             axis=None,
         )
-    return features
+    return node_skeletal_features
 
 
-def branch_skeletal(neurograph, computation_graph):
+def edge_skeletal(neurograph, computation_graph):
     """
-    Generates skeleton-based features for edges in "neurograph".
+    Generates skeleton-based features for edges in "computation_graph".
 
     Parameters
     ----------
@@ -174,22 +196,22 @@ def branch_skeletal(neurograph, computation_graph):
     Returns
     -------
     dict
-        Dictionary that maps edges to the corresponding feature vectors.
+        Dictionary that maps an edge id to the corresponding feature vector.
 
     """
-    features = dict()
+    edge_skeletal_features = dict()
     for edge in neurograph.edges:
-        features[frozenset(edge)] = np.concatenate(
+        edge_skeletal_features[frozenset(edge)] = np.concatenate(
             (
                 np.mean(neurograph.edges[edge]["radius"]),
                 neurograph.edge_length(edge) / 1000,
             ),
             axis=None,
         )
-    return features
+    return edge_skeletal_features
 
 
-def proposal_skeletal(neurograph, proposals, search_radius):
+def proposal_skeletal(neurograph, proposals, radius):
     """
     Generates skeleton-based features for "proposals".
 
@@ -199,22 +221,22 @@ def proposal_skeletal(neurograph, proposals, search_radius):
         NeuroGraph generated from a predicted segmentation.
     proposals : list[frozenset]
         List of proposals for which features will be generated.
-    search_radius : float
+    radius : float
         Search radius used to generate proposals.
 
     Returns
     -------
     dict
-        Dictionary that maps nodes to the corresponding feature vectors.
+        Dictionary that maps a node id to the corresponding feature vector.
 
     """
-    features = dict()
+    proposal_skeletal_features = dict()
     for proposal in proposals:
         i, j = tuple(proposal)
-        features[proposal] = np.concatenate(
+        proposal_skeletal_features[proposal] = np.concatenate(
             (
                 neurograph.proposal_length(proposal),
-                feats.n_nearby_leafs(neurograph, proposal, search_radius),
+                feats.n_nearby_leafs(neurograph, proposal, radius),
                 feats.get_radii(neurograph, proposal),
                 feats.get_directionals(neurograph, proposal, 8),
                 feats.get_directionals(neurograph, proposal, 16),
@@ -223,13 +245,13 @@ def proposal_skeletal(neurograph, proposals, search_radius):
             ),
             axis=None,
         )
-    return features
+    return proposal_skeletal_features
 
 
-# -- Image features --
-def node_profiles(neurograph, computation_graph, img):
+# -- image features --
+def node_profiles(neurograph, computation_graph, img, downsample_factor):
     """
-    Generates proposals for nodes in "neurograph".
+    Generates image profiles for nodes in "computation_graph".
 
     Parameters
     ----------
@@ -238,37 +260,38 @@ def node_profiles(neurograph, computation_graph, img):
     computation_graph : networkx.Graph
         Graph used by gnn to classify proposals.
     img : str
-        Image stored in a GCS bucket.
+        Image to be read from.
+    downsample_factor : int
+        Downsampling factor that accounts for which level in the image pyramid
+        the voxel coordinates must index into.
 
     Returns
     -------
     dict
-        Dictionary that maps nodes to image profiles.
+        Dictionary that maps a node id to the corresponding image profile.
 
-    """
-    # Generate coordinates
-    coords = dict()
+    """    
+    # Get specifications to compute profiles
+    specs = dict()
     for i in computation_graph.nodes:
         if neurograph.degree[i] == 1:
             profile_path = get_leaf_profile_path(neurograph, i)
         else:
-            profile_path = get_junction_profile_path(neurograph, i)
-        coords[i] = get_node_profile_coords(profile_path)
+            profile_path = get_branching_profile_path(neurograph, i)
+        specs[i] = get_node_profile_specs(profile_path, downsample_factor)
 
     # Generate profiles
     with ThreadPoolExecutor() as executor:
         threads = []
-        for i, coords_i in coords.items():
+        for i, specs_i in specs.items():
             threads.append(
-                executor.submit(feats.get_profile, img, coords_i, i)
+                executor.submit(feats.get_profile, img, specs_i, i)
             )
 
-    # Process results
-    profiles = dict()
-    for thread in as_completed(threads):
-        i, profile = thread.result()
-        profiles[i] = profile
-    return profiles
+        node_profile_features = dict()
+        for thread in as_completed(threads):
+            node_profile_features.update(thread.result())
+    return node_profile_features
 
 
 def get_leaf_profile_path(neurograph, i):
@@ -285,130 +308,161 @@ def get_leaf_profile_path(neurograph, i):
     Returns
     -------
     list
-        xyz coordinates that profile will be computed over.
+        Voxel coordinates that profile is generated from.
 
     """
-    j = list(neurograph.neighbors(i))[0]
+    j = neurograph.leaf_neighbor(i)
     return get_profile_path(neurograph.oriented_edge((i, j), i, key="xyz"))
 
 
-def get_junction_profile_path(neurograph, i):
+def get_branching_profile_path(neurograph, i):
     """
-    Gets path that profile will be computed over for the junction node "i".
+    Gets path that profile will be computed over for the branching node "i".
 
     Parameters
     ----------
     neurograph : NeuroGraph
         NeuroGraph generated from a predicted segmentation.
     i : int
-        Junction node in "neurograph".
+        branching node in "neurograph".
 
     Returns
     -------
     list
-        xyz coordinates that profile will be computed over.
+        Voxel coordinates that profile is generated from.
 
     """
-    # Get branches
     nbs = list(neurograph.neighbors(i))
-    xyz_list_1 = neurograph.oriented_edge((i, nbs[0]), i, key="xyz")
-    xyz_list_2 = neurograph.oriented_edge((i, nbs[1]), i, key="xyz")
-
-    # Get profile paths
-    path_1 = get_profile_path(xyz_list_1)
-    path_2 = get_profile_path(xyz_list_2)
-    return np.vstack([np.flip(path_1, axis=0), path_2])
+    voxels_1 = get_profile_path(neurograph.oriented_edge((i, nbs[0]), i))
+    voxles_2 = get_profile_path(neurograph.oriented_edge((i, nbs[1]), i))
+    return np.vstack([np.flip(voxels_1, axis=0), voxles_2])
 
 
-def get_profile_path(xyz_list):
-    # Get path
-    path_length = 0
-    i = 1
-    for i in range(1, len(xyz_list)):
-        path_length += geometry.dist(xyz_list[i - 1], xyz_list[i])
-        if path_length >= NODE_PROFILE_DEPTH and i > 2:
+def get_profile_path(xyz_path):
+    """
+    Gets a sub-path from "xyz_path" that has a path length of at most
+    "NODE_PROFILE_DEPTH" microns.
+
+    Parameters
+    ----------
+    xyz_path : numpy.ndarray
+        xyz coordinates that correspond to some edge in a neurograph from
+        which the profile path is extracted from.
+
+    Returns
+    -------
+    numpy.ndarray
+        xyz coordinates that an image profile will be generated from.
+
+    """
+    # Check for degeneracy
+    if xyz_path.shape[0] == 1:
+        xyz_path = np.vstack([xyz_path, xyz_path - 0.01])
+
+    # Truncate path
+    length = 0
+    for i in range(1, xyz_path.shape[0]):
+        length += geometry.dist(xyz_path[i - 1], xyz_path[i])
+        if length >= NODE_PROFILE_DEPTH:
             break
-
-    # Check for degenerate path
-    if xyz_list.shape[0] == 1:
-        xyz_list = np.vstack([xyz_list, xyz_list - 0.01])
-    return xyz_list[0:i, :]
+    return xyz_path[0:i, :]
 
 
-def get_node_profile_coords(profile_path):
-    profile_path = transform_path(profile_path)
-    bbox = get_bbox(profile_path)
-    bbox["min"] = [bbox["min"][i] - 1 for i in range(3)]
-    bbox["max"] = [bbox["max"][i] + 2 for i in range(3)]
-    return {"bbox": bbox, "profile_path": shift_path(profile_path, bbox)}
-
-
-def transform_path(profile_path):
-    profile_path = np.array([utils.to_voxels(xyz) for xyz in profile_path])
-    if profile_path.shape[0] < 5:
-        profile_path = check_degenerate(profile_path)
-    return geometry.sample_curve(profile_path, N_PROFILE_PTS)
-
-
-def shift_path(profile_path, bbox):
+def get_node_profile_specs(xyz_path, downsample_factor):
     """
-    Shifts "profile_path" by subtracting the min coordinate in "bbox".
+    Gets image bounding box and voxel coordinates needed to compute an image
+    profile.
 
     Parameters
     ----------
-    profile_path : numpy.ndarray
-        Array containing xyz coordinates to be shifted.
-    bbox : dict
-        Coordinates of a bounding box that contains "profile_path".
-
-    Returns
-    -------
-    numpy.ndarray
-        Shifted "profile_path".
-
-    """
-    return np.array([xyz - bbox["min"] + 1 for xyz in profile_path], dtype=int)
-
-
-def check_degenerate(profile_path):
-    """
-    Checks whether "profile_path" contains at least two unique points. If
-    False, the unique xyz coordinate is perturbed and added to "profile_path".
-
-    Parameters
-    ----------
-    profile_path : numpy.ndarray
-        Array containing xyz coordinates to be checked.
-
-    Returns
-    -------
-    numpy.ndarray
-        Array of xyz coordinates that form a non-degenerate path.
-
-    """
-    if np.unique(profile_path, axis=0).shape[0] == 1:
-        profile_path = np.vstack(
-            [profile_path, profile_path[0, :] + np.array([1, 1, 1], dtype=int)]
-        )
-    return profile_path
-
-
-def get_bbox(xyz_arr):
-    """
-    Gets the xyz coordinates of a bounding box that contains "xyz_arr".
-
-    Parameters
-    ----------
-    xyz_arr : numpy.ndarray
-        Array containing xyz coordinates.
+    xyz_path : numpy.ndarray
+        xyz coordinates that represent an image profile path.
+    downsample_factor : int
+        Downsampling factor that accounts for which level in the image pyramid
+        the voxel coordinates must index into.
 
     Returns
     -------
     dict
-        Bounding box.
+        Specifications needed to compute image profile for a given proposal.
 
     """
-    return {
-        "min": np.floor(np.min(xyz_arr, axis=0)).astype(int),
-        "max": np.ceil(np.max(xyz_arr, axis=0)).astype(int),
-    }
+    voxels = transform_path(xyz_path, downsample_factor)
+    bbox = img_utils.get_minimal_bbox(voxels, buffer=1)
+    return {"bbox": bbox, "profile_path": shift_path(voxels, bbox)}
+
+
+def transform_path(xyz_path, downsample_factor):
+    """
+    Transforms "xyz_path" by converting the xyz coordinates to voxels and
+    resampling "N_PROFILE_PTS" from voxel coordinates.
+
+    Parameters
+    ----------
+    xyz_path : numpy.ndarray
+        xyz coordinates that represent an image profile path.
+    downsample_factor : int
+        Downsampling factor that accounts for which level in the image pyramid
+        the voxel coordinates must index into.
+
+    Returns
+    -------
+    numpy.ndarray
+        Voxel coordinates that represent an image profile path.
+
+    """
+    # Main
+    voxels = list()
+    for xyz in xyz_path:
+        voxels.append(
+            img_utils.to_voxels(xyz, downsample_factor=downsample_factor)
+        )
+
+    # Finish
+    voxels = np.array(voxels)
+    if voxels.shape[0] < 5:
+        voxels = check_degenerate(voxels)
+    return geometry.sample_curve(voxels, N_PROFILE_PTS)
+
+
+def shift_path(voxels, bbox):
+    """
+    Shifts "voxels" by subtracting the min coordinate in "bbox".
+
+    Parameters
+    ----------
+    voxels : numpy.ndarray
+        Voxel coordinates to be shifted.
+    bbox : dict
+        Coordinates of a bounding box that contains "voxels".
+
+    Returns
+    -------
+    numpy.ndarray
+        Voxels shifted by min coordinate in "bbox".
+
+    """
+    return [voxel - bbox["min"] for voxel in voxels]
+
+
+def check_degenerate(voxels):
+    """
+    Checks whether "voxels" contains at least two unique points. If False, the
+    unique voxel coordinate is perturbed and added to "voxels".
+
+    Parameters
+    ----------
+    voxels : numpy.ndarray
+        Voxel coordinates to be checked.
+
+    Returns
+    -------
+    numpy.ndarray
+        Voxel coordinates that form a non-degenerate path.
+
+    """
+    if np.unique(voxels, axis=0).shape[0] == 1:
+        voxels = np.vstack(
+            [voxels, voxels[0, :] + np.array([1, 1, 1], dtype=int)]
+        )
+    return voxels

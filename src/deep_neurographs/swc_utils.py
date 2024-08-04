@@ -391,6 +391,7 @@ def set_radius(graph, i):
         radius = 1.0
     return radius
 
+
 def make_simple_entry(node, parent, xyz, radius=8):
     """
     Makes an entry to be written in an swc file.
