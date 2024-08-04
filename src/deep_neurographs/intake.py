@@ -14,7 +14,7 @@ from time import time
 from google.cloud import storage
 
 from deep_neurographs import graph_utils as gutils
-from deep_neurographs import utils
+from deep_neurographs import img_utils, utils
 from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.swc_utils import process_gcs_zip, process_local_paths
 
@@ -96,7 +96,7 @@ def build_neurograph_from_local(
     """
     # Process swc files
     assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
-    img_bbox = utils.get_img_bbox(img_patch_origin, img_patch_shape)
+    img_bbox = img_utils.get_bbox(img_patch_origin, img_patch_shape)
     paths = utils.list_paths(swc_dir, ext=".swc") if swc_dir else swc_paths
     swc_dicts, paths = process_local_paths(
         paths, anisotropy=anisotropy, min_size=min_size, img_bbox=img_bbox

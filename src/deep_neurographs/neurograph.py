@@ -598,24 +598,6 @@ class NeuroGraph(nx.Graph):
     def get_complex_proposals(self):
         return set([e for e in self.proposals if not self.is_simple(e)])
 
-    def proposal_xyz(self, proposal):
-        """
-        Gets the xyz coordinates of the nodes that comprise "proposal".
-
-        Parameters
-        ----------
-        proposal : frozenset
-            Pair of nodes that form a proposal.
-
-        Returns
-        -------
-        numpy.ndarray
-            xyz coordinates of nodes that comprise "proposal".
-
-        """
-        i, j = tuple(proposal)
-        return np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
-
     def proposal_search(self, root_1, root_2, max_depth, max_dist):
         queue = [(root_1, 0), (root_2, 0)]
         roots = [root_1, root_2]
@@ -645,6 +627,69 @@ class NeuroGraph(nx.Graph):
     def proposal_midpoint(self, proposal):
         i, j = tuple(proposal)
         return get_midpoint(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
+
+    def proposal_radii(self, proposal):
+        """
+        Gets the radii of the nodes that comprise "proposal".
+
+        Parameters
+        ----------
+        proposal : frozenset
+            Pair of nodes that form a proposal.
+
+        Returns
+        -------
+        numpy.ndarray
+            radii of nodes that comprise "proposal".
+
+        """
+        i, j = tuple(proposal)
+        return np.array([self.nodes[i]["radius"], self.nodes[j]["radius"]])
+
+    def proposal_avg_radii(self, proposal):
+        i, j = tuple(proposal)
+        radii_i = self.get_branches(i, ignore_reducibles=True, key="radius")
+        radii_j = self.get_branches(j, ignore_reducibles=True, key="radius")
+        return np.array([avg_radius(radii_i), avg_radius(radii_j)])
+
+    def proposal_xyz(self, proposal):
+        """
+        Gets the xyz coordinates of the nodes that comprise "proposal".
+
+        Parameters
+        ----------
+        proposal : frozenset
+            Pair of nodes that form a proposal.
+
+        Returns
+        -------
+        numpy.ndarray
+            xyz coordinates of nodes that comprise "proposal".
+
+        """
+        i, j = tuple(proposal)
+        return np.array([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
+
+    def proposal_directionals(self, proposal, window):
+        # Compute tangent vectors
+        i, j = tuple(proposal)
+        direction = geometry.tangent(self.proposal_xyz(proposal))
+        origin = self.proposal_midpoint(proposal)
+        branches_i = self.get_branches(i, ignore_reducibles=True)
+        branches_j = self.get_branches(j, ignore_reducibles=True)
+        direction_i = geometry.get_directional(branches_i, i, origin, window)
+        direction_j = geometry.get_directional(branches_j, j, origin, window)
+
+        # Compute features
+        inner_product_1 = abs(np.dot(direction, direction_i))
+        inner_product_2 = abs(np.dot(direction, direction_j))
+        if self.is_simple(proposal):
+            inner_product_3 = np.dot(direction_i, direction_j)
+        else:
+            inner_product_3 = np.dot(direction_i, direction_j)
+            if not self.is_simple(proposal):
+                inner_product_3 = max(inner_product_3, -inner_product_3)
+        return np.array([inner_product_1, inner_product_2, inner_product_3])
 
     def merge_proposal(self, edge):
         i, j = tuple(edge)
@@ -692,6 +737,10 @@ class NeuroGraph(nx.Graph):
             visited.add(i)
             for j in [j for j in self.neighbors(i) if j not in visited]:
                 queue.append(j)
+
+    def n_nearby_leafs(self, proposal, radius):
+        xyz = self.proposal_midpoint(proposal)
+        return len(self.query_kdtree(xyz, radius, "leaf")) - 1
 
     # --- Utils ---
     def is_soma(self, node_or_swc):
@@ -1056,3 +1105,12 @@ class NeuroGraph(nx.Graph):
             text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
             n_entries += 1
         return text_buffer, n_entries
+
+
+# -- utils --
+def avg_radius(radii_list):
+    avg = 0
+    for radii in radii_list:
+        end = max(min(16, len(radii) - 1), 1)
+        avg += np.mean(radii[0:end]) / len(radii_list)
+    return avg

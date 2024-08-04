@@ -27,7 +27,7 @@ from deep_neurographs.machine_learning import (
 )
 from deep_neurographs.machine_learning.gnn_utils import toCPU
 
-BATCH_SIZE = 1000
+BATCH_SIZE = 1600
 CONFIDENCE_THRESHOLD = 0.7
 
 
@@ -41,6 +41,7 @@ def run(
     search_radius,
     batch_size=BATCH_SIZE,
     confidence_threshold=CONFIDENCE_THRESHOLD,
+    downsample_factor=0,
 ):
     """
     Wrapper routine that calls the appropriate inference subroutine based on
@@ -68,6 +69,9 @@ def run(
     confidence_threshold : float, optional
         Threshold on acceptance probability for proposals. The default is the
         global variable "CONFIDENCE_THRESHOLD".
+    downsample_factor : int, optional
+        Downsampling factor that accounts for which level in the image pyramid
+        the voxel coordinates must index into. The default is 0.
 
     Returns
     -------
@@ -112,6 +116,7 @@ def run(
             search_radius,
             batch_size=batch_size,
             confidence_threshold=confidence_threshold,
+            downsample_factor=downsample_factor,
         )
 
     # Report Results
@@ -130,6 +135,7 @@ def run_without_seeds(
     search_radius,
     batch_size=BATCH_SIZE,
     confidence_threshold=0.7,
+    downsample_factor=0,
 ):
     """
     Runs inference without using seeds, where batches of proposals are chosen
@@ -157,6 +163,9 @@ def run_without_seeds(
     confidence_threshold : float, optional
         Threshold on acceptance probability for proposals. The default is the
         global variable "CONFIDENCE_THRESHOLD".
+    downsample_factor : int, optional
+        Downsampling factor that accounts for which level in the image pyramid
+        the voxel coordinates must index into. The default is 0.
 
     Returns
     -------
@@ -197,6 +206,7 @@ def run_without_seeds(
             batch,
             search_radius,
             confidence_threshold=confidence_threshold,
+            downsample_factor=downsample_factor,
         )
 
         # Merge proposals
@@ -224,6 +234,7 @@ def predict(
     batch,
     search_radius,
     confidence_threshold=CONFIDENCE_THRESHOLD,
+    downsample_factor=0
 ):
     """
     Generates features and runs model on a batch of proposals.
@@ -251,6 +262,9 @@ def predict(
     confidence_threshold : float, optional
         Threshold on acceptance probability for proposals. The default is the
         global variable "CONFIDENCE_THRESHOLD".
+    downsample_factor : int, optional
+        Downsampling factor that accounts for which level in the image pyramid
+        the voxel coordinates must index into. The default is 0.
 
     Returns
     -------
@@ -269,6 +283,7 @@ def predict(
         batch,
         search_radius,
         labels=labels,
+        downsample_factor=downsample_factor,
     )
     computation_graph = batch["graph"] if type(batch) is dict else None
     dataset = ml_utils.init_dataset(

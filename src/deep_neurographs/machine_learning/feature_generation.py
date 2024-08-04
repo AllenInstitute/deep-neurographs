@@ -9,15 +9,15 @@ Generates features for training a model and performing inference.
 Conventions:   (1) "xyz" refers to a real world coordinate such as those from
                    an swc file.
 
-               (2) "coord" refers to an image coordinate in a whole exaspim
-                   image. Note that we try to avoid using "coord" to refer to
-                   coordinate in a superchunk or image patch.
+               (2) "voxel" refers to an voxel coordinate in a whole exaspim
+                   image.
 
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from random import sample
+from time import time
 
 import numpy as np
 import tensorstore as ts
@@ -266,27 +266,24 @@ def proposal_profiles(neurograph, img, proposals, downsample_factor):
         profile.
 
     """
-    # Get specifications to compute profiles
-    specs = dict()
-    for i, proposal in enumerate(proposals):
-        xyz_1, xyz_2 = neurograph.proposal_xyz(proposal)
-        specs[proposal] = get_proposal_profile_specs(xyz_1, xyz_2, downsample_factor)
-
-    # Generate profiles
+    t0 = time()
     with ThreadPoolExecutor() as executor:
         threads = []
-        for proposal_i, specs_i in specs.items():
+        for proposal in proposals:
+            xyz_1, xyz_2 = neurograph.proposal_xyz(proposal)
+            specs = get_profile_specs(xyz_1, xyz_2, downsample_factor)
             threads.append(
-                executor.submit(get_profile, img, specs_i, proposal_i)
+                executor.submit(get_profile, img, specs, proposal)
             )
 
         profiles = dict()
         for thread in as_completed(threads):
             profiles.update(thread.result())
+    print(f"feature_generation -- proposal profiles:", time() - t0)
     return profiles
 
 
-def get_proposal_profile_specs(xyz_1, xyz_2, downsample_factor):
+def get_profile_specs(xyz_1, xyz_2, downsample_factor):
     """
     Gets image bounding box and voxel coordinates needed to compute an image
     profile.
@@ -370,6 +367,7 @@ def proposal_skeletal(neurograph, proposals, radius):
         Features generated from skeleton.
 
     """
+    t0 = time()
     features = dict()
     for proposal in proposals:
         i, j = tuple(proposal)
@@ -380,76 +378,18 @@ def proposal_skeletal(neurograph, proposals, radius):
                 neurograph.degree[j],
                 len(neurograph.nodes[i]["proposals"]),
                 len(neurograph.nodes[j]["proposals"]),
-                n_nearby_leafs(neurograph, proposal, radius),
-                get_radii(neurograph, proposal),
-                get_avg_radii(neurograph, proposal),
-                get_directionals(neurograph, proposal, 8),
-                get_directionals(neurograph, proposal, 16),
-                get_directionals(neurograph, proposal, 32),
-                get_directionals(neurograph, proposal, 64),
+                neurograph.n_nearby_leafs(proposal, radius),
+                neurograph.proposal_radii(proposal),
+                neurograph.proposal_avg_radii(proposal),
+                neurograph.proposal_directionals(proposal, 8),
+                neurograph.proposal_directionals(proposal, 16),
+                neurograph.proposal_directionals(proposal, 32),
+                neurograph.proposal_directionals(proposal, 64),
             ),
             axis=None,
         )
+    print(f"feature_generation -- proposal skeletal:", time() - t0)
     return features
-
-
-def get_directionals(neurograph, proposal, window):
-    # Compute tangent vectors
-    i, j = tuple(proposal)
-    direction = geometry.compute_tangent(neurograph.proposal_xyz(proposal))
-    origin = neurograph.proposal_midpoint(proposal)
-    direction_i = geometry.get_directional(neurograph, i, origin, window)
-    direction_j = geometry.get_directional(neurograph, j, origin, window)
-
-    # Compute features
-    inner_product_1 = abs(np.dot(direction, direction_i))
-    inner_product_2 = abs(np.dot(direction, direction_j))
-    if neurograph.is_simple(proposal):
-        inner_product_3 = np.dot(direction_i, direction_j)
-    else:
-        inner_product_3 = np.dot(direction_i, direction_j)
-        if not neurograph.is_simple(proposal):
-            inner_product_3 = max(inner_product_3, -inner_product_3)
-    return np.array([inner_product_1, inner_product_2, inner_product_3])
-
-
-def get_avg_radii(neurograph, proposal):
-    i, j = tuple(proposal)
-    radii_i = neurograph.get_branches(i, ignore_reducibles=True, key="radius")
-    radii_j = neurograph.get_branches(j, ignore_reducibles=True, key="radius")
-    return np.array([avg_radius(radii_i), avg_radius(radii_j)])
-
-
-def avg_radius(radii_list):
-    avg = 0
-    for radii in radii_list:
-        end = max(min(16, len(radii) - 1), 1)
-        avg += np.mean(radii[0:end]) / len(radii_list)
-    return avg
-
-
-def branch_length(branch_list):
-    branch_len = 0
-    for branch in branch_list:
-        branch_len += len(branch) / len(branch_list)
-    return branch_len
-
-
-def get_radii(neurograph, proposal):
-    i, j = tuple(proposal)
-    radius_i = neurograph.nodes[i]["radius"]
-    radius_j = neurograph.nodes[j]["radius"]
-    return np.array([radius_i, radius_j])
-
-
-def avg_radii(neurograph, edge):
-    return np.mean(neurograph.edges[edge]["radius"])
-
-
-def n_nearby_leafs(neurograph, proposal, radius):
-    xyz = neurograph.proposal_midpoint(proposal)
-    leafs = neurograph.query_kdtree(xyz, radius, "leaf")
-    return len(leafs) - 1
 
 
 # --- part 2: edge feature generation --
@@ -651,10 +591,10 @@ def generate_chunks(neurograph, proposals, img, labels):
         threads = [None] * len(proposals)
         for t, proposal in enumerate(proposals):
             xyz_0, xyz_1 = neurograph.proposal_xyz(proposal)
-            coord_0 = utils.to_voxels(xyz_0)
-            coord_1 = utils.to_voxels(xyz_1)
+            voxel_1 = utils.to_voxels(xyz_0)
+            voxel_2 = utils.to_voxels(xyz_1)
             threads[t] = executor.submit(
-                get_chunk, img, labels, coord_0, coord_1, proposal
+                get_chunk, img, labels, voxel_1, voxel_2, proposal
             )
 
         # Save result
@@ -667,9 +607,9 @@ def generate_chunks(neurograph, proposals, img, labels):
     return chunks, profiles
 
 
-def get_chunk(img, labels, coord_0, coord_1, thread_id=None):
+def get_chunk(img, labels, voxel_1, voxel_2, thread_id=None):
     # Extract chunks
-    midpoint = geometry.get_midpoint(coord_0, coord_1).astype(int)
+    midpoint = geometry.get_midpoint(voxel_1, voxel_2).astype(int)
     if type(img) == ts.TensorStore:
         chunk = utils.read_tensorstore(img, midpoint, CHUNK_SIZE)
         labels_chunk = utils.read_tensorstore(labels, midpoint, CHUNK_SIZE)
@@ -679,11 +619,11 @@ def get_chunk(img, labels, coord_0, coord_1, thread_id=None):
 
     # Coordinate transform
     chunk = utils.normalize(chunk)
-    patch_coord_0 = utils.voxels_to_patch(coord_0, midpoint, CHUNK_SIZE)
-    patch_coord_1 = utils.voxels_to_patch(coord_1, midpoint, CHUNK_SIZE)
+    patch_voxel_1 = utils.voxels_to_patch(voxel_1, midpoint, CHUNK_SIZE)
+    patch_voxel_2 = utils.voxels_to_patch(voxel_2, midpoint, CHUNK_SIZE)
 
     # Generate features
-    path = geometry.make_line(patch_coord_0, patch_coord_1, N_PROFILE_PTS)
+    path = geometry.make_line(patch_voxel_1, patch_voxel_2, N_PROFILE_PTS)
     profile = geometry.get_profile(chunk, path, window=WINDOW)
     labels_chunk[labels_chunk > 0] = 1
     labels_chunk = geometry.fill_path(labels_chunk, path, val=2)

@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from deep_neurographs import geometry, img_utils, utils
+from deep_neurographs import geometry, img_utils
 from deep_neurographs.machine_learning import feature_generation as feats
 
 WINDOW = [5, 5, 5]
@@ -270,7 +270,7 @@ def node_profiles(neurograph, computation_graph, img, downsample_factor):
     dict
         Dictionary that maps a node id to the corresponding image profile.
 
-    """    
+    """
     # Get specifications to compute profiles
     specs = dict()
     for i in computation_graph.nodes:

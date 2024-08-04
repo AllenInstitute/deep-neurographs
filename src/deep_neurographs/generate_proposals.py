@@ -465,4 +465,4 @@ def tangent(branch, idx, depth):
 
     """
     end = min(idx + depth, len(branch))
-    return geometry.compute_tangent(branch[idx:end])
+    return geometry.tangent(branch[idx:end])
