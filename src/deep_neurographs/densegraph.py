@@ -14,8 +14,8 @@ import os
 import networkx as nx
 from scipy.spatial import KDTree
 
-from deep_neurographs import graph_utils as gutils
-from deep_neurographs import swc_utils, utils
+from deep_neurographs.utils import graph_util as gutil
+from deep_neurographs.utils import swc_util, util
 
 DELETION_RADIUS = 10
 
@@ -43,7 +43,7 @@ class DenseGraph:
         None
 
         """
-        self.bbox = utils.get_img_bbox(img_patch_origin, img_patch_shape)
+        self.bbox = util.get_img_bbox(img_patch_origin, img_patch_shape)
         self.init_graphs(swc_paths)
         self.init_kdtree()
 
@@ -65,13 +65,13 @@ class DenseGraph:
         """
         self.graphs = dict()
         self.xyz_to_swc = dict()
-        swc_dicts, _ = swc_utils.process_local_paths(paths)
+        swc_dicts, _ = swc_util.process_local_paths(paths)
         for i, swc_dict in enumerate(swc_dicts):
             # Build graph
             swc_id = swc_dict["swc_id"]
-            graph, _ = swc_utils.to_graph(swc_dict, set_attrs=True)
+            graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
             if self.bbox:
-                graph = gutils.trim_branches(graph, self.bbox)
+                graph = gutil.trim_branches(graph, self.bbox)
 
             # Store graph
             self.store_xyz_swc(graph, swc_id)
@@ -152,7 +152,7 @@ class DenseGraph:
                 while os.path.exists(path):
                     path = os.path.join(output_dir, f"{swc_id}.{cnt}.swc")
                     cnt += 1
-                swc_utils.write(path, entry_list)
+                swc_util.write(path, entry_list)
 
     def make_entries(self, graph, component):
         """

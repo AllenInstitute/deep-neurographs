@@ -24,8 +24,8 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.utils import subgraph
 
-from deep_neurographs.machine_learning import gnn_utils, ml_utils
-from deep_neurographs.machine_learning.gnn_utils import toCPU
+from deep_neurographs.utils import gnn_util, ml_util
+from deep_neurographs.utils.gnn_util import toCPU
 
 # Training
 FEATURE_DTYPE = torch.float32
@@ -218,7 +218,7 @@ class HeteroGraphTrainer:
 
         """
         # Run model
-        x_dict, edge_index_dict, edge_attr_dict = gnn_utils.get_inputs(
+        x_dict, edge_index_dict, edge_attr_dict = gnn_util.get_inputs(
             data, MODEL_TYPE
         )
         self.optimizer.zero_grad()
@@ -292,7 +292,7 @@ class HeteroGraphTrainer:
         return f1
 
 
-# -- utils --
+# -- util --
 def shuffler(my_list):
     """
     Shuffles a list of items.
@@ -374,4 +374,4 @@ def get_predictions(hat_y, threshold=0.5):
         Binary predictions based on the given threshold.
 
     """
-    return (ml_utils.sigmoid(np.array(hat_y)) > threshold).tolist()
+    return (ml_util.sigmoid(np.array(hat_y)) > threshold).tolist()

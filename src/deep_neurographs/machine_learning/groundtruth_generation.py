@@ -13,9 +13,9 @@ import networkx as nx
 import numpy as np
 
 from deep_neurographs import geometry
-from deep_neurographs import graph_utils as gutils
-from deep_neurographs import utils
 from deep_neurographs.geometry import dist as get_dist
+from deep_neurographs.utils import graph_util as gutil
+from deep_neurographs.utils import util
 
 ALIGNED_THRESHOLD = 3.5
 MIN_INTERSECTION = 10
@@ -51,7 +51,7 @@ def init_targets(pred_graph, target_graph, strict=True):
     graph = pred_graph.copy_graph()
     for i in np.argsort(lengths):
         edge = valid_proposals[i]
-        created_cycle, _ = gutils.creates_cycle(graph, tuple(edge))
+        created_cycle, _ = gutil.creates_cycle(graph, tuple(edge))
         if not created_cycle:
             graph.add_edges_from([edge])
             target_edges.add(edge)
@@ -112,7 +112,7 @@ def unaligned_components(target_graph, pred_graph, kdtree):
             target_graph, pred_graph, component, kdtree
         )
         if not aligned:
-            i = utils.sample_singleton(component)
+            i = util.sample_singleton(component)
             invalid_ids.add(pred_graph.nodes[i]["swc_id"])
         else:
             node_to_target = upd_dict(node_to_target, component, target_id)
@@ -151,10 +151,10 @@ def is_component_aligned(target_graph, pred_graph, component, kdtree):
             hat_xyz = geometry.kdtree_query(kdtree, xyz)
             hat_swc_id = target_graph.xyz_to_swc(hat_xyz)
             d = get_dist(hat_xyz, xyz)
-            dists = utils.append_dict_value(dists, hat_swc_id, d)
+            dists = util.append_dict_value(dists, hat_swc_id, d)
 
     # Deterine whether aligned
-    hat_swc_id = utils.find_best(dists)
+    hat_swc_id = util.find_best(dists)
     dists = np.array(dists[hat_swc_id])
     intersects = True if len(dists) > MIN_INTERSECTION else False
     aligned_score = np.mean(dists[dists < np.percentile(dists, 85)])
@@ -219,7 +219,7 @@ def proj_branch(target_graph, pred_graph, kdtree, target_id, i):
             swc_id = target_graph.xyz_to_swc(hat_xyz)
             if swc_id == target_id:
                 hat_edge = target_graph.xyz_to_edge[hat_xyz]
-                hits = utils.append_dict_value(hits, hat_edge, hat_xyz)
+                hits = util.append_dict_value(hits, hat_edge, hat_xyz)
 
     # Determine closest edge
     min_dist = np.inf
@@ -273,7 +273,7 @@ def is_adjacent_aligned(hat_branch_i, hat_branch_j, xyz_i, xyz_j):
     return True if 2 * path_dist / (path_dist + hat_path_dist) > 0.5 else False
 
 
-# -- utils --
+# -- util --
 def upd_dict_cnts(my_dict, key):
     if key in my_dict.keys():
         my_dict[key] += 1

@@ -9,7 +9,7 @@ Routines for training graph neural networks that classify edge proposals.
 """
 
 from copy import deepcopy
-from random import shuffle
+from random import sample, shuffle
 
 import numpy as np
 import torch
@@ -23,7 +23,7 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.utils import subgraph
 
-from deep_neurographs.machine_learning import gnn_utils, ml_utils
+from deep_neurographs.utils import gnn_util, ml_util
 
 # Training
 LR = 1e-3
@@ -130,8 +130,8 @@ class GraphTrainer:
                 y_i, hat_y_i = self.train(
                     datasets[graph_id], epoch, augment=augment
                 )
-                y.extend(gnn_utils.toCPU(y_i))
-                hat_y.extend(gnn_utils.toCPU(hat_y_i))
+                y.extend(gnn_util.toCPU(y_i))
+                hat_y.extend(gnn_util.toCPU(hat_y_i))
             self.compute_metrics(y, hat_y, "train", epoch)
             self.scheduler.step()
 
@@ -141,8 +141,8 @@ class GraphTrainer:
                 self.model.eval()
                 for graph_id in test_ids:
                     y_i, hat_y_i = self.forward(datasets[graph_id].data)
-                    y.extend(gnn_utils.toCPU(y_i))
-                    hat_y.extend(gnn_utils.toCPU(hat_y_i))
+                    y.extend(gnn_util.toCPU(y_i))
+                    hat_y.extend(gnn_util.toCPU(hat_y_i))
                 test_score = self.compute_metrics(y, hat_y, "val", epoch)
 
                 # Check for best
@@ -226,7 +226,7 @@ class GraphTrainer:
 
         """
         self.optimizer.zero_grad()
-        x, edge_index = gnn_utils.get_inputs(data, MODEL_TYPE)
+        x, edge_index = gnn_util.get_inputs(data, MODEL_TYPE)
         hat_y = self.model(x, edge_index)
         y = data.y  # .to("cuda:0", dtype=torch.float32)
         return y, truncate(hat_y, y)
@@ -295,7 +295,7 @@ class GraphTrainer:
         return f1
 
 
-# -- utils --
+# -- util --
 def shuffler(my_list):
     """
     Shuffles a list of items.
@@ -377,7 +377,7 @@ def get_predictions(hat_y, threshold=0.5):
         Binary predictions based on the given threshold.
 
     """
-    return (ml_utils.sigmoid(np.array(hat_y)) > threshold).tolist()
+    return (ml_util.sigmoid(np.array(hat_y)) > threshold).tolist()
 
 
 def connected_components(data):

@@ -12,8 +12,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from deep_neurographs import geometry, img_utils
+from deep_neurographs import geometry
 from deep_neurographs.machine_learning import feature_generation as feats
+from deep_neurographs.utils import img_util
 
 WINDOW = [5, 5, 5]
 N_PROFILE_PTS = 10
@@ -386,7 +387,7 @@ def get_node_profile_specs(xyz_path, downsample_factor):
 
     """
     voxels = transform_path(xyz_path, downsample_factor)
-    bbox = img_utils.get_minimal_bbox(voxels, buffer=1)
+    bbox = img_util.get_minimal_bbox(voxels, buffer=1)
     return {"bbox": bbox, "profile_path": shift_path(voxels, bbox)}
 
 
@@ -413,7 +414,7 @@ def transform_path(xyz_path, downsample_factor):
     voxels = list()
     for xyz in xyz_path:
         voxels.append(
-            img_utils.to_voxels(xyz, downsample_factor=downsample_factor)
+            img_util.to_voxels(xyz, downsample_factor=downsample_factor)
         )
 
     # Finish

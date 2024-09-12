@@ -8,8 +8,6 @@ Routines for running inference with a model that classifies edge proposals.
 
 """
 
-from time import time
-
 import networkx as nx
 import numpy as np
 import torch
@@ -17,17 +15,11 @@ from torch.nn.functional import sigmoid
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from deep_neurographs import graph_utils as gutils
-from deep_neurographs import img_utils
-from deep_neurographs import reconstruction as build
-from deep_neurographs import utils
-from deep_neurographs.machine_learning import (
-    feature_generation,
-    gnn_utils,
-    ml_utils,
-    seeded_inference,
-)
-from deep_neurographs.machine_learning.gnn_utils import toCPU
+from deep_neurographs.machine_learning import feature_generation
+from deep_neurographs.utils import gnn_util
+from deep_neurographs.utils import graph_util as gutil
+from deep_neurographs.utils import img_util, ml_util, util
+from deep_neurographs.utils.gnn_util import toCPU
 
 BATCH_SIZE = 1600
 CONFIDENCE_THRESHOLD = 0.7
@@ -65,14 +57,14 @@ class InferenceEngine:
         search_radius : float
             Search radius used to generate proposals.
         batch_size : int, optional
-            Number of proposals to generate features and classify per batch. The
-            default is the global varaible "BATCH_SIZE".
+            Number of proposals to generate features and classify per batch.
+            The default is the global varaible "BATCH_SIZE".
         confidence_threshold : float, optional
-            Threshold on acceptance probability for proposals. The default is the
-            global variable "CONFIDENCE_THRESHOLD".
+            Threshold on acceptance probability for proposals. The default is
+            the global variable "CONFIDENCE_THRESHOLD".
         downsample_factor : int, optional
-            Downsampling factor that accounts for which level in the image pyramid
-            the voxel coordinates must index into. The default is 0.
+            Downsampling factor that accounts for which level in the image
+            pyramid the voxel coordinates must index into. The default is 0.
 
         Returns
         -------
@@ -89,8 +81,8 @@ class InferenceEngine:
 
         # Load image and model
         driver = "n5" if ".n5" in img_path else "zarr"
-        self.img = img_utils.open(img_path, driver)
-        self.model = ml_utils.load_model(model_type, model_path)
+        self.img = img_util.open(img_path, driver)
+        self.model = ml_util.load_model(model_type, model_path)
 
     def run(self, neurograph, proposals):
         """
@@ -114,7 +106,7 @@ class InferenceEngine:
             Accepted proposals.
 
         """
-        assert not gutils.cycle_exists(neurograph), "Graph contains cycle!"
+        assert not gutil.cycle_exists(neurograph), "Graph contains cycle!"
         accepts = []
         batches = self.get_batches(neurograph, proposals)
         for batch in tqdm(batches, desc="Inference"):
@@ -129,7 +121,7 @@ class InferenceEngine:
             accepts.extend(batch_accepts)
 
         # Report Results
-        print("\n# proposals added:", utils.reformat_number(len(accepts)))
+        print("\n# proposals added:", util.reformat_number(len(accepts)))
         print("% proposals added:", round(len(accepts) / len(proposals), 4))
         return neurograph, accepts
 
@@ -149,13 +141,13 @@ class InferenceEngine:
 
         """
         if self.is_gnn:
-            return gnn_utils.get_batches(neurograph.copy(), proposals)
+            return gnn_util.get_batches(neurograph.copy(), proposals)
         else:
             dists = np.argsort(
                 [neurograph.proposal_length(p) for p in proposals]
             )
             batches = list()
-            for idxs in ml_utils.get_batches(dists, self.batch_size):
+            for idxs in ml_util.get_batches(dists, self.batch_size):
                 batches.append([proposals[i] for i in idxs])
             return batches
 
@@ -188,7 +180,7 @@ class InferenceEngine:
 
         # Initialize dataset
         computation_graph = batch["graph"] if type(batch) is dict else None
-        dataset = ml_utils.init_dataset(
+        dataset = ml_util.init_dataset(
             neurograph,
             features,
             self.model_type,
@@ -211,7 +203,8 @@ class InferenceEngine:
         dict
             A dictionary that maps a proposal to the model's prediction (i.e.
             probability). Note that this dictionary only contains proposals
-            whose predicted probability is greater the 
+            whose predicted probability is greater the threshold.
+
         """
         # Get predictions
         if self.is_gnn:
@@ -247,13 +240,13 @@ def run_gnn_model(data, model, model_type):
     model.eval()
     with torch.no_grad():
         if "Hetero" in model_type:
-            x_dict, edge_index_dict, edge_attr_dict = gnn_utils.get_inputs(
+            x_dict, edge_index_dict, edge_attr_dict = gnn_util.get_inputs(
                 data, model_type
             )
             hat_y = sigmoid(model(x_dict, edge_index_dict, edge_attr_dict))
             idx = len(data["proposal"]["y"])
         else:
-            x, edge_index = gnn_utils.get_inputs(data, model_type)
+            x, edge_index = gnn_util.get_inputs(data, model_type)
             hat_y = sigmoid(model(x, edge_index))
             idx = len(data.proposals)
     return toCPU(hat_y[0:idx, 0])
@@ -353,13 +346,13 @@ def filter_proposals(graph, proposals):
     """
     accepts = list()
     for i, j in proposals:
-        nodes_i = set(gutils.get_component(graph, i))
-        nodes_j = set(gutils.get_component(graph, j))
+        nodes_i = set(gutil.get_component(graph, i))
+        nodes_j = set(gutil.get_component(graph, j))
         if nodes_i.isdisjoint(nodes_j):
             subgraph_i = graph.subgraph(nodes_i)
             subgraph_j = graph.subgraph(nodes_j)
             subgraph = nx.union(subgraph_i, subgraph_j)
-            created_cycle, _ = gutils.creates_cycle(subgraph, (i, j))
+            created_cycle, _ = gutil.creates_cycle(subgraph, (i, j))
             if not created_cycle:
                 graph.add_edge(i, j)
                 accepts.append((i, j))
@@ -367,7 +360,7 @@ def filter_proposals(graph, proposals):
     return accepts
 
 
-# --- utils ---
+# --- util ---
 def get_idxs(dataset, model_type):
     """
     Gets dictionary from "dataset" that maps indices (from feature matrix) to

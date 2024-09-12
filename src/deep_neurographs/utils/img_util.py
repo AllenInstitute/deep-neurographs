@@ -10,6 +10,7 @@ Helper routines for working with images.
 
 from copy import deepcopy
 
+import fastremap
 import numpy as np
 import tensorstore as ts
 from skimage.color import label2rgb
@@ -19,7 +20,7 @@ SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
 
 # --- io utils ---
-def open(path, driver):
+def open_tensorstore(path, driver="neuroglancer_precomputed"):
     """
     Opens an image that is assumed to be stored as a directory of shard files.
 
@@ -27,16 +28,17 @@ def open(path, driver):
     ----------
     path : str
         Path to directory containing shard files.
-    driver : str
-        Storage driver needed to read data at "path".
+    driver : str, optional
+        Storage driver needed to read data at "path". The default is
+        "neuroglancer_precomputed".
 
     Returns
     -------
     tensorstore.TensorStore
-        Pointer to image at "path".
+        Pointer to image stored at "path" in a GCS bucket.
 
     """
-    assert driver in SUPPORTED_DRIVERS, "Error! Driver is not supported!"
+    assert driver in SUPPORTED_DRIVERS, "Driver is not supported!"
     img = ts.open(
         {
             "driver": driver,
@@ -87,7 +89,7 @@ def read(img, voxel, shape, from_center=True):
     """
     start, end = get_start_end(voxel, shape, from_center=from_center)
     return deepcopy(
-        img[start[0] : end[0], start[1] : end[1], start[2] : end[2]]
+        img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
     )
 
 
@@ -423,3 +425,30 @@ def get_minimal_bbox(voxels, buffer=0):
         "max": np.ceil(np.max(voxels, axis=0) + buffer + 1).astype(int),
     }
     return bbox
+
+
+def get_chunk_labels(path, xyz, shape, from_center=True):
+    """
+    Gets the labels of segments contained in chunk centered at "xyz".
+
+    Parameters
+    ----------
+    path : str
+        Path to segmentation stored in a GCS bucket.
+    xyz : numpy.ndarray
+        Center point of chunk to be read.
+    shape : tuple
+        Shape of chunk to be read.
+    from_center : bool, optional
+        Indication of whether "xyz" is the center point or upper, left, front
+        corner of chunk to be read. The default is True.
+
+    Returns
+    -------
+    set
+        Labels of segments contained in chunk read from GCS bucket.
+
+    """
+    img = open_tensorstore(path)
+    img = read_tensorstore(img, xyz, shape, from_center=from_center)
+    return set(fastremap.unique(img).astype(int))

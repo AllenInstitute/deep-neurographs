@@ -16,10 +16,11 @@ from zipfile import ZipFile
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry, utils
+from deep_neurographs import geometry
+from deep_neurographs.utils import util
 
 
-# -- io utils --
+# -- io util --
 def process_local_paths(
     paths, anisotropy=[1.0, 1.0, 1.0], min_size=5, img_bbox=None
 ):
@@ -56,7 +57,7 @@ def process_local_paths(
         contents = read_from_local(path)
         if len(contents) > min_size:
             swc_dict = parse(contents, anisotropy=anisotropy)
-            swc_dict["swc_id"] = utils.get_swc_id(path)
+            swc_dict["swc_id"] = util.get_swc_id(path)
             swc_dicts.append(swc_dict)
             valid_paths.append(path)
     return swc_dicts, valid_paths
@@ -71,7 +72,7 @@ def process_gcs_zip(zip_content, anisotropy=[1.0, 1.0, 1.0], min_size=0):
                 executor.submit(
                     parse_gcs_zip, zip_file, path, anisotropy, min_size
                 )
-                for path in utils.list_files_in_gcs_zip(zip_content)
+                for path in util.list_files_in_gcs_zip(zip_content)
             ]
 
             # Process results
@@ -91,7 +92,7 @@ def parse_gcs_zip(zip_file, path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
         swc_dict = {"id": []}
 
     # Store id
-    swc_id = utils.get_swc_id(path)
+    swc_id = util.get_swc_id(path)
     swc_dict["swc_id"] = swc_id
     return swc_dict
 
@@ -420,7 +421,7 @@ def to_graph(swc_dict, graph_id=None, set_attrs=False):
     if set_attrs:
         xyz = swc_dict["xyz"]
         if type(swc_dict["xyz"]) == np.ndarray:
-            xyz = utils.numpy_to_hashable(swc_dict["xyz"])
+            xyz = util.numpy_to_hashable(swc_dict["xyz"])
         graph = __add_attributes(swc_dict, graph)
         xyz_to_node = dict(zip(xyz, swc_dict["id"]))
         return graph, xyz_to_node

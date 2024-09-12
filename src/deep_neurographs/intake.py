@@ -12,11 +12,15 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from time import time
 
 from google.cloud import storage
+from tqdm import tqdm
 
-from deep_neurographs import graph_utils as gutils
-from deep_neurographs import img_utils, utils
 from deep_neurographs.neurograph import NeuroGraph
-from deep_neurographs.swc_utils import process_gcs_zip, process_local_paths
+from deep_neurographs.utils import graph_util as gutil
+from deep_neurographs.utils import img_util, util
+from deep_neurographs.utils.swc_util import (
+    process_gcs_zip,
+    process_local_paths,
+)
 
 MIN_SIZE = 30
 NODE_SPACING = 2
@@ -71,11 +75,11 @@ def build_neurograph_from_local(
         Indication of whether to print out a progress bar during build. The
         default is False.
     prune_connectors : bool, optional
-        Indication of whether to prune connectors (see graph_utils.py), sites
+        Indication of whether to prune connectors (see graph_util.py), sites
         that are likely to be false merges. The default is the global variable
         "PRUNE_CONNECTORS".
     connector_length : int, optional
-        Maximum length of connecting paths pruned (see graph_utils.py). The
+        Maximum length of connecting paths pruned (see graph_util.py). The
         default is the global variable "CONNECTOR_LENGTH".
     prune_depth : int, optional
         Branches less than "prune_depth" microns are pruned if "prune" is
@@ -96,8 +100,8 @@ def build_neurograph_from_local(
     """
     # Process swc files
     assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
-    img_bbox = img_utils.get_bbox(img_patch_origin, img_patch_shape)
-    paths = utils.list_paths(swc_dir, ext=".swc") if swc_dir else swc_paths
+    img_bbox = img_util.get_bbox(img_patch_origin, img_patch_shape)
+    paths = util.list_paths(swc_dir, ext=".swc") if swc_dir else swc_paths
     swc_dicts, paths = process_local_paths(
         paths, anisotropy=anisotropy, min_size=min_size, img_bbox=img_bbox
     )
@@ -106,7 +110,7 @@ def build_neurograph_from_local(
     if img_bbox:
         filtered_swc_dicts = []
         for swc_dict in swc_dicts:
-            if utils.is_list_contained(img_bbox, swc_dict["xyz"]):
+            if util.is_list_contained(img_bbox, swc_dict["xyz"]):
                 filtered_swc_dicts.append(swc_dict)
         swc_dicts = filtered_swc_dicts
 
@@ -163,11 +167,11 @@ def build_neurograph_from_gcs_zips(
         Spacing (in microns) between nodes. The default is the global variable
         "NODE_SPACING".
     prune_connectors : bool, optional
-        Indication of whether to prune connectors (see graph_utils.py), sites
+        Indication of whether to prune connectors (see graph_util.py), sites
         that are likely to be false merges. The default is the global variable
         "PRUNE_CONNECTORS".
     connector_length : int, optional
-        Maximum length of connecting paths pruned (see graph_utils.py). The
+        Maximum length of connecting paths pruned (see graph_util.py). The
         default is the global variable "CONNECTOR_LENGTH".
     prune_depth : int, optional
         Branches less than "prune_depth" microns are pruned if "prune" is
@@ -184,9 +188,9 @@ def build_neurograph_from_gcs_zips(
     """
     # Process swc files
     print("Process swc files...")
-    total_runtime, t0 = utils.init_timers()
+    total_runtime, t0 = util.init_timers()
     swc_dicts = download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy)
-    t, unit = utils.time_writer(time() - t0)
+    t, unit = util.time_writer(time() - t0)
     print(f"\nModule Runtime: {round(t, 4)} {unit} \n")
 
     # Build neurograph
@@ -203,8 +207,8 @@ def build_neurograph_from_gcs_zips(
         trim_depth=trim_depth,
         smooth=smooth,
     )
-    t, unit = utils.time_writer(time() - t0)
-    print(f"Memory Consumption: {round(utils.get_memory_usage(), 4)} GBs")
+    t, unit = util.time_writer(time() - t0)
+    print(f"Memory Consumption: {round(util.get_memory_usage(), 4)} GBs")
     print(f"Module Runtime: {round(t, 4)} {unit} \n")
 
     return neurograph
@@ -234,35 +238,28 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
     """
     # Initializations
     bucket = storage.Client().bucket(bucket_name)
-    zip_paths = utils.list_gcs_filenames(bucket, gcs_path, ".zip")
+    zip_paths = util.list_gcs_filenames(bucket, gcs_path, ".zip")
 
-    # Assign processes
-    cnt = 1
-    t0, t1 = utils.init_timers()
-    chunk_size = int(len(zip_paths) * 0.02)
+    # Main
     with ProcessPoolExecutor() as executor:
+        # Assign processes
         processes = []
-        print("# zips:", len(zip_paths))
-        for i, path in enumerate(zip_paths):
+        for path in tqdm(zip_paths, desc="Download SWCs"):
             zip_content = bucket.blob(path).download_as_bytes()
             processes.append(
                 executor.submit(
                     process_gcs_zip, zip_content, anisotropy, min_size
                 )
             )
-            if i >= cnt * chunk_size:
-                cnt, t1 = utils.report_progress(
-                    i + 1, len(zip_paths), chunk_size, cnt, t0, t1
-                )
 
-    # Store results
-    swc_dicts = []
-    for process in as_completed(processes):
-        try:
-            result = process.result()
-            swc_dicts.extend(result)
-        except Exception as e:
-            print(type(e), e)
+        # Store result
+        swc_dicts = []
+        for process in as_completed(processes):
+            try:
+                result = process.result()
+                swc_dicts.extend(result)
+            except Exception as e:
+                print(type(e), e)
     return swc_dicts
 
 
@@ -284,7 +281,7 @@ def build_neurograph(
     # Extract irreducibles
     n_components = len(swc_dicts)
     if progress_bar:
-        print("# swcs downloaded:", utils.reformat_number(n_components))
+        print("# swcs downloaded:", util.reformat_number(n_components))
     irreducibles, n_nodes, n_edges = get_irreducibles(
         swc_dicts,
         bbox=img_bbox,
@@ -301,10 +298,10 @@ def build_neurograph(
     if progress_bar:
         print("\nGraph Overview...")
         print(
-            "# connected components:", utils.reformat_number(len(irreducibles))
+            "# connected components:", util.reformat_number(len(irreducibles))
         )
-        print("# nodes:", utils.reformat_number(n_nodes))
-        print("# edges:", utils.reformat_number(n_edges))
+        print("# nodes:", util.reformat_number(n_nodes))
+        print("# edges:", util.reformat_number(n_edges))
 
     neurograph = NeuroGraph(
         img_path=img_path, node_spacing=node_spacing, swc_paths=swc_paths
@@ -335,7 +332,7 @@ def get_irreducibles(
         while swc_dicts:
             swc_dict = swc_dicts.pop()
             processes[i] = executor.submit(
-                gutils.get_irreducibles,
+                gutil.get_irreducibles,
                 swc_dict,
                 min_size,
                 bbox,
@@ -348,7 +345,7 @@ def get_irreducibles(
             i += 1
 
         # Store results
-        t0, t1 = utils.init_timers()
+        t0, t1 = util.init_timers()
         n_nodes, n_edges = 0, 0
         cnt = 1
         irreducibles = []
@@ -358,7 +355,7 @@ def get_irreducibles(
             n_nodes += count_nodes(irreducibles_i)
             n_edges += count_edges(irreducibles_i)
             if i >= cnt * chunk_size and progress_bar:
-                cnt, t1 = utils.report_progress(
+                cnt, t1 = util.report_progress(
                     i + 1, n_components, chunk_size, cnt, t0, t1
                 )
     return irreducibles, n_nodes, n_edges

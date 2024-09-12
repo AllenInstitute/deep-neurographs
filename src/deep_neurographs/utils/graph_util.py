@@ -27,7 +27,8 @@ from random import sample
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry, swc_utils, utils
+from deep_neurographs import geometry
+from deep_neurographs.utils import swc_util, util
 
 
 def get_irreducibles(
@@ -73,7 +74,7 @@ def get_irreducibles(
     """
     # Build dense graph
     swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
-    graph, _ = swc_utils.to_graph(swc_dict, set_attrs=True)
+    graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
     graph = clip_branches(graph, bbox)
     graph, n_nodes_trimmed = prune_branches(
         graph,
@@ -114,8 +115,8 @@ def clip_branches(graph, bbox):
     if bbox:
         delete_nodes = set()
         for i in graph.nodes:
-            xyz = utils.to_voxels(graph.nodes[i]["xyz"])
-            if not utils.is_contained(bbox, xyz):
+            xyz = util.to_voxels(graph.nodes[i]["xyz"])
+            if not util.is_contained(bbox, xyz):
                 delete_nodes.add(i)
         graph.remove_nodes_from(delete_nodes)
     return graph
@@ -215,8 +216,8 @@ def __get_irreducibles(graph, swc_dict, smooth):
                 )
             else:
                 edges[(root, j)] = attrs
-            nbs = utils.append_dict_value(nbs, root, j)
-            nbs = utils.append_dict_value(nbs, j, root)
+            nbs = util.append_dict_value(nbs, root, j)
+            nbs = util.append_dict_value(nbs, j, root)
             root = None
 
     # Output
@@ -856,7 +857,7 @@ def largest_components(neurograph, k):
                 if len(nodes) > component_cardinalities[i]:
                     component_cardinalities.insert(i, len(nodes))
                     component_cardinalities.pop(-1)
-                    node_ids.insert(i, utils.sample_singleton(nodes))
+                    node_ids.insert(i, util.sample_singleton(nodes))
                     node_ids.pop(-1)
                     break
                 i += 1

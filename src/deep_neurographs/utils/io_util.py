@@ -1,22 +1,21 @@
 """
-Created on Sat Dec 12 17:00:00 2023
+Created on Thur September 12 9:00:00 2024
 
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-...
+
+Routines reading and writing.
 
 """
 
 import os
 
-import networkx as nx
-import numpy as np
-
-from deep_neurographs import graph_utils as gutils
-from deep_neurographs import swc_utils, utils
+from deep_neurographs.utils import graph_util as gutil
+from deep_neurographs.utils import swc_util, util
 
 
+# --- Save inference result ---
 def save_prediction(
     neurograph, accepted_proposals, output_dir, save_swcs=False
 ):
@@ -24,10 +23,10 @@ def save_prediction(
     connections_path = os.path.join(output_dir, "connections.txt")
     corrections_dir = os.path.join(output_dir, "corrections")
     swc_zip_path = os.path.join(output_dir, "corrected-processed-swcs.zip")
-    utils.mkdir(corrections_dir, delete=True)
+    util.mkdir(corrections_dir, delete=True)
 
     # Write Result
-    n_swcs = gutils.count_components(neurograph)
+    n_swcs = gutil.count_components(neurograph)
     save_connections(neurograph, connections_path)
     if save_swcs:
         neurograph.to_zipped_swcs(swc_zip_path)
@@ -46,7 +45,7 @@ def save_corrections(neurograph, accepted_proposals, output_dir):
         # Save
         xyz_i = neurograph.nodes[i]["xyz"]
         xyz_j = neurograph.nodes[j]["xyz"]
-        swc_utils.save_edge(path, xyz_i, xyz_j, color=color, radius=3)
+        swc_util.save_edge(path, xyz_i, xyz_j, color=color, radius=3)
 
 
 def save_connections(neurograph, path):

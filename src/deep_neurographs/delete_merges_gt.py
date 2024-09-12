@@ -14,8 +14,9 @@ import os
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry, swc_utils, utils
+from deep_neurographs import geometry
 from deep_neurographs.densegraph import DenseGraph
+from deep_neurographs.utils import swc_util, util
 
 CLOSE_DISTANCE_THRESHOLD = 3.5
 DELETION_RADIUS = 3
@@ -69,7 +70,7 @@ def delete_merges(
         img_patch_shape=img_patch_shape,
     )
     if save_sites:
-        utils.mkdir(os.path.join(output_dir, "merge_sites"))
+        util.mkdir(os.path.join(output_dir, "merge_sites"))
 
     # Run merge deletion
     for swc_id in pred_densegraph.graphs.keys():
@@ -164,11 +165,11 @@ def detect_intersections(target_densegraph, graph, component):
         hat_xyz = target_densegraph.get_projection(xyz)
         hat_swc_id = target_densegraph.xyz_to_swc[hat_xyz]
         if geometry.dist(hat_xyz, xyz) < CLOSE_DISTANCE_THRESHOLD:
-            hits = utils.append_dict_value(hits, hat_swc_id, i)
+            hits = util.append_dict_value(hits, hat_swc_id, i)
 
     # Remove spurious intersections
     keys = [key for key in hits.keys() if len(hits[key]) < MIN_INTERSECTION]
-    return utils.remove_items(hits, keys)
+    return util.remove_items(hits, keys)
 
 
 def detect_merges(target_densegraph, graph, hits, radius, output_dir, save):
@@ -219,9 +220,9 @@ def detect_merges(target_densegraph, graph, hits, radius, output_dir, save):
                     if save:
                         dir_name = f"{output_dir}/merge_sites/"
                         filename = "merge-" + graph.nodes[sites[0]]["swc_id"]
-                        path = utils.set_path(dir_name, filename, "swc")
+                        path = util.set_path(dir_name, filename, "swc")
                         xyz = get_point(graph, sites)
-                        swc_utils.save_point(path, xyz)
+                        swc_util.save_point(path, xyz)
     return merge_sites
 
 

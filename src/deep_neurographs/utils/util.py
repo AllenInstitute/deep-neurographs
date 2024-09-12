@@ -20,7 +20,7 @@ from zipfile import ZipFile
 import numpy as np
 import psutil
 
-from deep_neurographs import img_utils
+from deep_neurographs.utils import img_util
 
 
 # --- dictionary utils ---
@@ -409,7 +409,7 @@ def read_txt(path):
         return f.read()
 
 
-def parse_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
+def read_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
     """
     Parses metadata file to extract the "chunk_origin" and "chunk_shape".
 
@@ -429,7 +429,7 @@ def parse_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
     """
     metadata = read_json(path)
     origin = metadata["chunk_origin"]
-    chunk_origin = img_utils.to_voxels(origin, anisotropy=anisotropy)
+    chunk_origin = img_util.to_voxels(origin, anisotropy=anisotropy)
     return chunk_origin.tolist(), metadata["chunk_shape"]
 
 
