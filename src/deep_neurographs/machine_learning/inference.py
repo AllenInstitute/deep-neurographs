@@ -41,8 +41,8 @@ class InferenceEngine:
     def __init__(
         self,
         img_path,
-        model_type,
         model_path,
+        model_type,
         search_radius,
         batch_size=BATCH_SIZE,
         confidence_threshold=CONFIDENCE_THRESHOLD,
@@ -56,10 +56,10 @@ class InferenceEngine:
         ----------
         img_path : str
             Path to image stored in a GCS bucket.
-        model_type : str
-            Type of machine learning model used to perform inference.
         model_path : str
             Path to model parameters.
+        model_type : str
+            Type of machine learning model used to perform inference.
         search_radius : float
             Search radius used to generate proposals.
         batch_size : int, optional
@@ -211,7 +211,7 @@ class InferenceEngine:
         """
         # Get predictions
         if self.is_gnn:
-            preds = run_gnn_model(dataset.data, self.model)
+            preds = run_gnn_model(dataset.data, self.model, self.model_type)
         elif "Net" in self.model_type:
             preds = run_nn_model(dataset, self.model)
         else:
@@ -242,7 +242,7 @@ def run_nn_model(dataset, model):
 def run_gnn_model(data, model, model_type):
     model.eval()
     with torch.no_grad():
-        if "Hetero":
+        if "Hetero" in model_type:
             x_dict, edge_index_dict, edge_attr_dict = gnn_utils.get_inputs(
                 data, model_type
             )

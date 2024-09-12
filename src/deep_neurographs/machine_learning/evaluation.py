@@ -70,11 +70,11 @@ def run_evaluation(neurograph, accepts, proposals):
     overall_stats = get_stats(neurograph, proposals, accepts)
 
     simple_stats = get_stats(
-        neurograph, neurograph.get_simple_proposals(), accepts
+        neurograph, neurograph.simple_proposals(), accepts
     )
 
     complex_stats = get_stats(
-        neurograph, neurograph.get_complex_proposals(), accepts
+        neurograph, neurograph.complex_proposals(), accepts
     )
 
     # Store results
@@ -124,23 +124,23 @@ def run_evaluation_blocks(neurographs, blocks, accepts):
 
         simple_stats_i = get_stats(
             neurographs[block_id],
-            neurographs[block_id].get_simple_proposals(),
+            neurographs[block_id].simple_proposals(),
             accepts[block_id],
         )
 
         complex_stats_i = get_stats(
             neurographs[block_id],
-            neurographs[block_id].get_complex_proposals(),
+            neurographs[block_id].complex_proposals(),
             accepts[block_id],
         )
 
         # Store results
         avg_wgts["Overall"].append(len(neurographs[block_id].proposals))
         avg_wgts["Simple"].append(
-            len(neurographs[block_id].get_simple_proposals())
+            len(neurographs[block_id].simple_proposals())
         )
         avg_wgts["Complex"].append(
-            len(neurographs[block_id].get_complex_proposals())
+            len(neurographs[block_id].complex_proposals())
         )
         for metric in METRICS_LIST:
             stats["Overall"][metric].append(overall_stats_i[metric])
