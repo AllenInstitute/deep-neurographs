@@ -135,7 +135,6 @@ class GNN(torch.nn.Module):
 
         # Output
         x = self.output(x)
-
         return x
 
 

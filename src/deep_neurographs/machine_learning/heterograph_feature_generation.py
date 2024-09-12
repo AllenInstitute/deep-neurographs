@@ -57,7 +57,7 @@ def generate_hgnn_features(
         "edges": run_on_edges(neurograph, computation_graph),
         "proposals": run_on_proposals(
             neurograph, img, proposals, radius, downsample_factor
-        )
+        ),
     }
     return features
 
@@ -284,9 +284,7 @@ def node_profiles(neurograph, computation_graph, img, downsample_factor):
     with ThreadPoolExecutor() as executor:
         threads = []
         for i, specs_i in specs.items():
-            threads.append(
-                executor.submit(feats.get_profile, img, specs_i, i)
-            )
+            threads.append(executor.submit(feats.get_profile, img, specs_i, i))
 
         node_profile_features = dict()
         for thread in as_completed(threads):

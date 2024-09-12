@@ -316,7 +316,7 @@ def fill_path(img, path, val=-1):
     """
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
-        img[x - 1: x + 2, y - 1: y + 2, z - 1: z + 2] = val
+        img[x - 1 : x + 2, y - 1 : y + 2, z - 1 : z + 2] = val
     return img
 
 
@@ -628,3 +628,22 @@ def query_ball(kdtree, xyz, radius):
     """
     idxs = kdtree.query_ball_point(xyz, radius, return_sorted=True)
     return kdtree.data[idxs]
+
+
+def kdtree_query(kdtree, xyz):
+    """
+    Gets the xyz coordinates of the nearest neighbor of "xyz" from "kdtree".
+
+    Parameters
+    ----------
+    xyz : tuple
+        xyz coordinate to be queried.
+
+    Returns
+    -------
+    tuple
+        xyz coordinate of the nearest neighbor of "xyz".
+
+    """
+    _, idx = kdtree.query(xyz)
+    return tuple(kdtree.data[idx])

@@ -477,8 +477,7 @@ class NeuroGraph(nx.Graph):
         return list(self.proposals)
 
     def init_targets(self, target_neurograph):
-        target_neurograph.init_kdtree()
-        self.target_edges = init_targets(target_neurograph, self)
+        self.target_edges = init_targets(self, target_neurograph)
 
     def run_optimization(self):
         driver = "n5" if "n5" in self.img_path else "zarr"
@@ -556,24 +555,6 @@ class NeuroGraph(nx.Graph):
             return geometry.query_ball(self.leaf_kdtree, xyz, d)
         elif node_type == "proposal":
             return geometry.query_ball(self.proposal_kdtree, xyz, d)
-
-    def get_projection(self, xyz):
-        """
-        Gets the xyz coordinates of the nearest neighbor of "xyz".
-
-        Parameters
-        ----------
-        xyz : tuple
-            xyz coordinate to be queried.
-
-        Returns
-        -------
-        tuple
-            xyz coordinate of the nearest neighbor of "xyz".
-
-        """
-        _, idx = self.kdtree.query(xyz, k=1)
-        return tuple(self.kdtree.data[idx])
 
     # --- Proposal Utils ---
     def n_proposals(self):
@@ -850,6 +831,7 @@ class NeuroGraph(nx.Graph):
             return self.edges[edge][key]
         else:
             return np.flip(self.edges[edge][key], axis=0)
+
     """
     def node_xyz_dist(self, node, xyz):
         return get_dist(xyz, self.nodes[node]["xyz"])
