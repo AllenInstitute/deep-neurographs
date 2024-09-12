@@ -19,13 +19,13 @@ import tensorstore as ts
 from scipy.spatial import KDTree
 
 from deep_neurographs import generate_proposals, geometry
-from deep_neurographs import graph_utils as gutils
-from deep_neurographs import img_utils, swc_utils, utils
 from deep_neurographs.geometry import dist as get_dist
 from deep_neurographs.geometry import get_midpoint
 from deep_neurographs.machine_learning.groundtruth_generation import (
     init_targets,
 )
+from deep_neurographs.utils import graph_util as gutil
+from deep_neurographs.utils import img_util, swc_util, util
 
 SUPPORTED_LABEL_MASK_TYPES = [dict, np.array, ts.TensorStore]
 
@@ -105,7 +105,7 @@ class NeuroGraph(nx.Graph):
         None
 
         """
-        for i in gutils.largest_components(self, k):
+        for i in gutil.largest_components(self, k):
             self.soma_ids[self.nodes[i]["swc_id"]] = i
 
     # --- Edit Graph --
@@ -326,12 +326,7 @@ class NeuroGraph(nx.Graph):
             long_range_bool=long_range_bool,
             trim_endpoints_bool=trim_endpoints_bool,
         )
-
-        # Delete large data structures
-        # Finish
         # absorb reducible nodes
-        if optimize:
-            self.run_optimization()
 
     def reset_proposals(self):
         """
@@ -479,15 +474,6 @@ class NeuroGraph(nx.Graph):
     def init_targets(self, target_neurograph):
         self.target_edges = init_targets(self, target_neurograph)
 
-    def run_optimization(self):
-        driver = "n5" if "n5" in self.img_path else "zarr"
-        img = utils.get_superchunk(
-            self.img_path, driver, self.origin, self.shape, from_center=False
-        )
-        for edge in self.proposals:
-            xyz_1, xyz_2 = geometry.optimize_alignment(self, img, edge)
-            self.proposals[edge]["xyz"] = np.array([xyz_1, xyz_2])
-
     # -- KDTree --
     def init_kdtree(self, node_type):
         """
@@ -556,7 +542,7 @@ class NeuroGraph(nx.Graph):
         elif node_type == "proposal":
             return geometry.query_ball(self.proposal_kdtree, xyz, d)
 
-    # --- Proposal Utils ---
+    # --- Proposal util ---
     def n_proposals(self):
         """
         Computes number of edges proposals in the graph.
@@ -723,7 +709,7 @@ class NeuroGraph(nx.Graph):
         xyz = self.proposal_midpoint(proposal)
         return len(self.query_kdtree(xyz, radius, "leaf")) - 1
 
-    # --- Utils ---
+    # --- util ---
     def is_soma(self, node_or_swc):
         """
         Determines whether "node_or_swc" corresponds to a soma.
@@ -857,7 +843,7 @@ class NeuroGraph(nx.Graph):
     def is_contained(self, node_or_xyz, buffer=0):
         if self.bbox:
             coord = self.to_voxels(node_or_xyz)
-            return utils.is_contained(self.bbox, coord, buffer=buffer)
+            return util.is_contained(self.bbox, coord, buffer=buffer)
         else:
             return True
 
@@ -872,9 +858,9 @@ class NeuroGraph(nx.Graph):
     def to_voxels(self, node_or_xyz, shift=False):
         shift = self.origin if shift else np.zeros((3))
         if type(node_or_xyz) == int:
-            coord = img_utils.to_voxels(self.nodes[node_or_xyz]["xyz"])
+            coord = img_util.to_voxels(self.nodes[node_or_xyz]["xyz"])
         else:
-            coord = img_utils.to_voxels(node_or_xyz)
+            coord = img_util.to_voxels(node_or_xyz)
         return coord - shift
 
     def is_leaf(self, i):
@@ -912,14 +898,14 @@ class NeuroGraph(nx.Graph):
         return list(self.neighbors(i))[0]
 
     def get_edge_attr(self, edge, key):
-        xyz_arr = gutils.get_edge_attr(self, edge, key)
+        xyz_arr = gutil.get_edge_attr(self, edge, key)
         return xyz_arr[0], xyz_arr[-1]
 
     def to_patch_coords(self, edge, midpoint, chunk_size):
         patch_coords = []
         for xyz in self.edges[edge]["xyz"]:
             coord = self.to_voxels(xyz)
-            local_coord = utils.voxels_to_patch(coord, midpoint, chunk_size)
+            local_coord = util.voxels_to_patch(coord, midpoint, chunk_size)
             patch_coords.append(local_coord)
         return patch_coords
 
@@ -953,7 +939,7 @@ class NeuroGraph(nx.Graph):
 
     # --- write graph to swcs ---
     def to_zipped_swcs(self, zip_path, color=None):
-        n_components = utils.reformat_number(gutils.count_components(self))
+        n_components = util.reformat_number(gutil.count_components(self))
         print(f"Writing {n_components} swcs to local machine!")
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
             for nodes in nx.connected_components(self):
@@ -1006,7 +992,7 @@ class NeuroGraph(nx.Graph):
         """
         with ThreadPoolExecutor() as executor:
             threads = []
-            n_components = gutils.count_components(self)
+            n_components = gutil.count_components(self)
             print(f"Writing {n_components} swcs to local machine!")
             for i, nodes in enumerate(nx.connected_components(self)):
                 threads.append(executor.submit(self.to_swc, swc_dir, nodes))
@@ -1048,7 +1034,7 @@ class NeuroGraph(nx.Graph):
             node_to_idx[j] = len(entry_list)
 
         # Write
-        swc_utils.write(path, entry_list, color=color)
+        swc_util.write(path, entry_list, color=color)
 
     def branch_to_entries(self, entry_list, i, j, parent):
         # Orient branch
@@ -1089,7 +1075,7 @@ class NeuroGraph(nx.Graph):
         return text_buffer, n_entries
 
 
-# -- utils --
+# -- util --
 def avg_radius(radii_list):
     avg = 0
     for radii in radii_list:

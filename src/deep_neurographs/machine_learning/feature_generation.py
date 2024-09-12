@@ -17,15 +17,15 @@ Conventions:   (1) "xyz" refers to a real world coordinate such as those from
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from random import sample
-from time import time
 
 import numpy as np
 import tensorstore as ts
 
-from deep_neurographs import geometry, img_utils, utils
+from deep_neurographs import geometry
 from deep_neurographs.machine_learning.heterograph_feature_generation import (
     generate_hgnn_features,
 )
+from deep_neurographs.utils import img_util, util
 
 CHUNK_SIZE = [64, 64, 64]
 N_BRANCH_PTS = 50
@@ -250,7 +250,6 @@ def proposal_profiles(neurograph, img, proposals, downsample_factor):
         profile.
 
     """
-    t0 = time()
     with ThreadPoolExecutor() as executor:
         threads = []
         for proposal in proposals:
@@ -287,11 +286,11 @@ def get_profile_specs(xyz_1, xyz_2, downsample_factor):
 
     """
     # Compute voxel coordinates
-    voxel_1 = img_utils.to_voxels(xyz_1, downsample_factor=downsample_factor)
-    voxel_2 = img_utils.to_voxels(xyz_2, downsample_factor=downsample_factor)
+    voxel_1 = img_util.to_voxels(xyz_1, downsample_factor=downsample_factor)
+    voxel_2 = img_util.to_voxels(xyz_2, downsample_factor=downsample_factor)
 
     # Store local coordinates
-    bbox = img_utils.get_minimal_bbox(np.vstack([voxel_1, voxel_2]), buffer=1)
+    bbox = img_util.get_minimal_bbox(np.vstack([voxel_1, voxel_2]), buffer=1)
     start = [voxel_1[i] - bbox["min"][i] for i in range(3)]
     end = [voxel_2[i] - bbox["min"][i] for i in range(3)]
     specs = {
@@ -322,8 +321,8 @@ def get_profile(img, specs, profile_id):
         profile.
 
     """
-    profile = img_utils.read_profile(img, specs)
-    avg, std = utils.get_avg_std(profile)
+    profile = img_util.read_profile(img, specs)
+    avg, std = util.get_avg_std(profile)
     profile.extend([avg, std])
     return {profile_id: profile}
 
@@ -508,7 +507,7 @@ def stack_chunks(neurograph, features, shift=0):
     return X, y, idx_transforms
 
 
-# -- Utils --
+# -- util --
 def count_features(model_type):
     """
     Counts number of features based on the "model_type".
@@ -570,8 +569,8 @@ def generate_chunks(neurograph, proposals, img, labels):
         threads = [None] * len(proposals)
         for t, proposal in enumerate(proposals):
             xyz_0, xyz_1 = neurograph.proposal_xyz(proposal)
-            voxel_1 = utils.to_voxels(xyz_0)
-            voxel_2 = utils.to_voxels(xyz_1)
+            voxel_1 = util.to_voxels(xyz_0)
+            voxel_2 = util.to_voxels(xyz_1)
             threads[t] = executor.submit(
                 get_chunk, img, labels, voxel_1, voxel_2, proposal
             )
@@ -590,16 +589,16 @@ def get_chunk(img, labels, voxel_1, voxel_2, thread_id=None):
     # Extract chunks
     midpoint = geometry.get_midpoint(voxel_1, voxel_2).astype(int)
     if type(img) == ts.TensorStore:
-        chunk = utils.read_tensorstore(img, midpoint, CHUNK_SIZE)
-        labels_chunk = utils.read_tensorstore(labels, midpoint, CHUNK_SIZE)
+        chunk = util.read_tensorstore(img, midpoint, CHUNK_SIZE)
+        labels_chunk = util.read_tensorstore(labels, midpoint, CHUNK_SIZE)
     else:
-        chunk = img_utils.read_chunk(img, midpoint, CHUNK_SIZE)
-        labels_chunk = img_utils.read_chunk(labels, midpoint, CHUNK_SIZE)
+        chunk = img_util.read_chunk(img, midpoint, CHUNK_SIZE)
+        labels_chunk = img_util.read_chunk(labels, midpoint, CHUNK_SIZE)
 
     # Coordinate transform
-    chunk = utils.normalize(chunk)
-    patch_voxel_1 = utils.voxels_to_patch(voxel_1, midpoint, CHUNK_SIZE)
-    patch_voxel_2 = utils.voxels_to_patch(voxel_2, midpoint, CHUNK_SIZE)
+    chunk = util.normalize(chunk)
+    patch_voxel_1 = util.voxels_to_patch(voxel_1, midpoint, CHUNK_SIZE)
+    patch_voxel_2 = util.voxels_to_patch(voxel_2, midpoint, CHUNK_SIZE)
 
     # Generate features
     path = geometry.make_line(patch_voxel_1, patch_voxel_2, N_PROFILE_PTS)

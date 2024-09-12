@@ -10,13 +10,12 @@ proposals.
 """
 from copy import deepcopy
 
-import fastremap
 import networkx as nx
 
-from deep_neurographs import graph_utils as gutils
-from deep_neurographs import utils
-from deep_neurographs.machine_learning import feature_generation, ml_utils
+from deep_neurographs.machine_learning import feature_generation
 from deep_neurographs.neurograph import NeuroGraph
+from deep_neurographs.utils import graph_util as gutil
+from deep_neurographs.utils import img_util, ml_util, util
 
 BATCH_SIZE_PROPOSALS = 1000
 CHUNK_SHAPE = (256, 256, 256)
@@ -37,13 +36,13 @@ def run(
 ):
     # Initializations
     graph = neurograph.copy_graph()
-    model = ml_utils.load_model(model_type, model_path)
+    model = ml_util.load_model(model_type, model_path)
 
     # Run seeded inference until graphs are fully grown
-    print("Running Seeded Inference from Somas...")
+    accepts = list()
     for swc_id, root in neurograph.soma_ids.items():
         seed_graph = init_seed_graph(neurograph, proposals, root)
-        accepts = predict(
+        batch_accepts = predict(
             neurograph,
             seed_graph,
             graph,
@@ -54,6 +53,7 @@ def run(
             proposals,
             search_radius,
         )
+        accepts.extend(batch_accepts)
 
         # merge accepted proposals
         # upd seed graph
@@ -65,6 +65,7 @@ def run(
 
     # check whether any proposals remain
     # --> call run_without_seeds
+    return accepts, neurograph
 
 
 def init_seed_graph(neurograph, proposals, root):
@@ -88,7 +89,7 @@ def init_seed_graph(neurograph, proposals, root):
 
     """
     n_proposals_added = 0
-    nodes = gutils.get_component(neurograph, root)
+    nodes = gutil.get_component(neurograph, root)
     seed_graph = neurograph.subgraph(nodes)
     seed_graph.graph["proposals"] = set()
     for i in nodes:
@@ -126,13 +127,13 @@ def predict(
         labels_path=labels_path,
         proposals=proposals,
     )
-    # dataset = ml_utils.init_dataset(neurograph, features, model_type)
+    # dataset = ml_util.init_dataset(neurograph, features, model_type)
 
 
 def build_from_xyz(
     neurograph, labels_path, chunk_origin, chunk_shape=CHUNK_SHAPE, n_hops=1
 ):
-    swc_ids = get_swc_ids(labels_path, chunk_origin, chunk_shape)
+    swc_ids = img_util.get_chunk_labels(labels_path, chunk_origin, chunk_shape)
     seed_neurograph = build_seed_neurograph(neurograph, swc_ids)
     return seed_neurograph
 
@@ -140,7 +141,7 @@ def build_from_xyz(
 def build_seed_neurograph(neurograph, swc_ids):
     seed_neurograph = NeuroGraph()
     for nodes in nx.connected_components(neurograph):
-        i = utils.sample_singleton(nodes)
+        i = util.sample_singleton(nodes)
         swc_id = int(neurograph.nodes[i]["swc_id"])
         if swc_id in swc_ids:
             seed_neurograph.update(neurograph.subgraph(nodes))
@@ -166,7 +167,7 @@ def expand_boundary(neurograph, pred_neurograph, component):
 
             # Add component to graph
             if swc_id not in pred_neurograph.swc_ids:
-                c = gutils.get_component(neurograph, j)
+                c = gutil.get_component(neurograph, j)
                 pred_neurograph.add_swc_id(swc_id)
                 pred_neurograph = ingest_subgraph(
                     neurograph, pred_neurograph, c
@@ -200,34 +201,7 @@ def ingest_subgraph(neurograph_1, neurograph_2, node_subset):
     return neurograph_2
 
 
-# --- utils ---
-def get_swc_ids(path, xyz, shape, from_center=True):
-    """
-    Gets the swc ids of segments contained in chunk centered at "xyz".
-
-    Parameters
-    ----------
-    path : str
-        Path to segmentation stored in a GCS bucket.
-    xyz : numpy.ndarray
-        Center point of chunk to be read.
-    shape : tuple
-        Shape of chunk to be read.
-    from_center : bool, optional
-        Indication of whether "xyz" is the center point or upper, left, front
-        corner of chunk to be read.
-
-    Returns
-    -------
-    set
-        swc ids of segments contained in chunk read from GCS bucket.
-
-    """
-    img = utils.open_tensorstore(path, "neuroglancer_precomputed")
-    img = utils.read_tensorstore(img, xyz, shape, from_center=from_center)
-    return set(fastremap.unique(img).astype(int))
-
-
+# --- util ---
 def add_component(neurograph, seed_graph, root):
     """
     Adds the connected component that "root" is part of to "seed_graph".
@@ -247,7 +221,7 @@ def add_component(neurograph, seed_graph, root):
         Updated seed graph.
 
     """
-    nodes = gutils.get_component(neurograph, root)
+    nodes = gutil.get_component(neurograph, root)
     graph = neurograph.subgraph(nodes)
     seed_graph.add_nodes_from(nodes)
     seed_graph.add_edge_from(list(graph.edges))

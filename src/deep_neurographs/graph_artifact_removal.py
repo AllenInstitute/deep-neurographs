@@ -12,7 +12,8 @@ other from a NeuroGraph.
 import numpy as np
 from networkx import connected_components
 
-from deep_neurographs import geometry, utils
+from deep_neurographs import geometry
+from deep_neurographs.utils import util
 
 COLOR = "1.0 0.0 0.0"
 QUERY_DIST = 15
@@ -46,12 +47,12 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
     deleted = set()
     kdtree = neurograph.get_kdtree()
     if output_dir:
-        utils.mkdir(output_dir, delete=True)
+        util.mkdir(output_dir, delete=True)
 
     # Main
     chunk_cnt = 1
     n_components = len(components)
-    t0, t1 = utils.init_timers()
+    t0, t1 = util.init_timers()
     for cnt, idx in enumerate(np.argsort([len(c) for c in components])):
         i, j = tuple(components[idx])
         swc_id = neurograph.nodes[i]["swc_id"]
@@ -70,7 +71,7 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
 
         # Update progress bar
         if cnt >= chunk_cnt * n_components * 0.02:
-            chunk_cnt, t1 = utils.report_progress(
+            chunk_cnt, t1 = util.report_progress(
                 cnt + 1, n_components, n_components * 0.02, chunk_cnt, t0, t1
             )
     print("\n# Doubles detected:", len(deleted))
@@ -79,7 +80,7 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
 def compute_projections(neurograph, kdtree, edge):
     """
     Given a fragment defined by "edge", this routine iterates of every xyz in
-    the fragment and projects it onto the closest fragment. For each detected 
+    the fragment and projects it onto the closest fragment. For each detected
     fragment, the fragment id and projection distance are stored in a
     dictionary called "hits".
 
@@ -115,7 +116,7 @@ def compute_projections(neurograph, kdtree, edge):
 
         # Store best
         if best_id:
-            hits = utils.append_dict_value(hits, best_id, best_dist)
+            hits = util.append_dict_value(hits, best_id, best_dist)
         elif i == 15 and len(hits) == 0:
             return hits
     return hits

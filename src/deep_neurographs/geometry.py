@@ -12,7 +12,7 @@ from scipy.interpolate import UnivariateSpline
 from scipy.linalg import svd
 from scipy.spatial import distance
 
-from deep_neurographs import utils
+from deep_neurographs.utils import util
 
 
 # Directional Vectors
@@ -284,9 +284,9 @@ def get_profile(img, xyz_arr, process_id=None, window=[5, 5, 5]):
     profile = []
     for xyz in xyz_arr:
         if type(img) == ts.TensorStore:
-            profile.append(np.max(utils.read_tensorstore(img, xyz, window)))
+            profile.append(np.max(util.read_tensorstore(img, xyz, window)))
         else:
-            profile.append(np.max(utils.get_chunk(img, xyz, window)))
+            profile.append(np.max(util.get_chunk(img, xyz, window)))
 
     if process_id:
         return process_id, profile

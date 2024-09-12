@@ -17,7 +17,8 @@ import numpy as np
 import torch
 from torch_geometric.data import HeteroData as HeteroGraphData
 
-from deep_neurographs.machine_learning import feature_generation, gnn_utils
+from deep_neurographs.machine_learning import feature_generation
+from deep_neurographs.utils import gnn_util
 
 DTYPE = torch.float32
 
@@ -258,12 +259,12 @@ class HeteroGraphDataset:
 
         """
         edge_index = []
-        line_graph = gnn_utils.init_line_graph(self.proposals)
+        line_graph = gnn_util.init_line_graph(self.proposals)
         for e1, e2 in line_graph.edges:
             v1 = self.idxs_proposals["edge_to_idx"][frozenset(e1)]
             v2 = self.idxs_proposals["edge_to_idx"][frozenset(e2)]
             edge_index.extend([[v1, v2], [v2, v1]])
-        return gnn_utils.to_tensor(edge_index)
+        return gnn_util.to_tensor(edge_index)
 
     def branch_to_branch(self):
         """
@@ -289,7 +290,7 @@ class HeteroGraphDataset:
                 v1 = self.idxs_branches["edge_to_idx"][frozenset(e1)]
                 v2 = self.idxs_branches["edge_to_idx"][frozenset(e2)]
                 edge_index.extend([[v1, v2], [v2, v1]])
-        return gnn_utils.to_tensor(edge_index)
+        return gnn_util.to_tensor(edge_index)
 
     def branch_to_proposal(self):
         """
@@ -319,7 +320,7 @@ class HeteroGraphDataset:
                 if frozenset((j, k)) not in self.proposals:
                     v2 = self.idxs_branches["edge_to_idx"][frozenset((j, k))]
                     edge_index.extend([[v2, v1]])
-        return gnn_utils.to_tensor(edge_index)
+        return gnn_util.to_tensor(edge_index)
 
     # Set Edge Attributes
     def set_edge_attrs(self, x_nodes, edge_type, idx_map):
@@ -367,7 +368,7 @@ class HeteroGraphDataset:
         self.data[edge_type].edge_attr = arrs
 
 
-# -- utils --
+# -- util --
 def init_idxs(idxs):
     """
     Adds dictionary item called "edge_to_index" which maps an edge in a

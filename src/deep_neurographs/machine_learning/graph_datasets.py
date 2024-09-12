@@ -15,7 +15,8 @@ import numpy as np
 import torch
 from torch_geometric.data import Data as GraphData
 
-from deep_neurographs.machine_learning import feature_generation, gnn_utils
+from deep_neurographs.machine_learning import feature_generation
+from deep_neurographs.utils import gnn_util
 
 
 # Wrapper
@@ -144,7 +145,7 @@ class GraphDataset:
         edge_index = branch_proposal_edges
         edge_index.extend(branch_edges)
         edge_index.extend(proposal_edges)
-        return gnn_utils.to_tensor(edge_index)
+        return gnn_util.to_tensor(edge_index)
 
     def proposal_to_proposal(self):
         """
@@ -162,7 +163,7 @@ class GraphDataset:
 
         """
         edge_index = []
-        line_graph = gnn_utils.init_line_graph(self.proposals)
+        line_graph = gnn_util.init_line_graph(self.proposals)
         for e1, e2 in line_graph.edges:
             v1 = self.idxs_proposals["edge_to_idx"][frozenset(e1)]
             v2 = self.idxs_proposals["edge_to_idx"][frozenset(e2)]
@@ -222,7 +223,7 @@ class GraphDataset:
         return edge_index
 
 
-# -- utils --
+# -- util --
 def shift_idxs(idxs, shift):
     """
     Shifts every key in "idxs["idx_to_edge"]" by "shift".
