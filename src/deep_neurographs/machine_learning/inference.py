@@ -9,12 +9,13 @@ Routines for running inference with a model that classifies edge proposals.
 """
 
 from time import time
-from tqdm import tqdm
+
 import networkx as nx
 import numpy as np
 import torch
 from torch.nn.functional import sigmoid
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from deep_neurographs import graph_utils as gutils
 from deep_neurographs import img_utils
@@ -38,6 +39,7 @@ class InferenceEngine:
     trained to classify edge proposals.
 
     """
+
     def __init__(
         self,
         img_path,
@@ -149,7 +151,9 @@ class InferenceEngine:
         if self.is_gnn:
             return gnn_utils.get_batches(neurograph.copy(), proposals)
         else:
-            dists = np.argsort([neurograph.proposal_length(p) for p in proposals])
+            dists = np.argsort(
+                [neurograph.proposal_length(p) for p in proposals]
+            )
             batches = list()
             for idxs in ml_utils.get_batches(dists, self.batch_size):
                 batches.append([proposals[i] for i in idxs])

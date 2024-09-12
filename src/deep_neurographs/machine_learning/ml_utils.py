@@ -90,11 +90,7 @@ def load_model(model_type, path):
 
 # --- dataset utils ---
 def init_dataset(
-    neurograph,
-    features,
-    model_type,
-    computation_graph=None,
-    sample_ids=None,
+    neurograph, features, model_type, computation_graph=None, sample_ids=None
 ):
     """
     Initializes a dataset given features generated from some set of proposals
@@ -130,17 +126,12 @@ def init_dataset(
         dataset = graph_datasets.init(neurograph, features)
     else:
         dataset = init_proposal_dataset(
-            neurograph,
-            features,
-            model_type,
-            sample_ids=sample_ids,
+            neurograph, features, model_type, sample_ids=sample_ids
         )
     return dataset
 
 
-def init_proposal_dataset(
-    neurographs, features, model_type, sample_ids=None,
-):
+def init_proposal_dataset(neurographs, features, model_type, sample_ids=None):
     # Extract features
     inputs, targets, idx_transforms = feature_generation.get_matrix(
         neurographs, features["proposals"], model_type, sample_ids=sample_ids
@@ -235,5 +226,5 @@ def get_kfolds(filenames, k):
 def get_batches(my_list, batch_size):
     batches = list()
     for start in range(0, len(my_list), batch_size):
-        batches.append(my_list[start: min(start + batch_size, len(my_list))])
+        batches.append(my_list[start : min(start + batch_size, len(my_list))])
     return batches

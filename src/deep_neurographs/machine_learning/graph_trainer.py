@@ -126,6 +126,7 @@ class GraphTrainer:
             y, hat_y = [], []
             self.model.train()
             for graph_id in train_ids:
+                print(graph_id)
                 y_i, hat_y_i = self.train(
                     datasets[graph_id], epoch, augment=augment
                 )

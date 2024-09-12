@@ -17,7 +17,6 @@ from deep_neurographs import graph_utils as gutils
 from deep_neurographs import swc_utils, utils
 
 
-
 def save_prediction(
     neurograph, accepted_proposals, output_dir, save_swcs=False
 ):

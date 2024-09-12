@@ -83,20 +83,16 @@ def run(
         )
     elif "Graph" in model_type:
         return generate_gnn_features(
-            neurograph, img, proposals, radius, downsample_factor,
+            neurograph, img, proposals, radius, downsample_factor
         )
     else:
         return generate_features(
-            neurograph, img, proposals, radius, downsample_factor,
+            neurograph, img, proposals, radius, downsample_factor
         )
 
 
 def generate_gnn_features(
-    neurograph,
-    img,
-    proposals_dict,
-    radius,
-    downsample_factor,
+    neurograph, img, proposals_dict, radius, downsample_factor
 ):
     """
     Generates feature vectors used by a graph neural net (gnn) to classify
@@ -126,19 +122,13 @@ def generate_gnn_features(
     features = {
         "edges": run_on_edges(neurograph, proposals_dict),
         "proposals": run_on_proposals(
-            neurograph, img, proposals_dict["proposals"], radius,
-        )
+            neurograph, img, proposals_dict["proposals"], radius
+        ),
     }
     return features
 
 
-def generate_features(
-    neurograph,
-    img,
-    proposals,
-    radius,
-    downsample_factor,
-):
+def generate_features(neurograph, img, proposals, radius, downsample_factor):
     """
     Generates feature vectors that are used by a general machine learning model
     (e.g. random forest or feed forward neural network).
@@ -200,13 +190,7 @@ def run_on_edges(neurograph, proposals_dict):
     return {"skel": edge_features}
 
 
-def run_on_proposals(
-    neurograph,
-    img,
-    proposals,
-    radius,
-    downsample_factor,
-):
+def run_on_proposals(neurograph, img, proposals, radius, downsample_factor):
     """
     Generates feature vectors for a set of proposals in a neurograph.
 
@@ -272,9 +256,7 @@ def proposal_profiles(neurograph, img, proposals, downsample_factor):
         for proposal in proposals:
             xyz_1, xyz_2 = neurograph.proposal_xyz(proposal)
             specs = get_profile_specs(xyz_1, xyz_2, downsample_factor)
-            threads.append(
-                executor.submit(get_profile, img, specs, proposal)
-            )
+            threads.append(executor.submit(get_profile, img, specs, proposal))
 
         profiles = dict()
         for thread in as_completed(threads):
