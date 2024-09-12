@@ -592,10 +592,10 @@ class NeuroGraph(nx.Graph):
         """
         return len(self.proposals)
 
-    def get_simple_proposals(self):
+    def simple_proposals(self):
         return set([e for e in self.proposals if self.is_simple(e)])
 
-    def get_complex_proposals(self):
+    def complex_proposals(self):
         return set([e for e in self.proposals if not self.is_simple(e)])
 
     def proposal_search(self, root_1, root_2, max_depth, max_dist):
