@@ -279,7 +279,6 @@ def proposal_profiles(neurograph, img, proposals, downsample_factor):
         profiles = dict()
         for thread in as_completed(threads):
             profiles.update(thread.result())
-    print(f"feature_generation -- proposal profiles:", time() - t0)
     return profiles
 
 
@@ -367,7 +366,6 @@ def proposal_skeletal(neurograph, proposals, radius):
         Features generated from skeleton.
 
     """
-    t0 = time()
     features = dict()
     for proposal in proposals:
         i, j = tuple(proposal)
@@ -388,7 +386,6 @@ def proposal_skeletal(neurograph, proposals, radius):
             ),
             axis=None,
         )
-    print(f"feature_generation -- proposal skeletal:", time() - t0)
     return features
 
 
