@@ -236,12 +236,12 @@ def proposal_skeletal(neurograph, proposals, radius):
         proposal_skeletal_features[proposal] = np.concatenate(
             (
                 neurograph.proposal_length(proposal),
-                feats.n_nearby_leafs(neurograph, proposal, radius),
-                feats.get_radii(neurograph, proposal),
-                feats.get_directionals(neurograph, proposal, 8),
-                feats.get_directionals(neurograph, proposal, 16),
-                feats.get_directionals(neurograph, proposal, 32),
-                feats.get_directionals(neurograph, proposal, 64),
+                neurograph.n_nearby_leafs(proposal, radius),
+                neurograph.proposal_radii(proposal),
+                neurograph.proposal_directionals(proposal, 8),
+                neurograph.proposal_directionals(proposal, 16),
+                neurograph.proposal_directionals(proposal, 32),
+                neurograph.proposal_directionals(proposal, 64),
             ),
             axis=None,
         )
