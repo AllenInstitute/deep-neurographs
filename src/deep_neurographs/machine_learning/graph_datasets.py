@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from torch_geometric.data import Data as GraphData
 
-from deep_neurographs.machine_learning import feature_generation
+from deep_neurographs.machine_learning import feature_generation, datasets
 from deep_neurographs.utils import gnn_util
 
 
@@ -41,14 +41,14 @@ def init(neurograph, features):
     """
     # Extract features
     x_branches, _, idxs_branches = feature_generation.get_matrix(
-        neurograph, features["branch"], "GraphNeuralNet"
+        neurograph, features["branches"], "GraphNeuralNet"
     )
     x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
-        neurograph, features["proposal"], "GraphNeuralNet"
+        neurograph, features["proposals"], "GraphNeuralNet"
     )
 
-    # Initialize data
-    proposals = features["proposal"]["skel"].keys()
+    # Initialize dataset
+    proposals = list(features["proposals"]["skel"].keys())
     graph_dataset = GraphDataset(
         neurograph,
         proposals,
@@ -112,8 +112,8 @@ class GraphDataset:
 
         # Set edges
         idxs_branches = shift_idxs(idxs_branches, x_proposals.shape[0])
-        self.idxs_branches = init_idxs(idxs_branches)
-        self.idxs_proposals = init_idxs(idxs_proposals)
+        self.idxs_branches = datasets.init_idxs(idxs_branches)
+        self.idxs_proposals = datasets.init_idxs(idxs_proposals)
         self.proposals = proposals
 
         # Initialize data
@@ -245,27 +245,4 @@ def shift_idxs(idxs, shift):
     for key, value in idxs["idx_to_edge"].items():
         shifted_idxs[key + shift] = value
     idxs["idx_to_edge"] = shifted_idxs
-    return idxs
-
-
-def init_idxs(idxs):
-    """
-    Adds dictionary item called "edge_to_index" which maps an edge in a
-    neurograph to an that represents the edge's position in the feature
-    matrix.
-
-    Parameters
-    ----------
-    idxs : dict
-        Dictionary that maps indices to edges in some neurograph.
-
-    Returns
-    -------
-    dict
-        Updated dictionary.
-
-    """
-    idxs["edge_to_idx"] = dict()
-    for idx, edge in idxs["idx_to_edge"].items():
-        idxs["edge_to_idx"][edge] = idx
     return idxs

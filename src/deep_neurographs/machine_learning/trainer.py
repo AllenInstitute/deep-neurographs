@@ -37,9 +37,7 @@ SUPPORTED_MODELS = [
 
 
 def fit_model(model, dataset):
-    inputs = dataset["dataset"]["inputs"]
-    targets = dataset["dataset"]["targets"]
-    model.fit(inputs, targets)
+    model.fit(dataset.data.x, dataset.data.y)
     return model
 
 
@@ -76,8 +74,7 @@ def fit_deep_model(
     ...
     """
     # Load data
-    dataset = dataset["dataset"]
-    train_set, valid_set = random_split(dataset)
+    train_set, valid_set = random_split(dataset.data)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     valid_loader = DataLoader(valid_set, batch_size=batch_size)
 
@@ -99,7 +96,6 @@ def fit_deep_model(
     pylightning_trainer.fit(lit_model, train_loader, valid_loader)
 
     # Return best model
-    print(ckpt_callback.best_model_path)
     ckpt = torch.load(ckpt_callback.best_model_path)
     lit_model.model.load_state_dict(ckpt["state_dict"])
     return lit_model.model

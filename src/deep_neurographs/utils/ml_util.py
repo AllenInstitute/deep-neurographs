@@ -17,12 +17,9 @@ from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 
 from deep_neurographs.machine_learning import (
     feature_generation,
+    datasets,
     graph_datasets,
     heterograph_datasets,
-)
-from deep_neurographs.machine_learning.datasets import (
-    MultiModalDataset,
-    ProposalDataset,
 )
 from deep_neurographs.machine_learning.models import (
     FeedForwardNet,
@@ -67,25 +64,21 @@ def init_model(model_type):
         return MultiModalNet(n_features)
 
 
-def load_model(model_type, path):
+def load_model(path):
     """
     Loads the parameters of a machine learning model.
 
     Parameters
     ----------
-    model_type : str
-        Type of machine learning model.
     path : str
         Path to the model parameters.
 
     Returns
     -------
     ...
+
     """
-    if model_type in ["AdaBoost", "RandomForest"]:
-        return joblib.load(path)
-    else:
-        return torch.load(path)
+    return joblib.load(path) if ".joblib" in path else torch.load(path)
 
 
 # --- dataset utils ---
@@ -120,32 +113,19 @@ def init_dataset(
     if "Hetero" in model_type:
         assert computation_graph, "Must provide computation graph!"
         dataset = heterograph_datasets.init(
-            neurograph, computation_graph, features
+            neurograph, features, computation_graph
         )
     elif "Graph" in model_type:
         dataset = graph_datasets.init(neurograph, features)
     else:
-        dataset = init_proposal_dataset(
+        dataset = datasets.init(
             neurograph, features, model_type, sample_ids=sample_ids
         )
     return dataset
 
 
-def init_proposal_dataset(neurographs, features, model_type, sample_ids=None):
-    # Extract features
-    inputs, targets, idx_transforms = feature_generation.get_matrix(
-        neurographs, features["proposals"], model_type, sample_ids=sample_ids
-    )
-    dataset = {
-        "dataset": get_dataset(inputs, targets, model_type),
-        "block_to_idxs": idx_transforms["block_to_idxs"],
-        "idx_to_edge": idx_transforms["idx_to_edge"],
-    }
-    return dataset
-
-
+"""
 def get_dataset(inputs, targets, model_type):
-    """
     Gets classification model to be fit.
 
     Parameters
@@ -164,7 +144,6 @@ def get_dataset(inputs, targets, model_type):
     -------
     ...
 
-    """
     if model_type == "FeedForwardNet":
         dataset = ProposalDataset(inputs, targets)
     elif model_type == "MultiModalNet":
@@ -172,6 +151,7 @@ def get_dataset(inputs, targets, model_type):
     else:
         dataset = {"inputs": inputs, "targets": targets}
     return dataset
+"""
 
 
 # --- miscellaneous ---
@@ -226,5 +206,5 @@ def get_kfolds(filenames, k):
 def get_batches(my_list, batch_size):
     batches = list()
     for start in range(0, len(my_list), batch_size):
-        batches.append(my_list[start : min(start + batch_size, len(my_list))])
+        batches.append(my_list[start: min(start + batch_size, len(my_list))])
     return batches
