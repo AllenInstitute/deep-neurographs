@@ -81,8 +81,8 @@ class InferenceEngine:
 
         # Load image and model
         driver = "n5" if ".n5" in img_path else "zarr"
-        self.img = img_util.open(img_path, driver)
-        self.model = ml_util.load_model(model_type, model_path)
+        self.img = img_util.open_tensorstore(img_path, driver=driver)
+        self.model = ml_util.load_model(model_path)
 
     def run(self, neurograph, proposals):
         """
@@ -195,7 +195,7 @@ class InferenceEngine:
 
         Parameters
         ----------
-        dataset : ...
+        data : ...
             Dataset on which the model inference is to be run.
 
         Returns
@@ -210,25 +210,23 @@ class InferenceEngine:
         if self.is_gnn:
             preds = run_gnn_model(dataset.data, self.model, self.model_type)
         elif "Net" in self.model_type:
-            preds = run_nn_model(dataset, self.model)
+            preds = run_nn_model(dataset.data, self.model)
         else:
-            data = dataset["dataset"]["inputs"]
-            preds = np.array(self.model.predict_proba(data)[:, 1])
+            preds = np.array(self.model.predict_proba(dataset.data.x)[:, 1])
 
         # Filter preds
-        idxs = get_idxs(dataset, self.model_type)
+        idxs = dataset.idxs_proposals["idx_to_edge"]
         return {idxs[i]: p for i, p in enumerate(preds) if p > self.threshold}
 
 
 # --- run machine learning model ---
-def run_nn_model(dataset, model):
+def run_nn_model(data, model):
     hat_y = []
     model.eval()
     with torch.no_grad():
-        for batch in DataLoader(dataset["dataset"], batch_size=32):
+        for batch in DataLoader(data, batch_size=32):
             # Run model
-            x_i = batch["inputs"]
-            hat_y_i = sigmoid(model(x_i))
+            hat_y_i = sigmoid(model(batch["inputs"]))
 
             # Postprocess
             hat_y_i = np.array(hat_y_i)
@@ -358,28 +356,3 @@ def filter_proposals(graph, proposals):
                 accepts.append((i, j))
     graph.remove_edges_from(accepts)
     return accepts
-
-
-# --- util ---
-def get_idxs(dataset, model_type):
-    """
-    Gets dictionary from "dataset" that maps indices (from feature matrix) to
-    proposal ids.
-
-    Parameters
-    ----------
-    dataset : ProposalDataset
-        Dataset that contains features generated from proposals.
-    model_type : str
-        Type of model used to perform inference.
-
-    Returns
-    -------
-    dict
-        Dictionary that maps indices (from feature matrix) to proposal ids.
-
-    """
-    if "Graph" in model_type:
-        return dataset.idxs_proposals["idx_to_edge"]
-    else:
-        return dataset["idx_to_edge"]

@@ -17,14 +17,14 @@ import numpy as np
 import torch
 from torch_geometric.data import HeteroData as HeteroGraphData
 
-from deep_neurographs.machine_learning import feature_generation
+from deep_neurographs.machine_learning import feature_generation, datasets
 from deep_neurographs.utils import gnn_util
 
 DTYPE = torch.float32
 
 
 # Wrapper
-def init(neurograph, computation_graph, features):
+def init(neurograph, features, computation_graph):
     """
     Initializes a dataset that can be used to train a graph neural network.
 
@@ -32,11 +32,11 @@ def init(neurograph, computation_graph, features):
     ----------
     neurograph : NeuroGraph
         Graph that dataset is built from.
+    features : dict
+        Dictionary that contains different types of feature vectors for nodes,
+        edges, and proposals.
     computation_graph : networkx.Graph
         Graph used by gnn to classify proposals.
-    features : dict
-        Dictionary that contains different types of feature vectors for
-        nodes, edges, and proposals.
 
     Returns
     -------
@@ -53,7 +53,7 @@ def init(neurograph, computation_graph, features):
     )
     x_nodes = feature_generation.combine_features(features["nodes"])
 
-    # Initialize data
+    # Initialize dataset
     proposals = list(features["proposals"]["skel"].keys())
     heterograph_dataset = HeteroGraphDataset(
         computation_graph,
@@ -116,8 +116,8 @@ class HeteroGraphDataset:
 
         """
         # Conversion idxs
-        self.idxs_branches = init_idxs(idxs_branches)
-        self.idxs_proposals = init_idxs(idxs_proposals)
+        self.idxs_branches = datasets.init_idxs(idxs_branches)
+        self.idxs_proposals = datasets.init_idxs(idxs_proposals)
         self.computation_graph = computation_graph
         self.proposals = proposals
 
@@ -369,29 +369,6 @@ class HeteroGraphDataset:
 
 
 # -- util --
-def init_idxs(idxs):
-    """
-    Adds dictionary item called "edge_to_index" which maps an edge in a
-    neurograph to an that represents the edge's position in the feature
-    matrix.
-
-    Parameters
-    ----------
-    idxs : dict
-        Dictionary that maps indices to edges in some neurograph.
-
-    Returns
-    -------
-    dict
-        Updated dictionary.
-
-    """
-    idxs["edge_to_idx"] = dict()
-    for idx, edge in idxs["idx_to_edge"].items():
-        idxs["edge_to_idx"][edge] = idx
-    return idxs
-
-
 def node_intersection(idx_map, e1, e2):
     """
     Computes the common node between "e1" and "e2" in the case where these

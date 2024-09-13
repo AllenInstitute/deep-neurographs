@@ -10,41 +10,121 @@ Custom datasets for training deep learning models.
 
 import numpy as np
 import torchio as tio
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset as TorchDataset
+
+from deep_neurographs.machine_learning import feature_generation
 
 
-# Custom datasets
-class ProposalDataset(Dataset):
+# Wrapper
+def init(neurograph, features, model_type, sample_ids=None):
+    """
+    Initializes a dataset that can be used to train a machine learning model.
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph that dataset is built from.
+    features : dict
+        Feature vectors corresponding to branches such that the keys are
+        "proposals" and "branches". The values are a dictionary containing
+        different types of features for edges and branches.
+    is_multimodal : bool, optional
+        Indication of whether model is multimodal. The default is False.
+    sample_ids : list[str]
+        ...
+
+    Returns
+    -------
+    GraphDataset
+        Custom dataset.
+
+    """
+    # Extract features
+    x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
+        neurograph, features["proposals"], model_type, sample_ids=sample_ids
+    )
+
+    # Initialize dataset
+    proposals = list(features["proposals"]["skel"].keys())
+    dataset = Dataset(
+        proposals,
+        x_proposals,
+        y_proposals,
+        idxs_proposals,
+    )
+    return dataset
+
+
+class Dataset:
+    """
+    Dataset class that contains feature vectors of edge proposals. The feature
+    vectors may be either unimodal or multimodal.
+
+    """
+    def __init__(
+        self,
+        proposals,
+        x_proposals,
+        y_proposals,
+        idxs_proposals,
+    ):
+        """
+        Constructs a Dataset object.
+
+        Parameters
+        ----------
+        computation_graph : networkx.Graph
+            Graph used by gnn to classify proposals.
+        proposals : list
+            List of proposals to be classified.
+        x_proposals : numpy.ndarray
+            Feature matrix generated from "proposals" in "computation_graph".
+        y_proposals : numpy.ndarray
+            Ground truth of proposals (i.e. accept or reject).
+        idxs_proposals : dict
+            Dictionary that maps "proposals" to an index that represents the
+            proposal's position in "x_proposals".
+
+        Returns
+        -------
+        None
+
+        """
+        # Conversion idxs
+        self.block_to_idxs = idxs_proposals["block_to_idxs"]
+        self.idxs_proposals = init_idxs(idxs_proposals)
+        self.proposals = proposals
+
+        # Features
+        self.data = ProposalDataset(x=x_proposals, y=y_proposals)
+
+
+class ProposalDataset(TorchDataset):
     """
     Custom dataset that contains feature vectors that correspond to edge
     proposals.
 
     """
 
-    def __init__(
-        self, inputs, targets, search_radius=10, transform=False, lengths=[]
-    ):
+    def __init__(self, x, y):
         """
         Constructs ProposalDataset object.
 
         Parameters
         ----------
-        inputs : np.array
+        x : np.array
             Feature matrix where each row corresponds to the feature vector of
-            an edge proposal.
-        targets : np.array
-            Binary vector where each entry indicates whether an edge proposal
-            should be added or omitted from a reconstruction.
+            a proposal.
+        y : np.array
+            Ground truth of proposals (i.e. accept or reject).
 
         Returns
         -------
         None
 
         """
-        self.inputs = inputs.astype(np.float32)
-        self.targets = reformat(targets)
-        self.lengths = lengths
-        self.transform = transform
+        self.x = x.astype(np.float32)
+        self.y = reformat(y)
 
     def __len__(self):
         """
@@ -60,7 +140,7 @@ class ProposalDataset(Dataset):
             Number of examples in dataset.
 
         """
-        return len(self.targets)
+        return len(self.y)
 
     def __getitem__(self, idx):
         """
@@ -77,83 +157,7 @@ class ProposalDataset(Dataset):
             Example corresponding to "idx".
 
         """
-        inputs_i = self.inputs[idx]
-        if self.transform:
-            if np.random.random() > 0.6:
-                p = 100 * np.random.random()
-                inputs_i[0] = np.percentile(self.lengths, p)
-        return {"inputs": inputs_i, "targets": self.targets[idx]}
-
-
-class ImgProposalDataset(Dataset):
-    """
-    Custom dataset that contains image chunks that correspond to edge
-    proposals.
-
-    """
-
-    def __init__(self, inputs, targets, transform=True):
-        """
-        Constructs ImgProposalDataset object.
-
-        Parameters
-        ----------
-        inputs : numpy.array
-            Feature tensor where each submatrix corresponds to an image chunk
-            that contains an edge proposal. Note that the midpoint of the edge
-            proposal is the center point of the chunk.
-        targets : np.array
-            Binary vector where each entry indicates whether an edge proposal
-            should be added or omitted from a reconstruction.
-        transform : bool, optional
-            Indication of whether to apply data augmentation to the inputs.
-            The default is True.
-
-        Returns
-        -------
-        None
-
-        """
-        self.inputs = inputs.astype(np.float32)
-        self.targets = reformat(targets)
-        self.transform = AugmentImages() if transform else None
-
-    def __len__(self):
-        """
-        Computes number of examples in dataset.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        int
-            Number of examples in dataset.
-
-        """
-        return len(self.targets)
-
-    def __getitem__(self, idx):
-        """
-        Gets example (i.e. input and label) corresponding to "idx".
-
-        Parameters
-        ----------
-        idx : int
-            Index of example to be returned.
-
-        Returns
-        -------
-        dict
-            Example corresponding to "idx".
-
-        """
-        if self.transform:
-            inputs = self.transform.run(self.inputs[idx])
-        else:
-            inputs = self.inputs[idx]
-        return {"inputs": inputs, "targets": self.targets[idx]}
+        return {"inputs": self.x[idx], "targets": self.y[idx]}
 
 
 class MultiModalDataset(Dataset):
@@ -163,18 +167,18 @@ class MultiModalDataset(Dataset):
 
     """
 
-    def __init__(self, inputs, targets, transform=True):
+    def __init__(self, x, y, transform=True):
         """
         Constructs MultiModalDataset object.
 
         Parameters
         ----------
-        inputs : dict
+        x : dict
             Feature dictionary where each key-value is the type of feature and
             corresponding value. The keys of this dictionary are (1) "imgs" and
             (2) "features" which correspond to a (1) feature tensor containing
             image chunks and (2) feature vector.
-        targets : np.array
+        y : np.array
             Binary vector where each entry indicates whether an edge proposal
             should be added or omitted from a reconstruction.
         transform : bool, optional
@@ -186,9 +190,9 @@ class MultiModalDataset(Dataset):
         None
 
         """
-        self.img_inputs = inputs["imgs"].astype(np.float32)
-        self.feature_inputs = inputs["features"].astype(np.float32)
-        self.targets = reformat(targets)
+        self.x_imgs = x["imgs"].astype(np.float32)
+        self.x_features = x["features"].astype(np.float32)
+        self.y = reformat(y)
         self.transform = AugmentImages() if transform else None
 
     def __len__(self):
@@ -205,7 +209,7 @@ class MultiModalDataset(Dataset):
             Number of examples in dataset.
 
         """
-        return len(self.targets)
+        return len(self.y)
 
     def __getitem__(self, idx):
         """
@@ -223,10 +227,10 @@ class MultiModalDataset(Dataset):
 
         """
         if self.transform:
-            img_inputs = self.transform.run(self.img_inputs[idx])
+            x_img = self.transform.run(self.x_imgs[idx])
         else:
-            img_inputs = self.img_inputs[idx]
-        inputs = [self.feature_inputs[idx], img_inputs]
+            x_img = self.x_imgs[idx]
+        inputs = [self.feature_inputs[idx], x_img]
         return {"inputs": inputs, "targets": self.targets[idx]}
 
 
@@ -297,3 +301,26 @@ def reformat(arr):
 
     """
     return np.expand_dims(arr, axis=1).astype(np.float32)
+
+
+def init_idxs(idxs):
+    """
+    Adds dictionary item called "edge_to_index" which maps an edge in a
+    neurograph to an that represents the edge's position in the feature
+    matrix.
+
+    Parameters
+    ----------
+    idxs : dict
+        Dictionary that maps indices to edges in some neurograph.
+
+    Returns
+    -------
+    dict
+        Updated dictionary.
+
+    """
+    idxs["edge_to_idx"] = dict()
+    for idx, edge in idxs["idx_to_edge"].items():
+        idxs["edge_to_idx"][edge] = idx
+    return idxs

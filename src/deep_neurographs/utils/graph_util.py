@@ -35,11 +35,9 @@ def get_irreducibles(
     swc_dict,
     min_size,
     bbox=None,
-    prune_connectors=False,
-    connector_length=8,
-    prune_depth=16,
-    trim_depth=0,
+    prune_depth=16.0,
     smooth=True,
+    trim_depth=0.0,
 ):
     """
     Gets irreducible components of the graph stored in "swc_dict" by building
@@ -51,18 +49,19 @@ def get_irreducibles(
     ----------
     swc_dict : dict
         Contents of an swc file.
+    min_size : float
+        Minimum cardinality of swc files that are stored in NeuroGraph.
     bbox : dict, optional
-        ...
-    prune_connectors : bool, optional
-        Indication of whether to prune short paths connecting branches.
-        The default is False.
+        Dictionary with the keys "min" and "max" which specify a bounding box
+        in the image. The default is None.
     prune_depth : float, optional
         Path length microns that determines whether a branch is short and
-        should be pruned. The default is 16.
-    trim_depth : float, optional
-        Depth in microns to trim branch. The default is 0.
+        should be pruned. The default is 16.0.
     smooth : bool, optional
         Indication of whether to smooth each branch. The default is True.
+    trim_depth : float, optional
+        Maximum path length (in microns) to trim from "branch". The default is
+        0.0.
 
     Returns
     -------
@@ -76,18 +75,12 @@ def get_irreducibles(
     swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
     graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
     graph = clip_branches(graph, bbox)
-    graph, n_nodes_trimmed = prune_branches(
-        graph,
-        connector_length=connector_length,
-        prune_connectors=prune_connectors,
-        prune_depth=prune_depth,
-        trim_depth=trim_depth,
-    )
+    graph, n_trimmed = prune_trim_branches(graph, prune_depth, trim_depth)
 
     # Extract irreducibles
     irreducibles = []
     for node_subset in nx.connected_components(graph):
-        if len(node_subset) + n_nodes_trimmed > min_size:
+        if len(node_subset) + n_trimmed > min_size:
             subgraph = graph.subgraph(node_subset)
             irreducibles_i = __get_irreducibles(subgraph, swc_dict, smooth)
             if irreducibles_i:
@@ -104,7 +97,8 @@ def clip_branches(graph, bbox):
     graph : networkx.Graph
         Graph to be searched
     bbox : dict
-        Bounding box.
+        Dictionary with the keys "min" and "max" which specify a bounding box
+        in the image. The default is None.
 
     Returns
     -------
@@ -122,50 +116,35 @@ def clip_branches(graph, bbox):
     return graph
 
 
-def prune_branches(
-    graph,
-    connector_length=8,
-    prune_connectors=False,
-    prune_depth=16,
-    trim_depth=0,
-):
+def prune_trim_branches(graph, prune_depth, trim_depth):
     """
-    Prunes spurious branches and short paths connecting branches
-    (i.e. possible merge mistakes).
+    Prunes all short branches from "graph" and trims branchs if applicable. A
+    short branch is a path between a leaf and junction node with a path length
+    smaller than "prune_depth".
 
     Parameters
     ----------
     graph : networkx.Graph
-        Graph to be pruned.
-    connector_length : float, optional
-        ...
-    prune_connectors : bool, optional
-        Indication of whether to prune short paths connecting branches.
-        The default is False.
-    prune_depth : float, optional
-        Path length microns that determines whether a branch is short and
-        should be pruned. The default is 16.
-    trim_depth : float, optional
-        Depth in microns to trim branch. The default is 0.
+        Graph to be pruned and trimmed.
+    prune_depth : float
+        Path length microns that determines whether a branch is short. The
+        default is 16.0.
+    trim_depth : float
+        Maximum path length (in microns) to trim from "branch".
 
     Returns
     -------
     networkx.Graph
-        Pruned graph.
-    int
-        Number of nodes that were trimmed.
+        Graph with branches trimmed and short branches pruned.
 
     """
-    # Prune/Trim branches
-    assert prune_depth > 0 if prune_connectors else True, "prune_depth == 0"
-    if prune_depth > 0:
-        graph, n_nodes_trimmed = prune_trim_branches(
-            graph, prune_depth, trim_depth
-        )
-
-    # Prune connectors
-    if prune_connectors:
-        graph = prune_short_connectors(graph, connector_length)
+    remove_nodes = []
+    n_nodes_trimmed = 0
+    for leaf in get_leafs(graph):
+        nodes, n_trimmed = prune_trim(graph, leaf, prune_depth, trim_depth)
+        remove_nodes.extend(nodes)
+        n_nodes_trimmed += n_trimmed
+    graph.remove_nodes_from(remove_nodes)
     return graph, n_nodes_trimmed
 
 
@@ -178,9 +157,9 @@ def __get_irreducibles(graph, swc_dict, smooth):
     graph : networkx.Graph
         Graph to be searched.
     swc_dict : dict
-        Dictionary that was used to build "graph".
+        Dictionary used to build "graph".
     smooth : bool
-        Indication of whether to smooth irreducible edges.
+        Indication of whether to smooth edges.
 
     Returns
     -------
@@ -259,40 +238,11 @@ def get_irreducible_nodes(graph):
 
 
 # --- Refine graph ---
-def prune_trim_branches(graph, depth, trim_depth):
-    """
-    Prunes all short branches from "graph" and trims branchs if applicable. A
-    short branch is a path between a leaf and junction node with a path length
-    smaller than depth.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-    depth : int
-        Path length that determines whether a branch is short.
-
-    Returns
-    -------
-    networkx.Graph
-        Graph with short branches pruned.
-
-    """
-    remove_nodes = []
-    n_nodes_trimmed = 0
-    for leaf in get_leafs(graph):
-        nodes, n_trimmed = inspect_branch(graph, leaf, depth, trim_depth)
-        remove_nodes.extend(nodes)
-        n_nodes_trimmed += n_trimmed
-    graph.remove_nodes_from(remove_nodes)
-    return graph, n_nodes_trimmed
-
-
-def inspect_branch(graph, leaf, depth, trim_depth):
+def prune_trim(graph, leaf, prune_depth, trim_depth):
     """
     Determines whether the branch emanating from "leaf" should be pruned and
     returns nodes that should be pruned. If applicable (i.e. trim_depth > 0),
-    trims the branch by "trim_depth" microns.
+    every branch is trimmed by"trim_depth" microns.
 
     Parameters
     ----------
@@ -301,10 +251,10 @@ def inspect_branch(graph, leaf, depth, trim_depth):
     leaf : int
         Leaf node being inspected to determine whether it is the endpoint of
         a short branch that should be pruned.
-    depth : int
+    prune_depth : int
         Path length microns that determines whether a branch is short.
     trim_depth : float
-        Depth in microns to trim branch.
+        Maximum path length (in microns) to trim from "branch".
 
     Returns
     -------
@@ -314,35 +264,53 @@ def inspect_branch(graph, leaf, depth, trim_depth):
 
     """
     # Check whether to prune
-    path = [leaf]
+    branch = [leaf]
     node_spacing = []
-    for (i, j) in nx.dfs_edges(graph, source=leaf, depth_limit=depth):
+    for (i, j) in nx.dfs_edges(graph, source=leaf, depth_limit=prune_depth):
         node_spacing.append(compute_dist(graph, i, j))
         if graph.degree(j) > 2:
-            return path, 0
+            return branch, 0
         elif graph.degree(j) == 2:
-            path.append(j)
-        elif np.sum(node_spacing) > depth:
+            branch.append(j)
+        elif np.sum(node_spacing) > prune_depth:
             break
 
     # Check whether to trim
     spacing = np.mean(node_spacing)
     if trim_depth > 0 and graph.number_of_nodes() > 3 * trim_depth / spacing:
-        trim_nodes = trim_branch(graph, path, trim_depth)
+        trim_nodes = trim_branch(graph, branch, trim_depth)
         return trim_nodes, len(trim_nodes)
     else:
         return [], 0
 
 
-def trim_branch(graph, path, trim_depth):
-    branch_length = 0
-    for i in range(1, len(path)):
-        xyz_1 = graph.nodes[path[i - 1]]["xyz"]
-        xyz_2 = graph.nodes[path[i]]["xyz"]
-        branch_length += geometry.dist(xyz_1, xyz_2)
-        if branch_length > trim_depth:
+def trim_branch(graph, branch, trim_depth):
+    """
+    Trims a branch of a graph based on a specified depth.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+    branch : list[int]
+        List of nodes representing a path through the graph to be trimmed.
+    trim_depth : float
+        Maximum path length (in microns) to trim from "branch".
+
+    Returns
+    -------
+    list[int]
+        Trimmed branch.
+
+    """
+    path_length = 0
+    for i in range(1, len(branch)):
+        xyz_1 = graph.nodes[branch[i - 1]]["xyz"]
+        xyz_2 = graph.nodes[branch[i]]["xyz"]
+        path_length += geometry.dist(xyz_1, xyz_2)
+        if path_length > trim_depth:
             break
-    return path[0:i]
+    return branch[0:i]
 
 
 def compute_dist(graph, i, j):
@@ -364,82 +332,6 @@ def compute_dist(graph, i, j):
 
     """
     return geometry.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
-
-
-def prune_short_connectors(graph, length=8):
-    """ "
-    Prunes shorts paths (i.e. connectors) between junctions nodes and the nbhd
-    about the junctions.
-
-    Parameters
-    ----------
-    graph : netowrkx.Graph
-        Graph to be inspected.
-    length : int, optional
-        Upper bound on the distance that defines a connector path to be
-        pruned. The default is 8.
-
-    Returns
-    -------
-    list[tuple]
-        Graph with connectors pruned.
-    list[np.ndarray]
-        List of xyz coordinates of centroids of connectors.
-
-    """
-    junctions = [j for j in graph.nodes if graph.degree[j] > 2]
-    pruned_centroids = []
-    pruned_nodes = set()
-    cnt = 0
-    while len(junctions):
-        # Search nbhd
-        j = junctions.pop()
-        junction_nbs = []
-        for _, i in nx.dfs_edges(graph, source=j, depth_limit=length):
-            if i in junctions:
-                junction_nbs.append(i)
-
-        # Store nodes to be pruned
-        for nb in junction_nbs:
-            connector = list(nx.shortest_path(graph, source=j, target=nb))
-            nbhd = set(nx.dfs_tree(graph, source=nb, depth_limit=5))
-            centroid = connector[len(connector) // 2]
-            if not ignore_connector(graph, centroid, 16 + length // 2):
-                pruned_nodes.update(nbhd.union(set(connector)))
-                pruned_centroids.append(graph.nodes[centroid]["xyz"])
-
-        if len(junction_nbs) > 0:
-            nbhd = set(nx.dfs_tree(graph, source=j, depth_limit=5))
-            pruned_nodes.update(nbhd)
-            cnt += 1
-
-    # Finish
-    graph.remove_nodes_from(list(pruned_nodes))
-    return graph
-
-
-def ignore_connector(graph, root, depth):
-    """
-    Determines whether the connector is in a region with lots of branching.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-    root : int
-        Midpoint of connector.
-
-    Returns
-    -------
-    bool
-        Indication of whether connector is in a region with lots of branching.
-
-    """
-    n_branching_points = 0
-    for i in nx.dfs_tree(graph, source=root, depth_limit=depth):
-        if graph.degree[i] > 2:
-            n_branching_points += 1
-    return True if n_branching_points > 2 else False
 
 
 def __smooth_branch(swc_dict, attrs, edges, nbs, root, j):
