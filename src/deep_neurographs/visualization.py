@@ -198,7 +198,7 @@ def plot_nodes(graph):
         z=xyz[:, 2],
         mode="markers",
         name="Nodes",
-        marker=dict(size=3, color="red"),
+        marker=dict(size=2, color="red"),
     )
 
 
@@ -228,9 +228,9 @@ def plot_edges(graph, edges, color=None, line_width=3.5):
     )
     for i, j in edges:
         trace = go.Scatter3d(
-            x=graph.edges[i, j]["xyz"][::2, 0],
-            y=graph.edges[i, j]["xyz"][::2, 1],
-            z=graph.edges[i, j]["xyz"][::2, 2],
+            x=graph.edges[i, j]["xyz"][:, 0],
+            y=graph.edges[i, j]["xyz"][:, 1],
+            z=graph.edges[i, j]["xyz"][:, 2],
             mode="lines",
             line=line,
             name=f"({i},{j})",

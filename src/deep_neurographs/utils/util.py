@@ -20,8 +20,6 @@ from zipfile import ZipFile
 import numpy as np
 import psutil
 
-from deep_neurographs.utils import img_util
-
 
 # --- dictionary utils ---
 def remove_item(my_set, item):
@@ -409,7 +407,7 @@ def read_txt(path):
         return f.read()
 
 
-def read_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
+def read_metadata(path):
     """
     Parses metadata file to extract the "chunk_origin" and "chunk_shape".
 
@@ -417,9 +415,6 @@ def read_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
     ----------
     path : str
         Path to metadata file to be read.
-    anisotropy : list[float], optional
-        Anisotropy to be applied to values of interest that converts
-        coordinates from voxels to world. The default is [1.0, 1.0, 1.0].
 
     Returns
     -------
@@ -428,9 +423,7 @@ def read_metadata(path, anisotropy=[1.0, 1.0, 1.0]):
 
     """
     metadata = read_json(path)
-    origin = metadata["chunk_origin"]
-    chunk_origin = img_util.to_voxels(origin, anisotropy=anisotropy)
-    return chunk_origin.tolist(), metadata["chunk_shape"]
+    return metadata["chunk_origin"], metadata["chunk_shape"]
 
 
 def write_json(path, contents):
@@ -500,7 +493,20 @@ def get_avg_std(data, weights=None):
 
 def is_contained(bbox, voxel):
     """
-    Checks whether "xyz" is contained within "bbox".
+    Checks whether "voxel" is contained within "bbox".
+
+    Parameters
+    ----------
+    bbox : dict
+        Dictionary with the keys "min" and "max" which specify a bounding box
+        in an image.
+    voxel : ArrayLike
+        Voxel coordinate to be checked.
+
+    Returns
+    -------
+    bool
+        Inidcation of whether "voxel" is contained in "bbox".
 
     """
     above = any(voxel >= bbox["max"])
@@ -516,7 +522,7 @@ def is_list_contained(bbox, voxels):
     ----------
     bbox : dict
         Dictionary with the keys "min" and "max" which specify a bounding box
-        in the image.
+        in an image.
     voxels
         List of xyz coordinates to be checked.
 

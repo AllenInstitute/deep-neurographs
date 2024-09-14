@@ -15,19 +15,14 @@ from io import StringIO
 
 import networkx as nx
 import numpy as np
-import tensorstore as ts
 from scipy.spatial import KDTree
 
 from deep_neurographs import generate_proposals, geometry
 from deep_neurographs.geometry import dist as get_dist
 from deep_neurographs.geometry import get_midpoint
-from deep_neurographs.machine_learning.groundtruth_generation import (
-    init_targets,
-)
+from deep_neurographs.machine_learning.groundtruth_generation import init_targets
 from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import img_util, swc_util, util
-
-SUPPORTED_LABEL_MASK_TYPES = [dict, np.array, ts.TensorStore]
 
 
 class NeuroGraph(nx.Graph):
@@ -37,38 +32,39 @@ class NeuroGraph(nx.Graph):
 
     """
 
-    def __init__(
-        self,
-        img_bbox=None,
-        swc_paths=None,
-        img_path=None,
-        label_mask=None,
-        node_spacing=1,
-        train_model=False,
-    ):
-        super(NeuroGraph, self).__init__()
-        # Initialize paths
-        self.img_path = img_path
-        self.label_mask = label_mask
-        self.swc_paths = swc_paths
-        self.swc_ids = set()
+    def __init__(self, img_bbox=None, node_spacing=1):
+        """
+        Initializes an instance of NeuroGraph.
 
-        # Initialize node and edge sets
+        Parameters
+        ----------
+        img_bbox : dict or None, optional
+            Dictionary with the keys "min" and "max" which specify a bounding
+            box in an image. The default is None.
+        node_spacing : int, optional
+            Spacing (in microns) between nodes. The default is 1.
+
+        Returns
+        -------
+        None
+
+        """
+        super(NeuroGraph, self).__init__()
+        # General class attributes
+        self.node_spacing = node_spacing
+        self.merged_ids = set()
+        self.soma_ids = dict()
+        self.swc_ids = set()
+        self.xyz_to_edge = dict()
+
+        # Nodes and Edges
         self.leafs = set()
         self.junctions = set()
         self.proposals = set()
         self.target_edges = set()
         self.node_cnt = 0
-        self.node_spacing = node_spacing
-        self.soma_ids = dict()
 
-        # Initialize data structures for proposals
-        self.xyz_to_edge = dict()
-        self.kdtree = None
-        self.leaf_kdtree = None
-        self.merged_ids = set()
-
-        # Initialize bounding box (if exists)
+        # Bounding box (if applicable)
         self.bbox = img_bbox
         if self.bbox:
             self.origin = img_bbox["min"].astype(int)
@@ -279,8 +275,6 @@ class NeuroGraph(nx.Graph):
         complex_bool=False,
         long_range_bool=False,
         proposals_per_leaf=3,
-        optimize=False,
-        optimization_depth=10,
         return_trimmed_proposals=False,
         trim_endpoints_bool=False,
     ):
@@ -300,11 +294,6 @@ class NeuroGraph(nx.Graph):
         proposals_per_leaf : int, optional
             Maximum number of proposals generated for each leaf. The default
             is False.
-        optimize : bool, optional
-            Indication of whether to optimize proposal alignment to image. The
-            default is False.
-        optimization_depth : int, optional
-            Depth to check during optimization. The default is False.
         return_trimmed_proposals, optional
             Indication of whether to return trimmed proposal ids. The default
             is False.

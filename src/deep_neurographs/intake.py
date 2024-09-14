@@ -29,12 +29,71 @@ PRUNE_DEPTH = 25
 TRIM_DEPTH = 0
 
 
+class GraphBuilder:
+    """
+    Class that is used to build an instance of FragmentsGraph.
+
+    """
+    def __init__(
+        self,
+        anisotropy=[1.0, 1.0, 1.0],
+        img_patch_origin=None,
+        img_patch_shape=None,
+        min_size=MIN_SIZE,
+        node_spacing=NODE_SPACING,
+        progress_bar=False,
+        prune_depth=PRUNE_DEPTH,
+        smooth=SMOOTH,
+        trim_depth=TRIM_DEPTH,
+    ):
+        """
+        Builds a FragmentsGraph by reading swc files stored either on the
+        cloud or local machine.
+
+        Parameters
+        ----------
+        swc_pointer : dict, list, str
+            Pointer to swc files used to build an instance of FragmentsGraph,
+            see "swc_util.Reader" for further documentation.
+        anisotropy : list[float], optional
+            Scaling factors applied to xyz coordinates to account for
+            anisotropy of microscope. The default is [1.0, 1.0, 1.0].
+        image_patch_origin : list[float], optional
+            An xyz coordinate which is the upper, left, front corner of the
+            image patch that contains the swc files. The default is None.
+        image_patch_shape : list[float], optional
+            Shape of the image patch which contains the swc files. The default
+            is None.
+        min_size : int, optional
+            Minimum cardinality of swc files that are stored in NeuroGraph. The
+            default is the global variable "MIN_SIZE".
+        node_spacing : int, optional
+            Spacing (in microns) between nodes. The default is the global
+            variable "NODE_SPACING".
+        progress_bar : bool, optional
+            Indication of whether to print out a progress bar during build.
+            The default is False.
+        prune_depth : int, optional
+            Branches less than "prune_depth" microns are pruned if "prune" is
+            True. The default is the global variable "PRUNE_DEPTH".
+        smooth : bool, optional
+            Indication of whether to smooth branches from swc files. The
+            default is the global variable "SMOOTH".
+
+        Returns
+        -------
+        NeuroGraph
+            Neurograph generated from swc files.
+
+        """
+        pass
+
+
 # --- Build graph wrappers ---
 def build_neurograph_from_local(
     anisotropy=[1.0, 1.0, 1.0],
     img_patch_origin=None,
     img_patch_shape=None,
-    img_path=None,
     min_size=MIN_SIZE,
     node_spacing=NODE_SPACING,
     progress_bar=False,
@@ -58,9 +117,6 @@ def build_neurograph_from_local(
     image_patch_shape : list[float], optional
         The xyz dimensions of the bounding box which contains the swc files.
         The default is None.
-    img_path : str, optional
-        Path to image which is assumed to be stored in a Google Bucket. The
-        default is None.
     min_size : int, optional
         Minimum cardinality of swc files that are stored in NeuroGraph. The
         default is the global variable "MIN_SIZE".
@@ -91,23 +147,12 @@ def build_neurograph_from_local(
     assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
     img_bbox = img_util.get_bbox(img_patch_origin, img_patch_shape)
     paths = util.list_paths(swc_dir, ext=".swc") if swc_dir else swc_paths
-    swc_dicts, paths = process_local_paths(
-        paths, anisotropy=anisotropy, min_size=min_size, img_bbox=img_bbox
-    )
-
-    # Filter swc_dicts
-    if img_bbox:
-        filtered_swc_dicts = []
-        for swc_dict in swc_dicts:
-            if util.is_list_contained(img_bbox, swc_dict["xyz"]):
-                filtered_swc_dicts.append(swc_dict)
-        swc_dicts = filtered_swc_dicts
+    swc_dicts, paths = process_local_paths(paths, anisotropy, min_size)
 
     # Build neurograph
     neurograph = build_neurograph(
         swc_dicts,
         img_bbox=img_bbox,
-        img_path=img_path,
         min_size=min_size,
         node_spacing=node_spacing,
         progress_bar=progress_bar,
@@ -123,7 +168,6 @@ def build_neurograph_from_gcs_zips(
     bucket_name,
     gcs_path,
     anisotropy=[1.0, 1.0, 1.0],
-    img_path=None,
     min_size=MIN_SIZE,
     node_spacing=NODE_SPACING,
     prune_depth=PRUNE_DEPTH,
@@ -142,9 +186,6 @@ def build_neurograph_from_gcs_zips(
     anisotropy : list[float], optional
         Scaling factors applied to xyz coordinates to account for anisotropy
         of microscope. The default is [1.0, 1.0, 1.0].
-    img_path : str, optional
-        Path to image stored GCS Bucket that swc files were generated from.
-        The default is None.
     min_size : int, optional
         Minimum cardinality of swc files that are stored in NeuroGraph. The
         default is the global variable "MIN_SIZE".
@@ -169,7 +210,6 @@ def build_neurograph_from_gcs_zips(
     swc_dicts = download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy)
     neurograph = build_neurograph(
         swc_dicts,
-        img_path=img_path,
         min_size=min_size,
         node_spacing=node_spacing,
         prune_depth=prune_depth,
@@ -236,7 +276,6 @@ def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
 def build_neurograph(
     swc_dicts,
     img_bbox=None,
-    img_path=None,
     min_size=MIN_SIZE,
     node_spacing=NODE_SPACING,
     swc_paths=None,
@@ -265,9 +304,7 @@ def build_neurograph(
         print("# nodes:", util.reformat_number(n_nodes))
         print("# edges:", util.reformat_number(n_edges))
 
-    neurograph = NeuroGraph(
-        img_path=img_path, node_spacing=node_spacing, swc_paths=swc_paths
-    )
+    neurograph = NeuroGraph(node_spacing=node_spacing)
     while len(irreducibles):
         irreducible_set = irreducibles.pop()
         neurograph.add_component(irreducible_set)

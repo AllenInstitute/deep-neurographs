@@ -297,7 +297,6 @@ def run_trimming(neurograph, proposals, radius):
         elif neurograph.dist(i, j) > radius:
             neurograph.remove_proposal(proposal)
         n_endpoints_trimmed += 1 if trim_bool else 0
-    print("# Endpoints Trimmed:", n_endpoints_trimmed)
     return neurograph
 
 

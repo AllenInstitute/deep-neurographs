@@ -28,7 +28,7 @@ import networkx as nx
 import numpy as np
 
 from deep_neurographs import geometry
-from deep_neurographs.utils import swc_util, util
+from deep_neurographs.utils import img_util, swc_util, util
 
 
 def get_irreducibles(
@@ -109,7 +109,7 @@ def clip_branches(graph, bbox):
     if bbox:
         delete_nodes = set()
         for i in graph.nodes:
-            xyz = util.to_voxels(graph.nodes[i]["xyz"])
+            xyz = img_util.to_voxels(graph.nodes[i]["xyz"])
             if not util.is_contained(bbox, xyz):
                 delete_nodes.add(i)
         graph.remove_nodes_from(delete_nodes)
@@ -303,6 +303,7 @@ def trim_branch(graph, branch, trim_depth):
         Trimmed branch.
 
     """
+    i = 1
     path_length = 0
     for i in range(1, len(branch)):
         xyz_1 = graph.nodes[branch[i - 1]]["xyz"]
