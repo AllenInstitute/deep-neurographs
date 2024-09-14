@@ -15,7 +15,7 @@ import numpy as np
 import tensorstore as ts
 from skimage.color import label2rgb
 
-ANISOTROPY = np.array([0.748, 0.748, 1.0])
+ANISOTROPY = [0.748, 0.748, 1.0]
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
 
@@ -330,7 +330,7 @@ def patch_to_img(voxel, patch_centroid, patch_dims):
     return np.round(voxel + patch_centroid - half_patch_dims).astype(int)
 
 
-def to_world(voxel, shift=[0, 0, 0]):
+def to_world(voxel, anisotropy=ANISOTROPY, shift=[0, 0, 0]):
     """
     Converts coordinates from voxels to world.
 
@@ -347,7 +347,7 @@ def to_world(voxel, shift=[0, 0, 0]):
         Converted coordinates.
 
     """
-    return tuple([voxel[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
+    return tuple([voxel[i] * anisotropy[i] - shift[i] for i in range(3)])
 
 
 def to_voxels(xyz, anisotropy=ANISOTROPY, downsample_factor=0):
@@ -371,8 +371,9 @@ def to_voxels(xyz, anisotropy=ANISOTROPY, downsample_factor=0):
         Coordinates converted to voxels.
 
     """
-    downsample_factor = 1 / 2 ** downsample_factor
-    return (downsample_factor * (xyz / np.array(anisotropy))).astype(int)
+    downsample_factor = 1.0 / 2 ** downsample_factor
+    voxel = downsample_factor * (xyz / np.array(anisotropy))
+    return np.round(voxel).astype(int)
 
 
 # -- utils --

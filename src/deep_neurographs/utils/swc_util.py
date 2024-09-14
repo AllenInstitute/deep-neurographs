@@ -16,14 +16,11 @@ from zipfile import ZipFile
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry
 from deep_neurographs.utils import util
 
 
 # -- io util --
-def process_local_paths(
-    paths, anisotropy=[1.0, 1.0, 1.0], min_size=5, img_bbox=None
-):
+def process_local_paths(paths, anisotropy=[1.0, 1.0, 1.0], min_size=5):
     """
     Iterates over a list of swc paths to swc file, then builds a dictionary
     where the keys are swc attributes (i.e. id, xyz, radius, pid) and values
@@ -33,14 +30,13 @@ def process_local_paths(
     ----------
     paths : list[str]
         List of paths to swc files to be parsed.
+    anisotropy : list[float], optional
+        Scaling factors applied to xyz coordinates to account for anisotropy
+        of microscope. The default is [1.0, 1.0, 1.0].
     min_size : int, optional
         Threshold on the number of nodes contained in an swc file. Only swc
         files with more than "min_size" nodes are stored in "swc_dicts". The
         default is 3.
-    img_bbox : dict, optional
-        Dictionary with the keys "min" and "max" which specify a bounding box
-        in an image. Only swc files with at least one node contained in
-        "img_bbox" are stored in "swc_dicts". The default is None.
 
     Returns
     -------
@@ -87,13 +83,12 @@ def parse_gcs_zip(zip_file, path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
     # Parse contents
     contents = read_from_gcs_zip(zip_file, path)
     if len(contents) > min_size:
-        swc_dict = parse(contents, anisotropy=anisotropy)
+        swc_dict = parse(contents, anisotropy)
     else:
         swc_dict = {"id": []}
 
     # Store id
-    swc_id = util.get_swc_id(path)
-    swc_dict["swc_id"] = swc_id
+    swc_dict["swc_id"] = util.get_swc_id(path)
     return swc_dict
 
 
@@ -127,18 +122,12 @@ def parse(contents, anisotropy=[1.0, 1.0, 1.0]):
         swc_dict["id"][i] = parts[0]
         swc_dict["radius"][i] = float(parts[-2])
         swc_dict["pid"][i] = parts[-1]
-        swc_dict["xyz"][i] = read_xyz(
-            parts[2:5], anisotropy=anisotropy, offset=offset
-        )
+        swc_dict["xyz"][i] = read_xyz(parts[2:5], anisotropy, offset)
 
     # Check whether radius is in nanometers
     if swc_dict["radius"][0] > 100:
         swc_dict["radius"] /= 1000
     return swc_dict
-
-
-def reindex(arr, idxs):
-    return arr[idxs]
 
 
 def get_contents(swc_contents):
@@ -437,10 +426,3 @@ def __add_attributes(swc_dict, graph):
         }
     nx.set_node_attributes(graph, attrs)
     return graph
-
-
-# -- miscellaneous --
-def upd_edge(xyz, idxs):
-    idxs = np.array(idxs)
-    xyz[idxs] = geometry.smooth_branch(xyz[idxs], s=10)
-    return xyz
