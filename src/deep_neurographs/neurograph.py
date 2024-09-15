@@ -51,6 +51,7 @@ class NeuroGraph(nx.Graph):
         super(NeuroGraph, self).__init__()
         # General class attributes
         self.leaf_kdtree = None
+
         self.node_spacing = node_spacing
         self.merged_ids = set()
         self.soma_ids = dict()

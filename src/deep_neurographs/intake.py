@@ -164,7 +164,6 @@ class GraphBuilder:
                 n_edges += count_edges(irreducibles_i)
         return irreducibles, n_nodes, n_edges
 
-
 # --- utils ---
 def count_nodes(irreducibles):
     """
