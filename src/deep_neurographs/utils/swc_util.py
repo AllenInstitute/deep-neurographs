@@ -16,6 +16,7 @@ from concurrent.futures import (
     as_completed,
 )
 from io import BytesIO
+from tqdm import tqdm
 from zipfile import ZipFile
 
 import networkx as nx

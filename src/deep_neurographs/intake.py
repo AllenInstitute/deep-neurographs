@@ -10,7 +10,6 @@ Builds a neurograph for neuron reconstruction.
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from time import time
-
 from tqdm import tqdm
 
 from deep_neurographs.neurograph import NeuroGraph
