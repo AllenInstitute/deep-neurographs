@@ -268,6 +268,7 @@ def list_subdirs(path, keyword=None):
                 subdirs.append(d)
             elif keyword in d:
                 subdirs.append(d)
+    subdirs.sort()
     return subdirs
 
 
@@ -326,7 +327,7 @@ def set_path(dir_name, filename, ext):
 
 
 # -- gcs utils --
-def list_files_in_gcs_zip(zip_content):
+def list_files_in_zip(zip_content):
     """
     Lists all files in a zip file stored in a GCS bucket.
 
@@ -404,7 +405,7 @@ def read_txt(path):
 
     """
     with open(path, "r") as f:
-        return f.read()
+        return f.read().splitlines()
 
 
 def read_metadata(path):
@@ -424,6 +425,25 @@ def read_metadata(path):
     """
     metadata = read_json(path)
     return metadata["chunk_origin"], metadata["chunk_shape"]
+
+
+def read_zip(zip_file, path):
+    """
+    Reads the content of an swc file from a zip file.
+
+    Parameters
+    ----------
+    zip_file : ZipFile
+        Zip containing text file to be read.
+
+    Returns
+    -------
+    str
+        Contents of a txt file.
+
+    """
+    with zip_file.open(path) as f:
+        return f.read().decode("utf-8")
 
 
 def write_json(path, contents):

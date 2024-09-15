@@ -9,199 +9,337 @@ Routines for working with swc files.
 
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from google.cloud import storage
 from io import BytesIO
+from tqdm import tqdm
 from zipfile import ZipFile
 
 import networkx as nx
 import numpy as np
+import os
 
 from deep_neurographs.utils import util
 
 
-# -- io util --
-def process_local_paths(paths, anisotropy=[1.0, 1.0, 1.0], min_size=5):
+class Reader:
     """
-    Iterates over a list of swc paths to swc file, then builds a dictionary
-    where the keys are swc attributes (i.e. id, xyz, radius, pid) and values
-    are the corresponding contents within the swc file.
-
-    Parameters
-    ----------
-    paths : list[str]
-        List of paths to swc files to be parsed.
-    anisotropy : list[float], optional
-        Scaling factors applied to xyz coordinates to account for anisotropy
-        of microscope. The default is [1.0, 1.0, 1.0].
-    min_size : int, optional
-        Threshold on the number of nodes contained in an swc file. Only swc
-        files with more than "min_size" nodes are stored in "swc_dicts". The
-        default is 3.
-
-    Returns
-    -------
-    swc_dicts : list
-        List of dictionaries where the keys are swc attributes (i.e. id, xyz,
-        radius, pid) and values are the corresponding contents within the swc
-        file.
+    Class that reads swc files that are stored as (1) local directory of swcs,
+    (2) gcs directory of zips containing swcs, (3) local zip containing swcs,
+    (4) list of local paths to swcs, or (5) single path to a local swc.
 
     """
-    valid_paths = []
-    swc_dicts = []
-    for path in paths:
-        # Read contents
-        contents = read_from_local(path)
-        if len(contents) > min_size:
-            swc_dict = parse(contents, anisotropy=anisotropy)
-            swc_dict["swc_id"] = util.get_swc_id(path)
-            swc_dicts.append(swc_dict)
-            valid_paths.append(path)
-    return swc_dicts, valid_paths
 
+    def __init__(self, anisotropy=[1.0, 1.0, 1.0], min_size=0):
+        """
+        Initializes a Reader object that loads swc files.
 
-def process_gcs_zip(zip_content, anisotropy=[1.0, 1.0, 1.0], min_size=0):
-    swc_dicts = []
-    with ZipFile(BytesIO(zip_content)) as zip_file:
-        with ThreadPoolExecutor() as executor:
-            # Assign threads
-            threads = [
-                executor.submit(
-                    parse_gcs_zip, zip_file, path, anisotropy, min_size
+        Parameters
+        ----------
+        anisotropy : list[float], optional
+            Image to world scaling factors applied to xyz coordinates to
+            account for anisotropy of the microscope. The default is
+            [1.0, 1.0, 1.0].
+        min_size : int, optional
+            Threshold on the number of nodes in swc file. Only swc files with
+            more than "min_size" nodes are stored in "xyz_coords". The default
+            is 0.
+
+        Returns
+        -------
+        None
+
+        """
+        self.anisotropy = anisotropy
+        self.min_size = min_size
+
+    def load(self, swc_pointer):
+        """
+        Load data based on the type and format of the provided "swc_pointer".
+
+        Parameters
+        ----------
+        swc_pointer : dict, list, str
+            Object that points to swcs to be read, see class documentation for
+            details.
+
+        Returns
+        -------
+        list[dict]
+            List of dictionaries whose keys and values are the attribute name
+            and values from an swc file.
+
+        """
+        if type(swc_pointer) is dict:
+            return self.load_from_gcs(swc_pointer)
+        if type(swc_pointer) is list:
+            return self.load_from_local_paths(swc_pointer)
+        if type(swc_pointer) is str:
+            if ".zip" in swc_pointer:
+                return self.load_from_local_zip(swc_pointer)
+            if ".swc" in swc_pointer:
+                return self.load_from_local_path(swc_pointer)
+            if os.path.isdir(swc_pointer):
+                paths = util.list_paths(swc_pointer, ext=".swc")
+                return self.load_from_local_paths(paths)
+        raise Exception("SWC Pointer is not Valid!")
+
+    # --- Load subroutines ---
+    def load_from_local_paths(self, swc_paths):
+        """
+        Reads swc files from local machine, then returns either the xyz
+        coordinates or graphs.
+
+        Paramters
+        ---------
+        swc_paths : list
+            List of paths to swc files stored on the local machine.
+
+        Returns
+        -------
+        list[dict]
+            List of dictionaries whose keys and values are the attribute name
+            and values from an swc file.
+
+        """
+        with ProcessPoolExecutor(max_workers=1) as executor:
+            # Assign processes
+            processes = list()
+            for path in swc_paths:
+                processes.append(
+                    executor.submit(self.load_from_local_path, path)
                 )
-                for path in util.list_files_in_gcs_zip(zip_content)
-            ]
 
-            # Process results
-            for thread in as_completed(threads):
-                result = thread.result()
-                if len(result["id"]) > 0:
+            # Store results
+            swc_dicts = list()
+            for process in as_completed(processes):
+                result = process.result()
+                if result:
                     swc_dicts.append(result)
-    return swc_dicts
+        return swc_dicts
 
+    def load_from_local_path(self, path):
+        """
+        Reads a single swc file from local machine, then returns either the
+        xyz coordinates or graphs.
 
-def parse_gcs_zip(zip_file, path, anisotropy=[1.0, 1.0, 1.0], min_size=0):
-    # Parse contents
-    contents = read_from_gcs_zip(zip_file, path)
-    if len(contents) > min_size:
-        swc_dict = parse(contents, anisotropy)
-    else:
-        swc_dict = {"id": []}
+        Paramters
+        ---------
+        path : str
+            Path to swc file stored on the local machine.
 
-    # Store id
-    swc_dict["swc_id"] = util.get_swc_id(path)
-    return swc_dict
+        Returns
+        -------
+        list[dict]
+            List of dictionaries whose keys and values are the attribute name
+            and values from an swc file.
 
+        """
+        content = util.read_txt(path)
+        if len(content) > self.min_size:
+            result = self.parse(content)
+            result["swc_id"] = util.get_swc_id(path)
+            return result
+        else:
+            return False
 
-def parse(contents, anisotropy=[1.0, 1.0, 1.0]):
-    """
-    Parses an swc file to extract the contents which is stored in a dict. Note
-    that node_ids from swc are refactored to index from 0 to n-1 where n is
-    the number of entries in the swc file.
+    def load_from_gcs(self, gcs_dict):
+        """
+        Reads swc files from zips on a GCS bucket.
 
-    Parameters
-    ----------
-    contents : list[str]
-        List of entries from an swc file.
-    anisotropy : list[float]
+        Parameters
+        ----------
+        gcs_dict : dict
+            Dictionary where keys are "bucket_name" and "path".
 
-    Returns
-    -------
-    ...
+        Returns
+        -------
+        dict
+            Dictionary that maps an swc_id to the the xyz coordinates read from
+            that swc file.
 
-    """
-    # Compile swc content
-    contents, offset = get_contents(contents)
-    swc_dict = {
-        "id": np.zeros((len(contents)), dtype=np.int32),
-        "radius": np.zeros((len(contents)), dtype=np.float32),
-        "pid": np.zeros((len(contents)), dtype=np.int32),
-        "xyz": np.zeros((len(contents), 3), dtype=np.float32),
-    }
-    for i, line in enumerate(contents):
-        parts = line.split()
-        swc_dict["id"][i] = parts[0]
-        swc_dict["radius"][i] = float(parts[-2])
-        swc_dict["pid"][i] = parts[-1]
-        swc_dict["xyz"][i] = read_xyz(parts[2:5], anisotropy, offset)
+        """
+        # Initializations
+        bucket = storage.Client().bucket(gcs_dict["bucket_name"])
+        zip_paths = util.list_gcs_filenames(bucket, gcs_dict["path"], ".zip")
 
-    # Check whether radius is in nanometers
-    if swc_dict["radius"][0] > 100:
-        swc_dict["radius"] /= 1000
-    return swc_dict
+        # Main
+        with ProcessPoolExecutor() as executor:
+            # Assign processes
+            processes = []
+            for path in zip_paths:
+                zip_content = bucket.blob(path).download_as_bytes()
+                processes.append(
+                    executor.submit(self.load_from_cloud_zip, zip_content)
+                )
 
+            # Store results
+            swc_dicts = list()
+            desc = "Downloading SWCs"
+            for process in tqdm(as_completed(processes), desc=desc):
+                swc_dicts.extend(process.result())
+        return swc_dicts
 
-def get_contents(swc_contents):
-    offset = [0, 0, 0]
-    for i, line in enumerate(swc_contents):
-        if line.startswith("# OFFSET"):
+    def load_from_cloud_zip(self, zip_content):
+        """
+        Reads swc files from a zip that has been downloaded from a cloud
+        bucket.
+
+        Parameters
+        ----------
+        zip_content : ...
+            content of a zip file.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps an swc_id to the the xyz coordinates read from
+            that swc file.
+
+        """
+        with ZipFile(BytesIO(zip_content)) as zip_file:
+            with ThreadPoolExecutor() as executor:
+                # Assign threads
+                threads = []
+                for f in util.list_files_in_zip(zip_content):
+                    threads.append(
+                        executor.submit(
+                            self.load_from_cloud_zipped_file, zip_file, f
+                        )
+                    )
+
+                # Process results
+                swc_dicts = list()
+                for thread in as_completed(threads):
+                    result = thread.result()
+                    if result:
+                        swc_dicts.append(result)
+        return swc_dicts
+
+    def load_from_cloud_zipped_file(self, zip_file, path):
+        """
+        Reads swc file stored at "path" which points to a file in a zip.
+
+        Parameters
+        ----------
+        zip_file : ZipFile
+            Zip containing swc file to be read.
+        path : str
+            Path to swc file to be read.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps an swc_id to the the xyz coordinates or graph
+            read from that swc file.
+
+        """
+        content = util.read_zip(zip_file, path).splitlines()
+        if len(content) > self.min_size:
+            result = self.parse(content)
+            result["swc_id"] = util.get_swc_id(path)
+            return result
+        else:
+            return False
+
+    # --- Process swc content ---
+    def parse(self, content):
+        """
+        Parses an swc file to extract the content which is stored in a dict. Note
+        that node_ids from swc are refactored to index from 0 to n-1 where n is
+        the number of entries in the swc file.
+
+        Parameters
+        ----------
+        content : list[str]
+            List of entries from an swc file.
+
+        Returns
+        -------
+        dict
+            Dictionaries whose keys and values are the attribute name
+            and values from an swc file.
+
+        """
+        # Parse swc content
+        content, offset = self.process_content(content)
+        swc_dict = {
+            "id": np.zeros((len(content)), dtype=np.int32),
+            "radius": np.zeros((len(content)), dtype=np.float32),
+            "pid": np.zeros((len(content)), dtype=np.int32),
+            "xyz": np.zeros((len(content), 3), dtype=np.float32),
+        }
+        for i, line in enumerate(content):
             parts = line.split()
-            offset = read_xyz(parts[2:5])
-        if not line.startswith("#"):
-            break
-    return swc_contents[i:], offset
+            swc_dict["id"][i] = parts[0]
+            swc_dict["radius"][i] = float(parts[-2])
+            swc_dict["pid"][i] = parts[-1]
+            swc_dict["xyz"][i] = self.read_xyz(parts[2:5], offset)
+
+        # Check whether radius is in nanometers
+        if swc_dict["radius"][0] > 100:
+            swc_dict["radius"] /= 1000
+        return swc_dict
+
+    def process_content(self, content):
+        """
+        Processes lines of text from a content source, extracting an offset
+        value and returning the remaining content starting from the line
+        immediately after the last commented line.
+
+        Parameters
+        ----------
+        content : List[str]
+            List of strings where each string represents a line of text.
+
+        Returns
+        -------
+        List[str]
+            A list of strings representing the lines of text starting from the
+            line immediately after the last commented line.
+        List[float]
+            Offset of swc file.
+
+        """
+        offset = [1.0, 1.0, 1.0]
+        for i, line in enumerate(content):
+            if line.startswith("# OFFSET"):
+                offset = self.read_xyz(line.split()[2:5])
+            if not line.startswith("#"):
+                return content[i:], offset
+
+    def read_xyz(self, xyz_str, offset=[0.0, 0.0, 0.0]):
+        """
+        Reads the coordinates from a string and transforms it (if applicable).
+
+        Parameters
+        ----------
+        xyz_str : str
+            Coordinate stored in a str.
+        offset : list[int], optional
+            Offset of coordinates in swc file. The default is [0.0, 0.0, 0.0].
+
+        Returns
+        -------
+        numpy.ndarray
+            xyz coordinates of an entry from an swc file.
+
+        """
+        xyz = np.zeros((3))
+        for i in range(3):
+            xyz[i] = self.anisotropy[i] * (float(xyz_str[i]) + offset[i])
+        return xyz
 
 
-def read_from_local(path):
-    """
-    Reads swc file stored at "path" on local machine.
-
-    Parameters
-    ----------
-    Path : str
-        Path to swc file to be read.
-
-    Returns
-    -------
-    list
-        List such that each entry is a line from the swc file.
-
-    """
-    with open(path, "r") as file:
-        return file.readlines()
-
-
-def read_from_gcs_zip(zip_file, path):
-    """
-    Reads the content of an swc file from a zip file in a GCS bucket.
-
-    """
-    try:
-        with zip_file.open(path) as txt_file:
-            return txt_file.read().decode("utf-8").splitlines()
-    except:
-        print(f"Failed to read {path}")
-        return []
-
-
-def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
-    """
-    Reads the (x,y,z)) coordinates from an swc file, then shift and scales
-    them if application.
-
-    Parameters
-    ----------
-    xyz : str
-        (z,y,x) coordinates.
-
-    Returns
-    -------
-    tuple
-        The (x,y,z) coordinates from an swc file.
-
-    """
-    xyz = [float(xyz[i]) + offset[i] for i in range(3)]
-    return tuple([xyz[i] * anisotropy[i] for i in range(3)])
-
-
-def write(path, contents, color=None):
-    if type(contents) is list:
-        write_list(path, contents, color=color)
-    elif type(contents) is dict:
-        write_dict(path, contents, color=color)
-    elif type(contents) is nx.Graph:
-        write_graph(path, contents, color=color)
+def write(path, content, color=None):
+    if type(content) is list:
+        write_list(path, content, color=color)
+    elif type(content) is dict:
+        write_dict(path, content, color=color)
+    elif type(content) is nx.Graph:
+        write_graph(path, content, color=color)
     else:
-        assert True, "Unable to write {} to swc".format(type(contents))
+        assert True, "Unable to write {} to swc".format(type(content))
 
 
 def write_list(path, entry_list, color=None):

@@ -19,7 +19,6 @@ from scipy.spatial import KDTree
 
 from deep_neurographs import generate_proposals, geometry
 from deep_neurographs.geometry import dist as get_dist
-from deep_neurographs.geometry import get_midpoint
 from deep_neurographs.machine_learning.groundtruth_generation import init_targets
 from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import img_util, swc_util, util
@@ -51,6 +50,7 @@ class NeuroGraph(nx.Graph):
         """
         super(NeuroGraph, self).__init__()
         # General class attributes
+        self.leaf_kdtree = None
         self.node_spacing = node_spacing
         self.merged_ids = set()
         self.soma_ids = dict()
@@ -534,7 +534,7 @@ class NeuroGraph(nx.Graph):
     # --- Proposal util ---
     def n_proposals(self):
         """
-        Computes number of edges proposals in the graph.
+        Counts the number of proposals.
 
         Parameters
         ----------
@@ -543,7 +543,7 @@ class NeuroGraph(nx.Graph):
         Returns
         -------
         int
-            Number of edge proposals in the graph.
+            Number of proposals in the graph.
 
         """
         return len(self.proposals)
@@ -582,7 +582,7 @@ class NeuroGraph(nx.Graph):
 
     def proposal_midpoint(self, proposal):
         i, j = tuple(proposal)
-        return get_midpoint(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
+        return geometry.midpoint(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
     def proposal_radii(self, proposal):
         """

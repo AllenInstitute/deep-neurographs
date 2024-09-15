@@ -10,21 +10,16 @@ Builds a neurograph for neuron reconstruction.
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from time import time
-
-from google.cloud import storage
 from tqdm import tqdm
 
 from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.utils import graph_util as gutil
-from deep_neurographs.utils import img_util, util
-from deep_neurographs.utils.swc_util import (
-    process_gcs_zip,
-    process_local_paths,
-)
+from deep_neurographs.utils import img_util, swc_util, util
+
 
 MIN_SIZE = 30
 NODE_SPACING = 2
-SMOOTH = True
+SMOOTH_BOOL = True
 PRUNE_DEPTH = 25
 TRIM_DEPTH = 0
 
@@ -43,18 +38,15 @@ class GraphBuilder:
         node_spacing=NODE_SPACING,
         progress_bar=False,
         prune_depth=PRUNE_DEPTH,
-        smooth=SMOOTH,
+        smooth_bool=SMOOTH_BOOL,
         trim_depth=TRIM_DEPTH,
     ):
         """
         Builds a FragmentsGraph by reading swc files stored either on the
-        cloud or local machine.
+        cloud or local machine, then extracting the irreducible components.
 
         Parameters
         ----------
-        swc_pointer : dict, list, str
-            Pointer to swc files used to build an instance of FragmentsGraph,
-            see "swc_util.Reader" for further documentation.
         anisotropy : list[float], optional
             Scaling factors applied to xyz coordinates to account for
             anisotropy of microscope. The default is [1.0, 1.0, 1.0].
@@ -79,6 +71,9 @@ class GraphBuilder:
         smooth : bool, optional
             Indication of whether to smooth branches from swc files. The
             default is the global variable "SMOOTH".
+        trim_depth : float, optional
+            Maximum path length (in microns) to trim from "branch". The default
+            is the global variable "TRIM_DEPTH".
 
         Returns
         -------
@@ -86,268 +81,91 @@ class GraphBuilder:
             Neurograph generated from swc files.
 
         """
-        pass
+        self.anisotropy = anisotropy
+        self.min_size = min_size
+        self.node_spacing = node_spacing
+        self.progress_bar = progress_bar
+        self.prune_depth = prune_depth
+        self.smooth_bool = smooth_bool
+        self.trim_depth = trim_depth
 
+        self.img_bbox = img_util.get_bbox(img_patch_origin, img_patch_shape)
+        self.reader = swc_util.Reader(anisotropy, min_size)
 
-# --- Build graph wrappers ---
-def build_neurograph_from_local(
-    anisotropy=[1.0, 1.0, 1.0],
-    img_patch_origin=None,
-    img_patch_shape=None,
-    min_size=MIN_SIZE,
-    node_spacing=NODE_SPACING,
-    progress_bar=False,
-    prune_depth=PRUNE_DEPTH,
-    trim_depth=TRIM_DEPTH,
-    smooth=SMOOTH,
-    swc_dir=None,
-    swc_paths=None,
-):
-    """
-    Builds a neurograph from swc files on the local machine.
+    def run(self, swc_pointer):
+        """
+        Builds a FragmentsGraph by reading swc files stored either on the
+        cloud or local machine, then extracting the irreducible components.
 
-    Parameters
-    ----------
-    anisotropy : list[float], optional
-        Scaling factors applied to xyz coordinates to account for anisotropy
-        of microscope. The default is [1.0, 1.0, 1.0].
-    image_patch_origin : list[float], optional
-        An xyz coordinate in the image which is the upper, left, front corner
-        of am image patch that contains the swc files. The default is None.
-    image_patch_shape : list[float], optional
-        The xyz dimensions of the bounding box which contains the swc files.
-        The default is None.
-    min_size : int, optional
-        Minimum cardinality of swc files that are stored in NeuroGraph. The
-        default is the global variable "MIN_SIZE".
-    node_spacing : int, optional
-        Spacing (in microns) between nodes. The default is the global variable
-        "NODE_SPACING".
-    progress_bar : bool, optional
-        Indication of whether to print out a progress bar during build. The
-        default is False.
-    prune_depth : int, optional
-        Branches less than "prune_depth" microns are pruned if "prune" is
-        True. The default is the global variable "PRUNE_DEPTH".
-    smooth : bool, optional
-        Indication of whether to smooth branches from swc files. The default
-        is the global variable "SMOOTH".
-    swc_dir : str, optional
-        Path to a directory containing swc files. The default is None.
-    swc_paths : list[str], optional
-        List of paths to swc files. The default is None.
+        Parameters
+        ----------
+        swc_pointer : dict, list, str
+            Pointer to swc files used to build an instance of FragmentsGraph,
+            see "swc_util.Reader" for further documentation.
 
-    Returns
-    -------
-    NeuroGraph
-        Neurograph generated from swc files stored on local machine.
+        Returns
+        -------
+        NeuroGraph
+            Neurograph generated from swc files.
 
-    """
-    # Process swc files
-    assert swc_dir or swc_paths, "Provide swc_dir or swc_paths!"
-    img_bbox = img_util.get_bbox(img_patch_origin, img_patch_shape)
-    paths = util.list_paths(swc_dir, ext=".swc") if swc_dir else swc_paths
-    swc_dicts, paths = process_local_paths(paths, anisotropy, min_size)
+        """
+        # Initializations
+        t0 = time()
+        swc_dicts = self.reader.load(swc_pointer)
+        irreducibles, n_nodes, n_edges = self.get_irreducibles(swc_dicts)
 
-    # Build neurograph
-    neurograph = build_neurograph(
-        swc_dicts,
-        img_bbox=img_bbox,
-        min_size=min_size,
-        node_spacing=node_spacing,
-        progress_bar=progress_bar,
-        prune_depth=prune_depth,
-        trim_depth=trim_depth,
-        smooth=smooth,
-        swc_paths=paths,
-    )
-    return neurograph
+        # Build FragmentsGraph
+        neurograph = NeuroGraph(node_spacing=self.node_spacing)
+        while len(irreducibles):
+            irreducible_set = irreducibles.pop()
+            neurograph.add_component(irreducible_set)
 
+        # Report results
+        if self.progress_bar:
+            # Graph size
+            n_components = util.reformat_number(len(irreducibles))
+            print("\nGraph Overview...")
+            print("# connected components:", n_connected_components)
+            print("# nodes:", util.reformat_number(n_nodes))
+            print("# edges:", util.reformat_number(n_edges))
 
-def build_neurograph_from_gcs_zips(
-    bucket_name,
-    gcs_path,
-    anisotropy=[1.0, 1.0, 1.0],
-    min_size=MIN_SIZE,
-    node_spacing=NODE_SPACING,
-    prune_depth=PRUNE_DEPTH,
-    trim_depth=TRIM_DEPTH,
-    smooth=SMOOTH,
-):
-    """
-    Builds a neurograph from a GCS bucket that contain of zips of swc files.
+            # Memory and runtime
+            usage = round(util.get_memory_usage(), 2)
+            t, unit = util.time_writer(time() - t0)
+            print(f"Memory Consumption: {usage} GBs")
+            print(f"Module Runtime: {round(t, 4)} {unit} \n")
+        return neurograph
 
-    Parameters
-    ----------
-    bucket_name : str
-        Name of GCS bucket where zips of swc files are stored.
-    gcs_path : str
-        Path within GCS bucket to directory containing zips.
-    anisotropy : list[float], optional
-        Scaling factors applied to xyz coordinates to account for anisotropy
-        of microscope. The default is [1.0, 1.0, 1.0].
-    min_size : int, optional
-        Minimum cardinality of swc files that are stored in NeuroGraph. The
-        default is the global variable "MIN_SIZE".
-    node_spacing : int, optional
-        Spacing (in microns) between nodes. The default is the global variable
-        "NODE_SPACING".
-    prune_depth : int, optional
-        Branches less than "prune_depth" microns are pruned if "prune" is
-        True. The default is the global variable "PRUNE_DEPTH".
-    smooth : bool, optional
-        Indication of whether to smooth branches from swc files. The default
-        is the global variable "SMOOTH".
-
-    Returns
-    -------
-    NeuroGraph
-        Neurograph generated from zips of swc files stored in a GCS bucket.
-
-    """
-    print("\nBuild NeuroGraph...")
-    t0 = time()
-    swc_dicts = download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy)
-    neurograph = build_neurograph(
-        swc_dicts,
-        min_size=min_size,
-        node_spacing=node_spacing,
-        prune_depth=prune_depth,
-        trim_depth=trim_depth,
-        smooth=smooth,
-    )
-    t, unit = util.time_writer(time() - t0)
-    print(f"Memory Consumption: {round(util.get_memory_usage(), 4)} GBs")
-    print(f"Module Runtime: {round(t, 4)} {unit} \n")
-
-    return neurograph
-
-
-# -- Read swc files --
-def download_gcs_zips(bucket_name, gcs_path, min_size, anisotropy):
-    """
-    Downloads swc files from zips stored in a GCS bucket.
-
-    Parameters
-    ----------
-    bucket_name : str
-        Name of GCS bucket where zips are stored.
-    gcs_path : str
-        Path within GCS bucket to directory containing zips.
-    min_size : int
-        Minimum cardinality of swc files that are stored in NeuroGraph.
-    anisotropy : list[float]
-        Scaling factors applied to xyz coordinates to account for anisotropy
-        of microscope.
-
-    Returns
-    -------
-    swc_dicts : list
-
-    """
-    # Initializations
-    bucket = storage.Client().bucket(bucket_name)
-    zip_paths = util.list_gcs_filenames(bucket, gcs_path, ".zip")
-
-    # Main
-    with ProcessPoolExecutor() as executor:
-        # Assign processes
-        processes = []
-        for path in tqdm(zip_paths, desc="Download SWCs"):
-            zip_content = bucket.blob(path).download_as_bytes()
-            processes.append(
-                executor.submit(
-                    process_gcs_zip, zip_content, anisotropy, min_size
+    def get_irreducibles(self, swc_dicts):
+        with ProcessPoolExecutor() as executor:
+            # Assign Processes
+            i = 0
+            processes = [None] * len(swc_dicts)
+            while swc_dicts:
+                swc_dict = swc_dicts.pop()
+                processes[i] = executor.submit(
+                    gutil.get_irreducibles,
+                    swc_dict,
+                    self.min_size,
+                    self.img_bbox,
+                    self.prune_depth,
+                    self.smooth_bool,
+                    self.trim_depth,
                 )
-            )
+                i += 1
 
-        # Store result
-        swc_dicts = []
-        for process in as_completed(processes):
-            try:
-                result = process.result()
-                swc_dicts.extend(result)
-            except Exception as e:
-                print(type(e), e)
-    return swc_dicts
-
-
-# -- Build neurograph ---
-def build_neurograph(
-    swc_dicts,
-    img_bbox=None,
-    min_size=MIN_SIZE,
-    node_spacing=NODE_SPACING,
-    swc_paths=None,
-    progress_bar=True,
-    prune_depth=PRUNE_DEPTH,
-    trim_depth=TRIM_DEPTH,
-    smooth=SMOOTH,
-):
-    # Extract irreducibles
-    irreducibles, n_nodes, n_edges = get_irreducibles(
-        swc_dicts,
-        bbox=img_bbox,
-        min_size=min_size,
-        progress_bar=progress_bar,
-        prune_depth=prune_depth,
-        trim_depth=trim_depth,
-        smooth=smooth,
-    )
-
-    # Build neurograph
-    if progress_bar:
-        print("\nGraph Overview...")
-        print(
-            "# connected components:", util.reformat_number(len(irreducibles))
-        )
-        print("# nodes:", util.reformat_number(n_nodes))
-        print("# edges:", util.reformat_number(n_edges))
-
-    neurograph = NeuroGraph(node_spacing=node_spacing)
-    while len(irreducibles):
-        irreducible_set = irreducibles.pop()
-        neurograph.add_component(irreducible_set)
-    return neurograph
+            # Store results
+            irreducibles = []
+            n_nodes, n_edges = 0, 0
+            for process in tqdm(as_completed(processes), desc="Extract Graphs"):
+                irreducibles_i = process.result()
+                irreducibles.extend(irreducibles_i)
+                n_nodes += count_nodes(irreducibles_i)
+                n_edges += count_edges(irreducibles_i)
+        return irreducibles, n_nodes, n_edges
 
 
-def get_irreducibles(
-    swc_dicts,
-    bbox=None,
-    min_size=MIN_SIZE,
-    progress_bar=True,
-    prune_depth=PRUNE_DEPTH,
-    trim_depth=TRIM_DEPTH,
-    smooth=SMOOTH,
-):
-    with ProcessPoolExecutor() as executor:
-        # Assign Processes
-        i = 0
-        processes = [None] * len(swc_dicts)
-        while swc_dicts:
-            swc_dict = swc_dicts.pop()
-            processes[i] = executor.submit(
-                gutil.get_irreducibles,
-                swc_dict,
-                min_size,
-                bbox,
-                prune_depth,
-                trim_depth,
-                smooth,
-            )
-            i += 1
-
-        # Store results
-        irreducibles = []
-        n_nodes, n_edges = 0, 0
-        for process in tqdm(as_completed(processes), desc="Extract Graphs"):
-            irreducibles_i = process.result()
-            irreducibles.extend(irreducibles_i)
-            n_nodes += count_nodes(irreducibles_i)
-            n_edges += count_edges(irreducibles_i)
-    return irreducibles, n_nodes, n_edges
-
-
+# --- utils ---
 def count_nodes(irreducibles):
     """
     Counts the number of nodes in "irreducibles".
