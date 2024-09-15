@@ -9,15 +9,19 @@ Routines for working with swc files.
 
 """
 
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-from google.cloud import storage
+import os
+from concurrent.futures import (
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    as_completed,
+)
 from io import BytesIO
-from tqdm import tqdm
 from zipfile import ZipFile
 
 import networkx as nx
 import numpy as np
-import os
+from google.cloud import storage
+from tqdm import tqdm
 
 from deep_neurographs.utils import util
 
