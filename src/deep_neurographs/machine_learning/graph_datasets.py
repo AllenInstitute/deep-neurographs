@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from torch_geometric.data import Data as GraphData
 
-from deep_neurographs.machine_learning import feature_generation, datasets
+from deep_neurographs.machine_learning import datasets, feature_generation
 from deep_neurographs.utils import gnn_util
 
 

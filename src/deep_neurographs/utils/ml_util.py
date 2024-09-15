@@ -16,8 +16,8 @@ import torch
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 
 from deep_neurographs.machine_learning import (
-    feature_generation,
     datasets,
+    feature_generation,
     graph_datasets,
     heterograph_datasets,
 )

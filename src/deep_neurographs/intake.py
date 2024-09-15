@@ -16,7 +16,6 @@ from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import img_util, swc_util, util
 
-
 MIN_SIZE = 30
 NODE_SPACING = 2
 SMOOTH_BOOL = True
@@ -125,7 +124,7 @@ class GraphBuilder:
             # Graph size
             n_components = util.reformat_number(len(irreducibles))
             print("\nGraph Overview...")
-            print("# connected components:", n_connected_components)
+            print("# connected components:", n_components)
             print("# nodes:", util.reformat_number(n_nodes))
             print("# edges:", util.reformat_number(n_edges))
 
@@ -155,14 +154,16 @@ class GraphBuilder:
                 i += 1
 
             # Store results
+            desc = "Extract Graphs"
             irreducibles = []
             n_nodes, n_edges = 0, 0
-            for process in tqdm(as_completed(processes), desc="Extract Graphs"):
+            for process in tqdm(as_completed(processes), desc=desc):
                 irreducibles_i = process.result()
                 irreducibles.extend(irreducibles_i)
                 n_nodes += count_nodes(irreducibles_i)
                 n_edges += count_edges(irreducibles_i)
         return irreducibles, n_nodes, n_edges
+
 
 # --- utils ---
 def count_nodes(irreducibles):
