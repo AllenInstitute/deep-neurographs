@@ -436,9 +436,8 @@ def compute_dot(branch_1, branch_2, idx_1, idx_2):
 
     """
     # Initializations
-    origin = geometry.get_midpoint(branch_1[idx_1], branch_2[idx_2])
-    b1 = branch_1 - origin
-    b2 = branch_2 - origin
+    b1 = branch_1 - geometry.midpoint(branch_1[idx_1], branch_2[idx_2])
+    b2 = branch_2 - geometry.midpoint(branch_1[idx_1], branch_2[idx_2])
 
     # Main
     dot_10 = np.dot(tangent(b1, idx_1, 10), tangent(b2, idx_2, 10))

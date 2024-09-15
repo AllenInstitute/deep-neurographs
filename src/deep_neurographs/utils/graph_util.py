@@ -148,7 +148,7 @@ def prune_trim_branches(graph, prune_depth, trim_depth):
     return graph, n_nodes_trimmed
 
 
-def __get_irreducibles(graph, swc_dict, smooth):
+def __get_irreducibles(graph, swc_dict, smooth_bool):
     """
     Gets the irreducible components of "graph".
 
@@ -189,7 +189,7 @@ def __get_irreducibles(graph, swc_dict, smooth):
         attrs = upd_edge_attrs(swc_dict, attrs, j)
         if j in leafs or j in junctions:
             attrs = to_numpy(attrs)
-            if smooth:
+            if smooth_bool:
                 swc_dict, edges = __smooth_branch(
                     swc_dict, attrs, edges, nbs, root, j
                 )

@@ -44,13 +44,10 @@ def get_directional(branches, i, origin, depth):
     branches = shift_branches(branches, origin)
     if len(branches) == 1:
         return tangent(get_subarray(branches[0], depth))
-    elif len(branches) == 2:
+    else:
         branch_1 = get_subarray(branches[0], depth)
         branch_2 = get_subarray(branches[1], depth)
-        branch = np.concatenate((branch_1, branch_2))
-        return tangent(branch)
-    else:
-        return np.array([0, 0, 0])
+        return tangent(np.concatenate((branch_1, branch_2)))
 
 
 def get_subarray(arr, depth):
@@ -153,7 +150,7 @@ def normal(xyz):
     return VT[-1] / np.linalg.norm(VT[-1])
 
 
-def get_midpoint(xyz_1, xyz_2):
+def midpoint(xyz_1, xyz_2):
     """
     Computes the midpoint between "xyz_1" and "xyz_2".
 
