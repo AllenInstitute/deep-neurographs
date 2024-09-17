@@ -36,8 +36,8 @@ def run(
     radius : float
         Maximum Euclidean distance between endpoints of proposal.
     complex_bool : bool, optional
-        Indication of whether to generate complex proposals. The default is
-        True.
+        Indication of whether to generate complex proposals, meaning proposals
+        between leaf and non-leaf nodes. The default is False.
     long_range_bool : bool, optional
         Indication of whether to generate simple proposals within distance of
         "LONG_RANGE_FACTOR" * radius of leaf. The default is False.

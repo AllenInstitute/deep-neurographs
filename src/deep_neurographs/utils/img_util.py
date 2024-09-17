@@ -384,9 +384,9 @@ def get_bbox(origin, shape):
 
     Parameters
     ----------
-    origin : tuple
+    origin : tuple[int]
         Origin of bounding box which is assumed to be top, front, left corner.
-    shape : tuple
+    shape : tuple[int]
         Shape of bounding box.
 
     Returns

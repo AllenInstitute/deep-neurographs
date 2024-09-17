@@ -36,7 +36,7 @@ def get_irreducibles(
     min_size,
     bbox=None,
     prune_depth=16.0,
-    smooth=True,
+    smooth_bool=True,
     trim_depth=0.0,
 ):
     """
@@ -57,7 +57,7 @@ def get_irreducibles(
     prune_depth : float, optional
         Path length microns that determines whether a branch is short and
         should be pruned. The default is 16.0.
-    smooth : bool, optional
+    smooth_bool : bool, optional
         Indication of whether to smooth each branch. The default is True.
     trim_depth : float, optional
         Maximum path length (in microns) to trim from "branch". The default is
@@ -82,7 +82,7 @@ def get_irreducibles(
     for node_subset in nx.connected_components(graph):
         if len(node_subset) + n_trimmed > min_size:
             subgraph = graph.subgraph(node_subset)
-            irreducibles_i = __get_irreducibles(subgraph, swc_dict, smooth)
+            irreducibles_i = __get_irreducibles(subgraph, swc_dict, smooth_bool)
             if irreducibles_i:
                 irreducibles.append(irreducibles_i)
     return irreducibles

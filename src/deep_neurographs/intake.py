@@ -12,14 +12,16 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from time import time
 from tqdm import tqdm
 
+import numpy as np
+
 from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import img_util, swc_util, util
 
 MIN_SIZE = 30
-NODE_SPACING = 2
+NODE_SPACING = 1
 SMOOTH_BOOL = True
-PRUNE_DEPTH = 25
+PRUNE_DEPTH = 16
 TRIM_DEPTH = 0
 
 
@@ -31,8 +33,6 @@ class GraphBuilder:
     def __init__(
         self,
         anisotropy=[1.0, 1.0, 1.0],
-        img_patch_origin=None,
-        img_patch_shape=None,
         min_size=MIN_SIZE,
         node_spacing=NODE_SPACING,
         progress_bar=False,
@@ -49,15 +49,9 @@ class GraphBuilder:
         anisotropy : list[float], optional
             Scaling factors applied to xyz coordinates to account for
             anisotropy of microscope. The default is [1.0, 1.0, 1.0].
-        image_patch_origin : list[float], optional
-            An xyz coordinate which is the upper, left, front corner of the
-            image patch that contains the swc files. The default is None.
-        image_patch_shape : list[float], optional
-            Shape of the image patch which contains the swc files. The default
-            is None.
-        min_size : int, optional
-            Minimum cardinality of swc files that are stored in NeuroGraph. The
-            default is the global variable "MIN_SIZE".
+        min_size : float, optional
+            Minimum path length of swc files which are stored as connected
+            components in the FragmentsGraph. The default is 30ums.
         node_spacing : int, optional
             Spacing (in microns) between nodes. The default is the global
             variable "NODE_SPACING".
@@ -67,7 +61,7 @@ class GraphBuilder:
         prune_depth : int, optional
             Branches less than "prune_depth" microns are pruned if "prune" is
             True. The default is the global variable "PRUNE_DEPTH".
-        smooth : bool, optional
+        smooth_bool : bool, optional
             Indication of whether to smooth branches from swc files. The
             default is the global variable "SMOOTH".
         trim_depth : float, optional
@@ -76,8 +70,8 @@ class GraphBuilder:
 
         Returns
         -------
-        NeuroGraph
-            Neurograph generated from swc files.
+        FragmentsGraph
+            FragmentsGraph generated from swc files.
 
         """
         self.anisotropy = anisotropy
@@ -88,30 +82,38 @@ class GraphBuilder:
         self.smooth_bool = smooth_bool
         self.trim_depth = trim_depth
 
-        self.img_bbox = img_util.get_bbox(img_patch_origin, img_patch_shape)
         self.reader = swc_util.Reader(anisotropy, min_size)
 
-    def run(self, swc_pointer):
+    def run(
+        self, fragments_pointer, img_patch_origin=None, img_patch_shape=None
+    ):
         """
         Builds a FragmentsGraph by reading swc files stored either on the
         cloud or local machine, then extracting the irreducible components.
 
         Parameters
         ----------
-        swc_pointer : dict, list, str
+        fragments_pointer : dict, list, str
             Pointer to swc files used to build an instance of FragmentsGraph,
             see "swc_util.Reader" for further documentation.
+        img_patch_origin : list[int], optional
+            An xyz coordinate which is the upper, left, front corner of the
+            image patch that contains the swc files. The default is None.
+        img_patch_shape : list[int], optional
+            Shape of the image patch which contains the swc files. The default
+            is None.
 
         Returns
         -------
-        NeuroGraph
-            Neurograph generated from swc files.
+        FragmentsGraph
+            FragmentsGraph generated from swc files.
 
         """
-        # Initializations
+        # Load fragments and extract irreducibles
         t0 = time()
-        swc_dicts = self.reader.load(swc_pointer)
-        irreducibles, n_nodes, n_edges = self.get_irreducibles(swc_dicts)
+        self.set_img_bbox(img_patch_origin, img_patch_shape)
+        swc_dicts = self.reader.load(fragments_pointer)
+        irreducibles = self.get_irreducibles(swc_dicts)
 
         # Build FragmentsGraph
         neurograph = NeuroGraph(node_spacing=self.node_spacing)
@@ -119,23 +121,53 @@ class GraphBuilder:
             irreducible_set = irreducibles.pop()
             neurograph.add_component(irreducible_set)
 
-        # Report results
+        # Report Memory and runtime
         if self.progress_bar:
-            # Graph size
-            n_components = util.reformat_number(len(irreducibles))
-            print("\nGraph Overview...")
-            print("# connected components:", n_components)
-            print("# nodes:", util.reformat_number(n_nodes))
-            print("# edges:", util.reformat_number(n_edges))
-
-            # Memory and runtime
             usage = round(util.get_memory_usage(), 2)
             t, unit = util.time_writer(time() - t0)
             print(f"Memory Consumption: {usage} GBs")
             print(f"Module Runtime: {round(t, 4)} {unit} \n")
         return neurograph
 
+    def set_img_bbox(self, img_patch_origin, img_patch_shape):
+        """
+        Sets the bounding box of an image patch as a class attriubte.
+
+        Parameters
+        ----------
+        img_patch_origin : tuple[int]
+            Origin of bounding box which is assumed to be top, front, left
+            corner.
+        img_patch_shape : tuple[int]
+            Shape of bounding box.
+
+        Returns
+        -------
+        None
+
+        """
+        self.img_bbox = img_util.get_bbox(img_patch_origin, img_patch_shape)
+
     def get_irreducibles(self, swc_dicts):
+        """
+        Gets irreducible components of each graph stored in "swc_dicts" by
+        setting up a parellelization scheme that sends each graph to a CPU and
+        calling the subroutine "gutil.get_irreducibles".
+
+        Parameters
+        ----------
+        swc_dicts : list[dict]
+            List of dictionaries such that each entry contains the conents of
+            an swc file.
+
+        Returns
+        -------
+        list[dict]
+            List of irreducibles stored in a dictionary where key-values are
+            type of irreducible (i.e. leaf, junction, or edge) and the
+            corresponding set of all irreducibles from the graph of that type.
+
+        """
         with ProcessPoolExecutor() as executor:
             # Assign Processes
             i = 0
@@ -162,7 +194,15 @@ class GraphBuilder:
                 irreducibles.extend(irreducibles_i)
                 n_nodes += count_nodes(irreducibles_i)
                 n_edges += count_edges(irreducibles_i)
-        return irreducibles, n_nodes, n_edges
+
+        # Report graph size
+        if self.progress_bar:
+            n_components = util.reformat_number(len(irreducibles))
+            print("\nGraph Overview...")
+            print("# connected components:", n_components)
+            print("# nodes:", util.reformat_number(n_nodes))
+            print("# edges:", util.reformat_number(n_edges))
+        return irreducibles
 
 
 # --- utils ---
@@ -202,7 +242,4 @@ def count_edges(irreducibles):
         Number of edges in "irreducibles".
 
     """
-    cnt = 0
-    for irr_i in irreducibles:
-        cnt += len(irr_i["edges"])
-    return cnt
+    return np.sum([len(irr["edges"]) for irr in irreducibles])

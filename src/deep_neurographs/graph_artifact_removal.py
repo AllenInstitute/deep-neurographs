@@ -8,9 +8,10 @@ Module that removes doubled fragments and trims branches that pass by each
 other from a NeuroGraph.
 
 """
+from networkx import connected_components
+from tqdm import tqdm
 
 import numpy as np
-from networkx import connected_components
 
 from deep_neurographs import geometry
 from deep_neurographs.utils import util
@@ -50,10 +51,8 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
         util.mkdir(output_dir, delete=True)
 
     # Main
-    chunk_cnt = 1
-    n_components = len(components)
-    t0, t1 = util.init_timers()
-    for cnt, idx in enumerate(np.argsort([len(c) for c in components])):
+    desc = "Doubles Detection"
+    for idx in tqdm(np.argsort([len(c) for c in components]), desc=desc):
         i, j = tuple(components[idx])
         swc_id = neurograph.nodes[i]["swc_id"]
         if swc_id not in deleted:
@@ -68,13 +67,7 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
                         )
                     neurograph = delete(neurograph, components[idx], swc_id)
                     deleted.add(swc_id)
-
-        # Update progress bar
-        if cnt >= chunk_cnt * n_components * 0.02:
-            chunk_cnt, t1 = util.report_progress(
-                cnt + 1, n_components, n_components * 0.02, chunk_cnt, t0, t1
-            )
-    print("\n# Doubles detected:", len(deleted))
+    print("# Doubles detected:", len(deleted))
 
 
 def compute_projections(neurograph, kdtree, edge):
