@@ -31,8 +31,6 @@ def save_prediction(
     if save_swcs:
         neurograph.to_zipped_swcs(swc_zip_path)
         save_corrections(neurograph, accepted_proposals, corrections_dir)
-    else:
-        print(f"Result contains {n_swcs} swcs!")
 
 
 def save_corrections(neurograph, accepted_proposals, output_dir):

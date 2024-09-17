@@ -26,13 +26,14 @@ neuron segmentation data. It performs the following steps:
         into a cohesive structure.
 
 """
+import os
 from datetime import datetime
 from time import time
 
-import os
+import networkx as nx
 
-from deep_neurographs.intake import GraphBuilder
 from deep_neurographs.graph_artifact_removal import remove_doubles
+from deep_neurographs.intake import GraphBuilder
 from deep_neurographs.machine_learning.inference import InferenceEngine
 from deep_neurographs.utils import io_util, util
 
@@ -42,8 +43,9 @@ class GraphTracePipeline:
     Class that executes the full GraphTrace inference pipeline.
 
     """
+
     def __init__(
-        self, dataset, pred_id, img_path, model_path, output_dir, config,
+        self, dataset, pred_id, img_path, model_path, output_dir, config
     ):
         """
         Initializes an object that executes the full GraphTrace inference
@@ -82,7 +84,7 @@ class GraphTracePipeline:
         self.ml_config = config.ml_config
 
         # Set output directory
-        date = datetime.today().strftime('%Y-%m-%d')
+        date = datetime.today().strftime("%Y-%m-%d")
         self.output_dir = f"{output_dir}/{pred_id}-{date}"
         util.mkdir(self.output_dir, delete=True)
 
@@ -103,9 +105,9 @@ class GraphTracePipeline:
         """
         # Initializations
         print("\nExperiment Details")
-        print("---------------------------------------------------")
+        print("-----------------------------------------------")
         print("Dataset:", self.dataset)
-        print("google_pred_id:", self.pred_id)
+        print("Pred_Id:", self.pred_id)
         print("")
         t0 = time()
 
@@ -133,7 +135,7 @@ class GraphTracePipeline:
         None
 
         """
-        print("Building FragmentsGraph...")
+        print("1. Building FragmentsGraph...")
         t0 = time()
 
         # Initialize Graph
@@ -141,26 +143,35 @@ class GraphTracePipeline:
             anisotropy=self.graph_config.anisotropy,
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,
-            progress_bar=True,
             trim_depth=self.graph_config.trim_depth,
         )
-        self.fragments_graph = graph_builder.run(fragments_pointer)
+        self.graph = graph_builder.run(fragments_pointer)
 
         # Remove doubles (if applicable)
         if self.graph_config.remove_doubles_bool:
-            remove_doubles(
-                self.fragments_graph, 200, self.graph_config.node_spacing
-            )
+            remove_doubles(self.graph, 200, self.graph_config.node_spacing)
 
         # Save valid labels and current graph
-        valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        self.fragments_graph.save_valid_labels(valid_labels_path)
-
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
-        self.fragments_graph.to_zipped_swcs(swcs_path)
+        labels_path = os.path.join(self.output_dir, "valid_labels.txt")
+        self.graph.to_zipped_swcs(swcs_path)
+        self.graph.save_labels(labels_path)
 
         t, unit = util.time_writer(time() - t0)
         print(f"Module Runtime: {round(t, 4)} {unit}\n")
+        self.print_graph_overview()
+
+    def print_graph_overview(self):
+        # Compute values
+        n_components = nx.number_connected_components(self.graph)
+        usage = round(util.get_memory_usage(), 2)
+
+        # Print overview
+        print("Graph Overview...")
+        print("# connected components:", util.reformat_number(n_components))
+        print("# nodes:", util.reformat_number(self.graph.number_of_nodes()))
+        print("# edges:", util.reformat_number(self.graph.number_of_edges()))
+        print(f"Memory Consumption: {usage} GBs\n")
 
     def generate_proposals(self):
         """
@@ -176,17 +187,17 @@ class GraphTracePipeline:
         None
 
         """
-        print("Generate Proposals...")
+        print("2. Generate Proposals")
         t0 = time()
-        self.fragments_graph.generate_proposals(
+        self.graph.generate_proposals(
             self.graph_config.search_radius,
             complex_bool=self.graph_config.complex_bool,
             long_range_bool=self.graph_config.long_range_bool,
             proposals_per_leaf=self.graph_config.proposals_per_leaf,
             trim_endpoints_bool=self.graph_config.trim_endpoints_bool,
         )
-        self.fragments_graph.xyz_to_edge = dict()
-        n_proposals = util.reformat_number(self.fragments_graph.n_proposals())
+        self.graph.xyz_to_edge = dict()
+        n_proposals = util.reformat_number(self.graph.n_proposals())
 
         t, unit = util.time_writer(time() - t0)
         print("# Proposals:", n_proposals)
@@ -195,7 +206,7 @@ class GraphTracePipeline:
     def run_inference(self):
         """
         Executes the inference process using the configured inference engine
-        and updates the fragments_graph.
+        and updates the graph.
 
         Parameters
         ----------
@@ -206,7 +217,7 @@ class GraphTracePipeline:
         None
 
         """
-        print("Run Inference...")
+        print("3. Run Inference")
         t0 = time()
         inference_engine = InferenceEngine(
             self.img_path,
@@ -216,21 +227,18 @@ class GraphTracePipeline:
             confidence_threshold=self.ml_config.threshold,
             downsample_factor=self.ml_config.downsample_factor,
         )
-        self.fragments_graph, self.proposal_preds = inference_engine.run(
-            self.fragments_graph,
-            self.fragments_graph.list_proposals(),
+        self.graph, self.proposal_preds = inference_engine.run(
+            self.graph, self.graph.list_proposals()
         )
 
         t, unit = util.time_writer(time() - t0)
         print(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def save_results(self):
-        print("Save Predictions...")
+        print("4. Save Predictions")
         t0 = time()
         io_util.save_prediction(
-            self.fragments_graph,
-            self.proposal_preds,
-            self.output_dir,
+            self.graph, self.proposal_preds, self.output_dir
         )
         t, unit = util.time_writer(time() - t0)
         print(f"Module Runtime: {round(t, 4)} {unit}\n")

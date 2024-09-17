@@ -9,9 +9,9 @@ Module used to generate edge proposals.
 """
 
 from copy import deepcopy
-from tqdm import tqdm
 
 import numpy as np
+from tqdm import tqdm
 
 from deep_neurographs import geometry
 

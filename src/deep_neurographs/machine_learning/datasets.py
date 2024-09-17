@@ -46,12 +46,7 @@ def init(neurograph, features, model_type, sample_ids=None):
 
     # Initialize dataset
     proposals = list(features["proposals"]["skel"].keys())
-    dataset = Dataset(
-        proposals,
-        x_proposals,
-        y_proposals,
-        idxs_proposals,
-    )
+    dataset = Dataset(proposals, x_proposals, y_proposals, idxs_proposals)
     return dataset
 
 
@@ -61,13 +56,8 @@ class Dataset:
     vectors may be either unimodal or multimodal.
 
     """
-    def __init__(
-        self,
-        proposals,
-        x_proposals,
-        y_proposals,
-        idxs_proposals,
-    ):
+
+    def __init__(self, proposals, x_proposals, y_proposals, idxs_proposals):
         """
         Constructs a Dataset object.
 

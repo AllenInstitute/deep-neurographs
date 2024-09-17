@@ -55,6 +55,7 @@ class GraphConfig:
         proposal. The default is True.
 
     """
+
     anisotropy: List[float] = field(default_factory=list)
     complex_bool: bool = False
     img_bbox: dict = None
@@ -92,6 +93,7 @@ class MLConfig:
         Type of machine learning model to use. Default is "GraphNeuralNet".
 
     """
+
     batch_size: int = 1600
     downsample_factor: int = 1
     high_threshold: float = 0.9
@@ -105,6 +107,7 @@ class Config:
     and machine learning models.
 
     """
+
     def __init__(self, graph_config: GraphConfig, ml_config: MLConfig):
         """
         Initializes a Config object which is used to manage settings used to
@@ -123,4 +126,3 @@ class Config:
         """
         self.graph_config = graph_config
         self.ml_config = ml_config
-

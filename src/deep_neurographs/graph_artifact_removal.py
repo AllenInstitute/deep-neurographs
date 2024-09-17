@@ -8,10 +8,9 @@ Module that removes doubled fragments and trims branches that pass by each
 other from a NeuroGraph.
 
 """
+import numpy as np
 from networkx import connected_components
 from tqdm import tqdm
-
-import numpy as np
 
 from deep_neurographs import geometry
 from deep_neurographs.utils import util

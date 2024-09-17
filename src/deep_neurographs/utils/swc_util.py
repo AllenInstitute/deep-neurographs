@@ -15,13 +15,13 @@ from concurrent.futures import (
     ThreadPoolExecutor,
     as_completed,
 )
-from google.cloud import storage
 from io import BytesIO
-from tqdm import tqdm
 from zipfile import ZipFile
 
 import networkx as nx
 import numpy as np
+from google.cloud import storage
+from tqdm import tqdm
 
 from deep_neurographs.utils import util
 
