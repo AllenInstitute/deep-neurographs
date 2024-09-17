@@ -51,7 +51,7 @@ class InferenceEngine:
         img_path : str
             Path to image stored in a GCS bucket.
         model_path : str
-            Path to model parameters.
+            Path to machine learning model parameters.
         model_type : str
             Type of machine learning model used to perform inference.
         search_radius : float

@@ -810,11 +810,6 @@ class NeuroGraph(nx.Graph):
         else:
             return np.flip(self.edges[edge][key], axis=0)
 
-    """
-    def node_xyz_dist(self, node, xyz):
-        return get_dist(xyz, self.nodes[node]["xyz"])
-    """
-
     def edge_length(self, edge):
         """
         Computes length of path stored as xyz coordinates in "edge".
@@ -1066,6 +1061,10 @@ class NeuroGraph(nx.Graph):
             n_entries += 1
         return text_buffer, n_entries
 
+    def save_valid_labels(self, path):
+        with open(path, 'w') as f:
+            for swc_id in self.swc_ids:
+                f.write(f"{swc_id}\n")
 
 # -- util --
 def avg_radius(radii_list):
