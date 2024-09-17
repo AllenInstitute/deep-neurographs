@@ -27,12 +27,9 @@ neuron segmentation data. It performs the following steps:
 
 """
 from datetime import datetime
-from random import sample
 from time import time
 
 import os
-import networkx as nx
-import warnings
 
 from deep_neurographs.intake import GraphBuilder
 from deep_neurographs.graph_artifact_removal import remove_doubles
@@ -83,7 +80,6 @@ class GraphTracePipeline:
         # Extract config settings
         self.graph_config = config.graph_config
         self.ml_config = config.ml_config
-        self.proposals_config = config.proposals_config
 
         # Set output directory
         date = datetime.today().strftime('%Y-%m-%d')
@@ -107,7 +103,7 @@ class GraphTracePipeline:
         """
         # Initializations
         print("\nExperiment Details")
-        print("----------------------------------------------")
+        print("---------------------------------------------------")
         print("Dataset:", self.dataset)
         print("google_pred_id:", self.pred_id)
         print("")
@@ -145,6 +141,7 @@ class GraphTracePipeline:
             anisotropy=self.graph_config.anisotropy,
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,
+            progress_bar=True,
             trim_depth=self.graph_config.trim_depth,
         )
         self.fragments_graph = graph_builder.run(fragments_pointer)
@@ -162,14 +159,81 @@ class GraphTracePipeline:
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
         self.fragments_graph.to_zipped_swcs(swcs_path)
 
+        t, unit = util.time_writer(time() - t0)
+        print(f"Module Runtime: {round(t, 4)} {unit}\n")
+
     def generate_proposals(self):
-        pass
+        """
+        Generates proposals for the fragments graph based on the specified
+        configuration.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        print("Generate Proposals...")
+        t0 = time()
+        self.fragments_graph.generate_proposals(
+            self.graph_config.search_radius,
+            complex_bool=self.graph_config.complex_bool,
+            long_range_bool=self.graph_config.long_range_bool,
+            proposals_per_leaf=self.graph_config.proposals_per_leaf,
+            trim_endpoints_bool=self.graph_config.trim_endpoints_bool,
+        )
+        self.fragments_graph.xyz_to_edge = dict()
+        n_proposals = util.reformat_number(self.fragments_graph.n_proposals())
+
+        t, unit = util.time_writer(time() - t0)
+        print("# Proposals:", n_proposals)
+        print(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def run_inference(self):
-        pass
+        """
+        Executes the inference process using the configured inference engine
+        and updates the fragments_graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        print("Run Inference...")
+        t0 = time()
+        inference_engine = InferenceEngine(
+            self.img_path,
+            self.model_path,
+            self.ml_config.model_type,
+            self.graph_config.search_radius,
+            confidence_threshold=self.ml_config.threshold,
+            downsample_factor=self.ml_config.downsample_factor,
+        )
+        self.fragments_graph, self.proposal_preds = inference_engine.run(
+            self.fragments_graph,
+            self.fragments_graph.list_proposals(),
+        )
+
+        t, unit = util.time_writer(time() - t0)
+        print(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def save_results(self):
-        pass
+        print("Save Predictions...")
+        t0 = time()
+        io_util.save_prediction(
+            self.fragments_graph,
+            self.proposal_preds,
+            self.output_dir,
+        )
+        t, unit = util.time_writer(time() - t0)
+        print(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def write_metadata(self):
         metadata = {
@@ -180,10 +244,10 @@ class GraphTracePipeline:
             "min_fragment_output_size": f"{self.graph_config.min_size}um",
             "model_type": self.ml_config.model_type,
             "model_name": self.model_name,
-            "complex_proposals": self.proposals_config.complex_bool,
-            "long_range_bool": self.proposals_config.long_range_bool,
-            "proposals_per_leaf": self.proposals_config.proposals_per_leaf,
-            "search_radius": f"{self.proposals_config.search_radius}um",
+            "complex_proposals": self.graph_config.complex_bool,
+            "long_range_bool": self.graph_config.long_range_bool,
+            "proposals_per_leaf": self.graph_config.proposals_per_leaf,
+            "search_radius": f"{self.graph_config.search_radius}um",
             "confidence_threshold": self.ml_config.threshold,
             "node_spacing": self.graph_config.node_spacing,
             "remove_doubles": self.graph_config.remove_doubles_bool,

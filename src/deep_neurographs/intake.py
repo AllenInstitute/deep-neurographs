@@ -186,14 +186,15 @@ class GraphBuilder:
                 i += 1
 
             # Store results
-            desc = "Extract Graphs"
-            irreducibles = []
-            n_nodes, n_edges = 0, 0
-            for process in tqdm(as_completed(processes), desc=desc):
-                irreducibles_i = process.result()
-                irreducibles.extend(irreducibles_i)
-                n_nodes += count_nodes(irreducibles_i)
-                n_edges += count_edges(irreducibles_i)
+            with tqdm(total=len(processes), desc="Extract Graphs") as pbar:
+                irreducibles = []
+                n_nodes, n_edges = 0, 0
+                for process in as_completed(processes):
+                    irreducibles_i = process.result()
+                    irreducibles.extend(irreducibles_i)
+                    n_nodes += count_nodes(irreducibles_i)
+                    n_edges += count_edges(irreducibles_i)
+                    pbar.update(1)
 
         # Report graph size
         if self.progress_bar:

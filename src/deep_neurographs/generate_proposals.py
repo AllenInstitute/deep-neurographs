@@ -9,6 +9,7 @@ Module used to generate edge proposals.
 """
 
 from copy import deepcopy
+from tqdm import tqdm
 
 import numpy as np
 
@@ -23,8 +24,8 @@ def run(
     neurograph,
     radius,
     complex_bool=False,
-    long_range_bool=False,
-    trim_endpoints_bool=False,
+    long_range_bool=True,
+    trim_endpoints_bool=True,
 ):
     """
     Generates proposals emanating from "leaf".
@@ -40,10 +41,11 @@ def run(
         between leaf and non-leaf nodes. The default is False.
     long_range_bool : bool, optional
         Indication of whether to generate simple proposals within distance of
-        "LONG_RANGE_FACTOR" * radius of leaf. The default is False.
+        "LONG_RANGE_FACTOR" * radius of leaf from leaf without any proposals.
+        The default is False.
     trim_endpoints_bool : bool, optional
         Indication of whether to endpoints of branches with exactly one
-        proposal. The default is False.
+        proposal. The default is True.
 
     Returns
     -------
@@ -53,7 +55,7 @@ def run(
     connections = dict()
     kdtree = init_kdtree(neurograph, complex_bool)
     radius *= RADIUS_SCALING_FACTOR if trim_endpoints_bool else 1.0
-    for leaf in neurograph.leafs:
+    for leaf in tqdm(neurograph.leafs, desc="Proposals"):
         # Generate potential proposals
         candidates = get_candidates(
             neurograph,

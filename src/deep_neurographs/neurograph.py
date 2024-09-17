@@ -296,7 +296,7 @@ class NeuroGraph(nx.Graph):
             default is False.
         proposals_per_leaf : int, optional
             Maximum number of proposals generated for each leaf. The default
-            is False.
+            is 3.
         return_trimmed_proposals, optional
             Indication of whether to return trimmed proposal ids. The default
             is False.
@@ -1065,6 +1065,7 @@ class NeuroGraph(nx.Graph):
         with open(path, 'w') as f:
             for swc_id in self.swc_ids:
                 f.write(f"{swc_id}\n")
+
 
 # -- util --
 def avg_radius(radii_list):

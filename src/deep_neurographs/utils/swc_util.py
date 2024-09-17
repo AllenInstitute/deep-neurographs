@@ -15,14 +15,13 @@ from concurrent.futures import (
     ThreadPoolExecutor,
     as_completed,
 )
+from google.cloud import storage
 from io import BytesIO
 from tqdm import tqdm
 from zipfile import ZipFile
 
 import networkx as nx
 import numpy as np
-from google.cloud import storage
-from tqdm import tqdm
 
 from deep_neurographs.utils import util
 
@@ -179,10 +178,11 @@ class Reader:
                 )
 
             # Store results
-            swc_dicts = list()
-            desc = "Downloading SWCs"
-            for process in tqdm(as_completed(processes), desc=desc):
-                swc_dicts.extend(process.result())
+            with tqdm(total=len(processes), desc="Downloading SWCs") as pbar:
+                swc_dicts = list()
+                for process in as_completed(processes):
+                    swc_dicts.extend(process.result())
+                    pbar.update(1)
         return swc_dicts
 
     def load_from_cloud_zip(self, zip_content):
@@ -250,9 +250,9 @@ class Reader:
     # --- Process swc content ---
     def parse(self, content):
         """
-        Parses an swc file to extract the content which is stored in a dict. Note
-        that node_ids from swc are refactored to index from 0 to n-1 where n is
-        the number of entries in the swc file.
+        Parses an swc file to extract the content which is stored in a dict.
+        Note that node_ids from swc are refactored to index from 0 to n-1
+        where n is the number of entries in the swc file.
 
         Parameters
         ----------
