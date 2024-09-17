@@ -8,8 +8,6 @@ Builds a neurograph for neuron reconstruction.
 
 """
 
-from time import time
-
 from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import img_util, swc_util
