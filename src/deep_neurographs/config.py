@@ -123,3 +123,4 @@ class Config:
         """
         self.graph_config = graph_config
         self.ml_config = ml_config
+
