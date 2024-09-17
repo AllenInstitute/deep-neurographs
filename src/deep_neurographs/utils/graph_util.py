@@ -22,19 +22,74 @@ Branch: a sequence of nodes between two irreducible nodes.
 
 """
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from random import sample
 
 import networkx as nx
 import numpy as np
+from tqdm import tqdm
 
 from deep_neurographs import geometry
 from deep_neurographs.utils import img_util, swc_util, util
 
 
 def get_irreducibles(
+    swc_dicts,
+    min_size,
+    img_bbox=None,
+    prune_depth=16.0,
+    smooth_bool=True,
+    trim_depth=0.0,
+):
+    """
+    Gets irreducible components of each graph stored in "swc_dicts" by setting
+    up a parellelization scheme that sends each swc_dict to a CPU and calling
+    the subroutine "gutil.get_irreducibles".
+
+    Parameters
+    ----------
+    swc_dicts : list[dict]
+        List of dictionaries such that each entry contains the conents of an
+        swc file.
+
+    Returns
+    -------
+    list[dict]
+        List of irreducibles stored in a dictionary where key-values are type
+        of irreducible (i.e. leaf, junction, or edge) and the corresponding
+        set of all irreducibles from the graph of that type.
+
+    """
+    with ProcessPoolExecutor() as executor:
+        # Assign Processes
+        i = 0
+        processes = [None] * len(swc_dicts)
+        while swc_dicts:
+            swc_dict = swc_dicts.pop()
+            processes[i] = executor.submit(
+                get_component_irreducibles,
+                swc_dict,
+                min_size,
+                img_bbox,
+                prune_depth,
+                smooth_bool,
+                trim_depth,
+            )
+            i += 1
+
+        # Store results
+        with tqdm(total=len(processes), desc="Extract Graphs") as pbar:
+            irreducibles = []
+            for process in as_completed(processes):
+                irreducibles.extend(process.result())
+                pbar.update(1)
+    return irreducibles
+
+
+def get_component_irreducibles(
     swc_dict,
     min_size,
-    bbox=None,
+    img_bbox=None,
     prune_depth=16.0,
     smooth_bool=True,
     trim_depth=0.0,
@@ -51,7 +106,7 @@ def get_irreducibles(
         Contents of an swc file.
     min_size : float
         Minimum cardinality of swc files that are stored in NeuroGraph.
-    bbox : dict, optional
+    img_bbox : dict, optional
         Dictionary with the keys "min" and "max" which specify a bounding box
         in the image. The default is None.
     prune_depth : float, optional
@@ -74,7 +129,7 @@ def get_irreducibles(
     # Build dense graph
     swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
     graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
-    graph = clip_branches(graph, bbox)
+    graph = clip_branches(graph, img_bbox)
     graph, n_trimmed = prune_trim_branches(graph, prune_depth, trim_depth)
 
     # Extract irreducibles
@@ -82,35 +137,37 @@ def get_irreducibles(
     for node_subset in nx.connected_components(graph):
         if len(node_subset) + n_trimmed > min_size:
             subgraph = graph.subgraph(node_subset)
-            irreducibles_i = __get_irreducibles(subgraph, swc_dict, smooth_bool)
+            irreducibles_i = get_subcomponent_irreducibles(
+                subgraph, swc_dict, smooth_bool
+            )
             if irreducibles_i:
                 irreducibles.append(irreducibles_i)
     return irreducibles
 
 
-def clip_branches(graph, bbox):
+def clip_branches(graph, img_bbox):
     """
-    Deletes all nodes from "graph" that are not contained in "bbox".
+    Deletes all nodes from "graph" that are not contained in "img_bbox".
 
     Parameters
     ----------
     graph : networkx.Graph
         Graph to be searched
-    bbox : dict
+    img_bbox : dict
         Dictionary with the keys "min" and "max" which specify a bounding box
         in the image. The default is None.
 
     Returns
     -------
     networkx.Graph
-        "graph" with nodes deleted that were not contained in "bbox".
+        "graph" with nodes deleted that were not contained in "img_bbox".
 
     """
-    if bbox:
+    if img_bbox:
         delete_nodes = set()
         for i in graph.nodes:
             xyz = img_util.to_voxels(graph.nodes[i]["xyz"])
-            if not util.is_contained(bbox, xyz):
+            if not util.is_contained(img_bbox, xyz):
                 delete_nodes.add(i)
         graph.remove_nodes_from(delete_nodes)
     return graph
@@ -148,7 +205,7 @@ def prune_trim_branches(graph, prune_depth, trim_depth):
     return graph, n_nodes_trimmed
 
 
-def __get_irreducibles(graph, swc_dict, smooth_bool):
+def get_subcomponent_irreducibles(graph, swc_dict, smooth_bool):
     """
     Gets the irreducible components of "graph".
 

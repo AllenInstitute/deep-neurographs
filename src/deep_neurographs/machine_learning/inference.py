@@ -18,7 +18,7 @@ from tqdm import tqdm
 from deep_neurographs.machine_learning import feature_generation
 from deep_neurographs.utils import gnn_util
 from deep_neurographs.utils import graph_util as gutil
-from deep_neurographs.utils import img_util, ml_util, util
+from deep_neurographs.utils import img_util, ml_util
 from deep_neurographs.utils.gnn_util import toCPU
 
 BATCH_SIZE = 1600
@@ -119,10 +119,6 @@ class InferenceEngine:
             for proposal in batch_accepts:
                 neurograph.merge_proposal(frozenset(proposal))
             accepts.extend(batch_accepts)
-
-        # Report Results
-        print("\n# proposals added:", util.reformat_number(len(accepts)))
-        print("% proposals added:", round(len(accepts) / len(proposals), 4))
         return neurograph, accepts
 
     def get_batches(self, neurograph, proposals):

@@ -4,7 +4,7 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Implementation of subclass of Networkx.Graph called "NeuroGraph".
+Implementation of subclass of Networkx.Graph called "FragmentsGraph".
 
 """
 import os
@@ -296,7 +296,7 @@ class NeuroGraph(nx.Graph):
             default is False.
         proposals_per_leaf : int, optional
             Maximum number of proposals generated for each leaf. The default
-            is False.
+            is 3.
         return_trimmed_proposals, optional
             Indication of whether to return trimmed proposal ids. The default
             is False.
@@ -926,8 +926,6 @@ class NeuroGraph(nx.Graph):
 
     # --- write graph to swcs ---
     def to_zipped_swcs(self, zip_path, color=None):
-        n_components = util.reformat_number(gutil.count_components(self))
-        print(f"Writing {n_components} swcs to local machine!")
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
             for nodes in nx.connected_components(self):
                 self.to_zipped_swc(zip_writer, nodes, color)
@@ -979,8 +977,6 @@ class NeuroGraph(nx.Graph):
         """
         with ThreadPoolExecutor() as executor:
             threads = []
-            n_components = gutil.count_components(self)
-            print(f"Writing {n_components} swcs to local machine!")
             for i, nodes in enumerate(nx.connected_components(self)):
                 threads.append(executor.submit(self.to_swc, swc_dir, nodes))
 
@@ -1061,10 +1057,11 @@ class NeuroGraph(nx.Graph):
             n_entries += 1
         return text_buffer, n_entries
 
-    def save_valid_labels(self, path):
-        with open(path, 'w') as f:
+    def save_labels(self, path):
+        with open(path, "w") as f:
             for swc_id in self.swc_ids:
                 f.write(f"{swc_id}\n")
+
 
 # -- util --
 def avg_radius(radii_list):

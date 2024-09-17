@@ -26,16 +26,14 @@ neuron segmentation data. It performs the following steps:
         into a cohesive structure.
 
 """
+import os
 from datetime import datetime
-from random import sample
 from time import time
 
-import os
 import networkx as nx
-import warnings
 
-from deep_neurographs.intake import GraphBuilder
 from deep_neurographs.graph_artifact_removal import remove_doubles
+from deep_neurographs.intake import GraphBuilder
 from deep_neurographs.machine_learning.inference import InferenceEngine
 from deep_neurographs.utils import io_util, util
 
@@ -45,8 +43,9 @@ class GraphTracePipeline:
     Class that executes the full GraphTrace inference pipeline.
 
     """
+
     def __init__(
-        self, dataset, pred_id, img_path, model_path, output_dir, config,
+        self, dataset, pred_id, img_path, model_path, output_dir, config
     ):
         """
         Initializes an object that executes the full GraphTrace inference
@@ -83,10 +82,9 @@ class GraphTracePipeline:
         # Extract config settings
         self.graph_config = config.graph_config
         self.ml_config = config.ml_config
-        self.proposals_config = config.proposals_config
 
         # Set output directory
-        date = datetime.today().strftime('%Y-%m-%d')
+        date = datetime.today().strftime("%Y-%m-%d")
         self.output_dir = f"{output_dir}/{pred_id}-{date}"
         util.mkdir(self.output_dir, delete=True)
 
@@ -107,9 +105,9 @@ class GraphTracePipeline:
         """
         # Initializations
         print("\nExperiment Details")
-        print("----------------------------------------------")
+        print("-----------------------------------------------")
         print("Dataset:", self.dataset)
-        print("google_pred_id:", self.pred_id)
+        print("Pred_Id:", self.pred_id)
         print("")
         t0 = time()
 
@@ -137,7 +135,7 @@ class GraphTracePipeline:
         None
 
         """
-        print("Building FragmentsGraph...")
+        print("1. Building FragmentsGraph...")
         t0 = time()
 
         # Initialize Graph
@@ -147,29 +145,103 @@ class GraphTracePipeline:
             node_spacing=self.graph_config.node_spacing,
             trim_depth=self.graph_config.trim_depth,
         )
-        self.fragments_graph = graph_builder.run(fragments_pointer)
+        self.graph = graph_builder.run(fragments_pointer)
 
         # Remove doubles (if applicable)
         if self.graph_config.remove_doubles_bool:
-            remove_doubles(
-                self.fragments_graph, 200, self.graph_config.node_spacing
-            )
+            remove_doubles(self.graph, 200, self.graph_config.node_spacing)
 
         # Save valid labels and current graph
-        valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        self.fragments_graph.save_valid_labels(valid_labels_path)
-
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
-        self.fragments_graph.to_zipped_swcs(swcs_path)
+        labels_path = os.path.join(self.output_dir, "valid_labels.txt")
+        self.graph.to_zipped_swcs(swcs_path)
+        self.graph.save_labels(labels_path)
+
+        t, unit = util.time_writer(time() - t0)
+        print(f"Module Runtime: {round(t, 4)} {unit}\n")
+        self.print_graph_overview()
+
+    def print_graph_overview(self):
+        # Compute values
+        n_components = nx.number_connected_components(self.graph)
+        usage = round(util.get_memory_usage(), 2)
+
+        # Print overview
+        print("Graph Overview...")
+        print("# connected components:", util.reformat_number(n_components))
+        print("# nodes:", util.reformat_number(self.graph.number_of_nodes()))
+        print("# edges:", util.reformat_number(self.graph.number_of_edges()))
+        print(f"Memory Consumption: {usage} GBs\n")
 
     def generate_proposals(self):
-        pass
+        """
+        Generates proposals for the fragments graph based on the specified
+        configuration.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        print("2. Generate Proposals")
+        t0 = time()
+        self.graph.generate_proposals(
+            self.graph_config.search_radius,
+            complex_bool=self.graph_config.complex_bool,
+            long_range_bool=self.graph_config.long_range_bool,
+            proposals_per_leaf=self.graph_config.proposals_per_leaf,
+            trim_endpoints_bool=self.graph_config.trim_endpoints_bool,
+        )
+        self.graph.xyz_to_edge = dict()
+        n_proposals = util.reformat_number(self.graph.n_proposals())
+
+        t, unit = util.time_writer(time() - t0)
+        print("# Proposals:", n_proposals)
+        print(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def run_inference(self):
-        pass
+        """
+        Executes the inference process using the configured inference engine
+        and updates the graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        print("3. Run Inference")
+        t0 = time()
+        inference_engine = InferenceEngine(
+            self.img_path,
+            self.model_path,
+            self.ml_config.model_type,
+            self.graph_config.search_radius,
+            confidence_threshold=self.ml_config.threshold,
+            downsample_factor=self.ml_config.downsample_factor,
+        )
+        self.graph, self.proposal_preds = inference_engine.run(
+            self.graph, self.graph.list_proposals()
+        )
+
+        t, unit = util.time_writer(time() - t0)
+        print(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def save_results(self):
-        pass
+        print("4. Save Predictions")
+        t0 = time()
+        io_util.save_prediction(
+            self.graph, self.proposal_preds, self.output_dir
+        )
+        t, unit = util.time_writer(time() - t0)
+        print(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def write_metadata(self):
         metadata = {
@@ -180,10 +252,10 @@ class GraphTracePipeline:
             "min_fragment_output_size": f"{self.graph_config.min_size}um",
             "model_type": self.ml_config.model_type,
             "model_name": self.model_name,
-            "complex_proposals": self.proposals_config.complex_bool,
-            "long_range_bool": self.proposals_config.long_range_bool,
-            "proposals_per_leaf": self.proposals_config.proposals_per_leaf,
-            "search_radius": f"{self.proposals_config.search_radius}um",
+            "complex_proposals": self.graph_config.complex_bool,
+            "long_range_bool": self.graph_config.long_range_bool,
+            "proposals_per_leaf": self.graph_config.proposals_per_leaf,
+            "search_radius": f"{self.graph_config.search_radius}um",
             "confidence_threshold": self.ml_config.threshold,
             "node_spacing": self.graph_config.node_spacing,
             "remove_doubles": self.graph_config.remove_doubles_bool,
