@@ -15,6 +15,7 @@ from io import StringIO
 
 import networkx as nx
 import numpy as np
+from numpy import concatenate
 from scipy.spatial import KDTree
 
 from deep_neurographs import generate_proposals, geometry
@@ -201,22 +202,33 @@ class NeuroGraph(nx.Graph):
         )
         self.xyz_to_edge.update({tuple(xyz): edge for xyz in attrs["xyz"]})
 
-    """
-    def absorb_node(self, i, nb_1, nb_2):
-        # Get attributes
-        xyz = self.get_branches(i, key="xyz")
-        radius = self.get_branches(i, key="radius")
+    def absorb_reducibles(self):
+        """
+        Absorbs reducible nodes (i.e. nodes with degree 2) in the graph by
+        merging them into their neighboring nodes.
 
-        # Edit graph
-        self.remove_node(i)
-        self.add_edge(
-            nb_1,
-            nb_2,
-            xyz=np.vstack([np.flip(xyz[1], axis=0), xyz[0][1:, :]]),
-            radius=np.concatenate((radius[0], np.flip(radius[1]))),
-            swc_id=self.nodes[nb_1]["swc_id"],
-        )
-    """
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        """
+        nodes = deepcopy(self.nodes)
+        for i in nodes:
+            nbs = list(self.neighbors(i))
+            if len(nbs) == 2 and len(self.nodes[i]["proposals"]) == 0:
+                # Get attributes
+                xyz = self.get_branches(i, key="xyz")
+                radius = self.get_branches(i, key="radius")
+                attrs = {
+                    "radius": concatenate([np.flip(radius[0]), radius[1]]),
+                    "xyz": concatenate([np.flip(xyz[0], axis=0), xyz[1]]),
+                }
+
+                # Update graph
+                self.__add_edge(nbs, attrs, self.nodes[i]["swc_id"])
+                self.remove_node(i)
 
     def split_edge(self, edge, attrs, idx):
         """
@@ -309,7 +321,6 @@ class NeuroGraph(nx.Graph):
             long_range_bool=long_range_bool,
             trim_endpoints_bool=trim_endpoints_bool,
         )
-        # absorb reducible nodes
 
     def reset_proposals(self):
         """
@@ -542,34 +553,15 @@ class NeuroGraph(nx.Graph):
         """
         return len(self.proposals)
 
+    def is_simple(self, proposal):
+        i, j = tuple(proposal)
+        return True if self.is_leaf(i) and self.is_leaf(j) else False
+
     def simple_proposals(self):
-        return set([e for e in self.proposals if self.is_simple(e)])
+        return set([p for p in self.proposals if self.is_simple(p)])
 
     def complex_proposals(self):
-        return set([e for e in self.proposals if not self.is_simple(e)])
-
-    def proposal_search(self, root_1, root_2, max_depth, max_dist):
-        queue = [(root_1, 0), (root_2, 0)]
-        roots = [root_1, root_2]
-        proposals = set()
-        visited = set()
-        while len(queue) > 0:
-            # Visit node
-            i, depth = queue.pop(0)
-            proposals = proposals.union(self.nodes[i]["proposals"])
-            visited.add(i)
-
-            # Add neighbors
-            if depth < max_depth:
-                for j in [j for j in self.neighbors(i) if j not in visited]:
-                    dist = max(self.dist(root_1, j), self.dist(root_2, j))
-                    if j not in roots and dist < max_dist:
-                        queue.append((j, depth + 1))
-        return len(proposals) - 2 > 0
-
-    def is_simple(self, edge):
-        i, j = tuple(edge)
-        return True if self.is_leaf(i) and self.is_leaf(j) else False
+        return set([p for p in self.proposals if not self.is_simple(p)])
 
     def proposal_length(self, proposal):
         return self.dist(*tuple(proposal))
@@ -641,16 +633,16 @@ class NeuroGraph(nx.Graph):
                 inner_product_3 = max(inner_product_3, -inner_product_3)
         return np.array([inner_product_1, inner_product_2, inner_product_3])
 
-    def merge_proposal(self, edge):
-        i, j = tuple(edge)
-        swc_id_i = self.nodes[i]["swc_id"]
-        swc_id_j = self.nodes[j]["swc_id"]
+    def merge_proposal(self, proposal):
+        i, j = tuple(proposal)
         if not (self.is_soma(i) and self.is_soma(j)):
             # Attributes
             attrs = dict()
             for k in ["xyz", "radius"]:
                 combine = np.vstack if k == "xyz" else np.array
                 attrs[k] = combine([self.nodes[i][k], self.nodes[j][k]])
+            swc_id_i = self.nodes[i]["swc_id"]
+            swc_id_j = self.nodes[j]["swc_id"]
             swc_id = swc_id_i if self.is_soma(i) else swc_id_j
 
             # Update graph
@@ -661,7 +653,7 @@ class NeuroGraph(nx.Graph):
                 self.leafs.remove(i)
             if j in self.leafs:
                 self.leafs.remove(j)
-            self.proposals.remove(edge)
+            self.proposals.remove(proposal)
 
     def upd_ids(self, swc_id, r):
         """
@@ -689,6 +681,24 @@ class NeuroGraph(nx.Graph):
                 queue.append(j)
 
     def n_nearby_leafs(self, proposal, radius):
+        """
+        Counts the number of nearby leaf nodes within a specified radius from
+        a proposal.
+
+        Parameters
+        ----------
+        proposal : frozenset
+            Pproposal for which nearby leaf nodes are to be counted.
+        radius : float
+            The radius within which to search for nearby leaf nodes.
+
+        Returns
+        -------
+        int
+            Number of nearby leaf nodes within a specified radius from
+            a proposal.
+
+        """
         xyz = self.proposal_midpoint(proposal)
         return len(self.query_kdtree(xyz, radius, "leaf")) - 1
 

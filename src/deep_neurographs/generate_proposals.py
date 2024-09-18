@@ -389,7 +389,10 @@ def trim_to_idx(neurograph, i, idx):
     neurograph.edges[i, j]["xyz"] = branch_xyz[idx::]
     neurograph.edges[i, j]["radius"] = branch_radii[idx::]
     for k in range(idx):
-        del neurograph.xyz_to_edge[tuple(branch_xyz[k])]
+        try:
+            del neurograph.xyz_to_edge[tuple(branch_xyz[k])]
+        except KeyError:
+            pass
     return neurograph
 
 

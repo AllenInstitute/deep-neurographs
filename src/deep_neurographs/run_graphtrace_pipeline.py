@@ -109,7 +109,7 @@ class GraphTracePipeline:
         print("\nExperiment Details")
         print("-----------------------------------------------")
         print("Dataset:", self.dataset)
-        print("Pred_Id:", self.pred_id)
+        print("Pred_ID:", self.pred_id)
         print("")
         self.write_metadata()
         t0 = time()
@@ -128,7 +128,7 @@ class GraphTracePipeline:
         print("\nExperiment Details")
         print("-----------------------------------------------")
         print("Dataset:", self.dataset)
-        print("Pred_Id:", self.pred_id)
+        print("Pred_ID:", self.pred_id)
         print("")
         t0 = time()
 
@@ -247,6 +247,7 @@ class GraphTracePipeline:
             self.graph, self.graph.list_proposals()
         )
         self.accepted_proposals.extend(accepts)
+        print("# Accepted:", len(accepts))
         print("% Accepted:", len(accepts) / n_proposals)
 
         t, unit = util.time_writer(time() - t0)
@@ -344,7 +345,7 @@ class GraphTracePipeline:
 
         # Print overview
         print("Graph Overview...")
-        print("# connected components:", util.reformat_number(n_components))
-        print("# nodes:", util.reformat_number(self.graph.number_of_nodes()))
-        print("# edges:", util.reformat_number(self.graph.number_of_edges()))
+        print("# Connected Components:", util.reformat_number(n_components))
+        print("# Nodes:", util.reformat_number(self.graph.number_of_nodes()))
+        print("# Edges:", util.reformat_number(self.graph.number_of_edges()))
         print(f"Memory Consumption: {usage} GBs\n")
