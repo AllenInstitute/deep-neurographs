@@ -8,15 +8,15 @@
 ![Python](https://img.shields.io/badge/python->=3.7-blue?logo=python)
 
 
-GraphTrace is a Python library that utilizes machine learning to perform automated reconstruction of fragmented neuron segments from whole brain images.
+GraphTrace is a Python library that utilizes machine learning to perform automated reconstruction of a fragmented neuron segmentation from whole brain images.
 
 ## Key Features
 
-- Graph Construction: Converts neuron fragments into a graph structure, where nodes represent individual fragments and edges denote potential connections.
-- Connection Proposals: Generates and evaluates potential connections between graph nodes to improve segmentation accuracy.
-- Feature Generation: Extracts and processes features from the graph, providing valuable input for machine learning models.
-- Graph Neural Network (GNN) Inference: Employs graph neural networks to predict and refine connections based on the generated features.
-- Graph Update: Integrates inference results to update and merge fragments, resulting in a more accurate representation of neuron structures.
+- Graph Construction: Reads neuron fragments stored as swc files and loads them into a Networkx graph
+- Proposals: Generates potential connections between nearby fragments to correct false splits in the segmentation
+- Feature Generation: Extracts geometric and image-based features from the graph to be utilized by a machine learning model for classifying proposals.
+- Graph Neural Network (GNN) Inference: Predicts whether to accept or reject proposals based on the generated features and graphical structure.
+- Graph Update: Integrates inference results by merging fragments corresponding to an accepted proposal, resulting in a more accurate representation of neuron structures.
 
 ## Installation
 To use the software, in the root directory, run
