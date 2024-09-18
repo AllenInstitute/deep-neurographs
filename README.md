@@ -8,10 +8,10 @@
 ![Python](https://img.shields.io/badge/python->=3.7-blue?logo=python)
 
 
-GraphTrace is a Python library that utilizes machine learning to perform automated reconstruction of a fragmented neuron segmentation from whole brain images.
+GraphTrace is a Python library that utilizes machine learning to perform automated reconstruction of a fragmented neuron segmentation from whole brain images. For a demo, we provide a Jupyter notebook that loads fragments from a predicted segmentation and automatically merges them by running GraphTrace. You can use our github code to train a deep learning model and test with a ground-truth.
 
 <p>
-  <img src="imgs/result.png" width="400" alt="Example of before and after run obtained with GraphTrace">
+  <img src="imgs/result.png" width="800" alt="Example of before and after run obtained with GraphTrace">
 </p>
 
 ## Key Features
