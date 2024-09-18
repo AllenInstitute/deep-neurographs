@@ -11,7 +11,7 @@
 GraphTrace is a Python library that utilizes machine learning to perform automated reconstruction of a fragmented neuron segmentation from whole brain images.
 
 <p>
-  <img src="imgs/result.png" width="180" alt="Example of before and after run obtained with GraphTrace">
+  <img src="imgs/result.png" width="400" alt="Example of before and after run obtained with GraphTrace">
 </p>
 
 ## Key Features
