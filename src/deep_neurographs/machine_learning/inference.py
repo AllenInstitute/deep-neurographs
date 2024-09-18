@@ -116,9 +116,10 @@ class InferenceEngine:
 
             # Update graph
             batch_accepts = get_accepted_proposals(neurograph, preds)
-            for proposal in batch_accepts:
-                neurograph.merge_proposal(frozenset(proposal))
+            for proposal in map(frozenset, batch_accepts):
+                neurograph.merge_proposal(proposal)
             accepts.extend(batch_accepts)
+        neurograph.absorb_reducibles()
         return neurograph, accepts
 
     def get_batches(self, neurograph, proposals):
