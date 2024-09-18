@@ -74,6 +74,7 @@ class GraphTracePipeline:
 
         """
         # Class attributes
+        self.accepted_proposals = list()
         self.dataset = dataset
         self.pred_id = pred_id
         self.img_path = img_path
@@ -113,11 +114,30 @@ class GraphTracePipeline:
         self.write_metadata()
         t0 = time()
 
+        # Main
         self.build_graph(fragments_pointer)
         self.generate_proposals()
         self.run_inference()
         self.save_results()
 
+        t, unit = util.time_writer(time() - t0)
+        print(f"Total Runtime: {round(t, 4)} {unit}\n")
+
+    def run_schedule(self, fragments_pointer, search_radius_schedule):
+        # Initializations
+        print("\nExperiment Details")
+        print("-----------------------------------------------")
+        print("Dataset:", self.dataset)
+        print("Pred_Id:", self.pred_id)
+        print("")
+        t0 = time()
+
+        # Main
+        self.build_graph(fragments_pointer)
+        for search_radius in search_radius_schedule:
+            self.generate_proposals(search_radius=search_radius)
+            self.run_inference()
+        self.save_results()
         t, unit = util.time_writer(time() - t0)
         print(f"Total Runtime: {round(t, 4)} {unit}\n")
 
@@ -163,7 +183,7 @@ class GraphTracePipeline:
         print(f"Module Runtime: {round(t, 4)} {unit}\n")
         self.print_graph_overview()
 
-    def generate_proposals(self):
+    def generate_proposals(self, search_radius=None):
         """
         Generates proposals for the fragment graph based on the specified
         configuration.
@@ -177,18 +197,23 @@ class GraphTracePipeline:
         None
 
         """
+        # Initializations
         print("(2) Generate Proposals")
+        if not search_radius:
+            search_radius = self.graph_config.search_radius,
+
+        # Main
         t0 = time()
         self.graph.generate_proposals(
-            self.graph_config.search_radius,
+            search_radius,
             complex_bool=self.graph_config.complex_bool,
             long_range_bool=self.graph_config.long_range_bool,
             proposals_per_leaf=self.graph_config.proposals_per_leaf,
             trim_endpoints_bool=self.graph_config.trim_endpoints_bool,
         )
-        self.graph.xyz_to_edge = dict()
         n_proposals = util.reformat_number(self.graph.n_proposals())
 
+        # Report results
         t, unit = util.time_writer(time() - t0)
         print("# Proposals:", n_proposals)
         print(f"Module Runtime: {round(t, 4)} {unit}\n")
@@ -209,6 +234,7 @@ class GraphTracePipeline:
         """
         print("(3) Run Inference")
         t0 = time()
+        n_proposals = self.graph.n_proposals()
         inference_engine = InferenceEngine(
             self.img_path,
             self.model_path,
@@ -217,14 +243,16 @@ class GraphTracePipeline:
             confidence_threshold=self.ml_config.threshold,
             downsample_factor=self.ml_config.downsample_factor,
         )
-        self.graph, self.accepted_proposals = inference_engine.run(
+        self.graph, accepts = inference_engine.run(
             self.graph, self.graph.list_proposals()
         )
+        self.accepted_proposals.extend(accepts)
+        print("% Accepted:", len(accepts) / n_proposals)
 
         t, unit = util.time_writer(time() - t0)
         print(f"Module Runtime: {round(t, 4)} {unit}\n")
 
-    def save_results(self):
+    def save_results(self, round_id=None):
         """
         Saves the processed results from running the inference pipeline,
         namely the corrected swc files and a list of the merged swc ids.
@@ -239,9 +267,11 @@ class GraphTracePipeline:
 
         """
         print("(4) Saving Results")
-        path = os.path.join(self.output_dir, "corrected-processed-swcs.zip")
+        name = "corrected-processed-swcs.zip"
+        path = os.path.join(self.output_dir, name + ".zip")
         self.graph.to_zipped_swcs(path)
         self.save_connections()
+        self.write_metadata()
 
     # --- io ---
     def save_connections(self):

@@ -725,3 +725,30 @@ def get_memory_usage():
 
     """
     return psutil.virtual_memory().used / 1e9
+
+
+def spaced_idxs(container, k):
+    """
+    Generates an array of indices based on a specified step size and ensures
+    the last index is included.
+
+    Parameters:
+    ----------
+    container : iterable
+        An iterable (e.g., list, array) from which the length is determined.
+        The length  of this container dictates the range of generated indices.
+    k : int
+        Step size for generating indices.
+
+    Returns:
+    -------
+    numpy.ndarray
+        Array of indices starting from 0 up to (but not including) the length
+        of "container" spaced by "k". The last index before the length of
+        "container" is guaranteed to be included in the output.
+
+    """
+    idxs = np.arange(0, len(container) + k, k)[:-1]
+    if len(container) % 2 == 0:
+        idxs = np.append(idxs, len(container) - 1)
+    return idxs
