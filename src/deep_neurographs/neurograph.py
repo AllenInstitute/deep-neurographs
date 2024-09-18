@@ -134,10 +134,9 @@ class NeuroGraph(nx.Graph):
             # Edges
             for (i, j), attrs in irreducibles["edges"].items():
                 edge = (ids[i], ids[j])
-                idxs = np.arange(0, attrs["xyz"].shape[0], self.node_spacing)
-                if idxs[-1] != attrs["xyz"].shape[0] - 1:
-                    idxs = np.append(idxs, attrs["xyz"].shape[0] - 1)
-                self.__add_edge(edge, attrs, idxs, swc_id)
+                idxs = util.spaced_idxs(attrs["radius"], self.node_spacing)
+                attrs = {key: value[idxs] for key, value in attrs.items()}
+                self.__add_edge(edge, attrs, swc_id)
 
     def __add_nodes(self, irreducibles, node_type, node_ids):
         """
@@ -178,7 +177,7 @@ class NeuroGraph(nx.Graph):
             node_ids[i] = cur_id
         return node_ids
 
-    def __add_edge(self, edge, attrs, idxs, swc_id):
+    def __add_edge(self, edge, attrs, swc_id):
         """
         Adds an edge to "self".
 
@@ -187,11 +186,7 @@ class NeuroGraph(nx.Graph):
         edge : tuple
             Edge to be added.
         attrs : dict
-            Dictionary of attributes of "edge" that were obtained from an swc
-            file.
-        idxs : dict
-            Indices of attributes to store in order to reduce the amount of
-            memory required to store "self".
+            Dictionary of attributes of "edge" obtained from an swc file.
         swc_id : str
             swc id corresponding to edge.
 
@@ -202,14 +197,9 @@ class NeuroGraph(nx.Graph):
         """
         i, j = tuple(edge)
         self.add_edge(
-            i,
-            j,
-            radius=attrs["radius"][idxs],
-            xyz=attrs["xyz"][idxs],
-            swc_id=swc_id,
+            i, j, radius=attrs["radius"], xyz=attrs["xyz"], swc_id=swc_id,
         )
-        for xyz in attrs["xyz"][idxs]:
-            self.xyz_to_edge[tuple(xyz)] = edge
+        self.xyz_to_edge.update({tuple(xyz): edge for xyz in attrs["xyz"]})
 
     """
     def absorb_node(self, i, nb_1, nb_2):
@@ -265,10 +255,11 @@ class NeuroGraph(nx.Graph):
         self.node_cnt += 1
 
         # Create edges
-        idxs_1 = np.arange(0, idx + 1)
-        idxs_2 = np.arange(idx, len(attrs["xyz"]))
-        self.__add_edge((i, node_id), attrs, idxs_1, swc_id)
-        self.__add_edge((node_id, j), attrs, idxs_2, swc_id)
+        n = len(attrs["xyz"])
+        attrs_1 = {k: v[np.arange(0, idx + 1)] for k, v in attrs.items()}
+        attrs_2 = {k: v[np.arange(idx, n)] for k, v in attrs.items()}
+        self.__add_edge((i, node_id), attrs_1, swc_id)
+        self.__add_edge((node_id, j), attrs_2, swc_id)
         return node_id
 
     # --- Proposal Generation ---
@@ -656,16 +647,16 @@ class NeuroGraph(nx.Graph):
         swc_id_j = self.nodes[j]["swc_id"]
         if not (self.is_soma(i) and self.is_soma(j)):
             # Attributes
-            xyz = np.vstack([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
-            radius = np.array(
-                [self.nodes[i]["radius"], self.nodes[j]["radius"]]
-            )
+            attrs = dict()
+            for k in ["xyz", "radius"]:
+                combine = np.vstack if k == "xyz" else np.array
+                attrs[k] = combine([self.nodes[i][k], self.nodes[j][k]])
             swc_id = swc_id_i if self.is_soma(i) else swc_id_j
 
             # Update graph
             self.merged_ids.add((swc_id_i, swc_id_j))
             self.upd_ids(swc_id, j if swc_id == swc_id_i else i)
-            self.add_edge(i, j, xyz=xyz, radius=radius, swc_id=swc_id)
+            self.__add_edge((i, j), attrs, swc_id)
             if i in self.leafs:
                 self.leafs.remove(i)
             if j in self.leafs:
@@ -744,7 +735,7 @@ class NeuroGraph(nx.Graph):
         return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
     def get_branches(self, i, ignore_reducibles=False, key="xyz"):
-        branches = []
+        branches = list()
         for j in self.neighbors(i):
             branch = self.oriented_edge((i, j), i, key=key)
             if ignore_reducibles:
@@ -884,12 +875,14 @@ class NeuroGraph(nx.Graph):
         assert self.is_leaf(i)
         return list(self.neighbors(i))[0]
 
+    """
     def get_edge_attr(self, edge, key):
         xyz_arr = gutil.get_edge_attr(self, edge, key)
         return xyz_arr[0], xyz_arr[-1]
+    """
 
     def to_patch_coords(self, edge, midpoint, chunk_size):
-        patch_coords = []
+        patch_coords = list()
         for xyz in self.edges[edge]["xyz"]:
             coord = self.to_voxels(xyz)
             local_coord = util.voxels_to_patch(coord, midpoint, chunk_size)
@@ -976,7 +969,7 @@ class NeuroGraph(nx.Graph):
 
         """
         with ThreadPoolExecutor() as executor:
-            threads = []
+            threads = list()
             for i, nodes in enumerate(nx.connected_components(self)):
                 threads.append(executor.submit(self.to_swc, swc_dir, nodes))
 
@@ -998,7 +991,7 @@ class NeuroGraph(nx.Graph):
         None.
 
         """
-        entry_list = []
+        entry_list = list()
         node_to_idx = dict()
         for i, j in nx.dfs_edges(self.subgraph(nodes)):
             # Initialize
