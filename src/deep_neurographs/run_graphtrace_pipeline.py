@@ -134,10 +134,12 @@ class GraphTracePipeline:
 
         # Main
         self.build_graph(fragments_pointer)
-        for search_radius in search_radius_schedule:
+        for round_id, search_radius in enumerate(search_radius_schedule):
+            print(f"--- Round {round_id + 1}:  Radius = {search_radius} ---")
+            round_id += 1
             self.generate_proposals(search_radius=search_radius)
             self.run_inference()
-        self.save_results()
+            self.save_results(round_id=round_id)
         t, unit = util.time_writer(time() - t0)
         print(f"Total Runtime: {round(t, 4)} {unit}\n")
 
@@ -267,15 +269,15 @@ class GraphTracePipeline:
         None
 
         """
-        print("(4) Saving Results")
-        name = "corrected-processed-swcs.zip"
-        path = os.path.join(self.output_dir, name + ".zip")
+        suffix = f"-{round_id}" if round_id else ""
+        filename = f"corrected-processed-swcs{suffix}.zip"
+        path = os.path.join(self.output_dir, filename)
         self.graph.to_zipped_swcs(path)
-        self.save_connections()
+        self.save_connections(round_id=round_id)
         self.write_metadata()
 
     # --- io ---
-    def save_connections(self):
+    def save_connections(self, round_id=None):
         """
         Saves predicted connections between connected components in a txt file.
 
@@ -288,7 +290,8 @@ class GraphTracePipeline:
         None
 
         """
-        path = os.path.join(self.output_dir, "connections.txt")
+        suffix = f"-{round_id}" if round_id else ""
+        path = os.path.join(self.output_dir, f"connections{suffix}.txt")
         with open(path, "w") as f:
             for id_1, id_2 in self.graph.merged_ids:
                 f.write(f"{id_1}, {id_2}" + "\n")
