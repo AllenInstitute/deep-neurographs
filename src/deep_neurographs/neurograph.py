@@ -268,7 +268,7 @@ class NeuroGraph(nx.Graph):
 
         # Create edges
         n = len(attrs["xyz"])
-        attrs_1 = {k: v[np.arange(0, idx + 1)] for k, v in attrs.items()}
+        attrs_1 = {k: v[np.arange(idx + 1)] for k, v in attrs.items()}
         attrs_2 = {k: v[np.arange(idx, n)] for k, v in attrs.items()}
         self.__add_edge((i, node_id), attrs_1, swc_id)
         self.__add_edge((node_id, j), attrs_2, swc_id)
