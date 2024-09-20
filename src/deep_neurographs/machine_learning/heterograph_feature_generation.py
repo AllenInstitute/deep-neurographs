@@ -17,7 +17,7 @@ from deep_neurographs.machine_learning import feature_generation as feats
 from deep_neurographs.utils import img_util
 
 WINDOW = [5, 5, 5]
-N_PROFILE_PTS = 10
+N_PROFILE_PTS = 16
 NODE_PROFILE_DEPTH = 16
 
 
@@ -82,18 +82,11 @@ def run_on_nodes(neurograph, computation_graph, img, downsample_factor):
     Returns
     -------
     dict
-        Dictionary whose keys are feature types (i.e. skeletal and profiles)
-        and values are a dictionary that maps a node id to the corresponding
-        feature vector.
+        Dictionary whose keys are feature types (i.e. skeletal) and values are
+        a dictionary that maps a node id to the corresponding feature vector.
 
     """
-    node_features = {
-        "skel": node_skeletal(neurograph, computation_graph),
-        "profiles": node_profiles(
-            neurograph, computation_graph, img, downsample_factor
-        ),
-    }
-    return node_features
+    return {"skel": node_skeletal(neurograph, computation_graph)}
 
 
 def run_on_edges(neurograph, computation_graph):

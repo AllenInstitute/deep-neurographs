@@ -29,10 +29,8 @@ from deep_neurographs.utils import img_util, util
 
 CHUNK_SIZE = [64, 64, 64]
 N_BRANCH_PTS = 50
-N_PROFILE_PTS = 10
+N_PROFILE_PTS = 16
 N_SKEL_FEATURES = 22
-NODE_PROFILE_DEPTH = 15
-WINDOW = [5, 5, 5]
 
 
 def run(
@@ -41,7 +39,7 @@ def run(
     model_type,
     proposals,
     radius,
-    downsample_factor=0,
+    downsample_factor=1,
     labels=None,
 ):
     """
@@ -602,7 +600,7 @@ def get_chunk(img, labels, voxel_1, voxel_2, thread_id=None):
 
     # Generate features
     path = geometry.make_line(patch_voxel_1, patch_voxel_2, N_PROFILE_PTS)
-    profile = geometry.get_profile(chunk, path, window=WINDOW)
+    profile = geometry.get_profile(chunk, path)
     labels_chunk[labels_chunk > 0] = 1
     labels_chunk = geometry.fill_path(labels_chunk, path, val=2)
     chunk = np.stack([chunk, labels_chunk], axis=0)
