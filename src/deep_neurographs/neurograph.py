@@ -279,10 +279,11 @@ class NeuroGraph(nx.Graph):
         self,
         search_radius,
         complex_bool=False,
+        groundtruth_graph=None,
         long_range_bool=False,
         proposals_per_leaf=3,
         return_trimmed_proposals=False,
-        trim_endpoints_bool=False,
+        trim_endpoints_bool=False,        
     ):
         """
         Generates proposals from leaf nodes in "self".
@@ -294,6 +295,8 @@ class NeuroGraph(nx.Graph):
         complex_bool : bool, optional
             Indication of whether to generate complex proposals. The default
             is False.
+        groundtruth_graph : networkx.Graph, optional
+            Ground truth graph. The default is None.
         long_range_bool : bool, optional
             Indication of whether to generate long range proposals. The
             default is False.
@@ -321,6 +324,7 @@ class NeuroGraph(nx.Graph):
             long_range_bool=long_range_bool,
             trim_endpoints_bool=trim_endpoints_bool,
         )
+        self.target_edges = init_targets(self, groundtruth_graph)
 
     def reset_proposals(self):
         """
@@ -464,9 +468,6 @@ class NeuroGraph(nx.Graph):
 
         """
         return list(self.proposals)
-
-    def init_targets(self, target_neurograph):
-        self.target_edges = init_targets(self, target_neurograph)
 
     # -- KDTree --
     def init_kdtree(self, node_type):
