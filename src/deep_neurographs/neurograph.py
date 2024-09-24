@@ -283,7 +283,7 @@ class NeuroGraph(nx.Graph):
         long_range_bool=False,
         proposals_per_leaf=3,
         return_trimmed_proposals=False,
-        trim_endpoints_bool=False,
+        trim_endpoints_bool=False,        
     ):
         """
         Generates proposals from leaf nodes.
