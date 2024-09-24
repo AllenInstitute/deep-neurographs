@@ -18,9 +18,9 @@ GraphTrace is a Python library that utilizes machine learning to perform automat
 
 - Graph Construction: Reads neuron fragments stored as swc files and loads them into a Networkx graph
 - Proposals: Generates potential connections between nearby fragments to correct false splits in the segmentation
-- Feature Generation: Extracts geometric and image-based features from the graph to be utilized by a machine learning model for classifying proposals.
+- Feature Generation: Extracts geometric and image-based features from the graph to be utilized by a machine learning model that classifies the proposals.
 - Graph Neural Network (GNN) Inference: Predicts whether to accept or reject proposals based on the generated features and graphical structure.
-- Graph Update: Integrates inference results by merging fragments corresponding to an accepted proposal, resulting in a more accurate representation of neuron structures.
+- Graph Update: Integrates inference results by merging fragments corresponding to an accepted proposal.
 
 ## Installation
 To use the software, in the root directory, run
