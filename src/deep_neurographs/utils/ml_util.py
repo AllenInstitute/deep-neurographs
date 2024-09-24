@@ -171,10 +171,3 @@ def get_kfolds(filenames, k):
         if n_samples > len(samples):
             break
     return folds
-
-
-def get_batches(my_list, batch_size):
-    batches = list()
-    for start in range(0, len(my_list), batch_size):
-        batches.append(my_list[start: min(start + batch_size, len(my_list))])
-    return batches

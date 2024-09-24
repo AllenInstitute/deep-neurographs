@@ -8,6 +8,7 @@ General helper routines for various tasks.
 
 """
 
+import boto3
 import json
 import math
 import os
@@ -487,6 +488,28 @@ def write_txt(path, contents):
     f.close()
 
 
+def write_to_s3(local_path, bucket_name, s3_key):
+    """
+    Writes a single file on local machine to an s3 bucket.
+
+    Parameters
+    ----------
+    local_path : str
+        Path to file to be written to s3.
+    bucket_name : str
+        Name of s3 bucket.
+    s3_key : str
+        Path within s3 bucket.
+
+    Returns
+    -------
+    None
+
+    """
+    s3 = boto3.client('s3')
+    s3.upload_file(local_path, bucket_name, s3_key)
+
+
 # --- math utils ---
 def get_avg_std(data, weights=None):
     """
@@ -621,37 +644,6 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
-
-
-def progress_bar(current, total, bar_length=50, eta=None, runtime=None):
-    progress = int(current / total * bar_length)
-    n_completed = f"Completed: {current}/{total}"
-    bar = f"[{'=' * progress}{' ' * (bar_length - progress)}]"
-    eta = f"Time Remaining: {eta}" if eta else ""
-    runtime = f"Estimated Total Runtime: {runtime}" if runtime else ""
-    print(f"\r{bar} {n_completed} | {eta} | {runtime}    ", end="", flush=True)
-
-
-def report_progress(current, total, chunk_size, cnt, t0, t1):
-    eta = get_eta(current, total, chunk_size, t1)
-    runtime = get_runtime(current, total, chunk_size, t0, t1)
-    progress_bar(current, total, eta=eta, runtime=runtime)
-    return cnt + 1, time()
-
-
-def get_eta(current, total, chunk_size, t0, return_str=True):
-    chunk_runtime = time() - t0
-    remaining = total - current
-    eta = remaining * (chunk_runtime / max(chunk_size, 1))
-    t, unit = time_writer(eta)
-    return f"{round(t, 4)} {unit}" if return_str else eta
-
-
-def get_runtime(current, total, chunk_size, t0, t1):
-    eta = get_eta(current, total, chunk_size, t1, return_str=False)
-    total_runtime = time() - t0 + eta
-    t, unit = time_writer(total_runtime)
-    return f"{round(t, 4)} {unit}"
 
 
 # --- miscellaneous ---
