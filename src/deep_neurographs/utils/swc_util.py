@@ -26,6 +26,7 @@ from tqdm import tqdm
 from deep_neurographs.utils import util
 
 
+# --- Read ---
 class Reader:
     """
     Class that reads swc files that are stored as (1) local directory of swcs,
@@ -336,7 +337,26 @@ class Reader:
         return xyz
 
 
+# --- Write ---
 def write(path, content, color=None):
+    """
+    Write content to a specified file in a format based on the type o
+    f content.
+
+    Parameters
+    ----------
+    path : str
+        File path where the content will be written.
+    content : list, dict, nx.Graph
+        The content to be written.
+    color : str, optional
+        Color of swc to be written. The default is None.
+
+    Returns
+    -------
+    None
+
+    """
     if type(content) is list:
         write_list(path, content, color=color)
     elif type(content) is dict:
@@ -344,12 +364,12 @@ def write(path, content, color=None):
     elif type(content) is nx.Graph:
         write_graph(path, content, color=color)
     else:
-        assert True, "Unable to write {} to swc".format(type(content))
+        raise ExceptionType("Unable to write {} to swc".format(type(content)))
 
 
 def write_list(path, entry_list, color=None):
     """
-    Writes an swc file.
+    Writes a list of swc entries to a file at path.
 
     Parameters
     ----------
@@ -358,7 +378,7 @@ def write_list(path, entry_list, color=None):
     entry_list : list[str]
         List of entries that will be written to an swc file.
     color : str, optional
-        Color of nodes. The default is None.
+        Color of swc to be written. The default is None.
 
     Returns
     -------
@@ -378,8 +398,26 @@ def write_list(path, entry_list, color=None):
 
 
 def write_dict(path, swc_dict, color=None):
+    """
+    Writes the dictionary to an swc file.
+
+    Parameters
+    ----------
+    path : str
+        Path that swc will be written to.
+    swc_dict : dict
+        Dictionaries whose keys and values are the attribute name and values
+        from an swc file.
+    color : str, optional
+        Color of swc to be written. The default is None.
+
+    Returns
+    -------
+    None
+
+    """
     graph, _ = to_graph(swc_dict, set_attrs=True)
-    return write_graph(path, graph, color=color)
+    write_graph(path, graph, color=color)
 
 
 def write_graph(path, graph, color=None):
@@ -546,9 +584,28 @@ def make_simple_entry(node, parent, xyz, radius=8):
     return f"{node} 2 {x} {y} {z} {radius} {parent}"
 
 
-# -- Conversions --
-def to_graph(swc_dict, graph_id=None, set_attrs=False):
-    graph = nx.Graph(graph_id=graph_id)
+# --- Miscellaneous ---
+def to_graph(swc_dict, swc_id=None, set_attrs=False):
+    """
+    Converts an dictionary containing swc attributes to a graph.
+
+    Parameters
+    ----------
+    swc_dict : dict
+        Dictionaries whose keys and values are the attribute name and values
+        from an swc file.
+    swc_id : str, optional
+        Identifier that dictionary was generated from. The default is None.
+    set_attrs : bool, optional
+        Indication of whether to set attributes. The default is False.
+
+    Returns
+    -------
+    networkx.Graph
+        Graph generated from "swc_dict".
+
+    """
+    graph = nx.Graph(graph_id=swc_id)
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
     if set_attrs:
         xyz = swc_dict["xyz"]
@@ -561,6 +618,29 @@ def to_graph(swc_dict, graph_id=None, set_attrs=False):
 
 
 def __add_attributes(swc_dict, graph):
+    """
+    Adds node attributes to a NetworkX graph based on information from
+    "swc_dict".
+
+    Parameters:
+    ----------
+    swc_dict : dict
+        A dictionary containing SWC data. It must have the following keys:
+        - "id": A list of node identifiers (unique for each node).
+        - "xyz": A list of 3D coordinates (x, y, z) for each node.
+        - "radius": A list of radii for each node.
+
+    graph : networkx.Graph
+        A NetworkX graph object to which the attributes will be added.
+        The graph must contain nodes that correspond to the IDs in
+        "swc_dict["id"]".
+
+    Returns:
+    -------
+    networkx.Graph
+        The modified graph with added node attributes for each node.
+
+    """
     attrs = dict()
     for idx, node_id in enumerate(swc_dict["id"]):
         attrs[node_id] = {
