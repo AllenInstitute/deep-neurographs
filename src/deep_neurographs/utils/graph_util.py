@@ -79,7 +79,7 @@ def get_irreducibles(
 
         # Store results
         with tqdm(total=len(processes), desc="Extract Graphs") as pbar:
-            irreducibles = []
+            irreducibles = list()
             for process in as_completed(processes):
                 irreducibles.extend(process.result())
                 pbar.update(1)
@@ -133,7 +133,7 @@ def get_component_irreducibles(
     graph, n_trimmed = prune_trim_branches(graph, prune_depth, trim_depth)
 
     # Extract irreducibles
-    irreducibles = []
+    irreducibles = list()
     for node_subset in nx.connected_components(graph):
         if len(node_subset) + n_trimmed > min_size:
             subgraph = graph.subgraph(node_subset)
@@ -195,7 +195,7 @@ def prune_trim_branches(graph, prune_depth, trim_depth):
         Graph with branches trimmed and short branches pruned.
 
     """
-    remove_nodes = []
+    remove_nodes = list()
     n_nodes_trimmed = 0
     for leaf in get_leafs(graph):
         nodes, n_trimmed = prune_trim(graph, leaf, prune_depth, trim_depth)
@@ -322,7 +322,7 @@ def prune_trim(graph, leaf, prune_depth, trim_depth):
     """
     # Check whether to prune
     branch = [leaf]
-    node_spacing = []
+    node_spacing = list()
     for (i, j) in nx.dfs_edges(graph, source=leaf, depth_limit=prune_depth):
         node_spacing.append(compute_dist(graph, i, j))
         if graph.degree(j) > 2:
@@ -338,7 +338,7 @@ def prune_trim(graph, leaf, prune_depth, trim_depth):
         trim_nodes = trim_branch(graph, branch, trim_depth)
         return trim_nodes, len(trim_nodes)
     else:
-        return [], 0
+        return list(), 0
 
 
 def trim_branch(graph, branch, trim_depth):
@@ -716,7 +716,7 @@ def get_leafs(graph):
     return [i for i in graph.nodes if graph.degree[i] == 1]
 
 
-def sample_singleton(graph):
+def sample_node(graph):
     """
     Samples a single node from a graph.
 

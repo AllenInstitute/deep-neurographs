@@ -106,47 +106,57 @@ class InferenceEngine:
             Accepted proposals.
 
         """
+        # Initializations
         assert not gutil.cycle_exists(neurograph), "Graph contains cycle!"
-        accepts = []
-        batches = self.get_batches(neurograph, proposals)
-        for batch in tqdm(batches, desc="Inference"):
-            # Predict
-            dataset = self.get_batch_dataset(neurograph, batch)
-            preds = self.run_model(dataset)
+        if self.is_gnn:
+            proposals = set(proposals)
+        else:
+            proposals = sort_proposals(neurograph, proposals)
 
-            # Update graph
-            batch_accepts = get_accepted_proposals(neurograph, preds)
-            for proposal in map(frozenset, batch_accepts):
-                neurograph.merge_proposal(proposal)
-            accepts.extend(batch_accepts)
-        neurograph.absorb_reducibles()
+        # Main
+        with tqdm(total=len(proposals), desc="Inference") as pbar:
+            accepts = list()
+            while len(proposals) > 0:
+                # Predict
+                batch = self.get_batch(neurograph, proposals)
+                dataset = self.get_batch_dataset(neurograph, batch)
+                preds = self.run_model(dataset)
+
+                # Update graph
+                batch_accepts = get_accepted_proposals(neurograph, preds)
+                for proposal in map(frozenset, batch_accepts):
+                    neurograph.merge_proposal(proposal)
+
+                # Finish
+                accepts.extend(batch_accepts)
+                pbar.update(len(batch["proposals"]))
+            neurograph.absorb_reducibles()
         return neurograph, accepts
 
-    def get_batches(self, neurograph, proposals):
+    def get_batch(self, neurograph, proposals):
         """
-        Generates batches of proposals.
+        Generates a batch of proposals.
 
         Parameters
         ----------
+        neurograph : NeuroGraph
+            Graph that proposals were generated from.
         proposals : list
-            Proposals for which batches are to be generated from.
+            Proposals for which batch is to be generated from.
 
         Returns
         -------
-        list
-            List of batches where each batch is a subset of "proposals".
+        dict
+            Batch which consists of a subset of "proposals" and the
+            computation graph if the model type is a gnn.
 
         """
         if self.is_gnn:
-            return gnn_util.get_batches(neurograph.copy(), proposals)
+            return gnn_util.get_batch(neurograph, proposals, self.batch_size)
         else:
-            dists = np.argsort(
-                [neurograph.proposal_length(p) for p in proposals]
-            )
-            batches = list()
-            for idxs in ml_util.get_batches(dists, self.batch_size):
-                batches.append([proposals[i] for i in idxs])
-            return batches
+            batch = {"proposals": proposals[0:self.batch_size], "graph": None}
+            del proposals[0:self.batch_size]
+            return batch
 
     def get_batch_dataset(self, neurograph, batch):
         """
@@ -218,7 +228,7 @@ class InferenceEngine:
 
 # --- run machine learning model ---
 def run_nn_model(data, model):
-    hat_y = []
+    hat_y = list()
     model.eval()
     with torch.no_grad():
         for batch in DataLoader(data, batch_size=32):
@@ -353,3 +363,24 @@ def filter_proposals(graph, proposals):
                 accepts.append((i, j))
     graph.remove_edges_from(accepts)
     return accepts
+
+
+def sort_proposals(neurograph, proposals):
+    """
+    Sorts proposals by length.
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        Graph that proposals were generated from.
+    proposals : list[frozenset]
+        List of proposals.
+
+    Returns
+    -------
+    list[frozenset]
+        Sorted proposals.
+
+    """
+    idxs = np.argsort([neurograph.proposal_length(p) for p in proposals])
+    return [proposals[idx] for idx in idxs]

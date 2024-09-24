@@ -358,6 +358,7 @@ class HeteroGraphDataset:
         Returns
         -------
         None
+
         """
         attrs = []
         for i in range(self.data[edge_type].edge_index.size(1)):
@@ -385,6 +386,7 @@ def node_intersection(idx_map, e1, e2):
     -------
     int
         Common node between "e1" and "e2".
+
     """
     hat_e1 = idx_map["idx_to_edge"][int(e1)]
     hat_e2 = idx_map["idx_to_edge"][int(e2)]
@@ -409,6 +411,7 @@ def hetero_node_intersection(idx_map_1, idx_map_2, e1, e2):
     -------
     int
         Common node between "e1" and "e2".
+
     """
     hat_e1 = idx_map_1["idx_to_edge"][int(e1)]
     hat_e2 = idx_map_2["idx_to_edge"][int(e2)]

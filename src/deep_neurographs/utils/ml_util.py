@@ -111,7 +111,7 @@ def init_dataset(
 
     """
     if "Hetero" in model_type:
-        assert computation_graph, "Must provide computation graph!"
+        assert computation_graph is not None, "Must input computation graph!"
         dataset = heterograph_datasets.init(
             neurograph, features, computation_graph
         )
@@ -122,36 +122,6 @@ def init_dataset(
             neurograph, features, model_type, sample_ids=sample_ids
         )
     return dataset
-
-
-"""
-def get_dataset(inputs, targets, model_type):
-    Gets classification model to be fit.
-
-    Parameters
-    ----------
-    inputs : ...
-        ...
-    targets : ...
-        ...
-    model_type : str
-        Type of machine learning model, see "SUPPORTED_MODEL_TYPES" for
-        options.
-    transform : bool
-        Indication of whether to apply data augmentation
-
-    Returns
-    -------
-    ...
-
-    if model_type == "FeedForwardNet":
-        dataset = ProposalDataset(inputs, targets)
-    elif model_type == "MultiModalNet":
-        dataset = MultiModalDataset(inputs, targets)
-    else:
-        dataset = {"inputs": inputs, "targets": targets}
-    return dataset
-"""
 
 
 # --- miscellaneous ---

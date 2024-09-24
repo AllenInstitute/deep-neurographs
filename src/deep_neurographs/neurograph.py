@@ -286,7 +286,7 @@ class NeuroGraph(nx.Graph):
         trim_endpoints_bool=False,        
     ):
         """
-        Generates proposals from leaf nodes in "self".
+        Generates proposals from leaf nodes.
 
         Parameters
         ----------
@@ -324,7 +324,8 @@ class NeuroGraph(nx.Graph):
             long_range_bool=long_range_bool,
             trim_endpoints_bool=trim_endpoints_bool,
         )
-        self.target_edges = init_targets(self, groundtruth_graph)
+        if groundtruth_graph:
+            self.target_edges = init_targets(self, groundtruth_graph)
 
     def reset_proposals(self):
         """

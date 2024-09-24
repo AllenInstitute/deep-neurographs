@@ -132,10 +132,9 @@ def get_candidates(
     candidates = list()
     for xyz in search_kdtree(neurograph, leaf, kdtree, radius, max_proposals):
         i = get_connecting_node(neurograph, leaf, xyz, radius, complex_bool)
-        if i is None:
-            pass  
-        elif neurograph.is_valid_proposal(leaf, i, complex_bool):
-            candidates.append(i)
+        if i is not None:
+            if neurograph.is_valid_proposal(leaf, i, complex_bool):
+                candidates.append(i)
 
     # Process the results
     if max_proposals < 0 and len(candidates) == 1:
@@ -244,10 +243,8 @@ def get_connecting_node(neurograph, leaf, xyz, radius, complex_bool):
     elif complex_bool:
         attrs = neurograph.get_edge_data(*edge)
         idx = np.where(np.all(attrs["xyz"] == xyz, axis=1))[0][0]
-        #if type(idx) is int:
-        #    return neurograph.split_edge(edge, attrs, idx)
-        #else:
-        #    print(xyz, np.all(attrs["xyz"])
+        if type(idx) is int:
+            return neurograph.split_edge(edge, attrs, idx)
     return None
 
 
