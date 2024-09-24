@@ -261,7 +261,7 @@ def list_subdirs(path, keyword=None):
         List of all subdirectories at "path".
 
     """
-    subdirs = []
+    subdirs = list()
     for d in os.listdir(path):
         if os.path.isdir(os.path.join(path, d)):
             if keyword is None:
@@ -290,7 +290,7 @@ def list_paths(directory, ext=None):
         List of all paths within "directory".
 
     """
-    paths = []
+    paths = list()
     for f in listdir(directory, ext=ext):
         paths.append(os.path.join(directory, f))
     return paths
@@ -556,7 +556,7 @@ def is_list_contained(bbox, voxels):
     return all([is_contained(bbox, voxel) for voxel in voxels])
 
 
-def sample_singleton(my_container):
+def sample_once(my_container):
     """
     Samples a single element from "my_container".
 

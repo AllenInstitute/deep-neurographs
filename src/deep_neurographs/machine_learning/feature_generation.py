@@ -37,7 +37,7 @@ def run(
     neurograph,
     img,
     model_type,
-    proposals,
+    proposals_dict,
     radius,
     downsample_factor=1,
     labels=None,
@@ -54,8 +54,10 @@ def run(
         Image stored in a GCS bucket.
     model_type : str
         Type of machine learning model used to classify proposals.
-    proposals : list[frozenset] or dict
-        Proposals from "neurograph" that features will be generated.
+    proposals_dict : dict
+        Dictionary that contains the items (1) "proposals" which are the
+        proposals from "neurograph" that features will be generated and
+        (2) "graph" which is the computation graph used by the gnn.
     radius : float
         Search radius used to generate proposals.
     downsample_factor : int, optional
@@ -77,15 +79,15 @@ def run(
     # Feature generation by type of machine learning model
     if "Hetero" in model_type:
         return generate_hgnn_features(
-            neurograph, img, proposals, radius, downsample_factor
+            neurograph, img, proposals_dict, radius, downsample_factor
         )
     elif "Graph" in model_type:
         return generate_gnn_features(
-            neurograph, img, proposals, radius, downsample_factor
+            neurograph, img, proposals_dict, radius, downsample_factor
         )
     else:
         return generate_features(
-            neurograph, img, proposals, radius, downsample_factor
+            neurograph, img, proposals_dict, radius, downsample_factor
         )
 
 
@@ -126,7 +128,9 @@ def generate_gnn_features(
     return features
 
 
-def generate_features(neurograph, img, proposals, radius, downsample_factor):
+def generate_features(
+    neurograph, img, proposals_dict, radius, downsample_factor
+):
     """
     Generates feature vectors that are used by a general machine learning model
     (e.g. random forest or feed forward neural network).
@@ -137,8 +141,9 @@ def generate_features(neurograph, img, proposals, radius, downsample_factor):
         Graph that "proposals" belong to.
     img : tensorstore.Tensorstore
         Image stored in a GCS bucket.
-    proposals : list[frozenset]
-        List of proposals for which features will be generated.
+    proposals_dict : dict
+        Dictionary containing the computation graph used by gnn and proposals
+        to be classified.
     radius : float
         Search radius used to generate proposals.
     downsample_factor : int
@@ -153,7 +158,11 @@ def generate_features(neurograph, img, proposals, radius, downsample_factor):
     """
     features = {
         "proposals": run_on_proposals(
-            neurograph, img, proposals, radius, downsample_factor
+            neurograph,
+            img,
+            proposals_dict["proposals"],
+            radius,
+            downsample_factor,
         )
     }
     return features

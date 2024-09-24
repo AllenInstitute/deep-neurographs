@@ -249,7 +249,7 @@ class GraphTracePipeline:
             self.graph, self.graph.list_proposals()
         )
         self.accepted_proposals.extend(accepts)
-        print("# Accepted:", len(accepts))
+        print("# Accepted:", util.reformat_number(len(accepts)))
         print("% Accepted:", len(accepts) / n_proposals)
 
         t, unit = util.time_writer(time() - t0)

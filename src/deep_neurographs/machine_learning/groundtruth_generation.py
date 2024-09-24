@@ -112,7 +112,7 @@ def unaligned_components(target_graph, pred_graph, kdtree):
             target_graph, pred_graph, component, kdtree
         )
         if not aligned:
-            i = util.sample_singleton(component)
+            i = util.sample_once(component)
             invalid_ids.add(pred_graph.nodes[i]["swc_id"])
         else:
             node_to_target = upd_dict(node_to_target, component, target_id)

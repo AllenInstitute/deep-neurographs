@@ -170,7 +170,7 @@ class Reader:
         # Main
         with ProcessPoolExecutor() as executor:
             # Assign processes
-            processes = []
+            processes = list()
             for path in zip_paths:
                 zip_content = bucket.blob(path).download_as_bytes()
                 processes.append(
@@ -205,7 +205,7 @@ class Reader:
         with ZipFile(BytesIO(zip_content)) as zip_file:
             with ThreadPoolExecutor() as executor:
                 # Assign threads
-                threads = []
+                threads = list()
                 for f in util.list_files_in_zip(zip_content):
                     threads.append(
                         executor.submit(

@@ -8,11 +8,16 @@ Helper routines for training graph neural networks.
 
 """
 
+from collections import defaultdict
+
 import networkx as nx
 import numpy as np
 import torch
 
-GRAPH_BATCH_SIZE = 10000
+from deep_neurographs.utils import graph_util as gutil
+from deep_neurographs.utils import util
+
+BATCH_SIZE = 1600
 
 
 def toCPU(tensor):
@@ -83,10 +88,104 @@ def init_line_graph(edges):
     return nx.line_graph(graph)
 
 
-def get_batches(graph, proposals, batch_size=GRAPH_BATCH_SIZE):
+def get_batch(graph, proposals, batch_size=BATCH_SIZE):
     """
-    Gets batches during inference that consist of a computation graph and
-    list of proposals.
+    Gets a batch for training or inference that consist of a computation graph
+    and list of proposals.
+
+    Parameters
+    ----------
+    graph : NeuroGraph
+        Graph that contains proposals
+    proposals : list
+        Proposals to be classified as accept or reject.
+    batch_size : int, optional
+        Maximum number of nodes in the computation graph. The default is the
+        global variable "BATCH_SIZE".
+
+    Returns
+    -------
+    dict
+        Batch which consists of a subset of "proposals" and the computation
+        graph if the model type is a gnn.
+
+    """
+    batch = reset_batch()
+    visited = set()
+    while len(proposals) > 0 or len(batch["proposals"]) < batch_size:
+        root = tuple(util.sample_once(proposals))
+        queue = [root[0], root[1]]
+        while len(queue) > 0:
+            # Visit node
+            i = queue.pop()
+            for j in graph.neighbors(i):
+                if (i, j) not in batch["graph"].edges:
+                    batch["graph"].add_edge(i, j)
+
+            for p in graph.nodes[i]["proposals"]:
+                if frozenset({i, p}) in proposals:
+                    batch["graph"].add_edge(i, p)
+                    batch["proposals"].add(frozenset({i, p}))
+                    proposals.remove(frozenset({i, p}))
+                    queue.append(p)
+            visited.add(i)
+
+            # Update queue
+            if len(batch["proposals"]) < batch_size:
+                for j in graph.neighbors(i):
+                    if validate_node_for_queue(graph, proposals, visited, j):
+                        queue.append(j)
+    return batch
+
+
+def validate_node_for_queue(graph, proposals, visited, j):
+    """
+    Check whether node is within 3 hops from a proposal to be classified. If
+    so, then the node should be added to the queue in the routine "get_batch".
+
+    Parameters
+    ----------
+    graph : NeuroGraph
+        Graph that contains proposals
+    proposals : list
+        Proposals to be classified as accept or reject.
+    visited : set
+        Nodes that have been visited and added the current batch's computation
+        graph.
+    j : int
+        Node to be validated for being added to queue.
+
+    Returns
+    -------
+    bool
+        Indication of whether node should be added to queue.
+
+    """
+    hit_proposal = False
+    validate_queue = [(j, 0)]  # node id, distance from j
+    validate_visited = set()
+    while len(validate_queue) > 0:
+        # Check if node has proposals to be classified
+        k, d = validate_queue.pop()
+        for p in graph.nodes[k]["proposals"]:
+            if frozenset({p, k}) in proposals:
+                hit_proposal = True
+                validate_queue = list()
+                break
+        validate_visited.add(k)
+
+        # Update queue
+        if d < 3 and not hit_proposal:
+            for kk in graph.neighbors(k):
+                if kk not in visited and kk not in validate_visited:
+                    validate_queue.append((kk, d + 1))
+    return True if hit_proposal else False
+
+
+def get_train_batch(graph, proposals, batch_size=BATCH_SIZE):
+    """
+    Gets a batch for training or inference that consist of a computation graph
+    and list of proposals.
 
     Parameters
     ----------
@@ -96,7 +195,7 @@ def get_batches(graph, proposals, batch_size=GRAPH_BATCH_SIZE):
         Proposals to be classified as accept or reject.
     batch_size : int, optional
         Maximum number of nodes in the computation graph. The default is the
-        global variable "GRAPH_BATCH_SIZE".
+        global variable "BATCH_SIZE".
 
     Returns
     -------
@@ -109,24 +208,43 @@ def get_batches(graph, proposals, batch_size=GRAPH_BATCH_SIZE):
     batch = reset_batch()
     graph.add_edges_from(proposals)
     for cc in nx.connected_components(graph):
-        # Determine whether to add component
-        cc_graph = graph.subgraph(cc)
-        cc_proposals = list_proposals_in_graph(cc_graph, proposals)
-        if len(cc_proposals) > 0 and len(cc_proposals) < batch_size:
-            # Determine whether to start new batch
-            cur_batch_size = batch["graph"].number_of_nodes()
-            if cur_batch_size + cc_graph.number_of_nodes() > batch_size:
+        cc_graph = graph.subgraph(cc).copy()
+        cc_proposals = proposals_in_graph(cc_graph, proposals)
+
+        # Check whether to sample from graph
+        while len(cc_proposals) + len(batch["proposals"]) > batch_size:
+            node_proposal_cnt = get_node_proposal_cnt(cc_proposals)
+            batch = extract_subgraph_batch(
+                cc_graph,
+                cc_proposals,
+                batch,
+                batch_size,
+                node_proposal_cnt,
+            )
+            if len(batch["proposals"]) >= batch_size:
+                n_proposals = 0
+                for p in batch["proposals"]:
+                    if tuple(p) not in batch["graph"].edges:
+                        n_proposals += 1
+                        batch["graph"].add_edges_from([p])
+
                 yield batch
                 batch = reset_batch()
 
-            # Update batch
-            batch["graph"] = nx.union(batch["graph"], cc_graph)
+        # Check whether to return or update batch
+        if len(cc_proposals) > 0:
+            batch["graph"].add_edges_from(cc_graph.edges)
             batch["proposals"].extend(cc_proposals)
-        elif len(cc_proposals) > batch_size:
-            print("Too many proposals in connected component!")
-            print("# proposals:", len(cc_proposals))
-            print("")
-    yield batch
+
+    # Yield remaining batch if not empty
+    if len(batch["proposals"]) > 0:
+
+        n_proposals = 0
+        for p in batch["proposals"]:
+            if tuple(p) not in batch["graph"].edges:
+                n_proposals += 1
+                batch["graph"].add_edges_from([p])
+        yield batch
 
 
 def reset_batch():
@@ -143,10 +261,53 @@ def reset_batch():
         Batch that consists of a graph and list of proposals.
 
     """
-    return {"graph": nx.Graph(), "proposals": list()}
+    return {"graph": nx.Graph(), "proposals": set()}
 
 
-def list_proposals_in_graph(graph, proposals):
+def get_node_proposal_cnt(proposals):
+    node_proposal_cnt = defaultdict(int)
+    for i, j in proposals:
+        node_proposal_cnt[i] += 1
+        node_proposal_cnt[j] += 1
+    return node_proposal_cnt
+
+
+def extract_subgraph_batch(
+    graph, proposals, batch, batch_size, node_proposal_cnt
+):
+    # Extract batch via bfs
+    remove_nodes = set()
+    n_proposals_added = 0
+    for i, j in nx.bfs_edges(graph, source=gutil.sample_node(graph)):
+        # Visit edge
+        batch["graph"].add_edge(i, j)
+
+        # Check if edge is proposal
+        p = frozenset({i, j})
+        if p in proposals:
+            n_proposals_added += 1
+            batch["proposals"].append(p)
+            proposals.remove(p)
+
+        # Update node_proposal_cnt
+        node_proposal_cnt[i] -= 1
+        node_proposal_cnt[j] -= 1
+        if node_proposal_cnt[i] == 0:
+            remove_nodes.add(i)
+        if node_proposal_cnt[j] == 0:
+            remove_nodes.add(j)
+
+        # Check whether batch is full
+        if len(batch["proposals"]) >= batch_size:
+            break
+
+    print("# proposals added in extract_subgraph:", n_proposals_added)
+    # Yield batch
+    graph.remove_nodes_from(remove_nodes)
+    return batch
+
+
+def proposals_in_graph(graph, proposals):
     """
     Lists the proposals that are edges in "graph".
 
@@ -162,4 +323,4 @@ def list_proposals_in_graph(graph, proposals):
     list
         Proposals that are edges in "graph".
     """
-    return [frozenset(e) for e in graph.edges if frozenset(e) in proposals]
+    return set([e for e in map(frozenset, graph.edges) if e in proposals])
