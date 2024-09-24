@@ -94,7 +94,7 @@ class MLConfig:
 
     """
 
-    batch_size: int = 1600
+    batch_size: int = 2000
     downsample_factor: int = 1
     high_threshold: float = 0.9
     threshold: float = 0.6

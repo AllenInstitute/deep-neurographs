@@ -21,7 +21,7 @@ from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import img_util, ml_util
 from deep_neurographs.utils.gnn_util import toCPU
 
-BATCH_SIZE = 1600
+BATCH_SIZE = 2000
 CONFIDENCE_THRESHOLD = 0.7
 
 

@@ -17,8 +17,6 @@ import torch
 from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import util
 
-BATCH_SIZE = 1600
-
 
 def toCPU(tensor):
     """
@@ -88,7 +86,7 @@ def init_line_graph(edges):
     return nx.line_graph(graph)
 
 
-def get_batch(graph, proposals, batch_size=BATCH_SIZE):
+def get_batch(graph, proposals, batch_size):
     """
     Gets a batch for training or inference that consist of a computation graph
     and list of proposals.
@@ -99,9 +97,8 @@ def get_batch(graph, proposals, batch_size=BATCH_SIZE):
         Graph that contains proposals
     proposals : list
         Proposals to be classified as accept or reject.
-    batch_size : int, optional
-        Maximum number of nodes in the computation graph. The default is the
-        global variable "BATCH_SIZE".
+    batch_size : int
+        Maximum number of nodes in the computation graph.
 
     Returns
     -------
@@ -111,8 +108,9 @@ def get_batch(graph, proposals, batch_size=BATCH_SIZE):
 
     """
     batch = reset_batch()
+    cur_proposal_cnt = 0
     visited = set()
-    while len(proposals) > 0 or len(batch["proposals"]) < batch_size:
+    while len(proposals) > 0 and len(batch["proposals"]) < batch_size:
         root = tuple(util.sample_once(proposals))
         queue = [root[0], root[1]]
         while len(queue) > 0:
@@ -182,7 +180,7 @@ def validate_node_for_queue(graph, proposals, visited, j):
     return True if hit_proposal else False
 
 
-def get_train_batch(graph, proposals, batch_size=BATCH_SIZE):
+def get_train_batch(graph, proposals, batch_size):
     """
     Gets a batch for training or inference that consist of a computation graph
     and list of proposals.
