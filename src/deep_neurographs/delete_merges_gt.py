@@ -87,6 +87,7 @@ def delete_merges(
         # Finish
         if len(delete_nodes) > 0:
             graph.remove_nodes_from(delete_nodes)
+            print("Merge Detected:", swc_id)
             print("# Nodes Deleted:", len(delete_nodes))
             print("")
         pred_densegraph.graphs[swc_id] = graph

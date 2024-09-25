@@ -31,6 +31,7 @@ dependencies = [
     'torcheval',
     'torchio',
     'torch_geometric',
+    'tqdm',
     'zarr',
 ]
 
