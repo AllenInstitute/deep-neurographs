@@ -8,7 +8,6 @@ General helper routines for various tasks.
 
 """
 
-import boto3
 import json
 import math
 import os
@@ -18,6 +17,7 @@ from random import sample
 from time import time
 from zipfile import ZipFile
 
+import boto3
 import numpy as np
 import psutil
 
@@ -216,33 +216,32 @@ def rmdir(path):
         shutil.rmtree(path)
 
 
-def listdir(path, ext=None):
+def listdir(path, extension=None):
     """
     Lists all files in the directory at "path". If an extension "ext" is
-    provided, then only files containing "ext" are returned.
+    provided, then only files containing "extension" are returned.
 
     Parameters
     ----------
     path : str
         Path to directory to be searched.
-
-    ext : str, optional
+    extension : str, optional
        Extension of file type of interest. The default is None.
 
     Returns
     -------
     list
-        Files in directory at "path" with extension "ext" if provided.
+        Files in directory at "path" with extension "extension" if provided.
         Otherwise, list of all files in directory.
 
     """
-    if ext is None:
+    if extension is None:
         return [f for f in os.listdir(path)]
     else:
-        return [f for f in os.listdir(path) if ext in f]
+        return [f for f in os.listdir(path) if f.endswith(extension)]
 
 
-def list_subdirs(path, keyword=None):
+def list_subdirs(path, keyword=None, return_paths=False):
     """
     Creates list of all subdirectories at "path". If "keyword" is provided,
     then only subdirectories containing "keyword" are contained in list.
@@ -251,10 +250,12 @@ def list_subdirs(path, keyword=None):
     ----------
     path : str
         Path to directory containing subdirectories to be listed.
-
     keyword : str, optional
         Only subdirectories containing "keyword" are contained in list that is
         returned. The default is None.
+    return_paths : bool
+        Indication of whether to return full path of subdirectories. The
+        default is False.
 
     Returns
     -------
@@ -263,27 +264,27 @@ def list_subdirs(path, keyword=None):
 
     """
     subdirs = list()
-    for d in os.listdir(path):
-        if os.path.isdir(os.path.join(path, d)):
-            if keyword is None:
-                subdirs.append(d)
-            elif keyword in d:
-                subdirs.append(d)
-    subdirs.sort()
-    return subdirs
+    for subdir in os.listdir(path):
+        is_dir = os.path.isdir(os.path.join(path, subdir))
+        is_hidden = subdir.startswith('.')
+        if is_dir and not is_hidden:
+            subdir = os.path.join(path, subdir) if return_paths else subdir
+            if (keyword and keyword in subdir) or not keyword:
+                subdirs.append(subdir)
+    return sorted(subdirs)
 
 
-def list_paths(directory, ext=None):
+def list_paths(directory, extension=None):
     """
-    Lists all paths within "directory".
+    Lists all paths within "directory" that end with "extension" if provided.
 
     Parameters
     ----------
     directory : str
         Directory to be searched.
-    ext : str, optional
-        If provided, only paths of files with the extension "ext" are
-        returned. The default is None.
+    extension : str, optional
+        If provided, only paths of files with the extension are returned. The
+        default is None.
 
     Returns
     -------
@@ -292,12 +293,12 @@ def list_paths(directory, ext=None):
 
     """
     paths = list()
-    for f in listdir(directory, ext=ext):
+    for f in listdir(directory, extension=extension):
         paths.append(os.path.join(directory, f))
     return paths
 
 
-def set_path(dir_name, filename, ext):
+def set_path(dir_name, filename, extension):
     """
     Sets the path for a file in a directory. If a file with the same name
     exists, then this routine finds a suffix to append to the filename.
@@ -308,7 +309,7 @@ def set_path(dir_name, filename, ext):
         Name of directory that path will be generated to point to.
     filename : str
         Name of file that path will contain.
-    ext : str
+    extension : str
         Extension of file.
 
     Returns
@@ -319,10 +320,10 @@ def set_path(dir_name, filename, ext):
 
     """
     cnt = 0
-    ext = ext.replace(".", "")
-    path = os.path.join(dir_name, f"{filename}.{ext}")
+    extension = extension.replace(".", "")
+    path = os.path.join(dir_name, f"{filename}.{extension}")
     while os.path.exists(path):
-        path = os.path.join(dir_name, f"{filename}.{cnt}.{ext}")
+        path = os.path.join(dir_name, f"{filename}.{cnt}.{extension}")
         cnt += 1
     return path
 

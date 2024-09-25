@@ -33,9 +33,9 @@ from time import time
 import networkx as nx
 
 from deep_neurographs.graph_artifact_removal import remove_doubles
-from deep_neurographs.intake import GraphBuilder
 from deep_neurographs.machine_learning.inference import InferenceEngine
 from deep_neurographs.utils import util
+from deep_neurographs.utils.graph_util import GraphLoader
 
 
 class GraphTracePipeline:
@@ -163,7 +163,7 @@ class GraphTracePipeline:
         t0 = time()
 
         # Initialize Graph
-        graph_builder = GraphBuilder(
+        graph_builder = GraphLoader(
             anisotropy=self.graph_config.anisotropy,
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,

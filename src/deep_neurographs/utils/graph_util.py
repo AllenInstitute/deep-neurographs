@@ -5,7 +5,7 @@ Created on Wed June 5 16:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 
-Routines that extract the irreducible components of a graph.
+Routines for loading fragments and building a neurograph.
 
 
 Terminology
@@ -30,13 +30,147 @@ import numpy as np
 from tqdm import tqdm
 
 from deep_neurographs import geometry
+from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.utils import img_util, swc_util, util
 
+MIN_SIZE = 30
+NODE_SPACING = 1
+SMOOTH_BOOL = True
+PRUNE_DEPTH = 16
+TRIM_DEPTH = 0
 
+
+class GraphLoader:
+    """
+    Class that is used to build an instance of FragmentsGraph.
+
+    """
+
+    def __init__(
+        self,
+        anisotropy=[1.0, 1.0, 1.0],
+        min_size=MIN_SIZE,
+        node_spacing=NODE_SPACING,
+        progress_bar=False,
+        prune_depth=PRUNE_DEPTH,
+        smooth_bool=SMOOTH_BOOL,
+        trim_depth=TRIM_DEPTH,
+    ):
+        """
+        Builds a FragmentsGraph by reading swc files stored either on the
+        cloud or local machine, then extracting the irreducible components.
+
+        Parameters
+        ----------
+        anisotropy : list[float], optional
+            Scaling factors applied to xyz coordinates to account for
+            anisotropy of microscope. The default is [1.0, 1.0, 1.0].
+        min_size : float, optional
+            Minimum path length of swc files which are stored as connected
+            components in the FragmentsGraph. The default is 30ums.
+        node_spacing : int, optional
+            Spacing (in microns) between nodes. The default is the global
+            variable "NODE_SPACING".
+        progress_bar : bool, optional
+            Indication of whether to print out a progress bar while building
+            graph. The default is True.
+        prune_depth : int, optional
+            Branches less than "prune_depth" microns are pruned if "prune" is
+            True. The default is the global variable "PRUNE_DEPTH".
+        smooth_bool : bool, optional
+            Indication of whether to smooth branches from swc files. The
+            default is the global variable "SMOOTH".
+        trim_depth : float, optional
+            Maximum path length (in microns) to trim from "branch". The default
+            is the global variable "TRIM_DEPTH".
+
+        Returns
+        -------
+        FragmentsGraph
+            FragmentsGraph generated from swc files.
+
+        """
+        self.anisotropy = anisotropy
+        self.min_size = min_size
+        self.node_spacing = node_spacing
+        self.progress_bar = progress_bar
+        self.prune_depth = prune_depth
+        self.smooth_bool = smooth_bool
+        self.trim_depth = trim_depth
+
+        self.reader = swc_util.Reader(anisotropy, min_size)
+
+    def run(
+        self, fragments_pointer, img_patch_origin=None, img_patch_shape=None
+    ):
+        """
+        Builds a FragmentsGraph by reading swc files stored either on the
+        cloud or local machine, then extracting the irreducible components.
+
+        Parameters
+        ----------
+        fragments_pointer : dict, list, str
+            Pointer to swc files used to build an instance of FragmentsGraph,
+            see "swc_util.Reader" for further documentation.
+        img_patch_origin : list[int], optional
+            An xyz coordinate which is the upper, left, front corner of the
+            image patch that contains the swc files. The default is None.
+        img_patch_shape : list[int], optional
+            Shape of the image patch which contains the swc files. The default
+            is None.
+
+        Returns
+        -------
+        FragmentsGraph
+            FragmentsGraph generated from swc files.
+
+        """
+        # Load fragments and extract irreducibles
+        self.set_img_bbox(img_patch_origin, img_patch_shape)
+        swc_dicts = self.reader.load(fragments_pointer)
+        irreducibles = get_irreducibles(
+            swc_dicts,
+            self.min_size,
+            self.img_bbox,
+            self.progress_bar,
+            self.prune_depth,
+            self.smooth_bool,
+            self.trim_depth,
+        )
+
+        # Build FragmentsGraph
+        neurograph = NeuroGraph(node_spacing=self.node_spacing)
+        while len(irreducibles):
+            irreducible_set = irreducibles.pop()
+            neurograph.add_component(irreducible_set)
+        return neurograph
+
+    def set_img_bbox(self, img_patch_origin, img_patch_shape):
+        """
+        Sets the bounding box of an image patch as a class attriubte.
+
+        Parameters
+        ----------
+        img_patch_origin : tuple[int]
+            Origin of bounding box which is assumed to be top, front, left
+            corner.
+        img_patch_shape : tuple[int]
+            Shape of bounding box.
+
+        Returns
+        -------
+        None
+
+        """
+        self.img_bbox = img_util.get_bbox(img_patch_origin, img_patch_shape)
+
+
+# --- Graph structure extraction ---
 def get_irreducibles(
     swc_dicts,
     min_size,
     img_bbox=None,
+    progress_bar=True,
     prune_depth=16.0,
     smooth_bool=True,
     trim_depth=0.0,
@@ -78,11 +212,15 @@ def get_irreducibles(
             i += 1
 
         # Store results
-        with tqdm(total=len(processes), desc="Extract Graphs") as pbar:
-            irreducibles = list()
+        irreducibles = list()
+        if progress_bar:
+            with tqdm(total=len(processes), desc="Extract Graphs") as pbar:
+                for process in as_completed(processes):
+                    irreducibles.extend(process.result())
+                    pbar.update(1)
+        else:
             for process in as_completed(processes):
                 irreducibles.extend(process.result())
-                pbar.update(1)
     return irreducibles
 
 

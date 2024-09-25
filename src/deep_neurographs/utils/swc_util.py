@@ -85,7 +85,7 @@ class Reader:
             if ".swc" in swc_pointer:
                 return self.load_from_local_path(swc_pointer)
             if os.path.isdir(swc_pointer):
-                paths = util.list_paths(swc_pointer, ext=".swc")
+                paths = util.list_paths(swc_pointer, extension=".swc")
                 return self.load_from_local_paths(paths)
         raise Exception("SWC Pointer is not Valid!")
 
@@ -307,7 +307,7 @@ class Reader:
             Offset of swc file.
 
         """
-        offset = [1.0, 1.0, 1.0]
+        offset = [0.0, 0.0, 0.0]
         for i, line in enumerate(content):
             if line.startswith("# OFFSET"):
                 offset = self.read_xyz(line.split()[2:5])
@@ -364,7 +364,7 @@ def write(path, content, color=None):
     elif type(content) is nx.Graph:
         write_graph(path, content, color=color)
     else:
-        raise ExceptionType("Unable to write {} to swc".format(type(content)))
+        raise Exception("Unable to write {} to swc".format(type(content)))
 
 
 def write_list(path, entry_list, color=None):
@@ -558,7 +558,7 @@ def set_radius(graph, i):
     """
     try:
         radius = graph[i]["radius"]
-    except:
+    except ValueError:
         radius = 1.0
     return radius
 
