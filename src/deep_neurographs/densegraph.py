@@ -15,7 +15,7 @@ import networkx as nx
 from scipy.spatial import KDTree
 
 from deep_neurographs.utils import graph_util as gutil
-from deep_neurographs.utils import swc_util, util
+from deep_neurographs.utils import img_util, swc_util, util
 
 DELETION_RADIUS = 10
 
@@ -43,7 +43,7 @@ class DenseGraph:
         None
 
         """
-        self.bbox = util.get_img_bbox(img_patch_origin, img_patch_shape)
+        self.bbox = img_util.get_bbox(img_patch_origin, img_patch_shape)
         self.init_graphs(swc_paths)
         self.init_kdtree()
 
@@ -65,7 +65,7 @@ class DenseGraph:
         """
         self.graphs = dict()
         self.xyz_to_swc = dict()
-        swc_dicts, _ = swc_util.process_local_paths(paths)
+        swc_dicts = swc_util.Reader().load(paths)
         for i, swc_dict in enumerate(swc_dicts):
             # Build graph
             swc_id = swc_dict["swc_id"]
@@ -179,11 +179,13 @@ class DenseGraph:
                 node_to_idx[i] = 1
                 x, y, z = tuple(graph.nodes[i]["xyz"])
                 r = graph.nodes[i]["radius"]
-                entry_list.append([1, 2, x, y, z, r, -1])
+                entry_list.append(f"1 2 {x} {y} {z} {r} -1")
 
             # Create entry
             node_to_idx[j] = len(entry_list) + 1
             x, y, z = tuple(graph.nodes[j]["xyz"])
             r = graph.nodes[j]["radius"]
-            entry_list.append([node_to_idx[j], 2, x, y, z, r, node_to_idx[i]])
+            entry_list.append(
+                f"{node_to_idx[j]} 2 {x} {y} {z} {r} {node_to_idx[i]}"
+            )
         return entry_list
