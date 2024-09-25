@@ -15,7 +15,7 @@ import networkx as nx
 from scipy.spatial import KDTree
 
 from deep_neurographs.utils import graph_util as gutil
-from deep_neurographs.utils import img_util, swc_util, util
+from deep_neurographs.utils import img_util, swc_util
 
 DELETION_RADIUS = 10
 

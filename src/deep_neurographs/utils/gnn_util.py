@@ -108,7 +108,6 @@ def get_batch(graph, proposals, batch_size):
 
     """
     batch = reset_batch()
-    cur_proposal_cnt = 0
     visited = set()
     while len(proposals) > 0 and len(batch["proposals"]) < batch_size:
         root = tuple(util.sample_once(proposals))
