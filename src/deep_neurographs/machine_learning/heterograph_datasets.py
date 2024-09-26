@@ -140,7 +140,6 @@ class HeteroGraphDataset:
         self.check_missing_edge_type()
         self.init_edge_attrs(x_nodes)
         self.n_edge_attrs = n_edge_features(x_nodes)
-        
 
     def init_edges(self):
         """
