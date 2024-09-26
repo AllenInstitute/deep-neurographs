@@ -81,6 +81,29 @@ def load_model(path):
     return joblib.load(path) if ".joblib" in path else torch.load(path)
 
 
+def save_model(path, model, model_type):
+    """
+    Saves a machine learning model.
+
+    Parameters
+    ----------
+    path : str
+        Path that model parameters will be written to.
+    model : object
+        Model to be saved.
+
+    Returns
+    -------
+    None
+
+    """
+    print("Model saved!")
+    if "Net" in model_type:
+        torch.save(model, path)
+    else:
+        joblib.dump(model, path)
+
+
 # --- dataset utils ---
 def init_dataset(
     neurograph, features, model_type, computation_graph=None, sample_ids=None
