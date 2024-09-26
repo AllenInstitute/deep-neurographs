@@ -9,7 +9,7 @@ This script trains the GraphTrace inference pipeline.
 
 """
 
-from deep_neurographs.utils import util
+from deep_neurographs.utils import img_util, util
 from deep_neurographs.utils.graph_util import GraphLoader
 
 
@@ -77,11 +77,34 @@ class Trainer:
             {"dataset_name": dataset_name, "example_id": example_id}
         )
 
-    def load_img(self, img_path, dataset_name):
-        pass
+    def load_img(self, path, dataset_name):
+        if dataset_name not in self.imgs:
+            self.imgs[dataset_name] = img_util.open_tensorstore(path, "zarr")
 
     def run(self):
-        pass
+        self.generate_proposals()
+
+    def generate_proposals(self):
+        print("dataset_name - example_id - # proposals - % accepted")
+        for i in range(self.n_examples()):
+            # Run
+            self.pred_graphs[i].generate_proposals(
+                self.graph_config.search_radius,
+                complex_bool=self.graph_config.complex_bool,
+                groundtruth_graph=self.gt_graphs[i],
+                long_range_bool=self.graph_config.long_range_bool,
+                progress_bar=False,
+                proposals_per_leaf=self.graph_config.proposals_per_leaf,
+                trim_endpoints_bool=self.graph_config.trim_endpoints_bool,
+            )
+
+            # Report results
+            dataset_name = self.idx_to_ids[i]["dataset_name"]
+            example_id = self.idx_to_ids[i]["example_id"]
+            n_proposals = self.pred_graphs[i].n_proposals()
+            n_targets = len(self.pred_graphs[i].target_edges)
+            p_accepts = round(n_targets / n_proposals, 4)
+            print(f"{dataset_name}  {example_id}  {n_proposals}  {p_accepts}")
 
     def generate_features(self):
         # check that every example has an image that was loaded!
