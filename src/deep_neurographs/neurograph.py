@@ -281,6 +281,7 @@ class NeuroGraph(nx.Graph):
         complex_bool=False,
         groundtruth_graph=None,
         long_range_bool=False,
+        progress_bar=True,
         proposals_per_leaf=3,
         return_trimmed_proposals=False,
         trim_endpoints_bool=False,
@@ -300,6 +301,9 @@ class NeuroGraph(nx.Graph):
         long_range_bool : bool, optional
             Indication of whether to generate long range proposals. The
             default is False.
+        progress_bar : bool, optional
+            Indication of whether to print out a progress bar while generating
+            proposals. The default is True.
         proposals_per_leaf : int, optional
             Maximum number of proposals generated for each leaf. The default
             is 3.
@@ -322,6 +326,7 @@ class NeuroGraph(nx.Graph):
             search_radius,
             complex_bool=complex_bool,
             long_range_bool=long_range_bool,
+            progress_bar=progress_bar,
             trim_endpoints_bool=trim_endpoints_bool,
         )
         if groundtruth_graph:

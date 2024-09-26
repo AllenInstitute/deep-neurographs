@@ -25,6 +25,7 @@ def run(
     radius,
     complex_bool=False,
     long_range_bool=True,
+    progress_bar=True,
     trim_endpoints_bool=True,
 ):
     """
@@ -43,6 +44,9 @@ def run(
         Indication of whether to generate simple proposals within distance of
         "LONG_RANGE_FACTOR" * radius of leaf from leaf without any proposals.
         The default is False.
+    progress_bar : bool, optional
+        Indication of whether to print out a progress bar while generating
+        proposals. The default is True.
     trim_endpoints_bool : bool, optional
         Indication of whether to endpoints of branches with exactly one
         proposal. The default is True.
@@ -52,10 +56,17 @@ def run(
     None
 
     """
+    # Initializations
     connections = dict()
     kdtree = init_kdtree(neurograph, complex_bool)
     radius *= RADIUS_SCALING_FACTOR if trim_endpoints_bool else 1.0
-    for leaf in tqdm(neurograph.leafs, desc="Proposals"):
+    if progress_bar:
+        iterable = tqdm(neurograph.leafs, desc="Proposals")
+    else:
+        iterable = neurograph.leafs
+
+    # Main
+    for leaf in iterable:
         # Generate potential proposals
         candidates = get_candidates(
             neurograph,
