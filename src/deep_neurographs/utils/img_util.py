@@ -9,11 +9,11 @@ Helper routines for working with images.
 """
 
 from copy import deepcopy
-from skimage.color import label2rgb
 
 import fastremap
 import numpy as np
 import tensorstore as ts
+from skimage.color import label2rgb
 
 from deep_neurographs.utils import util
 

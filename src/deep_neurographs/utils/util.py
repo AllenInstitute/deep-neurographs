@@ -8,19 +8,19 @@ General helper routines for various tasks.
 
 """
 
-from google.cloud import storage
+import json
+import math
+import os
+import shutil
 from io import BytesIO
 from random import sample
 from time import time
 from zipfile import ZipFile
 
 import boto3
-import json
-import math
 import numpy as np
-import os
 import psutil
-import shutil
+from google.cloud import storage
 
 
 # --- dictionary utils ---
