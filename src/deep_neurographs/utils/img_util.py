@@ -9,11 +9,13 @@ Helper routines for working with images.
 """
 
 from copy import deepcopy
+from skimage.color import label2rgb
 
 import fastremap
 import numpy as np
 import tensorstore as ts
-from skimage.color import label2rgb
+
+from deep_neurographs.utils import util
 
 ANISOTROPY = [0.748, 0.748, 1.0]
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
@@ -453,3 +455,28 @@ def get_chunk_labels(path, xyz, shape, from_center=True):
     img = open_tensorstore(path)
     img = read_tensorstore(img, xyz, shape, from_center=from_center)
     return set(fastremap.unique(img).astype(int))
+
+
+def find_img_path(bucket_name, img_root, dataset_name):
+    """
+    Find the path of a specific dataset in a GCS bucket.
+
+    Parameters:
+    ----------
+    bucket_name : str
+        Name of the GCS bucket where the images are stored.
+    img_root : str
+        Root directory path in the GCS bucket where the images are located.
+    dataset_name : str
+        Name of the dataset to be searched for within the subdirectories.
+
+    Returns:
+    -------
+    str
+        Path of the found dataset subdirectory within the specified GCS bucket.
+
+    """
+    for subdir in util.list_gcs_subdirectories(bucket_name, img_root):
+        if dataset_name in subdir:
+            return subdir + "fused.zarr/"
+    raise(f"Dataset not found in {bucket_name} - {img_root}")

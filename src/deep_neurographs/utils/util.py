@@ -8,18 +8,19 @@ General helper routines for various tasks.
 
 """
 
-import json
-import math
-import os
-import shutil
+from google.cloud import storage
 from io import BytesIO
 from random import sample
 from time import time
 from zipfile import ZipFile
 
 import boto3
+import json
+import math
 import numpy as np
+import os
 import psutil
+import shutil
 
 
 # --- dictionary utils ---
@@ -348,7 +349,7 @@ def list_files_in_zip(zip_content):
         return zip_file.namelist()
 
 
-def list_gcs_filenames(bucket, cloud_path, extension):
+def list_gcs_filenames(bucket, prefix, extension):
     """
     Lists all files in a GCS bucket with the given extension.
 
@@ -356,7 +357,7 @@ def list_gcs_filenames(bucket, cloud_path, extension):
     ----------
     bucket : google.cloud.client
         Name of bucket to be read from.
-    cloud_path : str
+    prefix : str
         Path to directory in "bucket".
     extension : str
         File extension of filenames to be listed.
@@ -367,8 +368,43 @@ def list_gcs_filenames(bucket, cloud_path, extension):
         Filenames stored at "cloud" path with the given extension.
 
     """
-    blobs = bucket.list_blobs(prefix=cloud_path)
+    blobs = bucket.list_blobs(prefix=prefix)
     return [blob.name for blob in blobs if extension in blob.name]
+
+
+def list_gcs_subdirectories(bucket_name, prefix):
+    """
+    Lists all direct subdirectories of a given prefix in a GCS bucket.
+
+    Parameters
+    ----------
+    bucket : str
+        Name of bucket to be read from.
+    prefix : str
+        Path to directory in "bucket".
+
+    Returns
+    -------
+    list[str]
+         List of direct subdirectories.
+
+    """
+    # Load blobs 
+    storage_client = storage.Client()
+    blobs = storage_client.list_blobs(
+        bucket_name, prefix=prefix, delimiter="/"
+    )
+    [blob.name for blob in blobs]
+
+    # Parse directory contents
+    prefix_depth = len(prefix.split("/"))
+    subdirs = list()
+    for prefix in blobs.prefixes:
+        is_dir = prefix.endswith("/")
+        is_direct_subdir = len(prefix.split("/")) - 1 == prefix_depth
+        if is_dir and is_direct_subdir:
+            subdirs.append(prefix)
+    return subdirs
 
 
 # -- io utils --

@@ -80,8 +80,7 @@ class InferenceEngine:
         self.threshold = confidence_threshold
 
         # Load image and model
-        driver = "n5" if ".n5" in img_path else "zarr"
-        self.img = img_util.open_tensorstore(img_path, driver=driver)
+        self.img = img_util.open_tensorstore(img_path, driver="zarr")
         self.model = ml_util.load_model(model_path)
 
     def run(self, neurograph, proposals):
