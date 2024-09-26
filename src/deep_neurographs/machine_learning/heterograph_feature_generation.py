@@ -21,6 +21,7 @@ N_PROFILE_PTS = 16
 NODE_PROFILE_DEPTH = 16
 WINDOW = [5, 5, 5]
 
+
 def generate_hgnn_features(
     neurograph, img, proposals_dict, radius, downsample_factor
 ):
