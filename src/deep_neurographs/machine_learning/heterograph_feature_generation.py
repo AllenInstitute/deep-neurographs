@@ -16,10 +16,10 @@ from deep_neurographs import geometry
 from deep_neurographs.machine_learning import feature_generation as feats
 from deep_neurographs.utils import img_util
 
-WINDOW = [5, 5, 5]
+
 N_PROFILE_PTS = 16
 NODE_PROFILE_DEPTH = 16
-
+WINDOW = [5, 5, 5]
 
 def generate_hgnn_features(
     neurograph, img, proposals_dict, radius, downsample_factor
@@ -458,3 +458,16 @@ def check_degenerate(voxels):
             [voxels, voxels[0, :] + np.array([1, 1, 1], dtype=int)]
         )
     return voxels
+
+
+def n_node_features():
+    return {'branch': 2, 'proposal': 34}
+
+
+def n_edge_features():
+    n_edge_features_dict = {
+        ('proposal', 'edge', 'proposal'): 3,
+        ('branch', 'edge', 'branch'): 3,
+        ('branch', 'edge', 'proposal'): 3
+    }
+    return n_edge_features_dict

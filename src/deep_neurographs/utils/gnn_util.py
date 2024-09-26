@@ -18,6 +18,18 @@ from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import util
 
 
+def get_inputs(data, model_type):
+    if "Hetero" in model_type:
+        x = data.x_dict
+        edge_index = data.edge_index_dict
+        edge_attr_dict = data.edge_attr_dict
+        return x, edge_index, edge_attr_dict
+    else:
+        x = data.x
+        edge_index = data.edge_index
+        return x, edge_index
+
+
 def toCPU(tensor):
     """
     Moves tensor from GPU to CPU.
@@ -33,18 +45,6 @@ def toCPU(tensor):
 
     """
     return tensor.detach().cpu().tolist()
-
-
-def get_inputs(data, model_type):
-    if "Hetero" in model_type:
-        x = data.x_dict
-        edge_index = data.edge_index_dict
-        edge_attr_dict = data.edge_attr_dict
-        return x, edge_index, edge_attr_dict
-    else:
-        x = data.x
-        edge_index = data.edge_index
-        return x, edge_index
 
 
 def to_tensor(my_list):

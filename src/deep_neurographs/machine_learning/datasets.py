@@ -295,8 +295,8 @@ def reformat(arr):
 
 def init_idxs(idxs):
     """
-    Adds dictionary item called "edge_to_index" which maps an edge in a
-    neurograph to an that represents the edge's position in the feature
+    Adds dictionary item called "edge_to_index" which maps a branch/proposal
+    in a neurograph to an idx that represents it's position in the feature
     matrix.
 
     Parameters
