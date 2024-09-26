@@ -389,7 +389,7 @@ def list_gcs_subdirectories(bucket_name, prefix):
          List of direct subdirectories.
 
     """
-    # Load blobs 
+    # Load blobs
     storage_client = storage.Client()
     blobs = storage_client.list_blobs(
         bucket_name, prefix=prefix, delimiter="/"
