@@ -515,15 +515,13 @@ def stack_chunks(neurograph, features, shift=0):
 
 
 # -- util --
-def count_features(model_type):
+def count_features():
     """
     Counts number of features based on the "model_type".
 
     Parameters
     ----------
-    model_type : str
-        Indication of model to be trained. Options include: AdaBoost,
-        RandomForest, FeedForwardNet, MultiModalNet.
+    None
 
     Returns
     -------

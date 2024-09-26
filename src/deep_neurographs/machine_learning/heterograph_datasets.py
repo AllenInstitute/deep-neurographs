@@ -137,8 +137,10 @@ class HeteroGraphDataset:
 
         # Edges
         self.init_edges()
+        self.check_missing_edge_type()
         self.init_edge_attrs(x_nodes)
         self.n_edge_attrs = n_edge_features(x_nodes)
+        
 
     def init_edges(self):
         """
@@ -191,6 +193,23 @@ class HeteroGraphDataset:
         self.set_hetero_edge_attrs(
             x_nodes, edge_type, self.idxs_branches, self.idxs_proposals
         )
+
+    def check_missing_edge_type(self):
+        edge_type = ("branch", "edge", "branch")
+        if len(self.data[edge_type].edge_index) == 0:
+            # Add dummy features
+            dtype = self.data["branch"].x.dtype
+            zeros = torch.zeros(2, self.n_branch_features(), dtype=dtype)
+            self.data["branch"].x = torch.cat(
+                (self.data["branch"].x, zeros), dim=0
+            )
+
+            # Update edge_index
+            n = self.data["branch"]["x"].size(0)
+            edge_index = [[n - 1, n - 2], [n - 2, n - 1]]
+            self.data[edge_type].edge_index = gnn_util.to_tensor(edge_index)
+            self.idxs_branches["idx_to_edge"][n - 1] = frozenset({-1, -2})
+            self.idxs_branches["idx_to_edge"][n - 2] = frozenset({-2, -3})
 
     # -- Getters --
     def n_branch_features(self):
@@ -342,7 +361,10 @@ class HeteroGraphDataset:
             for i in range(self.data[edge_type].edge_index.size(1)):
                 e1, e2 = self.data[edge_type].edge_index[:, i]
                 v = node_intersection(idx_map, e1, e2)
-                attrs.append(x_nodes[v])
+                if v < 0:
+                    attrs.append(torch.zeros(self.n_branch_features() + 1))
+                else:
+                    attrs.append(x_nodes[v])
         arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
         self.data[edge_type].edge_attr = arrs
 

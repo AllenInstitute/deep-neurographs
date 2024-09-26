@@ -8,12 +8,15 @@ Graph neural network architectures that learn to classify edge proposals.
 
 """
 
+import numpy as np
 import torch
 import torch.nn.init as init
 from torch import nn
 from torch.nn import Dropout, LeakyReLU
 from torch_geometric.nn import GATv2Conv as GATConv
 from torch_geometric.nn import HEATConv, HeteroConv, Linear
+
+from deep_neurographs.machine_learning import heterograph_feature_generation
 
 CONV_TYPES = ["GATConv", "GCNConv"]
 DROPOUT = 0.3
@@ -29,9 +32,7 @@ class HeteroGNN(torch.nn.Module):
 
     def __init__(
         self,
-        node_dict,
-        edge_dict,
-        hidden_dim,
+        scale_hidden_dim=2,
         dropout=DROPOUT,
         heads_1=HEADS_1,
         heads_2=HEADS_2,
@@ -41,6 +42,11 @@ class HeteroGNN(torch.nn.Module):
 
         """
         super().__init__()
+        # Feature vector sizes
+        node_dict = heterograph_feature_generation.n_node_features()
+        edge_dict = heterograph_feature_generation.n_edge_features()
+        hidden_dim = scale_hidden_dim * np.max(list(node_dict.values()))
+
         # Linear layers
         output_dim = heads_1 * heads_2 * hidden_dim
         self.input_nodes = nn.ModuleDict(
@@ -161,9 +167,8 @@ class HeteroGNN(torch.nn.Module):
         x_dict = self.activation(x_dict)
 
         # Input - Edges
-        edge_attr_dict = {
-            key: f(edge_attr_dict[key]) for key, f in self.input_edges.items()
-        }
+        for key, f in self.input_edges.items():
+            edge_attr_dict[key] = f(edge_attr_dict[key])
         edge_attr_dict = self.activation(edge_attr_dict)
 
         # Convolutional layers
@@ -218,7 +223,8 @@ class HEATGNN(torch.nn.Module):
             metadata=metadata,
         )
         """
-        x in_channels (int) – Size of each input sample, or -1 to derive the size from the first input(s) to the forward method.
+        x in_channels (int) – Size of each input sample, or -1 to
+        derive the size from the first input(s) to the forward method.
         x out_channels (int) – Size of each output sample.
         x num_node_types (int) – The number of node types.
         x num_edge_types (int) – The number of edge types.

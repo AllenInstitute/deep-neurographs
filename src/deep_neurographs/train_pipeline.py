@@ -30,11 +30,11 @@ class Trainer:
     def __init__(
         self,
         config,
+        model,
         model_type,
         criterion=None,
         output_dir=None,
         validation_ids=None,
-        validation_split=0.15,
         save_model_bool=True,
     ):
         # Check for parameter errors
@@ -43,11 +43,11 @@ class Trainer:
 
         # Set class attributes
         self.idx_to_ids = list()
+        self.model = model
         self.model_type = model_type
         self.output_dir = output_dir
         self.save_model_bool = save_model_bool
         self.validation_ids = validation_ids
-        self.validation_split = validation_split
 
         # Set data structures for training examples
         self.gt_graphs = list()
@@ -80,7 +80,7 @@ class Trainer:
 
     def set_validation_idxs(self):
         if self.validation_ids is None:
-            k = int(self.validation_split * self.n_examples())
+            k = int(self.ml_config.validation_split * self.n_examples())
             self.validation_idxs = sample(np.arange(self.n_examples), k)
         else:
             self.validation_idxs = list()
