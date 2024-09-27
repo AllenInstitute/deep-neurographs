@@ -8,6 +8,8 @@ Module that removes doubled fragments and trims branches that pass by each
 other from a NeuroGraph.
 
 """
+from collections import defaultdict
+
 import numpy as np
 from networkx import connected_components
 from tqdm import tqdm
@@ -93,7 +95,7 @@ def compute_projections(neurograph, kdtree, edge):
         projection distances.
 
     """
-    hits = dict()
+    hits = defaultdict(list)
     query_id = neurograph.edges[edge]["swc_id"]
     for i, xyz in enumerate(neurograph.edges[edge]["xyz"]):
         # Compute projections
@@ -108,7 +110,7 @@ def compute_projections(neurograph, kdtree, edge):
 
         # Store best
         if best_id:
-            hits = util.append_dict_value(hits, best_id, best_dist)
+            hits[best_id].append(best_dist)
         elif i == 15 and len(hits) == 0:
             return hits
     return hits

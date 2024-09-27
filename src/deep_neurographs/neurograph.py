@@ -892,12 +892,6 @@ class NeuroGraph(nx.Graph):
         assert self.is_leaf(i)
         return list(self.neighbors(i))[0]
 
-    """
-    def get_edge_attr(self, edge, key):
-        xyz_arr = gutil.get_edge_attr(self, edge, key)
-        return xyz_arr[0], xyz_arr[-1]
-    """
-
     def to_patch_coords(self, edge, midpoint, chunk_size):
         patch_coords = list()
         for xyz in self.edges[edge]["xyz"]:
@@ -917,6 +911,7 @@ class NeuroGraph(nx.Graph):
         else:
             return None
 
+    """
     def component_cardinality(self, root):
         cardinality = 0
         queue = [(-1, root)]
@@ -933,6 +928,7 @@ class NeuroGraph(nx.Graph):
                 if frozenset((j, k)) not in visited:
                     queue.append((j, k))
         return cardinality
+    """
 
     # --- write graph to swcs ---
     def to_zipped_swcs(self, zip_path, color=None):
@@ -956,8 +952,7 @@ class NeuroGraph(nx.Graph):
                     swc_id = self.nodes[i]["swc_id"]
                     x, y, z = tuple(self.nodes[i]["xyz"])
                     r = self.nodes[i]["radius"]
-                    if color != "1.0 0.0 0.0":
-                        r += 1.5
+
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
                     n_entries += 1
@@ -1056,11 +1051,11 @@ class NeuroGraph(nx.Graph):
             branch_radius = np.flip(branch_radius, axis=0)
 
         # Make entries
-        for k in range(1, len(branch_xyz)):
+        idxs = np.arange(1, len(branch_xyz))
+        for k in util.spaced_idxs(idxs, 4):
             x, y, z = tuple(branch_xyz[k])
             r = branch_radius[k]
-            if color != "1.0 0.0 0.0":
-                r += 1
+
             node_id = n_entries + 1
             parent = n_entries if k > 1 else parent
             text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
