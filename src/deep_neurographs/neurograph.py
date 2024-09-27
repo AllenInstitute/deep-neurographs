@@ -20,7 +20,7 @@ from scipy.spatial import KDTree
 
 from deep_neurographs import generate_proposals, geometry
 from deep_neurographs.geometry import dist as get_dist
-from deep_neurographs.machine_learning.groundtruth_generation import (
+from deep_neurographs.groundtruth_generation import (
     init_targets,
 )
 from deep_neurographs.utils import graph_util as gutil
