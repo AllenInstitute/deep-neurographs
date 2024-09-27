@@ -38,7 +38,7 @@ from deep_neurographs.utils import util
 from deep_neurographs.utils.graph_util import GraphLoader
 
 
-class GraphTracePipeline:
+class InferencePipeline:
     """
     Class that executes the full GraphTrace inference pipeline.
 
