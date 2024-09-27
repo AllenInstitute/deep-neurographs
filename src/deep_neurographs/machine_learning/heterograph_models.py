@@ -16,7 +16,7 @@ from torch.nn import Dropout, LeakyReLU
 from torch_geometric.nn import GATv2Conv as GATConv
 from torch_geometric.nn import HEATConv, HeteroConv, Linear
 
-from deep_neurographs.machine_learning import heterograph_feature_generation
+from deep_neurographs import machine_learning as ml
 
 CONV_TYPES = ["GATConv", "GCNConv"]
 DROPOUT = 0.3
@@ -43,8 +43,8 @@ class HeteroGNN(torch.nn.Module):
         """
         super().__init__()
         # Feature vector sizes
-        node_dict = heterograph_feature_generation.n_node_features()
-        edge_dict = heterograph_feature_generation.n_edge_features()
+        node_dict = ml.heterograph_feature_generation.n_node_features()
+        edge_dict = ml.heterograph_feature_generation.n_edge_features()
         hidden_dim = scale_hidden_dim * np.max(list(node_dict.values()))
 
         # Linear layers
