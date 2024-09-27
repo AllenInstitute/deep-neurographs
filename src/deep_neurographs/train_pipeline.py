@@ -17,11 +17,12 @@ import numpy as np
 from torch.nn import BCEWithLogitsLoss
 
 from deep_neurographs.machine_learning import feature_generation
+from deep_neurographs.machine_learning.gnn_trainer import Trainer
 from deep_neurographs.utils import img_util, ml_util, util
 from deep_neurographs.utils.graph_util import GraphLoader
 
 
-class Trainer:
+class TrainingPipeline:
     """
     Class that is used to train a machine learning model that classifies
     proposals.
@@ -53,8 +54,8 @@ class Trainer:
         self.gt_graphs = list()
         self.pred_graphs = list()
         self.imgs = dict()
-        self.train_dataset = list()
-        self.validation_dataset = list()
+        self.train_dataset_list = list()
+        self.validation_dataset_list = list()
 
         # Train parameters
         self.criterion = criterion if criterion else BCEWithLogitsLoss()
@@ -73,10 +74,10 @@ class Trainer:
         return len(self.gt_graphs)
 
     def n_train_examples(self):
-        return len(self.train_dataset)
+        return len(self.train_dataset_list)
 
     def n_validation_samples(self):
-        return len(self.validation_dataset)
+        return len(self.validation_dataset_list)
 
     def set_validation_idxs(self):
         if self.validation_ids is None:
@@ -131,9 +132,24 @@ class Trainer:
 
     # --- main pipeline ---
     def run(self):
+        # Initialize training data
         self.generate_proposals()
         self.generate_features()
-        self.train_model()
+
+        # Train model
+        trainer = Trainer(
+            self.model,
+            self.criterion,
+            lr=self.ml_config.lr,
+            n_epochs=self.ml_config.n_epochs,
+        )
+        self.model = trainer.run(
+            self.train_dataset_list, self.validation_dataset_list
+        )
+
+        # Save model (if applicable)
+        if self.save_model_bool:
+            self.save_model()
 
     def generate_proposals(self):
         print("sample_id - example_id - # proposals - % accepted")
@@ -184,15 +200,12 @@ class Trainer:
                 computation_graph=proposals_dict["graph"]
             )
             if i in self.validation_ids:
-                self.validation_dataset.append(dataset)
+                self.validation_dataset_list.append(dataset)
             else:
-                self.train_dataset.append(dataset)
+                self.train_dataset_list.append(dataset)
 
-    def train_model(self):
-        pass
-
-    def save_model(self, model):
+    def save_model(self):
         name = self.model_type + "-" + datetime.today().strftime('%Y-%m-%d')
         extension = ".pth" if "Net" in self.model_type else ".joblib"
         path = os.path.join(self.output_dir, name + extension)
-        util.save_model(path, model)
+        ml_util.save_model(path, self.model, self.model_type)
