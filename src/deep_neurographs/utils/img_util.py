@@ -479,4 +479,4 @@ def find_img_path(bucket_name, img_root, dataset_name):
     for subdir in util.list_gcs_subdirectories(bucket_name, img_root):
         if dataset_name in subdir:
             return subdir + "whole-brain/fused.zarr/"
-    raise(f"Dataset not found in {bucket_name} - {img_root}")
+    raise f"Dataset not found in {bucket_name} - {img_root}"

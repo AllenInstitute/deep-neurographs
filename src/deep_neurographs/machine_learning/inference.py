@@ -40,7 +40,7 @@ class InferenceEngine:
         search_radius,
         batch_size=BATCH_SIZE,
         confidence_threshold=CONFIDENCE_THRESHOLD,
-        downsample_factor=0,
+        downsample_factor=1,
     ):
         """
         Initializes an inference engine by loading images and setting class
@@ -122,8 +122,10 @@ class InferenceEngine:
                 preds = self.run_model(dataset)
 
                 # Update graph
-                batch_accepts = get_accepted_proposals(neurograph, preds)
-                for proposal in map(frozenset, batch_accepts):
+                batch_accepts = get_accepted_proposals(
+                    neurograph, preds, self.threshold
+                )
+                for proposal in batch_accepts:
                     neurograph.merge_proposal(proposal)
 
                 # Finish
@@ -222,7 +224,7 @@ class InferenceEngine:
 
         # Filter preds
         idxs = dataset.idxs_proposals["idx_to_edge"]
-        return {idxs[i]: p for i, p in enumerate(preds) if p > self.threshold}
+        return {idxs[i]: p for i, p in enumerate(preds)}
 
 
 # --- run machine learning model ---
@@ -257,7 +259,7 @@ def run_gnn_model(data, model, model_type):
 
 
 # --- Accepting proposals ---
-def get_accepted_proposals(neurograph, preds, high_threshold=0.9):
+def get_accepted_proposals(neurograph, preds, threshold, high_threshold=0.9):
     """
     Determines which proposals to accept based on prediction scores and the
     specified threshold.
@@ -280,6 +282,7 @@ def get_accepted_proposals(neurograph, preds, high_threshold=0.9):
 
     """
     # Partition proposals into best and the rest
+    preds = {k: v for k, v in preds.items() if v > threshold}
     best_proposals, proposals = separate_best(
         preds, neurograph.simple_proposals(), high_threshold
     )
@@ -359,8 +362,8 @@ def filter_proposals(graph, proposals):
             created_cycle, _ = gutil.creates_cycle(subgraph, (i, j))
             if not created_cycle:
                 graph.add_edge(i, j)
-                accepts.append((i, j))
-    graph.remove_edges_from(accepts)
+                accepts.append(frozenset({i, j}))
+    graph.remove_edges_from(map(tuple, accepts))
     return accepts
 
 

@@ -593,7 +593,7 @@ def generate_chunks(neurograph, proposals, img, labels):
 def get_chunk(img, labels, voxel_1, voxel_2, thread_id=None):
     # Extract chunks
     midpoint = geometry.get_midpoint(voxel_1, voxel_2).astype(int)
-    if type(img) == ts.TensorStore:
+    if type(img) is ts.TensorStore:
         chunk = util.read_tensorstore(img, midpoint, CHUNK_SIZE)
         labels_chunk = util.read_tensorstore(labels, midpoint, CHUNK_SIZE)
     else:
