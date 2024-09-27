@@ -852,7 +852,7 @@ class NeuroGraph(nx.Graph):
 
     def to_voxels(self, node_or_xyz, shift=False):
         shift = self.origin if shift else np.zeros((3))
-        if type(node_or_xyz) == int:
+        if type(node_or_xyz) is int:
             coord = img_util.to_voxels(self.nodes[node_or_xyz]["xyz"])
         else:
             coord = img_util.to_voxels(node_or_xyz)

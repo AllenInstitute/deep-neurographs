@@ -280,7 +280,7 @@ def get_profile(img, xyz_arr, process_id=None, window=[5, 5, 5]):
     """
     profile = []
     for xyz in xyz_arr:
-        if type(img) == ts.TensorStore:
+        if type(img) is ts.TensorStore:
             profile.append(np.max(util.read_tensorstore(img, xyz, window)))
         else:
             profile.append(np.max(util.get_chunk(img, xyz, window)))

@@ -609,7 +609,7 @@ def to_graph(swc_dict, swc_id=None, set_attrs=False):
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
     if set_attrs:
         xyz = swc_dict["xyz"]
-        if type(swc_dict["xyz"]) == np.ndarray:
+        if type(swc_dict["xyz"]) is np.ndarray:
             xyz = util.numpy_to_hashable(swc_dict["xyz"])
         graph = __add_attributes(swc_dict, graph)
         xyz_to_node = dict(zip(xyz, swc_dict["id"]))
