@@ -22,6 +22,7 @@ Branch: a sequence of nodes between two irreducible nodes.
 
 """
 
+from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from random import sample
 
@@ -372,7 +373,7 @@ def get_subcomponent_irreducibles(graph, swc_dict, smooth_bool):
 
     # Extract edges
     edges = dict()
-    nbs = dict()
+    nbs = defaultdict(list)
     root = None
     for (i, j) in nx.dfs_edges(graph, source=source):
         # Check if start of path is valid
@@ -390,8 +391,8 @@ def get_subcomponent_irreducibles(graph, swc_dict, smooth_bool):
                 )
             else:
                 edges[(root, j)] = attrs
-            nbs = util.append_dict_value(nbs, root, j)
-            nbs = util.append_dict_value(nbs, j, root)
+            nbs[root].append(j)  # = util.append_dict_value(nbs, root, j)
+            nbs[j].append(root)  # = util.append_dict_value(nbs, j, root)
             root = None
 
     # Output

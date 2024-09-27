@@ -14,165 +14,12 @@ import os
 import shutil
 from io import BytesIO
 from random import sample
-from time import time
 from zipfile import ZipFile
 
 import boto3
 import numpy as np
 import psutil
 from google.cloud import storage
-
-
-# --- dictionary utils ---
-def remove_item(my_set, item):
-    """
-    Removes item from a set.
-
-    Parameters
-    ----------
-    my_set : set
-        Set to be queried.
-    item :
-        Value to query.
-
-    Returns
-    -------
-    set
-        Set "my_set" with "item" removed if it existed.
-
-    """
-    if item in my_set:
-        my_set.remove(item)
-    return my_set
-
-
-def check_key(my_dict, key):
-    """
-    Checks whether "key" is contained in "my_dict". If so, returns the
-    corresponding value.
-
-    Parameters
-    ----------
-    my_dict : dict
-        Dictionary to be checked
-    key : hashable data type
-
-    Returns
-    -------
-    dict value or bool
-       If "key" is a key in "my_dict", then the associated value is returned.
-       Otherwise, the bool "False" is returned.
-
-    """
-    if key in my_dict.keys():
-        return my_dict[key]
-    else:
-        return False
-
-
-def remove_key(my_dict, key):
-    """
-    Removes "key" from "my_dict" in the case when key may need to be reversed.
-
-    Parameters
-    ----------
-    my_dict : dict
-        Dictionary to be queried
-    key : hashable data type
-        Key to query.
-
-    Returns
-    -------
-    dict
-        Updated dictionary.
-
-    """
-    if check_key(my_dict, key):
-        my_dict.pop(key)
-    elif check_key(my_dict, (key[1], key[0])):
-        my_dict.pop((key[1], key[0]))
-    return my_dict
-
-
-def remove_items(my_dict, keys):
-    """
-    Removes dictionary items corresponding to "keys".
-
-    Parameters
-    ----------
-    my_dict : dict
-        Dictionary to be edited.
-    keys : list
-        List of keys to be deleted from "my_dict".
-
-    Returns
-    -------
-    dict
-        Updated dictionary.
-
-    """
-    for key in keys:
-        if key in my_dict.keys():
-            del my_dict[key]
-    return my_dict
-
-
-def append_dict_value(my_dict, key, value):
-    """
-    Appends "value" to the list stored at "key".
-
-    Parameters
-    ----------
-    my_dict : dict
-        Dictionary to be queried.
-    key : hashable data type
-        Key to be query.
-    value : list item type
-        Value to append to list stored at "key".
-
-    Returns
-    -------
-    dict
-        Updated dictionary.
-
-    """
-    if key in my_dict.keys():
-        my_dict[key].append(value)
-    else:
-        my_dict[key] = [value]
-    return my_dict
-
-
-def find_best(my_dict, maximize=True):
-    """
-    Given a dictionary where each value is either a list or int (i.e. cnt),
-    finds the key associated with the longest list or largest integer.
-
-    Parameters
-    ----------
-    my_dict : dict
-        Dictionary to be searched.
-    maximize : bool, optional
-        Indication of whether to find the largest value or highest vote cnt.
-
-    Returns
-    -------
-    hashable data type
-        Key associated with the longest list or largest integer in "my_dict".
-
-    """
-    best_key = None
-    best_vote_cnt = 0 if maximize else np.inf
-    for key in my_dict.keys():
-        val_type = type(my_dict[key])
-        vote_cnt = my_dict[key] if val_type == float else len(my_dict[key])
-        if vote_cnt > best_vote_cnt and maximize:
-            best_key = key
-            best_vote_cnt = vote_cnt
-        elif vote_cnt < best_vote_cnt and not maximize:
-            best_key = key
-            best_vote_cnt = vote_cnt
-    return best_key
 
 
 # --- os utils ---
@@ -633,26 +480,63 @@ def sample_once(my_container):
     return sample(my_container, 1)[0]
 
 
-# --- runtime ---
-def init_timers():
+# --- dictionary utils ---
+def remove_items(my_dict, keys):
     """
-    Initializes two timers.
+    Removes dictionary items corresponding to "keys".
 
     Parameters
     ----------
-    None
+    my_dict : dict
+        Dictionary to be edited.
+    keys : list
+        List of keys to be deleted from "my_dict".
 
     Returns
     -------
-    time.time
-        Timer.
-    time.time
-        Timer.
+    dict
+        Updated dictionary.
 
     """
-    return time(), time()
+    for key in keys:
+        if key in my_dict:
+            del my_dict[key]
+    return my_dict
 
 
+def find_best(my_dict, maximize=True):
+    """
+    Given a dictionary where each value is either a list or int (i.e. cnt),
+    finds the key associated with the longest list or largest integer.
+
+    Parameters
+    ----------
+    my_dict : dict
+        Dictionary to be searched.
+    maximize : bool, optional
+        Indication of whether to find the largest value or highest vote cnt.
+
+    Returns
+    -------
+    hashable data type
+        Key associated with the longest list or largest integer in "my_dict".
+
+    """
+    best_key = None
+    best_vote_cnt = 0 if maximize else np.inf
+    for key in my_dict.keys():
+        val_type = type(my_dict[key])
+        vote_cnt = my_dict[key] if val_type == float else len(my_dict[key])
+        if vote_cnt > best_vote_cnt and maximize:
+            best_key = key
+            best_vote_cnt = vote_cnt
+        elif vote_cnt < best_vote_cnt and not maximize:
+            best_key = key
+            best_vote_cnt = vote_cnt
+    return best_key
+
+
+# --- miscellaneous ---
 def time_writer(t, unit="seconds"):
     """
     Converts a runtime "t" to a larger unit of time if applicable.
@@ -683,7 +567,6 @@ def time_writer(t, unit="seconds"):
     return t, unit
 
 
-# --- miscellaneous ---
 def get_swc_id(path):
     """
     Gets segment id of the swc file at "path".

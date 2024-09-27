@@ -135,6 +135,8 @@ class TrainingPipeline:
         # Initialize training data
         self.generate_proposals()
         self.generate_features()
+        self.set_validation_idxs()
+        assert len(self.validation_dataset_list) > 0, "No validation data!"
 
         # Train model
         trainer = Trainer(
@@ -174,7 +176,6 @@ class TrainingPipeline:
             print(f"{sample_id}  {example_id}  {n_proposals}  {p_accepts}")
 
     def generate_features(self):
-        self.set_validation_idxs()
         for i in range(self.n_examples()):
             # Get proposals
             proposals_dict = {
@@ -199,7 +200,7 @@ class TrainingPipeline:
                 self.model_type,
                 computation_graph=proposals_dict["graph"]
             )
-            if i in self.validation_ids:
+            if i in self.validation_idxs:
                 self.validation_dataset_list.append(dataset)
             else:
                 self.train_dataset_list.append(dataset)

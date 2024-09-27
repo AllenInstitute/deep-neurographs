@@ -118,7 +118,7 @@ class Trainer:
                 loss.backward()
                 self.optimizer.step()
 
-                # Store predictions
+                # Store prediction
                 y.extend(toCPU(y_i))
                 hat_y.extend(toCPU(hat_y_i))
 
@@ -159,13 +159,8 @@ class Trainer:
             Prediction.
 
         """
-        # Run model
-        x_dict, edge_index_dict, edge_attr_dict = gnn_util.get_inputs(
-            data, "HeteroGNN"
-        )
-        hat_y = self.model(x_dict, edge_index_dict, edge_attr_dict)
-
-        # Output
+        x, edge_index, edge_attr = gnn_util.get_inputs(data, "HeteroGNN")
+        hat_y = self.model(x, edge_index, edge_attr)
         y = data["proposal"]["y"]
         return truncate(hat_y, y), y
 

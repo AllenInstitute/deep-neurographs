@@ -9,6 +9,8 @@ should be accepted or rejected).
 
 """
 
+from collections import defaultdict
+
 import networkx as nx
 import numpy as np
 
@@ -145,13 +147,13 @@ def is_component_aligned(target_graph, pred_graph, component, kdtree):
 
     """
     # Compute distances
-    dists = dict()
+    dists = defaultdict(list)
     for edge in pred_graph.subgraph(component).edges:
         for xyz in pred_graph.edges[edge]["xyz"]:
             hat_xyz = geometry.kdtree_query(kdtree, xyz)
             hat_swc_id = target_graph.xyz_to_swc(hat_xyz)
             d = get_dist(hat_xyz, xyz)
-            dists = util.append_dict_value(dists, hat_swc_id, d)
+            dists[hat_swc_id].append(d)
 
     # Deterine whether aligned
     hat_swc_id = util.find_best(dists)
@@ -212,14 +214,14 @@ def is_valid(target_graph, pred_graph, kdtree, target_id, edge):
 
 def proj_branch(target_graph, pred_graph, kdtree, target_id, i):
     # Compute projections
-    hits = dict()
+    hits = defaultdict(list)
     for branch in pred_graph.get_branches(i):
         for xyz in branch:
             hat_xyz = geometry.kdtree_query(kdtree, xyz)
             swc_id = target_graph.xyz_to_swc(hat_xyz)
             if swc_id == target_id:
                 hat_edge = target_graph.xyz_to_edge[hat_xyz]
-                hits = util.append_dict_value(hits, hat_edge, hat_xyz)
+                hits[hat_edge].append(hat_xyz)
 
     # Determine closest edge
     min_dist = np.inf
