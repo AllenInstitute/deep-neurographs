@@ -192,9 +192,9 @@ class Trainer:
         # Compute
         accuracy = accuracy_score(y, hat_y)
         accuracy_dif = accuracy - np.sum(y) / len(y)
-        precision = precision_score(y, hat_y, zero_division=1.0)
-        recall = recall_score(y, hat_y, zero_division=1.0)
-        f1 = f1_score(y, hat_y, zero_division=1.0)
+        precision = precision_score(y, hat_y)
+        recall = recall_score(y, hat_y)
+        f1 = f1_score(y, hat_y)
 
         # Log
         self.writer.add_scalar(prefix + "_accuracy:", accuracy, epoch)
