@@ -16,7 +16,6 @@ from deep_neurographs import geometry
 from deep_neurographs.machine_learning import feature_generation as feats
 from deep_neurographs.utils import img_util
 
-
 N_PROFILE_PTS = 16
 NODE_PROFILE_DEPTH = 16
 WINDOW = [5, 5, 5]

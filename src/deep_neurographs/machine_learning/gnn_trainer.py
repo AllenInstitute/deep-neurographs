@@ -33,7 +33,7 @@ SCHEDULER_STEP_SIZE = 1000
 WEIGHT_DECAY = 1e-3
 
 
-class HeteroGraphTrainer:
+class Trainer:
     """
     Custom class that trains graph neural networks.
 
@@ -107,9 +107,9 @@ class HeteroGraphTrainer:
             # Train
             y, hat_y = [], []
             self.model.train()
-            for graph_dataset in train_dataset_list:
+            for dataset in train_dataset_list:
                 # Forward pass
-                hat_y_i, y_i = self.predict(graph_dataset.data)
+                hat_y_i, y_i = self.predict(dataset.data)
                 loss = self.criterion(hat_y_i, y_i)
                 self.writer.add_scalar("loss", loss, epoch)
 
@@ -129,8 +129,8 @@ class HeteroGraphTrainer:
             if epoch % 10 == 0:
                 y, hat_y = [], []
                 self.model.eval()
-                for graph_dataset in validation_dataset_list:
-                    hat_y_i, y_i = self.predict(graph_dataset.data)
+                for dataset in validation_dataset_list:
+                    hat_y_i, y_i = self.predict(dataset.data)
                     y.extend(toCPU(y_i))
                     hat_y.extend(toCPU(hat_y_i))
                 test_score = self.compute_metrics(y, hat_y, "val", epoch)
