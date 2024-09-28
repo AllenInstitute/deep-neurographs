@@ -4,7 +4,8 @@ Created on Sat November 04 15:30:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Routines for running inference with a machine model that classifies edge proposals.
+Routines for running inference with machine models that classifies edge
+proposals.
 
 """
 
@@ -58,7 +59,13 @@ class InferencePipeline:
     """
 
     def __init__(
-        self, dataset, pred_id, img_path, model_path, output_dir, config
+        self,
+        sample_id,
+        segmentation_id,
+        img_path,
+        model_path,
+        output_dir,
+        config,
     ):
         """
         Initializes an object that executes the full GraphTrace inference
@@ -66,9 +73,10 @@ class InferencePipeline:
 
         Parameters
         ----------
-        dataset : int
-            Identifier for the dataset to be used in the inference pipeline.
-        pred_id : str
+        sample_id : int
+            Identifier for the brain sample to be used in the inference
+            pipeline.
+        segmentation_id : str
             Identifier for the predicted segmentation to be processed by the
             inference pipeline.
         img_path : str
@@ -88,8 +96,8 @@ class InferencePipeline:
         """
         # Class attributes
         self.accepted_proposals = list()
-        self.dataset = dataset
-        self.pred_id = pred_id
+        self.sample_id = sample_id
+        self.segmentation_id = segmentation_id
         self.img_path = img_path
         self.model_path = model_path
 
@@ -99,7 +107,7 @@ class InferencePipeline:
 
         # Set output directory
         date = datetime.today().strftime("%Y-%m-%d")
-        self.output_dir = f"{output_dir}/{pred_id}-{date}"
+        self.output_dir = f"{output_dir}/{segmentation_id}-{date}"
         util.mkdir(self.output_dir, delete=True)
 
     # --- Core ---
@@ -121,8 +129,8 @@ class InferencePipeline:
         # Initializations
         print("\nExperiment Details")
         print("-----------------------------------------------")
-        print("Dataset:", self.dataset)
-        print("Pred_ID:", self.pred_id)
+        print("Sample_ID:", self.sample_id)
+        print("Segmentation_ID:", self.segmentation_id)
         print("")
         self.write_metadata()
         t0 = time()
@@ -140,8 +148,8 @@ class InferencePipeline:
         # Initializations
         print("\nExperiment Details")
         print("-----------------------------------------------")
-        print("Dataset:", self.dataset)
-        print("Pred_ID:", self.pred_id)
+        print("Sample_ID:", self.sample_id)
+        print("Segmentation_ID:", self.segmentation_id)
         print("")
         t0 = time()
 
@@ -150,7 +158,7 @@ class InferencePipeline:
         for round_id, search_radius in enumerate(search_radius_schedule):
             print(f"--- Round {round_id + 1}:  Radius = {search_radius} ---")
             round_id += 1
-            self.generate_proposals(search_radius=search_radius)
+            self.generate_proposals(search_radius)
             self.run_inference()
             self.save_results(round_id=round_id)
         t, unit = util.time_writer(time() - t0)
@@ -214,8 +222,8 @@ class InferencePipeline:
         """
         # Initializations
         print("(2) Generate Proposals")
-        if not search_radius:
-            search_radius = self.graph_config.search_radius,
+        if search_radius is None:
+            search_radius = self.graph_config.search_radius
 
         # Main
         t0 = time()
@@ -324,8 +332,8 @@ class InferencePipeline:
         """
         metadata = {
             "date": datetime.today().strftime("%Y-%m-%d"),
-            "dataset": self.dataset,
-            "pred_id": self.pred_id,
+            "sample_id": self.sample_id,
+            "segmentation_id": self.segmentation_id,
             "min_fragment_size": f"{self.graph_config.min_size}um",
             "model_type": self.ml_config.model_type,
             "model_name": os.path.basename(self.model_path),
@@ -558,8 +566,8 @@ class InferenceEngine:
 
         """
         # Get predictions
-        if self.is_gnn:
-            preds = run_gnn_model(dataset.data, self.model, self.model_type)
+        if self.model_type == "GraphNeuralNet":
+            preds = run_gnn_model(dataset.data, self.model)
         elif "Net" in self.model_type:
             preds = run_nn_model(dataset.data, self.model)
         else:
@@ -585,23 +593,16 @@ def run_nn_model(data, model):
     return np.array(hat_y)
 
 
-def run_gnn_model(data, model, model_type):
+def run_gnn_model(data, model):
     model.eval()
     with torch.no_grad():
-        if "Hetero" in model_type:
-            x_dict, edge_index_dict, edge_attr_dict = gnn_util.get_inputs(
-                data, model_type
-            )
-            hat_y = sigmoid(model(x_dict, edge_index_dict, edge_attr_dict))
-            idx = len(data["proposal"]["y"])
-        else:
-            x, edge_index = gnn_util.get_inputs(data, model_type)
-            hat_y = sigmoid(model(x, edge_index))
-            idx = len(data.proposals)
+        x, edge_index, edge_attr = gnn_util.get_inputs(data)
+        hat_y = sigmoid(model(x, edge_index, edge_attr))
+        idx = len(data["proposal"]["y"])
     return toCPU(hat_y[0:idx, 0])
 
 
-# --- Accepting proposals ---
+# --- Accepting Proposals ---
 def get_accepted_proposals(neurograph, preds, threshold, high_threshold=0.9):
     """
     Determines which proposals to accept based on prediction scores and the
