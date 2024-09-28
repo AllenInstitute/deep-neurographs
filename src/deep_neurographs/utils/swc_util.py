@@ -172,18 +172,16 @@ class Reader:
         with ProcessPoolExecutor() as executor:
             # Assign processes
             processes = list()
-            for path in zip_paths:
+            for path in tqdm(zip_paths, desc="Downloading SWCs"):
                 zip_content = bucket.blob(path).download_as_bytes()
                 processes.append(
                     executor.submit(self.load_from_cloud_zip, zip_content)
                 )
 
             # Store results
-            with tqdm(total=len(processes), desc="Downloading SWCs") as pbar:
-                swc_dicts = list()
-                for process in as_completed(processes):
-                    swc_dicts.extend(process.result())
-                    pbar.update(1)
+            swc_dicts = list()
+            for process in as_completed(processes):
+                swc_dicts.extend(process.result())
         return swc_dicts
 
     def load_from_cloud_zip(self, zip_content):

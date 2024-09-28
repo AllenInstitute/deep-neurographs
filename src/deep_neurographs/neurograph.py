@@ -1052,7 +1052,7 @@ class NeuroGraph(nx.Graph):
 
         # Make entries
         idxs = np.arange(1, len(branch_xyz))
-        for k in util.spaced_idxs(idxs, 4):
+        for k in util.spaced_idxs(idxs, 6):
             x, y, z = tuple(branch_xyz[k])
             r = branch_radius[k]
 

@@ -6,7 +6,7 @@ Created on Sat April 12 11:00:00 2024
 
 Custom datasets for training graph neural networks.
 
-# explain branches vs edges terminology
+NOTE: THIS SCRIPT IS NO LONGER USED!
 
 """
 

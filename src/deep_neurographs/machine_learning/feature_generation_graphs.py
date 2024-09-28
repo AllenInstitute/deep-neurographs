@@ -21,11 +21,11 @@ NODE_PROFILE_DEPTH = 16
 WINDOW = [5, 5, 5]
 
 
-def generate_hgnn_features(
+def generate_gnn_features(
     neurograph, img, proposals_dict, radius, downsample_factor
 ):
     """
-    Generates features for a heterogeneous graph neural network model.
+    Generates node and edge features for graph neural network.
 
     Parameters
     ----------

@@ -13,12 +13,10 @@ from random import sample
 import joblib
 import numpy as np
 import torch
-from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 
 from deep_neurographs.machine_learning import (
     datasets,
     feature_generation,
-    graph_datasets,
     heterograph_datasets,
 )
 from deep_neurographs.machine_learning.models import (
@@ -26,44 +24,10 @@ from deep_neurographs.machine_learning.models import (
     MultiModalNet,
 )
 
-SUPPORTED_MODELS = [
-    "AdaBoost",
-    "RandomForest",
-    "FeedForwardNet",
-    "ConvNet",
-    "MultiModalNet",
-    "GraphNeuralNet",
-]
+SUPPORTED_MODELS = ["RandomForest", "GraphNeuralNet"]
 
 
 # --- model utils ---
-def init_model(model_type):
-    """
-    Initializes a machine learning model.
-
-    Parameters
-    ----------
-    model_type : str
-        Type of machine learning model.
-
-    Returns
-    -------
-    ...
-
-    """
-    assert model_type in SUPPORTED_MODELS, f"{model_type} not supported!"
-    if model_type == "AdaBoost":
-        return AdaBoostClassifier()
-    elif model_type == "RandomForest":
-        return RandomForestClassifier()
-    elif model_type == "FeedForwardNet":
-        n_features = feature_generation.count_features(model_type)
-        return FeedForwardNet(n_features)
-    elif model_type == "MultiModalNet":
-        n_features = feature_generation.count_features(model_type)
-        return MultiModalNet(n_features)
-
-
 def load_model(path):
     """
     Loads the parameters of a machine learning model.
@@ -133,13 +97,11 @@ def init_dataset(
         Dataset that stores features.
 
     """
-    if "Hetero" in model_type:
+    if model_type == "GraphNeuralNet":
         assert computation_graph is not None, "Must input computation graph!"
         dataset = heterograph_datasets.init(
             neurograph, features, computation_graph
         )
-    elif "Graph" in model_type:
-        dataset = graph_datasets.init(neurograph, features)
     else:
         dataset = datasets.init(
             neurograph, features, model_type, sample_ids=sample_ids

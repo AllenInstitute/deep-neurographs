@@ -46,10 +46,10 @@ def init(neurograph, features, computation_graph):
     """
     # Extract features
     x_branches, _, idxs_branches = feature_generation.get_matrix(
-        neurograph, features["edges"], "GraphNeuralNet"
+        neurograph, features["edges"]
     )
     x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
-        neurograph, features["proposals"], "GraphNeuralNet"
+        neurograph, features["proposals"]
     )
     x_nodes = feature_generation.combine_features(features["nodes"])
 
