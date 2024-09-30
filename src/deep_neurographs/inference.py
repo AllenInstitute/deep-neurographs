@@ -154,11 +154,8 @@ class InferencePipeline:
         print(f"Total Runtime: {round(t, 4)} {unit}\n")
 
     def run_schedule(self, fragments_pointer, search_radius_schedule):
-        # Initializations
-
         t0 = time()
-
-        # Main
+        self.report_experiment()
         self.build_graph(fragments_pointer)
         for round_id, search_radius in enumerate(search_radius_schedule):
             print(f"--- Round {round_id + 1}:  Radius = {search_radius} ---")

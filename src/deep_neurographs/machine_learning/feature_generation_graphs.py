@@ -86,8 +86,7 @@ def run_on_nodes(neurograph, computation_graph, img, downsample_factor):
         a dictionary that maps a node id to the corresponding feature vector.
 
     """
-    features = {"skel": node_skeletal(neurograph, computation_graph)}
-    return features
+    return {"skel": node_skeletal(neurograph, computation_graph)}
 
 
 def run_on_edges(neurograph, computation_graph):
@@ -108,8 +107,7 @@ def run_on_edges(neurograph, computation_graph):
         a dictionary that maps an edge id to the corresponding feature vector.
 
     """
-    features = {"skel": edge_skeletal(neurograph, computation_graph)}
-    return features
+    return {"skel": edge_skeletal(neurograph, computation_graph)}
 
 
 def run_on_proposals(neurograph, img, proposals, radius, downsample_factor):
@@ -194,7 +192,6 @@ def edge_skeletal(neurograph, computation_graph):
     dict
         Dictionary that maps an edge id to the corresponding feature vector.
 
-    NOTE: IT COULD BE A GOOD IDEA TO STORE THE EDGE LENGTH
     """
     edge_skeletal_features = dict()
     for edge in neurograph.edges:
