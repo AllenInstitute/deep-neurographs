@@ -195,12 +195,11 @@ def edge_skeletal(neurograph, computation_graph):
     """
     edge_skeletal_features = dict()
     for edge in neurograph.edges:
-        edge_skeletal_features[frozenset(edge)] = np.concatenate(
-            (
+        edge_skeletal_features[frozenset(edge)] = np.array(
+            [
                 np.mean(neurograph.edges[edge]["radius"]),
-                neurograph.edge_length(edge) / 1000,
-            ),
-            axis=None,
+                neurograph.edges[edge]["length"] / 1000,
+            ],
         )
     return edge_skeletal_features
 
@@ -226,7 +225,6 @@ def proposal_skeletal(neurograph, proposals, radius):
     """
     proposal_skeletal_features = dict()
     for proposal in proposals:
-        i, j = tuple(proposal)
         proposal_skeletal_features[proposal] = np.concatenate(
             (
                 neurograph.proposal_length(proposal),
