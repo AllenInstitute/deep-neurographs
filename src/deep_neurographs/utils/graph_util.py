@@ -365,25 +365,32 @@ def get_subcomponent_irreducibles(graph, swc_dict, smooth_bool):
     """
     # Extract nodes
     leafs, junctions = get_irreducible_nodes(graph)
-    assert len(leafs), "No leaf nodes!"
+    assert len(leafs) > 0, "No leaf nodes!"
     if len(leafs) > 0:
-        source = sample(leafs, 1)[0]
+        source = util.sample_once(leafs)
     else:
-        source = sample(junctions, 1)[0]
+        source = util.sample_once(junctions)
 
     # Extract edges
     edges = dict()
     nbs = defaultdict(list)
     root = None
     for (i, j) in nx.dfs_edges(graph, source=source):
-        # Check if start of path is valid
+        # Check if starting new or continuing current path
         if root is None:
             root = i
+            cur_length = 0
             attrs = init_edge_attrs(swc_dict, root)
+        else:
+            xyz_i = swc_dict["xyz"][swc_dict["idx"][i]]
+            xyz_j = swc_dict["xyz"][swc_dict["idx"][j]]
+            cur_length += geometry.dist(xyz_i, xyz_j)        
 
         # Visit j
         attrs = upd_edge_attrs(swc_dict, attrs, j)
         if j in leafs or j in junctions:
+            # Check whether to smooth
+            attrs["length"] = cur_length
             attrs = to_numpy(attrs)
             if smooth_bool:
                 swc_dict, edges = __smooth_branch(
@@ -391,8 +398,10 @@ def get_subcomponent_irreducibles(graph, swc_dict, smooth_bool):
                 )
             else:
                 edges[(root, j)] = attrs
-            nbs[root].append(j)  # = util.append_dict_value(nbs, root, j)
-            nbs[j].append(root)  # = util.append_dict_value(nbs, j, root)
+
+            # Finish
+            nbs[root].append(j)
+            nbs[j].append(root)
             root = None
 
     # Output
@@ -638,7 +647,8 @@ def upd_endpoint_xyz(edges, key, old_xyz, new_xyz):
 def init_edge_attrs(swc_dict, i):
     """
     Initializes edge attribute dictionary with attributes from node "i" which
-    is an end point of the edge.
+    is an end point of the edge. Note: the following assertion error may be
+    useful: assert i in swc_dict["idx"].keys(), f"{swc_dict["swc_id"]} - {i}"
 
     Parameters
     ----------
@@ -654,8 +664,6 @@ def init_edge_attrs(swc_dict, i):
         Edge attribute dictionary.
 
     """
-    swc_id = swc_dict["swc_id"]
-    assert i in swc_dict["idx"].keys(), f"{swc_id} - {i}"
     j = swc_dict["idx"][i]
     return {"radius": [swc_dict["radius"][j]], "xyz": [swc_dict["xyz"][j]]}
 

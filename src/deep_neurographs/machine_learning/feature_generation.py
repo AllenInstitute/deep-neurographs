@@ -14,6 +14,7 @@ Conventions:   (1) "xyz" refers to a real world coordinate such as those from
 
 """
 
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from random import sample
@@ -29,7 +30,7 @@ from deep_neurographs.utils import img_util, util
 
 CHUNK_SIZE = [64, 64, 64]
 N_BRANCH_PTS = 50
-N_PROFILE_PTS = 16
+N_PROFILE_PTS = 16  # 10
 N_SKEL_FEATURES = 22
 
 
@@ -115,55 +116,18 @@ def generate_features(
         Feature vectors.
 
     """
-    features = {
-        "proposals": run_on_proposals(
-            neurograph,
-            img,
-            proposals_dict["proposals"],
-            radius,
-            downsample_factor,
-        )
+    features = defaultdict(bool)
+    features["proposals"] = {
+        "skel": proposal_skeletal(
+            neurograph, proposals_dict["proposals"], radius
+        ),
+        "profiles": proposal_profiles(
+            neurograph, img, proposals_dict["proposals"], downsample_factor
+        ),
     }
     return features
 
 
-# -- feature generation by graphical structure type --
-def run_on_proposals(neurograph, img, proposals, radius, downsample_factor):
-    """
-    Generates feature vectors for a set of proposals in a neurograph.
-
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        Graph that "proposals" belong to.
-    img : tensorstore.Tensorstore
-        Image stored in a GCS bucket.
-    proposals : list[frozenset]
-        List of proposals for which features will be generated.
-    radius : float
-        Search radius used to generate proposals.
-    downsample_factor : int
-        Downsampling factor that accounts for which level in the image pyramid
-        the voxel coordinates must index into.
-
-    Returns
-    -------
-    dict
-        Dictionary whose keys are feature types (i.e. skeletal and profiles)
-        and values are a dictionary that maps a proposal id to the
-        corresponding feature vector.
-
-    """
-    proposal_features = {
-        "skel": proposal_skeletal(neurograph, proposals, radius),
-        "profiles": proposal_profiles(
-            neurograph, img, proposals, downsample_factor
-        ),
-    }
-    return proposal_features
-
-
-# -- part 1: proposal feature generation --
 def proposal_profiles(neurograph, img, proposals, downsample_factor):
     """
     Generates an image intensity profile along each proposal by reading from

@@ -32,6 +32,7 @@ class HeteroGNN(torch.nn.Module):
 
     def __init__(
         self,
+        device=None,
         scale_hidden_dim=2,
         dropout=DROPOUT,
         heads_1=HEADS_1,
@@ -50,12 +51,12 @@ class HeteroGNN(torch.nn.Module):
         # Linear layers
         output_dim = heads_1 * heads_2 * hidden_dim
         self.input_nodes = nn.ModuleDict(
-            {key: nn.Linear(d, hidden_dim) for key, d in node_dict.items()}
+            {key: nn.Linear(d, hidden_dim, device=device) for key, d in node_dict.items()}
         )
         self.input_edges = {
-            key: nn.Linear(d, hidden_dim) for key, d in edge_dict.items()
+            key: nn.Linear(d, hidden_dim, device=device) for key, d in edge_dict.items()
         }
-        self.output = Linear(output_dim, 1)
+        self.output = Linear(output_dim, 1, device=device)
 
         # Convolutional layers
         self.conv1 = HeteroConv(

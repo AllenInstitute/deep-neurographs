@@ -12,7 +12,6 @@ proposals.
 from datetime import datetime
 from time import time
 from torch.nn.functional import sigmoid
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import networkx as nx
@@ -66,6 +65,7 @@ class InferencePipeline:
         model_path,
         output_dir,
         config,
+        device=None,
     ):
         """
         Initializes an object that executes the full GraphTrace inference
@@ -88,6 +88,8 @@ class InferencePipeline:
         config : Config
             Configuration object containing parameters and settings required
             for the inference pipeline.
+        device : str, optional
+            ...
 
         Returns
         -------
@@ -104,6 +106,17 @@ class InferencePipeline:
         # Extract config settings
         self.graph_config = config.graph_config
         self.ml_config = config.ml_config
+
+        # Inference engine
+        self.inference_engine = InferenceEngine(
+            self.img_path,
+            self.model_path,
+            self.ml_config.model_type,
+            self.graph_config.search_radius,
+            confidence_threshold=self.ml_config.threshold,
+            device=device,
+            downsample_factor=self.ml_config.downsample_factor,
+        )
 
         # Set output directory
         date = datetime.today().strftime("%Y-%m-%d")
@@ -127,11 +140,7 @@ class InferencePipeline:
 
         """
         # Initializations
-        print("\nExperiment Details")
-        print("-----------------------------------------------")
-        print("Sample_ID:", self.sample_id)
-        print("Segmentation_ID:", self.segmentation_id)
-        print("")
+        self.report_experiment()
         self.write_metadata()
         t0 = time()
 
@@ -146,11 +155,7 @@ class InferencePipeline:
 
     def run_schedule(self, fragments_pointer, search_radius_schedule):
         # Initializations
-        print("\nExperiment Details")
-        print("-----------------------------------------------")
-        print("Sample_ID:", self.sample_id)
-        print("Segmentation_ID:", self.segmentation_id)
-        print("")
+
         t0 = time()
 
         # Main
@@ -258,15 +263,7 @@ class InferencePipeline:
         print("(3) Run Inference")
         t0 = time()
         n_proposals = self.graph.n_proposals()
-        inference_engine = InferenceEngine(
-            self.img_path,
-            self.model_path,
-            self.ml_config.model_type,
-            self.graph_config.search_radius,
-            confidence_threshold=self.ml_config.threshold,
-            downsample_factor=self.ml_config.downsample_factor,
-        )
-        self.graph, accepts = inference_engine.run(
+        self.graph, accepts = self.inference_engine.run(
             self.graph, self.graph.list_proposals()
         )
         self.accepted_proposals.extend(accepts)
@@ -296,6 +293,13 @@ class InferencePipeline:
         self.graph.to_zipped_swcs(path)
         self.save_connections(round_id=round_id)
         self.write_metadata()
+
+    def report_experiment(self):
+        print("\nExperiment Overview")
+        print("-----------------------------------------------")
+        print("Sample_ID:", self.sample_id)
+        print("Segmentation_ID:", self.segmentation_id)
+        print("")
 
     # --- io ---
     def save_connections(self, round_id=None):
@@ -390,6 +394,7 @@ class InferenceEngine:
         search_radius,
         batch_size=BATCH_SIZE,
         confidence_threshold=CONFIDENCE_THRESHOLD,
+        device=None,
         downsample_factor=1,
     ):
         """
@@ -424,6 +429,7 @@ class InferenceEngine:
         # Set class attributes
         self.batch_size = batch_size
         self.downsample_factor = downsample_factor
+        self.device = "cpu" if device is None else device
         self.is_gnn = True if "Graph" in model_type else False
         self.model_type = model_type
         self.search_radius = search_radius
@@ -433,6 +439,9 @@ class InferenceEngine:
         driver = "n5" if ".n5" in img_path else "zarr"
         self.img = img_util.open_tensorstore(img_path, driver=driver)
         self.model = ml_util.load_model(model_path)
+        if self.is_gnn:
+            self.model = self.model.to(self.device)
+            self.model.eval()
 
     def run(self, neurograph, proposals):
         """
@@ -470,7 +479,7 @@ class InferenceEngine:
                 # Predict
                 batch = self.get_batch(neurograph, proposals)
                 dataset = self.get_batch_dataset(neurograph, batch)
-                preds = self.run_model(dataset)
+                preds = self.predict(dataset)
 
                 # Update graph
                 batch_accepts = get_accepted_proposals(
@@ -547,7 +556,7 @@ class InferenceEngine:
         )
         return dataset
 
-    def run_model(self, dataset):
+    def predict(self, dataset):
         """
         Runs the model on the given dataset to generate and filter
         predictions.
@@ -561,45 +570,27 @@ class InferenceEngine:
         -------
         dict
             A dictionary that maps a proposal to the model's prediction (i.e.
-            probability). Note that this dictionary only contains proposals
-            whose predicted probability is greater the threshold.
+            probability).
 
         """
         # Get predictions
         if self.model_type == "GraphNeuralNet":
-            preds = run_gnn_model(dataset.data, self.model)
-        elif "Net" in self.model_type:
-            preds = run_nn_model(dataset.data, self.model)
+            with torch.no_grad():
+                # Get inputs
+                n = len(dataset.data["proposal"]["y"])
+                x, edge_index, edge_attr = gnn_util.get_inputs(
+                    dataset.data, device=self.device
+                )
+
+                # Run model
+                preds = sigmoid(self.model(x, edge_index, edge_attr))
+                preds = toCPU(preds[0:n, 0])
         else:
             preds = np.array(self.model.predict_proba(dataset.data.x)[:, 1])
 
-        # Filter preds
+        # Reformat prediction
         idxs = dataset.idxs_proposals["idx_to_edge"]
         return {idxs[i]: p for i, p in enumerate(preds)}
-
-
-# --- run machine learning model ---
-def run_nn_model(data, model):
-    hat_y = list()
-    model.eval()
-    with torch.no_grad():
-        for batch in DataLoader(data, batch_size=32):
-            # Run model
-            hat_y_i = sigmoid(model(batch["inputs"]))
-
-            # Postprocess
-            hat_y_i = np.array(hat_y_i)
-            hat_y.extend(hat_y_i[:, 0].tolist())
-    return np.array(hat_y)
-
-
-def run_gnn_model(data, model):
-    model.eval()
-    with torch.no_grad():
-        x, edge_index, edge_attr = gnn_util.get_inputs(data)
-        hat_y = sigmoid(model(x, edge_index, edge_attr))
-        idx = len(data["proposal"]["y"])
-    return toCPU(hat_y[0:idx, 0])
 
 
 # --- Accepting Proposals ---

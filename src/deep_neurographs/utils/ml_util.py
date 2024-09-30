@@ -104,7 +104,7 @@ def init_dataset(
         )
     else:
         dataset = datasets.init(
-            neurograph, features, model_type, sample_ids=sample_ids
+            neurograph, features, sample_ids=sample_ids
         )
     return dataset
 

@@ -86,7 +86,8 @@ def run_on_nodes(neurograph, computation_graph, img, downsample_factor):
         a dictionary that maps a node id to the corresponding feature vector.
 
     """
-    return {"skel": node_skeletal(neurograph, computation_graph)}
+    features = {"skel": node_skeletal(neurograph, computation_graph)}
+    return features
 
 
 def run_on_edges(neurograph, computation_graph):
@@ -107,7 +108,8 @@ def run_on_edges(neurograph, computation_graph):
         a dictionary that maps an edge id to the corresponding feature vector.
 
     """
-    return {"skel": edge_skeletal(neurograph, computation_graph)}
+    features = {"skel": edge_skeletal(neurograph, computation_graph)}
+    return features
 
 
 def run_on_proposals(neurograph, img, proposals, radius, downsample_factor):
@@ -192,15 +194,15 @@ def edge_skeletal(neurograph, computation_graph):
     dict
         Dictionary that maps an edge id to the corresponding feature vector.
 
+    NOTE: IT COULD BE A GOOD IDEA TO STORE THE EDGE LENGTH
     """
     edge_skeletal_features = dict()
     for edge in neurograph.edges:
-        edge_skeletal_features[frozenset(edge)] = np.concatenate(
-            (
+        edge_skeletal_features[frozenset(edge)] = np.array(
+            [
                 np.mean(neurograph.edges[edge]["radius"]),
-                neurograph.edge_length(edge) / 1000,
-            ),
-            axis=None,
+                neurograph.edges[edge]["length"] / 1000,
+            ],
         )
     return edge_skeletal_features
 
@@ -226,7 +228,6 @@ def proposal_skeletal(neurograph, proposals, radius):
     """
     proposal_skeletal_features = dict()
     for proposal in proposals:
-        i, j = tuple(proposal)
         proposal_skeletal_features[proposal] = np.concatenate(
             (
                 neurograph.proposal_length(proposal),

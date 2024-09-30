@@ -136,7 +136,8 @@ class NeuroGraph(nx.Graph):
             for (i, j), attrs in irreducibles["edges"].items():
                 edge = (ids[i], ids[j])
                 idxs = util.spaced_idxs(attrs["radius"], self.node_spacing)
-                attrs = {key: value[idxs] for key, value in attrs.items()}
+                for key in ["radius", "xyz"]:
+                    attrs[key] = attrs[key][idxs]
                 self.__add_edge(edge, attrs, swc_id)
 
     def __add_nodes(self, irreducibles, node_type, node_ids):
@@ -198,7 +199,12 @@ class NeuroGraph(nx.Graph):
         """
         i, j = tuple(edge)
         self.add_edge(
-            i, j, radius=attrs["radius"], xyz=attrs["xyz"], swc_id=swc_id,
+            i,
+            j,
+            length=attrs["length"],
+            radius=attrs["radius"],
+            xyz=attrs["xyz"],
+            swc_id=swc_id,
         )
         self.xyz_to_edge.update({tuple(xyz): edge for xyz in attrs["xyz"]})
 
@@ -642,12 +648,28 @@ class NeuroGraph(nx.Graph):
 
     def merge_proposal(self, proposal):
         i, j = tuple(proposal)
-        if not (self.is_soma(i) and self.is_soma(j)):
-            # Attributes
+        somas_check = not (self.is_soma(i) and self.is_soma(j))
+        degrees_check = self.degree[i] == 2 and self.degree[j] == 2
+        if somas_check and degrees_check:
+            # Dense attributes
             attrs = dict()
             for k in ["xyz", "radius"]:
                 combine = np.vstack if k == "xyz" else np.array
                 attrs[k] = combine([self.nodes[i][k], self.nodes[j][k]])
+
+            # Sparse attributes
+            if self.degree[i] == 1 and self.degree[j] == 1:
+                e_i = (i, self.leaf_neighbor(i))
+                e_j = (j, self.leaf_neighbor(j))
+                len_ij = self.edges[e_i]["length"] + self.edges[e_j]["length"]
+                attrs["length"] = len_ij
+            elif self.degree[i] == 2:
+                e_j = (j, self.leaf_neighbor(j))
+                attrs["length"] = self.edges[e_i]["length"]
+            else:
+                e_i = (i, self.leaf_neighbor(i))
+                attrs["length"] = self.edges[e_j]["length"]
+
             swc_id_i = self.nodes[i]["swc_id"]
             swc_id_j = self.nodes[j]["swc_id"]
             swc_id = swc_id_i if self.is_soma(i) else swc_id_j

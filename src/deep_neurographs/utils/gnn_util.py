@@ -17,12 +17,39 @@ import torch
 from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import util
 
+GNN_DEPTH = 2
 
-def get_inputs(data):
+
+# --- Tensor Operations ---
+def get_inputs(data, device=None):
+    # Extract inputs
     x = data.x_dict
     edge_index = data.edge_index_dict
-    edge_attr_dict = data.edge_attr_dict
-    return x, edge_index, edge_attr_dict
+    edge_attr = data.edge_attr_dict
+
+    # Move to gpu (if applicable)
+    if "cuda" in device and torch.cuda.is_available():
+        x = toGPU(x, device)
+        edge_index = toGPU(edge_index, device)
+        edge_attr = toGPU(edge_attr, device)    
+    return x, edge_index, edge_attr
+
+
+def toGPU(tensor_dict, device):
+    """
+    Moves dictionary of tensors from CPU to GPU.
+
+    Parameters
+    ----------
+    tensor_dict : dict
+        Tensor to be moved to GPU.
+
+    Returns
+    -------
+    None
+
+    """
+    return {k: tensor.to("cuda") for k, tensor in tensor_dict.items()}
 
 
 def toCPU(tensor):
@@ -32,7 +59,7 @@ def toCPU(tensor):
     Parameters
     ----------
     tensor : torch.Tensor
-        Tensor.
+        Tensor to be moved to CPU.
 
     Returns
     -------
@@ -42,7 +69,7 @@ def toCPU(tensor):
     return tensor.detach().cpu().tolist()
 
 
-def to_tensor(my_list):
+def toTensor(my_list):
     """
     Converts a list to a tensor with contiguous memory.
 
@@ -61,30 +88,12 @@ def to_tensor(my_list):
     return torch.Tensor(arr).t().contiguous().long()
 
 
-def init_line_graph(edges):
-    """
-    Initializes a line graph from a list of edges.
-
-    Parameters
-    ----------
-    edges : list
-        List of edges.
-
-    Returns
-    -------
-    networkx.Graph
-        Line graph generated from a list of edges.
-
-    """
-    graph = nx.Graph()
-    graph.add_edges_from(edges)
-    return nx.line_graph(graph)
-
-
+# --- Batch Generation ---
 def get_batch(graph, proposals, batch_size):
     """
     Gets a batch for training or inference that consist of a computation graph
-    and list of proposals.
+    and list of proposals. Note: queue contains tuples that consist of a node
+    id and distance from proposal.
 
     Parameters
     ----------
@@ -93,7 +102,7 @@ def get_batch(graph, proposals, batch_size):
     proposals : list
         Proposals to be classified as accept or reject.
     batch_size : int
-        Maximum number of nodes in the computation graph.
+        Maximum number of proposals in the computation graph.
 
     Returns
     -------
@@ -106,10 +115,10 @@ def get_batch(graph, proposals, batch_size):
     visited = set()
     while len(proposals) > 0 and len(batch["proposals"]) < batch_size:
         root = tuple(util.sample_once(proposals))
-        queue = [root[0], root[1]]
+        queue = [(root[0], 0), (root[1], 0)]
         while len(queue) > 0:
             # Visit node
-            i = queue.pop()
+            i, d = queue.pop()
             for j in graph.neighbors(i):
                 if (i, j) not in batch["graph"].edges:
                     batch["graph"].add_edge(i, j)
@@ -119,59 +128,16 @@ def get_batch(graph, proposals, batch_size):
                     batch["graph"].add_edge(i, p)
                     batch["proposals"].add(frozenset({i, p}))
                     proposals.remove(frozenset({i, p}))
-                    queue.append(p)
+                    queue.append((p, 0))
             visited.add(i)
 
             # Update queue
             if len(batch["proposals"]) < batch_size:
-                for j in graph.neighbors(i):
-                    if validate_node_for_queue(graph, proposals, visited, j):
-                        queue.append(j)
+                for j in [j for j in graph.neighbors(i) if j not in visited]:
+                    d_j = min(d + 1, -len(graph.nodes[j]["proposals"]))
+                    if d_j <= GNN_DEPTH:
+                        queue.append((j, d + 1))
     return batch
-
-
-def validate_node_for_queue(graph, proposals, visited, j):
-    """
-    Check whether node is within 3 hops from a proposal to be classified. If
-    so, then the node should be added to the queue in the routine "get_batch".
-
-    Parameters
-    ----------
-    graph : NeuroGraph
-        Graph that contains proposals
-    proposals : list
-        Proposals to be classified as accept or reject.
-    visited : set
-        Nodes that have been visited and added the current batch's computation
-        graph.
-    j : int
-        Node to be validated for being added to queue.
-
-    Returns
-    -------
-    bool
-        Indication of whether node should be added to queue.
-
-    """
-    hit_proposal = False
-    validate_queue = [(j, 0)]  # node id, distance from j
-    validate_visited = set()
-    while len(validate_queue) > 0:
-        # Check if node has proposals to be classified
-        k, d = validate_queue.pop()
-        for p in graph.nodes[k]["proposals"]:
-            if frozenset({p, k}) in proposals:
-                hit_proposal = True
-                validate_queue = list()
-                break
-        validate_visited.add(k)
-
-        # Update queue
-        if d < 3 and not hit_proposal:
-            for kk in graph.neighbors(k):
-                if kk not in visited and kk not in validate_visited:
-                    validate_queue.append((kk, d + 1))
-    return True if hit_proposal else False
 
 
 def get_train_batch(graph, proposals, batch_size):
@@ -239,31 +205,6 @@ def get_train_batch(graph, proposals, batch_size):
         yield batch
 
 
-def reset_batch():
-    """
-    Resets the current batch.
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    dict
-        Batch that consists of a graph and list of proposals.
-
-    """
-    return {"graph": nx.Graph(), "proposals": set()}
-
-
-def get_node_proposal_cnt(proposals):
-    node_proposal_cnt = defaultdict(int)
-    for i, j in proposals:
-        node_proposal_cnt[i] += 1
-        node_proposal_cnt[j] += 1
-    return node_proposal_cnt
-
-
 def extract_subgraph_batch(
     graph, proposals, batch, batch_size, node_proposal_cnt
 ):
@@ -293,12 +234,29 @@ def extract_subgraph_batch(
         if len(batch["proposals"]) >= batch_size:
             break
 
-    print("# proposals added in extract_subgraph:", n_proposals_added)
     # Yield batch
     graph.remove_nodes_from(remove_nodes)
     return batch
 
 
+def reset_batch():
+    """
+    Resets the current batch.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    dict
+        Batch that consists of a graph and list of proposals.
+
+    """
+    return {"graph": nx.Graph(), "proposals": set()}
+
+
+# --- Miscellaneous ---
 def proposals_in_graph(graph, proposals):
     """
     Lists the proposals that are edges in "graph".
@@ -316,3 +274,31 @@ def proposals_in_graph(graph, proposals):
         Proposals that are edges in "graph".
     """
     return set([e for e in map(frozenset, graph.edges) if e in proposals])
+
+
+def get_node_proposal_cnt(proposals):
+    node_proposal_cnt = defaultdict(int)
+    for i, j in proposals:
+        node_proposal_cnt[i] += 1
+        node_proposal_cnt[j] += 1
+    return node_proposal_cnt
+
+
+def init_line_graph(edges):
+    """
+    Initializes a line graph from a list of edges.
+
+    Parameters
+    ----------
+    edges : list
+        List of edges.
+
+    Returns
+    -------
+    networkx.Graph
+        Line graph generated from a list of edges.
+
+    """
+    graph = nx.Graph()
+    graph.add_edges_from(edges)
+    return nx.line_graph(graph)
