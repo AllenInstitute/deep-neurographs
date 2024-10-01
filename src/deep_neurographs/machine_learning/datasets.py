@@ -16,7 +16,7 @@ from deep_neurographs.machine_learning import feature_generation
 
 
 # Wrapper
-def init(neurograph, features, model_type, sample_ids=None):
+def init(neurograph, features, sample_ids=None):
     """
     Initializes a dataset that can be used to train a machine learning model.
 
@@ -41,7 +41,7 @@ def init(neurograph, features, model_type, sample_ids=None):
     """
     # Extract features
     x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
-        neurograph, features["proposals"], model_type, sample_ids=sample_ids
+        neurograph, features["proposals"], sample_ids=sample_ids
     )
 
     # Initialize dataset

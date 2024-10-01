@@ -14,6 +14,7 @@ Conventions:   (1) "xyz" refers to a real world coordinate such as those from
 
 """
 
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from random import sample
@@ -22,14 +23,14 @@ import numpy as np
 import tensorstore as ts
 
 from deep_neurographs import geometry
-from deep_neurographs.machine_learning.heterograph_feature_generation import (
-    generate_hgnn_features,
+from deep_neurographs.machine_learning.feature_generation_graphs import (
+    generate_gnn_features,
 )
 from deep_neurographs.utils import img_util, util
 
 CHUNK_SIZE = [64, 64, 64]
 N_BRANCH_PTS = 50
-N_PROFILE_PTS = 16
+N_PROFILE_PTS = 16  # 10
 N_SKEL_FEATURES = 22
 
 
@@ -77,11 +78,7 @@ def run(
         neurograph.init_kdtree(node_type="leaf")
 
     # Feature generation by type of machine learning model
-    if "Hetero" in model_type:
-        return generate_hgnn_features(
-            neurograph, img, proposals_dict, radius, downsample_factor
-        )
-    elif "Graph" in model_type:
+    if model_type == "GraphNeuralNet":
         return generate_gnn_features(
             neurograph, img, proposals_dict, radius, downsample_factor
         )
@@ -89,43 +86,6 @@ def run(
         return generate_features(
             neurograph, img, proposals_dict, radius, downsample_factor
         )
-
-
-def generate_gnn_features(
-    neurograph, img, proposals_dict, radius, downsample_factor
-):
-    """
-    Generates feature vectors used by a graph neural net (gnn) to classify
-    proposals.
-
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        Graph that "proposals" belong to.
-    img : tensorstore.Tensorstore
-        Image stored in a GCS bucket.
-    proposals_dict : dict
-        Dictionary containing the computation graph used by gnn and proposals
-        to be classified.
-    radius : float
-        Search radius used to generate proposals.
-    downsample_factor : int
-        Downsampling factor that accounts for which level in the image pyramid
-        the voxel coordinates must index into.
-
-    Returns
-    -------
-    dict
-        Feature vectors.
-
-    """
-    features = {
-        "edges": run_on_edges(neurograph, proposals_dict),
-        "proposals": run_on_proposals(
-            neurograph, img, proposals_dict["proposals"], radius
-        ),
-    }
-    return features
 
 
 def generate_features(
@@ -156,83 +116,18 @@ def generate_features(
         Feature vectors.
 
     """
-    features = {
-        "proposals": run_on_proposals(
-            neurograph,
-            img,
-            proposals_dict["proposals"],
-            radius,
-            downsample_factor,
-        )
+    features = defaultdict(bool)
+    features["proposals"] = {
+        "skel": proposal_skeletal(
+            neurograph, proposals_dict["proposals"], radius
+        ),
+        "profiles": proposal_profiles(
+            neurograph, img, proposals_dict["proposals"], downsample_factor
+        ),
     }
     return features
 
 
-# -- feature generation by graphical structure type --
-def run_on_edges(neurograph, proposals_dict):
-    """
-    Generates feature vectors for every edge in computation graph.
-
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        Graph that proposals in "proposals_dict" belong to.
-    proposals_dict : dict
-        Dictionary containing the computation graph used by gnn and proposals
-        to be classified.
-
-    Returns
-    -------
-    dict
-        Dictionary whose keys are feature types (i.e. skeletal) and values are
-        a dictionary that maps an edge id to the corresponding feature vector.
-
-    """
-    edge_features = dict()
-    for edge in proposals_dict["graph"].edges:
-        if frozenset(edge) not in proposals_dict["proposals"]:
-            edge_features[frozenset(edge)] = np.concatenate(
-                (1, np.zeros((33))), axis=None
-            )
-    return {"skel": edge_features}
-
-
-def run_on_proposals(neurograph, img, proposals, radius, downsample_factor):
-    """
-    Generates feature vectors for a set of proposals in a neurograph.
-
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        Graph that "proposals" belong to.
-    img : tensorstore.Tensorstore
-        Image stored in a GCS bucket.
-    proposals : list[frozenset]
-        List of proposals for which features will be generated.
-    radius : float
-        Search radius used to generate proposals.
-    downsample_factor : int
-        Downsampling factor that accounts for which level in the image pyramid
-        the voxel coordinates must index into.
-
-    Returns
-    -------
-    dict
-        Dictionary whose keys are feature types (i.e. skeletal and profiles)
-        and values are a dictionary that maps a proposal id to the
-        corresponding feature vector.
-
-    """
-    proposal_features = {
-        "skel": proposal_skeletal(neurograph, proposals, radius),
-        "profiles": proposal_profiles(
-            neurograph, img, proposals, downsample_factor
-        ),
-    }
-    return proposal_features
-
-
-# -- part 1: proposal feature generation --
 def proposal_profiles(neurograph, img, proposals, downsample_factor):
     """
     Generates an image intensity profile along each proposal by reading from
@@ -399,17 +294,15 @@ def curvature(xyz_list):
     return 4 * delta / (a * b * c)
 
 
-# -- build feature matrix --
-def get_matrix(neurographs, features, model_type, sample_ids=None):
+# -- Build Feature Matrix --
+def get_matrix(neurographs, features, sample_ids=None):
     if sample_ids:
-        return __multiblock_feature_matrix(
-            neurographs, features, sample_ids, model_type
-        )
+        return stack_feature_matrices(neurographs, features, sample_ids)
     else:
-        return __feature_matrix(neurographs, features, model_type)
+        return get_feature_matrix(neurographs, features)
 
 
-def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
+def stack_feature_matrices(neurographs, features, blocks):
     # Initialize
     X = None
     y = None
@@ -417,52 +310,29 @@ def __multiblock_feature_matrix(neurographs, features, blocks, model_type):
 
     # Feature extraction
     for block_id in blocks:
-        if neurographs[block_id].n_proposals() == 0:
-            idx_transforms["block_to_idxs"][block_id] = set()
-            continue
-
+        # Extract feature matrix
         idx_shift = 0 if X is None else X.shape[0]
-        if model_type == "MultiModalNet":
-            X_i, x_i, y_i, idx_transforms_i = get_multimodal_features(
-                neurographs[block_id], features[block_id], shift=idx_shift
-            )
-        else:
-            X_i, y_i, idx_transforms_i = get_feature_vectors(
-                neurographs[block_id], features[block_id], shift=idx_shift
-            )
+        X_i, y_i, idx_transforms_i = get_feature_matrix(
+            neurographs[block_id], features[block_id], shift=idx_shift
+        )
 
         # Concatenate
         if X is None:
             X = deepcopy(X_i)
             y = deepcopy(y_i)
-            if model_type == "MultiModalNet":
-                x = deepcopy(x_i)
         else:
             X = np.concatenate((X, X_i), axis=0)
             y = np.concatenate((y, y_i), axis=0)
-            if model_type == "MultiModalNet":
-                x = np.concatenate((x, x_i), axis=0)
 
         # Update dicts
         idx_transforms["block_to_idxs"][block_id] = idx_transforms_i[
             "block_to_idxs"
         ]
         idx_transforms["idx_to_edge"].update(idx_transforms_i["idx_to_edge"])
-
-    if model_type == "MultiModalNet":
-        X = {"imgs": X, "features": x}
-
     return X, y, idx_transforms
 
 
-def __feature_matrix(neurographs, features, model_type):
-    if model_type == "MultiModalNet":
-        return get_multimodal_features(neurographs, features)
-    else:
-        return get_feature_vectors(neurographs, features)
-
-
-def get_feature_vectors(neurograph, features, shift=0):
+def get_feature_matrix(neurograph, features, shift=0):
     # Initialize
     features = combine_features(features)
     key = sample(list(features.keys()), 1)[0]
@@ -473,41 +343,6 @@ def get_feature_vectors(neurograph, features, shift=0):
     # Build
     for i, edge in enumerate(features.keys()):
         X[i, :] = features[edge]
-        y[i] = 1 if edge in neurograph.target_edges else 0
-        idx_transforms["block_to_idxs"].add(i + shift)
-        idx_transforms["idx_to_edge"][i + shift] = edge
-    return X, y, idx_transforms
-
-
-def get_multimodal_features(neurograph, features, shift=0):
-    # Initialize
-    n_edges = neurograph.n_proposals()
-    X = np.zeros(((n_edges, 2) + tuple(CHUNK_SIZE)))
-    x = np.zeros((n_edges, N_SKEL_FEATURES + N_PROFILE_PTS))
-    y = np.zeros((n_edges))
-    idx_transforms = {"block_to_idxs": set(), "idx_to_edge": dict()}
-
-    # Build
-    for i, edge in enumerate(features["chunks"].keys()):
-        X[i, :] = features["chunks"][edge]
-        x[i, :] = np.concatenate(
-            (features["skel"][edge], features["profiles"][edge])
-        )
-        y[i] = 1 if edge in neurograph.target_edges else 0
-        idx_transforms["block_to_idxs"].add(i + shift)
-        idx_transforms["idx_to_edge"][i + shift] = edge
-    return X, x, y, idx_transforms
-
-
-def stack_chunks(neurograph, features, shift=0):
-    # Initialize
-    X = np.zeros(((neurograph.n_proposals(), 2) + tuple(CHUNK_SIZE)))
-    y = np.zeros((neurograph.n_proposals()))
-    idx_transforms = {"block_to_idxs": set(), "idx_to_edge": dict()}
-
-    # Build
-    for i, edge in enumerate(features["chunks"].keys()):
-        X[i, :] = features["chunks"][edge]
         y[i] = 1 if edge in neurograph.target_edges else 0
         idx_transforms["block_to_idxs"].add(i + shift)
         idx_transforms["idx_to_edge"][i + shift] = edge

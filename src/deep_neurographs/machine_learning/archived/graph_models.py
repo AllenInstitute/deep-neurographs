@@ -6,6 +6,8 @@ Created on Sat April 12 11:00:00 2024
 
 Graph neural network architectures that learn to classify edge proposals.
 
+NOTE: THIS SCRIPT IS NO LONGER USED!
+
 """
 
 import torch

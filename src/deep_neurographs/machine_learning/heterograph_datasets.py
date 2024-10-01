@@ -46,10 +46,10 @@ def init(neurograph, features, computation_graph):
     """
     # Extract features
     x_branches, _, idxs_branches = feature_generation.get_matrix(
-        neurograph, features["edges"], "GraphNeuralNet"
+        neurograph, features["edges"]
     )
     x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
-        neurograph, features["proposals"], "GraphNeuralNet"
+        neurograph, features["proposals"]
     )
     x_nodes = feature_generation.combine_features(features["nodes"])
 
@@ -206,7 +206,7 @@ class HeteroGraphDataset:
             # Update edge_index
             n = self.data["branch"]["x"].size(0)
             edge_index = [[n - 1, n - 2], [n - 2, n - 1]]
-            self.data[edge_type].edge_index = gnn_util.to_tensor(edge_index)
+            self.data[edge_type].edge_index = gnn_util.toTensor(edge_index)
             self.idxs_branches["idx_to_edge"][n - 1] = frozenset({-1, -2})
             self.idxs_branches["idx_to_edge"][n - 2] = frozenset({-2, -3})
 
@@ -282,7 +282,7 @@ class HeteroGraphDataset:
             v1 = self.idxs_proposals["edge_to_idx"][frozenset(e1)]
             v2 = self.idxs_proposals["edge_to_idx"][frozenset(e2)]
             edge_index.extend([[v1, v2], [v2, v1]])
-        return gnn_util.to_tensor(edge_index)
+        return gnn_util.toTensor(edge_index)
 
     def branch_to_branch(self):
         """
@@ -308,7 +308,7 @@ class HeteroGraphDataset:
                 v1 = self.idxs_branches["edge_to_idx"][frozenset(e1)]
                 v2 = self.idxs_branches["edge_to_idx"][frozenset(e2)]
                 edge_index.extend([[v1, v2], [v2, v1]])
-        return gnn_util.to_tensor(edge_index)
+        return gnn_util.toTensor(edge_index)
 
     def branch_to_proposal(self):
         """
@@ -338,7 +338,7 @@ class HeteroGraphDataset:
                 if frozenset((j, k)) not in self.proposals:
                     v2 = self.idxs_branches["edge_to_idx"][frozenset((j, k))]
                     edge_index.extend([[v2, v1]])
-        return gnn_util.to_tensor(edge_index)
+        return gnn_util.toTensor(edge_index)
 
     # Set Edge Attributes
     def set_edge_attrs(self, x_nodes, edge_type, idx_map):
