@@ -16,12 +16,7 @@ import torch
 
 from deep_neurographs.machine_learning import (
     datasets,
-    feature_generation,
     heterograph_datasets,
-)
-from deep_neurographs.machine_learning.models import (
-    FeedForwardNet,
-    MultiModalNet,
 )
 
 SUPPORTED_MODELS = ["RandomForest", "GraphNeuralNet"]

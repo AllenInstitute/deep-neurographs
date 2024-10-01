@@ -33,7 +33,7 @@ class HeteroGNN(torch.nn.Module):
     def __init__(
         self,
         device=None,
-        scale_hidden_dim=2,
+        scale_hidden=2,
         dropout=DROPOUT,
         heads_1=HEADS_1,
         heads_2=HEADS_2,
@@ -46,16 +46,16 @@ class HeteroGNN(torch.nn.Module):
         # Feature vector sizes
         node_dict = ml.heterograph_feature_generation.n_node_features()
         edge_dict = ml.heterograph_feature_generation.n_edge_features()
-        hidden_dim = scale_hidden_dim * np.max(list(node_dict.values()))
+        hidden = scale_hidden * np.max(list(node_dict.values()))
 
         # Linear layers
-        output_dim = heads_1 * heads_2 * hidden_dim
-        self.input_nodes = nn.ModuleDict(
-            {key: nn.Linear(d, hidden_dim, device=device) for key, d in node_dict.items()}
-        )
-        self.input_edges = {
-            key: nn.Linear(d, hidden_dim, device=device) for key, d in edge_dict.items()
-        }
+        output_dim = heads_1 * heads_2 * hidden
+        self.input_nodes = nn.ModuleDict()
+        self.input_edges = dict()
+        for key, d in node_dict.items():
+            self.input_nodes[key] = nn.Linear(d, hidden, device=device)
+        for key, d in edge_dict.items():
+            self.input_edges[key] = nn.Linear(d, hidden, device=device)
         self.output = Linear(output_dim, 1, device=device)
 
         # Convolutional layers
@@ -63,50 +63,50 @@ class HeteroGNN(torch.nn.Module):
             {
                 ("proposal", "edge", "proposal"): GATConv(
                     -1,
-                    hidden_dim,
+                    hidden,
                     dropout=dropout,
-                    edge_dim=hidden_dim,
+                    edge_dim=hidden,
                     heads=heads_1,
                 ),
                 ("branch", "edge", "branch"): GATConv(
                     -1,
-                    hidden_dim,
+                    hidden,
                     dropout=dropout,
-                    edge_dim=hidden_dim,
+                    edge_dim=hidden,
                     heads=heads_1,
                 ),
                 ("branch", "edge", "proposal"): GATConv(
-                    (hidden_dim, hidden_dim),
-                    hidden_dim,
+                    (hidden, hidden),
+                    hidden,
                     add_self_loops=False,
-                    edge_dim=hidden_dim,
+                    edge_dim=hidden,
                     heads=heads_1,
                 ),
             },
             aggr="sum",
         )
-        edge_dim = hidden_dim
-        hidden_dim = heads_1 * hidden_dim
+        edge_dim = hidden
+        hidden = heads_1 * hidden
 
         self.conv2 = HeteroConv(
             {
                 ("proposal", "edge", "proposal"): GATConv(
                     -1,
-                    hidden_dim,
+                    hidden,
                     dropout=dropout,
                     edge_dim=edge_dim,
                     heads=heads_2,
                 ),
                 ("branch", "edge", "branch"): GATConv(
                     -1,
-                    hidden_dim,
+                    hidden,
                     dropout=dropout,
                     edge_dim=edge_dim,
                     heads=heads_2,
                 ),
                 ("branch", "edge", "proposal"): GATConv(
-                    (hidden_dim, hidden_dim),
-                    hidden_dim,
+                    (hidden, hidden),
+                    hidden,
                     add_self_loops=False,
                     edge_dim=edge_dim,
                     heads=heads_2,
@@ -114,7 +114,7 @@ class HeteroGNN(torch.nn.Module):
             },
             aggr="sum",
         )
-        hidden_dim = heads_2 * hidden_dim
+        hidden = heads_2 * hidden
 
         # Nonlinear activation
         self.dropout = Dropout(dropout)
@@ -193,7 +193,7 @@ class HEATGNN(torch.nn.Module):
 
     def __init__(
         self,
-        hidden_dim,
+        hidden,
         metadata,
         node_dict,
         edge_dict,
@@ -208,17 +208,17 @@ class HEATGNN(torch.nn.Module):
         super().__init__()
         # Linear layers
         self.input_nodes = nn.ModuleDict(
-            {key: nn.Linear(d, hidden_dim) for key, d in node_dict.items()}
+            {key: nn.Linear(d, hidden) for key, d in node_dict.items()}
         )
         self.input_edges = {
-            key: nn.Linear(d, hidden_dim) for key, d in edge_dict.items()
+            key: nn.Linear(d, hidden) for key, d in edge_dict.items()
         }
-        self.output = Linear(heads_1 * heads_2 * hidden_dim)
+        self.output = Linear(heads_1 * heads_2 * hidden)
 
         # Convolutional layers
         self.conv1 = HEATConv(
-            hidden_dim,
-            hidden_dim,
+            hidden,
+            hidden,
             heads=heads_1,
             dropout=dropout,
             metadata=metadata,
@@ -234,16 +234,16 @@ class HEATGNN(torch.nn.Module):
         edge_attr_emb_dim (int) – The embedding size of edge features.
         heads (int, optional) – Number of multi-head-attentions. (default: 1)
         """
-        hidden_dim = heads_1 * hidden_dim
+        hidden = heads_1 * hidden
 
         self.conv2 = HEATConv(
-            hidden_dim,
-            hidden_dim,
+            hidden,
+            hidden,
             heads=heads_2,
             dropout=dropout,
             metadata=metadata,
         )
-        hidden_dim = heads_2 * hidden_dim
+        hidden = heads_2 * hidden
 
         # Nonlinear activation
         self.dropout = Dropout(dropout)

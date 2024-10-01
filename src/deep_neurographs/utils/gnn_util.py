@@ -31,7 +31,7 @@ def get_inputs(data, device=None):
     if "cuda" in device and torch.cuda.is_available():
         x = toGPU(x, device)
         edge_index = toGPU(edge_index, device)
-        edge_attr = toGPU(edge_attr, device)    
+        edge_attr = toGPU(edge_attr, device)
     return x, edge_index, edge_attr
 
 
