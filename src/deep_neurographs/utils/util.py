@@ -372,7 +372,7 @@ def write_txt(path, contents):
     f.close()
 
 
-def write_to_s3(local_path, bucket_name, s3_key):
+def write_to_s3(local_path, bucket_name, prefix):
     """
     Writes a single file on local machine to an s3 bucket.
 
@@ -382,7 +382,7 @@ def write_to_s3(local_path, bucket_name, s3_key):
         Path to file to be written to s3.
     bucket_name : str
         Name of s3 bucket.
-    s3_key : str
+    prefix : str
         Path within s3 bucket.
 
     Returns
@@ -391,7 +391,7 @@ def write_to_s3(local_path, bucket_name, s3_key):
 
     """
     s3 = boto3.client('s3')
-    s3.upload_file(local_path, bucket_name, s3_key)
+    s3.upload_file(local_path, bucket_name, prefix)
 
 
 # --- math utils ---
