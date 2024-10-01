@@ -4,14 +4,14 @@ Created on Sat November 04 15:30:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Routines for running inference with a machine model that classifies edge proposals.
+Routines for running inference with a machine model that classifies edge
+proposals.
 
 """
 
 from datetime import datetime
 from time import time
 from torch.nn.functional import sigmoid
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import networkx as nx

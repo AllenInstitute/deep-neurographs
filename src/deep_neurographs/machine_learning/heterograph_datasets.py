@@ -46,7 +46,7 @@ def init(neurograph, features, computation_graph):
     """
     # Extract features
     x_branches, _, idxs_branches = feature_generation.get_matrix(
-        neurograph, features["edges"]
+        neurograph, features["edge"]
     )
     x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
         neurograph, features["proposals"]
@@ -137,7 +137,7 @@ class HeteroGraphDataset:
 
         # Edges
         self.init_edges()
-        self.check_missing_edge_type()
+        self.check_missing_edge_types()
         self.init_edge_attrs(x_nodes)
         self.n_edge_attrs = n_edge_features(x_nodes)
 
@@ -162,9 +162,7 @@ class HeteroGraphDataset:
         # Store edges
         self.data["proposal", "edge", "proposal"].edge_index = proposal_edges
         self.data["branch", "edge", "branch"].edge_index = branch_edges
-        self.data[
-            "branch", "edge", "proposal"
-        ].edge_index = branch_proposal_edges
+        self.data["branch", "edge", "proposal"].edge_index = branch_proposal_edges
 
     def init_edge_attrs(self, x_nodes):
         """
@@ -193,22 +191,34 @@ class HeteroGraphDataset:
             x_nodes, edge_type, self.idxs_branches, self.idxs_proposals
         )
 
-    def check_missing_edge_type(self):
-        edge_type = ("branch", "edge", "branch")
-        if len(self.data[edge_type].edge_index) == 0:
-            # Add dummy features
-            dtype = self.data["branch"].x.dtype
-            zeros = torch.zeros(2, self.n_branch_features(), dtype=dtype)
-            self.data["branch"].x = torch.cat(
-                (self.data["branch"].x, zeros), dim=0
-            )
+    def check_missing_edge_types(self):
+        for node_type in ["branch", "proposal"]:
+            edge_type = (node_type, "edge", node_type)
+            if len(self.data[edge_type].edge_index) == 0:
+                # Add dummy features
+                dtype = self.data[node_type].x.dtype
+                if node_type == "branch":
+                    d = self.n_branch_features()
+                else:
+                    d = self.n_proposal_features()
 
-            # Update edge_index
-            n = self.data["branch"]["x"].size(0)
-            edge_index = [[n - 1, n - 2], [n - 2, n - 1]]
-            self.data[edge_type].edge_index = gnn_util.toTensor(edge_index)
-            self.idxs_branches["idx_to_edge"][n - 1] = frozenset({-1, -2})
-            self.idxs_branches["idx_to_edge"][n - 2] = frozenset({-2, -3})
+                zeros = torch.zeros(2, d, dtype=dtype)
+                self.data[node_type].x = torch.cat(
+                    (self.data[node_type].x, zeros), dim=0
+                )
+
+                # Update edge_index
+                n = self.data[node_type]["x"].size(0)
+                e_1 = frozenset({-1, -2})
+                e_2 = frozenset({-2, -3})
+                edges = [[n - 1, n - 2], [n - 2, n - 1]]
+                self.data[edge_type].edge_index = gnn_util.toTensor(edges)
+                if node_type == "branch":
+                    self.idxs_branches["idx_to_edge"][n - 1] = e_1
+                    self.idxs_branches["idx_to_edge"][n - 2] = e_2
+                else:
+                    self.idxs_proposals["idx_to_edge"][n - 1] = e_1
+                    self.idxs_proposals["idx_to_edge"][n - 2] = e_2
 
     # -- Getters --
     def n_branch_features(self):

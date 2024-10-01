@@ -55,7 +55,7 @@ def generate_gnn_features(
         "nodes": run_on_nodes(
             neurograph, computation_graph, img, downsample_factor
         ),
-        "edges": run_on_edges(neurograph, computation_graph),
+        "edge": run_on_edges(neurograph, computation_graph),
         "proposals": run_on_proposals(
             neurograph, img, proposals, radius, downsample_factor
         ),
@@ -459,13 +459,13 @@ def check_degenerate(voxels):
 
 
 def n_node_features():
-    return {'branch': 2, 'proposal': 34}
+    return {"branch": 2, "proposal": 34}
 
 
 def n_edge_features():
     n_edge_features_dict = {
-        ('proposal', 'edge', 'proposal'): 3,
-        ('branch', 'edge', 'branch'): 3,
-        ('branch', 'edge', 'proposal'): 3
+        ("proposal", "edge", "proposal"): 3,
+        ("branch", "edge", "branch"): 3,
+        ("branch", "edge", "proposal"): 3
     }
     return n_edge_features_dict

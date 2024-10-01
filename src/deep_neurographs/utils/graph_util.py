@@ -384,7 +384,7 @@ def get_subcomponent_irreducibles(graph, swc_dict, smooth_bool):
         else:
             xyz_i = swc_dict["xyz"][swc_dict["idx"][i]]
             xyz_j = swc_dict["xyz"][swc_dict["idx"][j]]
-            cur_length += geometry.dist(xyz_i, xyz_j)        
+            cur_length += geometry.dist(xyz_i, xyz_j)
 
         # Visit j
         attrs = upd_edge_attrs(swc_dict, attrs, j)
