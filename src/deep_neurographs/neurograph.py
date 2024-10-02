@@ -224,10 +224,13 @@ class NeuroGraph(nx.Graph):
         for i in nodes:
             nbs = list(self.neighbors(i))
             if len(nbs) == 2 and len(self.nodes[i]["proposals"]) == 0:
-                # Get attributes
+                # Concatenate attributes
+                len_1 = self.edges[i, nbs[0]]["length"]
+                len_2 = self.edges[i, nbs[1]]["length"]
                 xyz = self.get_branches(i, key="xyz")
                 radius = self.get_branches(i, key="radius")
                 attrs = {
+                    "length": len_1 + len_2,
                     "radius": concatenate([np.flip(radius[0]), radius[1]]),
                     "xyz": concatenate([np.flip(xyz[0], axis=0), xyz[1]]),
                 }
@@ -649,7 +652,7 @@ class NeuroGraph(nx.Graph):
     def merge_proposal(self, proposal):
         i, j = tuple(proposal)
         somas_check = not (self.is_soma(i) and self.is_soma(j))
-        degrees_check = self.degree[i] == 2 and self.degree[j] == 2
+        degrees_check = not (self.degree[i] == 2 and self.degree[j] == 2)
         if somas_check and degrees_check:
             # Dense attributes
             attrs = dict()
@@ -665,10 +668,10 @@ class NeuroGraph(nx.Graph):
                 attrs["length"] = len_ij
             elif self.degree[i] == 2:
                 e_j = (j, self.leaf_neighbor(j))
-                attrs["length"] = self.edges[e_i]["length"]
+                attrs["length"] = self.edges[e_j]["length"]
             else:
                 e_i = (i, self.leaf_neighbor(i))
-                attrs["length"] = self.edges[e_j]["length"]
+                attrs["length"] = self.edges[e_i]["length"]
 
             swc_id_i = self.nodes[i]["swc_id"]
             swc_id_j = self.nodes[j]["swc_id"]

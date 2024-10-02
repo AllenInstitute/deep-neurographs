@@ -479,14 +479,9 @@ class InferenceEngine:
                 preds = self.predict(dataset)
 
                 # Update graph
-                batch_accepts = get_accepted_proposals(
-                    neurograph, preds, self.threshold
-                )
-                for proposal in batch_accepts:
-                    neurograph.merge_proposal(proposal)
-
-                # Finish
-                accepts.extend(batch_accepts)
+                for p in get_accepts(neurograph, preds, self.threshold):
+                    neurograph.merge_proposal(p)
+                    accepts.append(p)
                 pbar.update(len(batch["proposals"]))
             neurograph.absorb_reducibles()
         return neurograph, accepts
@@ -591,7 +586,7 @@ class InferenceEngine:
 
 
 # --- Accepting Proposals ---
-def get_accepted_proposals(neurograph, preds, threshold, high_threshold=0.9):
+def get_accepts(neurograph, preds, threshold, high_threshold=0.9):
     """
     Determines which proposals to accept based on prediction scores and the
     specified threshold.
@@ -623,6 +618,7 @@ def get_accepted_proposals(neurograph, preds, threshold, high_threshold=0.9):
     accepts = list()
     accepts.extend(filter_proposals(neurograph, best_proposals))
     accepts.extend(filter_proposals(neurograph, proposals))
+    neurograph.remove_edges_from(map(tuple, accepts))
     return accepts
 
 
@@ -685,17 +681,9 @@ def filter_proposals(graph, proposals):
     """
     accepts = list()
     for i, j in proposals:
-        nodes_i = set(gutil.get_component(graph, i))
-        nodes_j = set(gutil.get_component(graph, j))
-        if nodes_i.isdisjoint(nodes_j):
-            subgraph_i = graph.subgraph(nodes_i)
-            subgraph_j = graph.subgraph(nodes_j)
-            subgraph = nx.union(subgraph_i, subgraph_j)
-            created_cycle, _ = gutil.creates_cycle(subgraph, (i, j))
-            if not created_cycle:
-                graph.add_edge(i, j)
-                accepts.append(frozenset({i, j}))
-    graph.remove_edges_from(map(tuple, accepts))
+        if not nx.has_path(graph, i, j):
+            graph.add_edge(i, j)
+            accepts.append(frozenset({i, j}))
     return accepts
 
 

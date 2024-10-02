@@ -798,32 +798,6 @@ def upd_node_attrs(swc_dict, leafs, junctions, i):
 
 
 # -- miscellaneous --
-def creates_cycle(graph, edge):
-    """
-    Checks whether adding "edge" to "graph" creates a cycle.
-
-    Paramaters
-    ----------
-    graph : networkx.Graph
-        Graph to be checked for cycles.
-    edge : tuple
-        Edge to be added to "graph"
-
-    Returns
-    -------
-    bool
-        Indication of whether adding "edge" to graph creates a cycle.
-
-    """
-    graph.add_edges_from([edge])
-    exists = cycle_exists(graph)
-    graph.remove_edges_from([edge])
-    if exists:
-        return True, edge
-    else:
-        return False, edge
-
-
 def cycle_exists(graph):
     """
     Checks whether a cycle exists in "graph".
@@ -900,14 +874,13 @@ def get_component(graph, root):
 
     """
     queue = [root]
-    component = set()
+    visited = set()
     while len(queue):
         i = queue.pop()
-        component.add(i)
-        for j in [j for j in graph.neighbors(i) if j not in component]:
-            if (i, j) in graph.edges:
-                queue.append(j)
-    return component
+        visited.add(i)
+        for j in [j for j in graph.neighbors(i) if j not in visited]:
+            queue.append(j)
+    return visited
 
 
 def count_components(graph):
