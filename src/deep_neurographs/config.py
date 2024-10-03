@@ -47,9 +47,6 @@ class GraphConfig:
     smooth_bool : bool, optional
         Indication of whether to smooth branches in graph. The default is
         True.
-    trim_depth : float, optional
-        Maximum path length (in microns) to trim from all branches. The
-        default is 5.
     trim_endpoints_bool : bool, optional
         Indication of whether to endpoints of branches with exactly one
         proposal. The default is True.
@@ -67,7 +64,6 @@ class GraphConfig:
     remove_doubles_bool: bool = False
     search_radius: float = 20.0
     smooth_bool: bool = True
-    trim_depth: float = 5.0
     trim_endpoints_bool: bool = True
 
 
