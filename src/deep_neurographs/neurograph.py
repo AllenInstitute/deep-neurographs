@@ -20,9 +20,7 @@ from scipy.spatial import KDTree
 
 from deep_neurographs import generate_proposals, geometry
 from deep_neurographs.geometry import dist as get_dist
-from deep_neurographs.groundtruth_generation import (
-    init_targets,
-)
+from deep_neurographs.groundtruth_generation import init_targets
 from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import img_util, swc_util, util
 
@@ -658,6 +656,8 @@ class NeuroGraph(nx.Graph):
             attrs = dict()
             for k in ["xyz", "radius"]:
                 combine = np.vstack if k == "xyz" else np.array
+                self.nodes[i][k][-1] = 8.0
+                self.nodes[j][k][0] = 8.0
                 attrs[k] = combine([self.nodes[i][k], self.nodes[j][k]])
 
             # Sparse attributes
@@ -843,23 +843,6 @@ class NeuroGraph(nx.Graph):
         else:
             return np.flip(self.edges[edge][key], axis=0)
 
-    def edge_length(self, edge):
-        """
-        Computes length of path stored as xyz coordinates in "edge".
-
-        Parameters
-        ----------
-        edge : tuple
-            Edge in self.
-
-        Returns
-        -------
-        float
-            Path length of edge.
-
-        """
-        return geometry.path_length(self.edges[edge]["xyz"])
-
     def is_contained(self, node_or_xyz, buffer=0):
         if self.bbox:
             coord = self.to_voxels(node_or_xyz)
@@ -935,25 +918,6 @@ class NeuroGraph(nx.Graph):
                 return self.nodes[i]["swc_id"]
         else:
             return None
-
-    """
-    def component_cardinality(self, root):
-        cardinality = 0
-        queue = [(-1, root)]
-        visited = set()
-        while len(queue):
-            # Visit
-            i, j = queue.pop()
-            visited.add(frozenset((i, j)))
-            if i != -1:
-                cardinality = len(self.edges[i, j]["xyz"])
-
-            # Add neighbors
-            for k in self.neighbors(j):
-                if frozenset((j, k)) not in visited:
-                    queue.append((j, k))
-        return cardinality
-    """
 
     # --- write graph to swcs ---
     def to_zipped_swcs(self, zip_path, color=None):

@@ -23,7 +23,7 @@ ALIGNED_THRESHOLD = 4
 MIN_INTERSECTION = 10
 
 
-def init_targets(pred_graph, target_graph, strict=True):
+def init_targets(pred_graph, target_graph):
     """
     Initializes ground truth for edge proposals.
 
@@ -33,62 +33,53 @@ def init_targets(pred_graph, target_graph, strict=True):
         Graph built from ground truth swc files.
     pred_graph : NeuroGraph
         Graph build from predicted swc files.
-    strict : bool, optional
-        Indication if whether target edges should be determined by using
-        stricter criteria that checks if proposals are reasonably well
-        aligned. The default is True.
 
     Returns
     -------
-    target_edges : set
-        Edge proposals that machine learning model learns to accept.
+    set
+        Proposals that machine learning model learns to accept.
 
     """
     # Initializations
-    valid_proposals = get_valid_proposals(target_graph, pred_graph)
-    lengths = [pred_graph.proposal_length(e) for e in valid_proposals]
+    proposals = get_valid_proposals(target_graph, pred_graph)
+    lengths = [pred_graph.proposal_length(p) for p in proposals]
 
     # Add best simple edges
-    target_edges = set()
+    gt_accepts = set()
     graph = pred_graph.copy_graph()
-    for i in np.argsort(lengths):
-        edge = valid_proposals[i]
-        created_cycle, _ = gutil.creates_cycle(graph, tuple(edge))
-        if not created_cycle:
-            graph.add_edges_from([edge])
-            target_edges.add(edge)
-    return target_edges
+    for idx in np.argsort(lengths):
+        i, j = tuple(proposals[idx])
+        if not nx.has_path(graph, i, j):
+            graph.add_edge(i, j)
+            gt_accepts.add(proposals[idx])
+    return gt_accepts
 
 
 def get_valid_proposals(target_graph, pred_graph):
     # Initializations
-    valid_proposals = list()
     kdtree = target_graph.get_kdtree()
-    invalid_ids, node_to_target = unaligned_components(
+    aligned_fragment_ids, node_to_target = find_aligned_fragments(
         target_graph, pred_graph, kdtree
     )
 
-    # Check whether aligned to same/adjacent target edges (i.e. valid)
-    for edge in pred_graph.proposals:
-        # Filter invalid and proposals btw different components
-        i, j = tuple(edge)
-        invalid_i = pred_graph.nodes[i]["swc_id"] in invalid_ids
-        invalid_j = pred_graph.nodes[j]["swc_id"] in invalid_ids
-        if invalid_i or invalid_j:
-            continue
-        elif node_to_target[i] != node_to_target[j]:
-            continue
-
-        # Check whether proposal is valid
-        target_id = node_to_target[i]
-        if is_valid(target_graph, pred_graph, kdtree, target_id, edge):
-            valid_proposals.append(edge)
+    # Check whether aligned to same/adjacent target edges
+    valid_proposals = list()
+    for p in pred_graph.proposals:
+        i, j = tuple(p)
+        is_aligned_i = pred_graph.nodes[i]["swc_id"] in aligned_fragment_ids
+        is_aligned_j = pred_graph.nodes[j]["swc_id"] in aligned_fragment_ids
+        if is_aligned_i and is_aligned_j:
+            if node_to_target[i] == node_to_target[j]:
+                # Check whether proposal is valid
+                target_id = node_to_target[i]
+                if is_valid(target_graph, pred_graph, kdtree, target_id, p):
+                    valid_proposals.append(p)
     return valid_proposals
 
 
-def unaligned_components(target_graph, pred_graph, kdtree):
+def find_aligned_fragments(target_graph, pred_graph, kdtree):
     """
-    Detects connected components in "pred_graph" that are unaligned to a
+    Detects connected components in "pred_graph" that are aligned to some
     connected component in "target_graph".
 
     Parameters
@@ -100,31 +91,30 @@ def unaligned_components(target_graph, pred_graph, kdtree):
 
     Returns
     -------
-    invalid_ids : set
+    valid_ids : set
         IDs in ""pred_graph" that correspond to connected components that
-        are unaligned to a connected component in "target_graph".
+        are aligned to some connected component in "target_graph".
     node_to_target : dict
         Mapping between nodes and target ids.
 
     """
-    invalid_ids = set()
+    valid_ids = set()
     node_to_target = dict()
-    for component in nx.connected_components(pred_graph):
+    for nodes in nx.connected_components(pred_graph):
         aligned, target_id = is_component_aligned(
-            target_graph, pred_graph, component, kdtree
+            target_graph, pred_graph, nodes, kdtree
         )
-        if not aligned:
-            i = util.sample_once(component)
-            invalid_ids.add(pred_graph.nodes[i]["swc_id"])
-        else:
-            node_to_target = upd_dict(node_to_target, component, target_id)
-    return invalid_ids, node_to_target
+        if aligned:
+            i = util.sample_once(nodes)
+            valid_ids.add(pred_graph.nodes[i]["swc_id"])
+            node_to_target = upd_dict(node_to_target, nodes, target_id)
+    return valid_ids, node_to_target
 
 
-def is_component_aligned(target_graph, pred_graph, component, kdtree):
+def is_component_aligned(target_graph, pred_graph, nodes, kdtree):
     """
-    Determines whether the connected component defined by "node_subset" is
-    close to a component in "target_graph". This routine iterates over
+    Determines whether the connected component "nodes" is
+    close to some component in "target_graph". This routine iterates over
     "node_subset" and projects each node onto "target_graph", then
     computes the projection distance. If (on average) each node in
     "node_subset" is less 3.5 microns from a component in the ground truth,
@@ -142,13 +132,13 @@ def is_component_aligned(target_graph, pred_graph, component, kdtree):
     Returns
     -------
     bool
-        Indication of whether "component" is aligned to a connected
+        Indication of whether connected component "nodes" is aligned to a connected
         component in "target_graph".
 
     """
     # Compute distances
     dists = defaultdict(list)
-    for edge in pred_graph.subgraph(component).edges:
+    for edge in pred_graph.subgraph(nodes).edges:
         for xyz in pred_graph.edges[edge]["xyz"]:
             hat_xyz = geometry.kdtree_query(kdtree, xyz)
             hat_swc_id = target_graph.xyz_to_swc(hat_xyz)
@@ -276,14 +266,6 @@ def is_adjacent_aligned(hat_branch_i, hat_branch_j, xyz_i, xyz_j):
 
 
 # -- util --
-def upd_dict_cnts(my_dict, key):
-    if key in my_dict.keys():
-        my_dict[key] += 1
-    else:
-        my_dict[key] = 1
-    return my_dict
-
-
 def orient_branch(branch_i, branch_j):
     """
     Flips branches so that "all(branch_i[0] == branch_j[0])" is True.

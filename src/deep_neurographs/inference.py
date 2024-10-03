@@ -9,24 +9,23 @@ proposals.
 
 """
 
+import os
 from datetime import datetime
 from time import time
-from torch.nn.functional import sigmoid
-from tqdm import tqdm
 
 import networkx as nx
 import numpy as np
-import os
 import torch
+from torch.nn.functional import sigmoid
+from tqdm import tqdm
 
 from deep_neurographs.graph_artifact_removal import remove_doubles
 from deep_neurographs.machine_learning import feature_generation
 from deep_neurographs.utils import gnn_util
 from deep_neurographs.utils import graph_util as gutil
-from deep_neurographs.utils import img_util, ml_util
-from deep_neurographs.utils import util
-from deep_neurographs.utils.graph_util import GraphLoader
+from deep_neurographs.utils import img_util, ml_util, util
 from deep_neurographs.utils.gnn_util import toCPU
+from deep_neurographs.utils.graph_util import GraphLoader
 
 BATCH_SIZE = 2000
 CONFIDENCE_THRESHOLD = 0.7
@@ -190,7 +189,6 @@ class InferencePipeline:
             anisotropy=self.graph_config.anisotropy,
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,
-            trim_depth=self.graph_config.trim_depth,
         )
         self.graph = graph_builder.run(fragments_pointer)
 
@@ -345,7 +343,6 @@ class InferencePipeline:
             "confidence_threshold": self.ml_config.threshold,
             "node_spacing": self.graph_config.node_spacing,
             "remove_doubles": self.graph_config.remove_doubles_bool,
-            "trim_depth": self.graph_config.trim_depth,
         }
         path = os.path.join(self.output_dir, "metadata.json")
         util.write_json(path, metadata)

@@ -14,10 +14,7 @@ import joblib
 import numpy as np
 import torch
 
-from deep_neurographs.machine_learning import (
-    datasets,
-    heterograph_datasets,
-)
+from deep_neurographs.machine_learning import datasets, heterograph_datasets
 
 SUPPORTED_MODELS = ["RandomForest", "GraphNeuralNet"]
 

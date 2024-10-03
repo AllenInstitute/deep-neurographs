@@ -44,8 +44,8 @@ class HeteroGNN(torch.nn.Module):
         """
         super().__init__()
         # Feature vector sizes
-        node_dict = ml.heterograph_feature_generation.n_node_features()
-        edge_dict = ml.heterograph_feature_generation.n_edge_features()
+        node_dict = ml.feature_generation_graphs.n_node_features()
+        edge_dict = ml.feature_generation_graphs.n_edge_features()
         hidden = scale_hidden * np.max(list(node_dict.values()))
 
         # Linear layers
@@ -56,7 +56,7 @@ class HeteroGNN(torch.nn.Module):
             self.input_nodes[key] = nn.Linear(d, hidden, device=device)
         for key, d in edge_dict.items():
             self.input_edges[key] = nn.Linear(d, hidden, device=device)
-        self.output = Linear(output_dim, 1, device=device)
+        self.output = Linear(output_dim, 1).to(device)
 
         # Convolutional layers
         self.conv1 = HeteroConv(
