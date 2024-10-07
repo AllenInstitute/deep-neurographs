@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from deep_neurographs import geometry
 
-DOT_THRESHOLD = -0.4
+DOT_THRESHOLD = -0.3
 RADIUS_SCALING_FACTOR = 1.5
 TRIM_SEARCH_DIST = 15
 
@@ -61,9 +61,9 @@ def run(
     kdtree = init_kdtree(neurograph, complex_bool)
     radius *= RADIUS_SCALING_FACTOR if trim_endpoints_bool else 1.0
     if progress_bar:
-        iterable = tqdm(neurograph.leafs, desc="Proposals")
+        iterable = tqdm(neurograph.get_leafs(), desc="Proposals")
     else:
-        iterable = neurograph.leafs
+        iterable = neurograph.get_leafs()
 
     # Main
     for leaf in iterable:
@@ -151,7 +151,7 @@ def get_candidates(
     if max_proposals < 0 and len(candidates) == 1:
         return candidates if neurograph.is_leaf(candidates[0]) else []
     else:
-        return [] if max_proposals < 0 else candidates
+        return list() if max_proposals < 0 else candidates
 
 
 def search_kdtree(neurograph, leaf, kdtree, radius, max_proposals):
@@ -312,6 +312,7 @@ def run_trimming(neurograph, proposals, radius):
         elif neurograph.dist(i, j) > radius:
             neurograph.remove_proposal(proposal)
         n_endpoints_trimmed += 1 if trim_bool else 0
+    print("# Endpoints Trimmed:", n_endpoints_trimmed)
     return neurograph
 
 
@@ -458,9 +459,10 @@ def compute_dot(branch_1, branch_2, idx_1, idx_2):
     b2 = branch_2 - geometry.midpoint(branch_1[idx_1], branch_2[idx_2])
 
     # Main
+    dot_5 = np.dot(tangent(b1, idx_1, 5), tangent(b2, idx_2, 5))
     dot_10 = np.dot(tangent(b1, idx_1, 10), tangent(b2, idx_2, 10))
     dot_20 = np.dot(tangent(b1, idx_1, 20), tangent(b2, idx_2, 20))
-    return min(dot_10, dot_20)
+    return min(dot_5, min(dot_10, dot_20))
 
 
 def tangent(branch, idx, depth):

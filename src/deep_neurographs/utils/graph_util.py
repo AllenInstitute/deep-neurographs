@@ -37,7 +37,7 @@ from deep_neurographs.utils import img_util, swc_util, util
 MIN_SIZE = 30
 NODE_SPACING = 1
 SMOOTH_BOOL = True
-PRUNE_DEPTH = 16
+PRUNE_DEPTH = 25
 
 
 class GraphLoader:
@@ -165,7 +165,7 @@ def get_irreducibles(
     min_size,
     img_bbox=None,
     progress_bar=True,
-    prune_depth=16.0,
+    prune_depth=PRUNE_DEPTH,
     smooth_bool=True,
 ):
     """
@@ -220,7 +220,7 @@ def get_component_irreducibles(
     swc_dict,
     min_size,
     img_bbox=None,
-    prune_depth=16.0,
+    prune_depth=PRUNE_DEPTH,
     smooth_bool=True,
 ):
     """
@@ -451,7 +451,7 @@ def prune_branch(graph, leaf, prune_depth):
     """
     branch = [leaf]
     node_dists = list()
-    for (i, j) in nx.dfs_edges(graph, source=leaf, depth_limit=prune_depth):
+    for (i, j) in nx.dfs_edges(graph, source=leaf, depth_limit=2*prune_depth):
         # Visit edge
         node_dists.append(compute_dist(graph, i, j))
         if graph.degree(j) > 2:
@@ -462,7 +462,7 @@ def prune_branch(graph, leaf, prune_depth):
         # Check whether to stop
         if np.sum(node_dists) > prune_depth:
             break
-    return list()
+    return branch[0:min(4, len(branch))]
 
 
 def smooth_branch(swc_dict, attrs, edges, nbs, root, j):

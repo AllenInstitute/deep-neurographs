@@ -167,8 +167,6 @@ def delete(neurograph, nodes, swc_id):
     i, j = tuple(nodes)
     neurograph = remove_xyz_entries(neurograph, i, j)
     neurograph.remove_nodes_from([i, j])
-    neurograph.leafs.remove(i)
-    neurograph.leafs.remove(j)
     neurograph.swc_ids.remove(swc_id)
     return neurograph
 
