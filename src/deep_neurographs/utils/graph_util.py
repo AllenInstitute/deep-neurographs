@@ -462,7 +462,7 @@ def prune_branch(graph, leaf, prune_depth):
         # Check whether to stop
         if np.sum(node_dists) > prune_depth:
             break
-    return branch[0:min(4, len(branch))]
+    return branch[0:min(5, len(branch))]
 
 
 def smooth_branch(swc_dict, attrs, edges, nbs, root, j):

@@ -230,10 +230,10 @@ def proposal_skeletal(neurograph, proposals, radius):
                 neurograph.proposal_length(proposal) / radius,
                 neurograph.n_nearby_leafs(proposal, radius),
                 neurograph.proposal_radii(proposal),
-                neurograph.proposal_directionals(proposal, 8),
                 neurograph.proposal_directionals(proposal, 16),
                 neurograph.proposal_directionals(proposal, 32),
                 neurograph.proposal_directionals(proposal, 64),
+                neurograph.proposal_directionals(proposal, 128),
             ),
             axis=None,
         )
