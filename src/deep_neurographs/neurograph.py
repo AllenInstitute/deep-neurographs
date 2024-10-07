@@ -660,7 +660,7 @@ class NeuroGraph(nx.Graph):
 
     def merge_proposal(self, proposal):
         i, j = tuple(proposal)
-        somas_check = not (self.is_soma(i) and self.is_soma(j))        
+        somas_check = not (self.is_soma(i) and self.is_soma(j))
         if somas_check and self.check_proposal_degrees(i, j):
             # Dense attributes
             attrs = dict()
@@ -668,8 +668,6 @@ class NeuroGraph(nx.Graph):
             self.nodes[j]["radius"] = 7.0
             for k in ["xyz", "radius"]:
                 combine = np.vstack if k == "xyz" else np.array
-                self.nodes[i][k][-1] = 8.0
-                self.nodes[j][k][0] = 8.0
                 attrs[k] = combine([self.nodes[i][k], self.nodes[j][k]])
 
             # Sparse attributes
@@ -701,7 +699,7 @@ class NeuroGraph(nx.Graph):
         one_leaf = self.degree[i] == 1 or self.degree[j] == 1
         branching = self.degree[i] > 2 or self.degree[j] > 2
         return one_leaf and not branching
-        
+
     def upd_ids(self, swc_id, r):
         """
         Updates the swc_id of all nodes connected to "r".

@@ -152,7 +152,9 @@ class InferencePipeline:
         t, unit = util.time_writer(time() - t0)
         print(f"Total Runtime: {round(t, 4)} {unit}\n")
 
-    def run_schedule(self, fragments_pointer, search_radius_schedule):
+    def run_schedule(
+        self, fragments_pointer, search_radius_schedule, save_all_rounds=False
+    ):
         t0 = time()
         self.report_experiment()
         self.build_graph(fragments_pointer)
@@ -161,7 +163,12 @@ class InferencePipeline:
             round_id += 1
             self.generate_proposals(search_radius)
             self.run_inference()
+            if save_all_rounds:
+                self.save_results(round_id=round_id)
+
+        if not save_all_rounds:
             self.save_results(round_id=round_id)
+
         t, unit = util.time_writer(time() - t0)
         print(f"Total Runtime: {round(t, 4)} {unit}\n")
 
@@ -263,7 +270,7 @@ class InferencePipeline:
         )
         self.accepted_proposals.extend(accepts)
         print("# Accepted:", util.reformat_number(len(accepts)))
-        print("% Accepted:", len(accepts) / n_proposals)
+        print("% Accepted:", round(len(accepts) / n_proposals, 4))
 
         t, unit = util.time_writer(time() - t0)
         print(f"Module Runtime: {round(t, 4)} {unit}\n")

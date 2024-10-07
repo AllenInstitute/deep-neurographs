@@ -142,8 +142,7 @@ def read_tensorstore_with_bbox(img, bbox):
     try:
         shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
         return read_tensorstore(img, bbox["min"], shape, from_center=False)
-    except Exception as e:
-        print(type(e), e)
+    except Exception:
         return np.zeros(shape)
 
 
@@ -186,7 +185,7 @@ def read_intensities(img, voxels):
         Image intensities.
 
     """
-    return [img[tuple(voxel)] for voxel in voxels]
+    return [img[voxel] for voxel in map(tuple, voxels)]
 
 
 def get_start_end(voxel, shape, from_center=True):
@@ -405,7 +404,7 @@ def get_bbox(origin, shape):
         return None
 
 
-def get_minimal_bbox(voxels, buffer=0):
+def get_minimal_bbox(voxels):
     """
     Gets the min and max coordinates of a bounding box that contains "voxels".
 
@@ -425,7 +424,16 @@ def get_minimal_bbox(voxels, buffer=0):
     """
     bbox = {
         "min": np.floor(np.min(voxels, axis=0) - 1).astype(int),
-        "max": np.ceil(np.max(voxels, axis=0) + buffer + 1).astype(int),
+        "max": np.ceil(np.max(voxels, axis=0) + 1).astype(int),
+    }
+    return bbox
+
+
+def get_fixed_bbox(voxels, shape):
+    centroid = np.round(np.mean(voxels, axis=0)).astype(int)
+    bbox = {
+        "min": [centroid[i] - shape[i] // 2 for i in range(3)],
+        "max": [centroid[i] + shape[i] // 2 for i in range(3)],
     }
     return bbox
 

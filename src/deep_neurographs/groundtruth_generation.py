@@ -16,7 +16,6 @@ import numpy as np
 
 from deep_neurographs import geometry
 from deep_neurographs.geometry import dist as get_dist
-from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import util
 
 ALIGNED_THRESHOLD = 4
@@ -132,8 +131,8 @@ def is_component_aligned(target_graph, pred_graph, nodes, kdtree):
     Returns
     -------
     bool
-        Indication of whether connected component "nodes" is aligned to a connected
-        component in "target_graph".
+        Indication of whether connected component "nodes" is aligned to a
+        connected component in "target_graph".
 
     """
     # Compute distances

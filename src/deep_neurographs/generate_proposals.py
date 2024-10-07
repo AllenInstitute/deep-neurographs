@@ -109,8 +109,8 @@ def run(
     if trim_endpoints_bool:
         radius /= RADIUS_SCALING_FACTOR
         long_range, in_range = separate_proposals(neurograph, radius)
-        neurograph = run_trimming(neurograph, long_range, radius)
-        neurograph = run_trimming(neurograph, in_range, radius)
+        neurograph = run_trimming(neurograph, long_range, radius, progress_bar)
+        neurograph = run_trimming(neurograph, in_range, radius, progress_bar)
 
 
 def init_kdtree(neurograph, complex_bool):
@@ -297,7 +297,7 @@ def separate_proposals(neurograph, radius):
 
 
 # --- Trim Endpoints ---
-def run_trimming(neurograph, proposals, radius):
+def run_trimming(neurograph, proposals, radius, progress_bar):
     n_endpoints_trimmed = 0
     long_radius = radius * RADIUS_SCALING_FACTOR
     for proposal in deepcopy(proposals):
@@ -312,7 +312,8 @@ def run_trimming(neurograph, proposals, radius):
         elif neurograph.dist(i, j) > radius:
             neurograph.remove_proposal(proposal)
         n_endpoints_trimmed += 1 if trim_bool else 0
-    print("# Endpoints Trimmed:", n_endpoints_trimmed)
+    if progress_bar:
+        print("# Endpoints Trimmed:", n_endpoints_trimmed)
     return neurograph
 
 

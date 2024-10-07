@@ -28,7 +28,7 @@ from deep_neurographs.machine_learning.feature_generation_graphs import (
 )
 from deep_neurographs.utils import img_util, util
 
-CHUNK_SIZE = [64, 64, 64]
+CHUNK_SIZE = [48, 48, 48]
 N_BRANCH_PTS = 50
 N_PROFILE_PTS = 16  # 10
 N_SKEL_FEATURES = 22
@@ -192,7 +192,7 @@ def get_profile_specs(xyz_1, xyz_2, downsample_factor):
     voxel_2 = img_util.to_voxels(xyz_2, downsample_factor=downsample_factor)
 
     # Store local coordinates
-    bbox = img_util.get_minimal_bbox(np.vstack([voxel_1, voxel_2]), buffer=1)
+    bbox = img_util.get_fixed_bbox(np.vstack([voxel_1, voxel_2]), CHUNK_SIZE)
     start = [voxel_1[i] - bbox["min"][i] for i in range(3)]
     end = [voxel_2[i] - bbox["min"][i] for i in range(3)]
     specs = {
