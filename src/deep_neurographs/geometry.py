@@ -198,7 +198,7 @@ def smooth_branch(xyz, s=None):
     return xyz.astype(np.float32)
 
 
-def fit_spline(xyz, k=3, s=None):
+def fit_spline(xyz, k=2, s=None):
     """
     Fits a cubic spline to an array containing xyz coordinates.
 

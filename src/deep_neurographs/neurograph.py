@@ -60,7 +60,6 @@ class NeuroGraph(nx.Graph):
         self.xyz_to_edge = dict()
 
         # Nodes and Edges
-        self.leafs = set()
         self.junctions = set()
         self.proposals = set()
         self.target_edges = set()
@@ -105,6 +104,22 @@ class NeuroGraph(nx.Graph):
         """
         for i in gutil.largest_components(self, k):
             self.soma_ids[self.nodes[i]["swc_id"]] = i
+
+    def get_leafs(self):
+        """
+        Gets all leaf nodes in graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        list[int]
+            Leaf nodes in graph.
+
+        """
+        return [i for i in self.nodes if self.is_leaf(i)]
 
     # --- Edit Graph --
     def add_component(self, irreducibles):
@@ -170,10 +185,6 @@ class NeuroGraph(nx.Graph):
                 xyz=irreducibles[node_type][i]["xyz"],
             )
             self.node_cnt += 1
-            if node_type == "leafs":
-                self.leafs.add(cur_id)
-            else:
-                self.junctions.add(cur_id)
             node_ids[i] = cur_id
         return node_ids
 
@@ -521,7 +532,7 @@ class NeuroGraph(nx.Graph):
         """
         # Get xyz coordinates
         if node_type == "leaf":
-            xyz_list = [self.nodes[i]["xyz"] for i in self.leafs]
+            xyz_list = [self.nodes[i]["xyz"] for i in self.get_leafs()]
         elif node_type == "proposal":
             xyz_list = list(self.xyz_to_proposal.keys())
         else:
@@ -649,11 +660,12 @@ class NeuroGraph(nx.Graph):
 
     def merge_proposal(self, proposal):
         i, j = tuple(proposal)
-        somas_check = not (self.is_soma(i) and self.is_soma(j))
-        degrees_check = not (self.degree[i] == 2 and self.degree[j] == 2)
-        if somas_check and degrees_check:
+        somas_check = not (self.is_soma(i) and self.is_soma(j))        
+        if somas_check and self.check_proposal_degrees(i, j):
             # Dense attributes
             attrs = dict()
+            self.nodes[i]["radius"] = 7.0
+            self.nodes[j]["radius"] = 7.0
             for k in ["xyz", "radius"]:
                 combine = np.vstack if k == "xyz" else np.array
                 self.nodes[i][k][-1] = 8.0
@@ -666,12 +678,12 @@ class NeuroGraph(nx.Graph):
                 e_j = (j, self.leaf_neighbor(j))
                 len_ij = self.edges[e_i]["length"] + self.edges[e_j]["length"]
                 attrs["length"] = len_ij
-            elif self.degree[i] == 2:
-                e_j = (j, self.leaf_neighbor(j))
-                attrs["length"] = self.edges[e_j]["length"]
-            else:
+            elif self.degree[i] == 1:
                 e_i = (i, self.leaf_neighbor(i))
                 attrs["length"] = self.edges[e_i]["length"]
+            else:
+                e_j = (j, self.leaf_neighbor(j))
+                attrs["length"] = self.edges[e_j]["length"]
 
             swc_id_i = self.nodes[i]["swc_id"]
             swc_id_j = self.nodes[j]["swc_id"]
@@ -681,12 +693,15 @@ class NeuroGraph(nx.Graph):
             self.merged_ids.add((swc_id_i, swc_id_j))
             self.upd_ids(swc_id, j if swc_id == swc_id_i else i)
             self.__add_edge((i, j), attrs, swc_id)
-            if i in self.leafs:
-                self.leafs.remove(i)
-            if j in self.leafs:
-                self.leafs.remove(j)
             self.proposals.remove(proposal)
+        else:
+            print("Skip! -- Failed Degree Check")
 
+    def check_proposal_degrees(self, i, j):
+        one_leaf = self.degree[i] == 1 or self.degree[j] == 1
+        branching = self.degree[i] > 2 or self.degree[j] > 2
+        return one_leaf and not branching
+        
     def upd_ids(self, swc_id, r):
         """
         Updates the swc_id of all nodes connected to "r".

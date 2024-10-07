@@ -60,7 +60,7 @@ class GraphConfig:
     min_size: float = 30.0
     node_spacing: int = 1
     proposals_per_leaf: int = 2
-    prune_depth: float = 16.0
+    prune_depth: float = 25.0
     remove_doubles_bool: bool = False
     search_radius: float = 20.0
     smooth_bool: bool = True
@@ -93,7 +93,7 @@ class MLConfig:
     batch_size: int = 2000
     downsample_factor: int = 1
     high_threshold: float = 0.9
-    lr: float = 1e-4
+    lr: float = 1e-3
     threshold: float = 0.6
     model_type: str = "GraphNeuralNet"
     n_epochs: int = 1000
