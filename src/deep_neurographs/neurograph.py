@@ -668,6 +668,8 @@ class NeuroGraph(nx.Graph):
             self.nodes[j]["radius"] = 7.0
             for k in ["xyz", "radius"]:
                 combine = np.vstack if k == "xyz" else np.array
+                self.nodes[i][k][-1] = 8.0
+                self.nodes[j][k][0] = 8.0
                 attrs[k] = combine([self.nodes[i][k], self.nodes[j][k]])
 
             # Sparse attributes
