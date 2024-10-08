@@ -236,8 +236,8 @@ class NeuroGraph(nx.Graph):
                 # Concatenate attributes
                 len_1 = self.edges[i, nbs[0]]["length"]
                 len_2 = self.edges[i, nbs[1]]["length"]
-                xyz = self.get_branches(i, key="xyz")
-                radius = self.get_branches(i, key="radius")
+                xyz = self.branches(i, key="xyz")
+                radius = self.branches(i, key="radius")
                 attrs = {
                     "length": len_1 + len_2,
                     "radius": concatenate([np.flip(radius[0]), radius[1]]),
@@ -615,8 +615,8 @@ class NeuroGraph(nx.Graph):
 
     def proposal_avg_radii(self, proposal):
         i, j = tuple(proposal)
-        radii_i = self.get_branches(i, ignore_reducibles=True, key="radius")
-        radii_j = self.get_branches(j, ignore_reducibles=True, key="radius")
+        radii_i = self.branches(i, key="radius")
+        radii_j = self.branches(j, key="radius")
         return np.array([avg_radius(radii_i), avg_radius(radii_j)])
 
     def proposal_xyz(self, proposal):
@@ -637,15 +637,17 @@ class NeuroGraph(nx.Graph):
         i, j = tuple(proposal)
         return np.array([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
 
-    def proposal_directionals(self, proposal, window):
-        # Compute tangent vectors
+    def proposal_directionals(self, proposal, depth):
+        # Extract branches
         i, j = tuple(proposal)
-        direction = geometry.tangent(self.proposal_xyz(proposal))
+        branches_i = [geometry.truncate_path(b, depth) for b in self.branches(i)]
+        branches_j = [geometry.truncate_path(b, depth) for b in self.branches(j)]
         origin = self.proposal_midpoint(proposal)
-        branches_i = self.get_branches(i, ignore_reducibles=True)
-        branches_j = self.get_branches(j, ignore_reducibles=True)
-        direction_i = geometry.get_directional(branches_i, i, origin, window)
-        direction_j = geometry.get_directional(branches_j, j, origin, window)
+
+        # Compute tangent vectors
+        direction_i = geometry.get_directional(branches_i, origin, depth)
+        direction_j = geometry.get_directional(branches_j, origin, depth)
+        direction = geometry.tangent(self.proposal_xyz(proposal))
 
         # Compute features
         inner_product_1 = abs(np.dot(direction, direction_i))
@@ -789,7 +791,7 @@ class NeuroGraph(nx.Graph):
         """
         return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
-    def get_branches(self, i, ignore_reducibles=False, key="xyz"):
+    def branches(self, i, ignore_reducibles=True, key="xyz"):
         branches = list()
         for j in self.neighbors(i):
             branch = self.oriented_edge((i, j), i, key=key)
@@ -807,7 +809,7 @@ class NeuroGraph(nx.Graph):
             branches.append(branch)
         return branches
 
-    def get_branch(self, leaf, key="xyz"):
+    def branch(self, leaf, key="xyz"):
         """
         Gets the xyz coordinates or radii contained in the edge emanating from
         "leaf".
@@ -825,7 +827,7 @@ class NeuroGraph(nx.Graph):
 
         """
         assert self.is_leaf(leaf)
-        return self.get_branches(leaf, key=key)[0]
+        return self.branches(leaf, key=key)[0]
 
     def get_other_nb(self, i, j):
         """
@@ -1077,3 +1079,9 @@ def avg_radius(radii_list):
         end = max(min(16, len(radii) - 1), 1)
         avg += np.mean(radii[0:end]) / len(radii_list)
     return avg
+
+
+def directional_origin(branch_1, branch_2):
+    origin_1 = np.mean(branch_1, axis=0)
+    origin_2 = np.mean(branch_2, axis=0)
+    return np.mean(np.vstack(origin_1, origin_2), axis=0)

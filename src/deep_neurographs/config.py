@@ -97,6 +97,7 @@ class MLConfig:
     threshold: float = 0.6
     model_type: str = "GraphNeuralNet"
     n_epochs: int = 1000
+    use_img_embedding: bool = False
     validation_split: float = 0.15
     weight_decay: float = 1e-3
 

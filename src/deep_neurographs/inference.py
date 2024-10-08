@@ -99,7 +99,6 @@ class InferencePipeline:
         self.accepted_proposals = list()
         self.sample_id = sample_id
         self.segmentation_id = segmentation_id
-        self.img_path = img_path
         self.model_path = model_path
 
         # Extract config settings
@@ -108,7 +107,7 @@ class InferencePipeline:
 
         # Inference engine
         self.inference_engine = InferenceEngine(
-            self.img_path,
+            img_path,
             self.model_path,
             self.ml_config.model_type,
             self.graph_config.search_radius,
@@ -153,15 +152,15 @@ class InferencePipeline:
         print(f"Total Runtime: {round(t, 4)} {unit}\n")
 
     def run_schedule(
-        self, fragments_pointer, search_radius_schedule, save_all_rounds=False
+        self, fragments_pointer, radius_schedule, save_all_rounds=False
     ):
         t0 = time()
         self.report_experiment()
         self.build_graph(fragments_pointer)
-        for round_id, search_radius in enumerate(search_radius_schedule):
-            print(f"--- Round {round_id + 1}:  Radius = {search_radius} ---")
+        for round_id, radius in enumerate(radius_schedule):
+            print(f"--- Round {round_id + 1}:  Radius = {radius} ---")
             round_id += 1
-            self.generate_proposals(search_radius)
+            self.generate_proposals(radius)
             self.run_inference()
             if save_all_rounds:
                 self.save_results(round_id=round_id)
@@ -213,7 +212,7 @@ class InferencePipeline:
         print(f"Module Runtime: {round(t, 4)} {unit}\n")
         self.print_graph_overview()
 
-    def generate_proposals(self, search_radius=None):
+    def generate_proposals(self, radius=None):
         """
         Generates proposals for the fragment graph based on the specified
         configuration.
@@ -229,13 +228,13 @@ class InferencePipeline:
         """
         # Initializations
         print("(2) Generate Proposals")
-        if search_radius is None:
-            search_radius = self.graph_config.search_radius
+        if radius is None:
+            radius = self.graph_config.radius
 
         # Main
         t0 = time()
         self.graph.generate_proposals(
-            search_radius,
+            radius,
             complex_bool=self.graph_config.complex_bool,
             long_range_bool=self.graph_config.long_range_bool,
             proposals_per_leaf=self.graph_config.proposals_per_leaf,
@@ -392,7 +391,7 @@ class InferenceEngine:
         img_path,
         model_path,
         model_type,
-        search_radius,
+        radius,
         batch_size=BATCH_SIZE,
         confidence_threshold=CONFIDENCE_THRESHOLD,
         device=None,
@@ -410,7 +409,7 @@ class InferenceEngine:
             Path to machine learning model parameters.
         model_type : str
             Type of machine learning model used to perform inference.
-        search_radius : float
+        radius : float
             Search radius used to generate proposals.
         batch_size : int, optional
             Number of proposals to generate features and classify per batch.
@@ -429,16 +428,25 @@ class InferenceEngine:
         """
         # Set class attributes
         self.batch_size = batch_size
-        self.downsample_factor = downsample_factor
         self.device = "cpu" if device is None else device
         self.is_gnn = True if "Graph" in model_type else False
         self.model_type = model_type
-        self.search_radius = search_radius
+        self.radius = radius
         self.threshold = confidence_threshold
 
-        # Load image and model
+        # Load image
         driver = "n5" if ".n5" in img_path else "zarr"
-        self.img = img_util.open_tensorstore(img_path, driver=driver)
+        img = img_util.open_tensorstore(img_path, driver=driver)
+
+        # Features
+        feature_factory = feature_generation.Factory()
+        self.feature_generator = feature_factory.create(
+            model_type,
+            img,
+            downsample_factor
+        )
+
+        # Model
         self.model = ml_util.load_model(model_path)
         if self.is_gnn:
             self.model = self.model.to(self.device)
@@ -532,17 +540,7 @@ class InferenceEngine:
         ...
 
         """
-        # Generate features
-        features = feature_generation.run(
-            neurograph,
-            self.img,
-            self.model_type,
-            batch,
-            self.search_radius,
-            downsample_factor=self.downsample_factor,
-        )
-
-        # Initialize dataset
+        features = self.feature_generator.run(neurograph, batch, self.radius)
         computation_graph = batch["graph"] if type(batch) is dict else None
         dataset = ml_util.init_dataset(
             neurograph,

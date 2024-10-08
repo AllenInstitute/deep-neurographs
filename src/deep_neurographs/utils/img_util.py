@@ -146,7 +146,7 @@ def read_tensorstore_with_bbox(img, bbox):
         return np.zeros(shape)
 
 
-def read_profile(img, specs):
+def read_profile(img, spec):
     """
     Reads an intensity profile from an image (i.e. image profile).
 
@@ -154,7 +154,7 @@ def read_profile(img, specs):
     ----------
     img : tensorstore.TensorStore
         Image to be read.
-    specs : dict
+    spec : dict
         Dictionary that stores the bounding box of chunk to be read and the
         voxel coordinates of the profile path.
 
@@ -164,8 +164,8 @@ def read_profile(img, specs):
         Image profile.
 
     """
-    img_chunk = normalize(read_tensorstore_with_bbox(img, specs["bbox"]))
-    return read_intensities(img_chunk, specs["profile_path"])
+    img_chunk = normalize(read_tensorstore_with_bbox(img, spec["bbox"]))
+    return read_intensities(img_chunk, spec["profile_path"])
 
 
 def read_intensities(img, voxels):
@@ -283,6 +283,57 @@ def get_labels_mip(img, axis=0):
     return (255 * mip).astype(np.uint8)
 
 
+def get_chunk_profile(img, specs, profile_id):
+    """
+    Gets the image profile for a given proposal.
+
+    Parameters
+    ----------
+    img : tensorstore.TensorStore
+        Image that profiles are generated from.
+    specs : dict
+        Dictionary that contains the image bounding box and coordinates of the
+        image profile path.
+    profile_id : frozenset
+        ...
+
+    Returns
+    -------
+    dict
+        Dictionary that maps an id (e.g. node, edge, or proposal) to its image
+        profile.
+
+    """
+    pass
+
+
+def get_profile(img, spec, profile_id):
+    """
+    Gets the image profile for a given proposal.
+
+    Parameters
+    ----------
+    img : tensorstore.TensorStore
+        Image that profiles are generated from.
+    spec : dict
+        Dictionary that contains the image bounding box and coordinates of the
+        image profile path.
+    profile_id : frozenset
+        Identifier of profile.
+
+    Returns
+    -------
+    dict
+        Dictionary that maps an id (e.g. node, edge, or proposal) to its image
+        profile.
+
+    """
+    profile = read_profile(img, spec)
+    avg, std = util.get_avg_std(profile)
+    profile.extend([avg, std])
+    return {profile_id: profile}
+
+
 # --- coordinate conversions ---
 def img_to_patch(voxel, patch_centroid, patch_shape):
     """
@@ -331,7 +382,7 @@ def patch_to_img(voxel, patch_centroid, patch_dims):
     return np.round(voxel + patch_centroid - half_patch_dims).astype(int)
 
 
-def to_world(voxel, anisotropy=ANISOTROPY, shift=[0, 0, 0]):
+def to_world(voxel, shift=[0, 0, 0]):
     """
     Converts coordinates from voxels to world.
 
@@ -348,10 +399,10 @@ def to_world(voxel, anisotropy=ANISOTROPY, shift=[0, 0, 0]):
         Converted coordinates.
 
     """
-    return tuple([voxel[i] * anisotropy[i] - shift[i] for i in range(3)])
+    return tuple([voxel[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
 
 
-def to_voxels(xyz, anisotropy=ANISOTROPY, downsample_factor=0):
+def to_voxels(xyz, downsample_factor=0):
     """
     Converts coordinates from world to voxel.
 
@@ -373,12 +424,12 @@ def to_voxels(xyz, anisotropy=ANISOTROPY, downsample_factor=0):
 
     """
     downsample_factor = 1.0 / 2 ** downsample_factor
-    voxel = downsample_factor * (xyz / np.array(anisotropy))
+    voxel = downsample_factor * (xyz / np.array(ANISOTROPY))
     return np.round(voxel).astype(int)
 
 
 # -- utils --
-def get_bbox(origin, shape):
+def init_bbox(origin, shape):
     """
     Gets the min and max coordinates of a bounding box based on "origin" and
     "shape".

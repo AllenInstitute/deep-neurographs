@@ -319,8 +319,8 @@ def run_trimming(neurograph, proposals, radius, progress_bar):
 
 def trim_endpoints(neurograph, i, j, radius):
     # Initializations
-    branch_i = neurograph.get_branch(i)
-    branch_j = neurograph.get_branch(j)
+    branch_i = neurograph.branch(i)
+    branch_j = neurograph.branch(j)
 
     # Check both orderings
     idx_i, idx_j = trim_endpoints_ordered(branch_i, branch_j)
@@ -394,8 +394,8 @@ def trim_to_idx(neurograph, i, idx):
 
     """
     # Update node
-    branch_xyz = neurograph.get_branch(i, key="xyz")
-    branch_radii = neurograph.get_branch(i, key="radius")
+    branch_xyz = neurograph.branch(i, key="xyz")
+    branch_radii = neurograph.branch(i, key="radius")
     neurograph.nodes[i]["xyz"] = branch_xyz[idx]
     neurograph.nodes[i]["radius"] = branch_radii[idx]
 
