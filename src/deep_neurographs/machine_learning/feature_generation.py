@@ -377,6 +377,40 @@ class FeatureGenerator:
                 profiles.update(thread.result())
         return profiles
 
+    def proposal_chunks(self, neurograph, proposals):
+        """
+        Generates an image intensity profile along the proposal.
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            Graph that "proposals" belong to.
+        proposals : list[frozenset]
+            List of proposals for which features will be generated.
+
+        Returns
+        -------
+        dict
+            Dictonary such that each pair is the proposal id and image
+            intensity profile.
+
+        """
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            threads = list()
+            for p in proposals:
+                labels = neurograph.proposal_labels(p)
+                xyz_path = np.vstack(neurograph.proposal_xyz(p))
+                threads.append(
+                    executor.submit(self.get_chunk, labels, xyz_path, p)
+                )
+
+            # Store results
+            chunks = dict()
+            for thread in as_completed(threads):
+                chunks.update(thread.result())
+        return chunks
+
     def get_profile(self, xyz_path, profile_id):
         """
         Gets the image intensity profile given xyz coordinates that form a
@@ -399,39 +433,6 @@ class FeatureGenerator:
         profile = img_util.read_profile(self.img, self.get_spec(xyz_path))
         profile.extend(list(util.get_avg_std(profile)))
         return {profile_id: profile}
-
-    def proposal_chunks(self, neurograph, proposals):
-        """
-        Generates an image intensity profile along each proposal.
-
-        Parameters
-        ----------
-        neurograph : NeuroGraph
-            Graph that "proposals" belong to.
-        proposals : list[frozenset]
-            List of proposals for which features will be generated.
-
-        Returns
-        -------
-        dict
-            Dictonary such that each pair is the proposal id and profile.
-
-        """
-        with ThreadPoolExecutor() as executor:
-            # Assign threads
-            threads = list()
-            for p in proposals:
-                labels = neurograph.proposal_labels(p)
-                xyz_path = np.vstack(neurograph.proposal_xyz(p))
-                threads.append(
-                    executor.submit(self.get_chunk, labels, xyz_path, p)
-                )
-
-            # Store results
-            chunks = dict()
-            for thread in as_completed(threads):
-                chunks.update(thread.result())
-        return chunks
 
     def get_spec(self, xyz_path):
         """
@@ -515,8 +516,6 @@ class FeatureGenerator:
         relabel_chunk[label_chunk == labels[0]] = 100
         relabel_chunk[label_chunk == labels[1]] = 200
         relabel_chunk = geometry.fill_path(relabel_chunk, line, val=255)
-        assert np.sum(label_chunk == labels[0]) > 0
-        assert np.sum(label_chunk == labels[1]) > 0
         return zoom(relabel_chunk, 1.0 / 2 ** self.downsample_factor)
 
 
@@ -564,7 +563,6 @@ def get_branching_path(neurograph, i):
     voxels_1 = geometry.truncate_path(neurograph.oriented_edge((i, j_1), i))
     voxles_2 = geometry.truncate_path(neurograph.oriented_edge((i, j_2), i))
     return np.vstack([np.flip(voxels_1, axis=0), voxles_2])
-
 
 # --- Build feature matrix ---
 def get_matrix(neurographs, features, sample_ids=None):

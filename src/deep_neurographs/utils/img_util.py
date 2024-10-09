@@ -121,7 +121,7 @@ def read_tensorstore(img, voxel, shape, from_center=True):
     return read(img, voxel, shape, from_center=from_center).read().result()
 
 
-def read_tensorstore_with_bbox(img, bbox):
+def read_tensorstore_with_bbox(img, bbox, normalize=True):
     """
     Reads a chunk from a subarray that is determined by "bbox".
 
