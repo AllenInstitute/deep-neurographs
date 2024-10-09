@@ -122,7 +122,7 @@ def read_tensorstore(img, voxel, shape, from_center=True):
     return read(img, voxel, shape, from_center=from_center).read().result()
 
 
-def read_tensorstore_with_bbox(img, bbox):
+def read_tensorstore_with_bbox(img, bbox, normalize=True):
     """
     Reads a chunk from a subarray that is determined by "bbox".
 
@@ -283,57 +283,6 @@ def get_labels_mip(img, axis=0):
     return (255 * mip).astype(np.uint8)
 
 
-def get_chunk_profile(img, specs, profile_id):
-    """
-    Gets the image profile for a given proposal.
-
-    Parameters
-    ----------
-    img : tensorstore.TensorStore
-        Image that profiles are generated from.
-    specs : dict
-        Dictionary that contains the image bounding box and coordinates of the
-        image profile path.
-    profile_id : frozenset
-        ...
-
-    Returns
-    -------
-    dict
-        Dictionary that maps an id (e.g. node, edge, or proposal) to its image
-        profile.
-
-    """
-    pass
-
-
-def get_profile(img, spec, profile_id):
-    """
-    Gets the image profile for a given proposal.
-
-    Parameters
-    ----------
-    img : tensorstore.TensorStore
-        Image that profiles are generated from.
-    spec : dict
-        Dictionary that contains the image bounding box and coordinates of the
-        image profile path.
-    profile_id : frozenset
-        Identifier of profile.
-
-    Returns
-    -------
-    dict
-        Dictionary that maps an id (e.g. node, edge, or proposal) to its image
-        profile.
-
-    """
-    profile = read_profile(img, spec)
-    avg, std = util.get_avg_std(profile)
-    profile.extend([avg, std])
-    return {profile_id: profile}
-
-
 # --- coordinate conversions ---
 def img_to_patch(voxel, patch_centroid, patch_shape):
     """
@@ -476,15 +425,6 @@ def get_minimal_bbox(voxels):
     bbox = {
         "min": np.floor(np.min(voxels, axis=0) - 1).astype(int),
         "max": np.ceil(np.max(voxels, axis=0) + 1).astype(int),
-    }
-    return bbox
-
-
-def get_fixed_bbox(voxels, shape):
-    centroid = np.round(np.mean(voxels, axis=0)).astype(int)
-    bbox = {
-        "min": [centroid[i] - shape[i] // 2 for i in range(3)],
-        "max": [centroid[i] + shape[i] // 2 for i in range(3)],
     }
     return bbox
 
