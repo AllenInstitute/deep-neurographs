@@ -122,7 +122,7 @@ def read_tensorstore(img, voxel, shape, from_center=True):
     return read(img, voxel, shape, from_center=from_center).read().result()
 
 
-def read_tensorstore_with_bbox(img, bbox):
+def read_tensorstore_with_bbox(img, bbox, normalize=True):
     """
     Reads a chunk from a subarray that is determined by "bbox".
 
@@ -476,15 +476,6 @@ def get_minimal_bbox(voxels):
     bbox = {
         "min": np.floor(np.min(voxels, axis=0) - 1).astype(int),
         "max": np.ceil(np.max(voxels, axis=0) + 1).astype(int),
-    }
-    return bbox
-
-
-def get_fixed_bbox(voxels, shape):
-    centroid = np.round(np.mean(voxels, axis=0)).astype(int)
-    bbox = {
-        "min": [centroid[i] - shape[i] // 2 for i in range(3)],
-        "max": [centroid[i] + shape[i] // 2 for i in range(3)],
     }
     return bbox
 

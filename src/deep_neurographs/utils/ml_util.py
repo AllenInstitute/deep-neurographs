@@ -62,7 +62,7 @@ def save_model(path, model, model_type):
 
 # --- dataset utils ---
 def init_dataset(
-    neurograph, features, model_type, computation_graph=None, sample_ids=None
+    neurograph, features, is_gnn=True, computation_graph=None, sample_ids=None
 ):
     """
     Initializes a dataset given features generated from some set of proposals
@@ -89,7 +89,7 @@ def init_dataset(
         Dataset that stores features.
 
     """
-    if model_type == "GraphNeuralNet":
+    if is_gnn:
         assert computation_graph is not None, "Must input computation graph!"
         dataset = heterograph_datasets.init(
             neurograph, features, computation_graph

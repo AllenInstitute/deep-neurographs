@@ -20,12 +20,12 @@ from torch.nn.functional import sigmoid
 from tqdm import tqdm
 
 from deep_neurographs.graph_artifact_removal import remove_doubles
-from deep_neurographs.machine_learning import feature_generation
 from deep_neurographs.utils import gnn_util
 from deep_neurographs.utils import graph_util as gutil
-from deep_neurographs.utils import img_util, ml_util, util
+from deep_neurographs.utils import ml_util, util
 from deep_neurographs.utils.gnn_util import toCPU
 from deep_neurographs.utils.graph_util import GraphLoader
+from deep_neurographs.machine_learning.feature_generation import FeatureGenerator
 
 BATCH_SIZE = 2000
 CONFIDENCE_THRESHOLD = 0.7
@@ -65,6 +65,8 @@ class InferencePipeline:
         output_dir,
         config,
         device=None,
+        label_path=None,
+        use_img_embedding=False,
     ):
         """
         Initializes an object that executes the full GraphTrace inference
@@ -79,7 +81,7 @@ class InferencePipeline:
             Identifier for the predicted segmentation to be processed by the
             inference pipeline.
         img_path : str
-            Path to the raw image of whole brain stored on a GCS bucket.
+            Path to the raw image assumed to be stored in a GCS bucket.
         model_path : str
             Path to machine learning model parameters.
         output_dir : str
@@ -88,6 +90,10 @@ class InferencePipeline:
             Configuration object containing parameters and settings required
             for the inference pipeline.
         device : str, optional
+            ...
+        label_path : str, optional
+            Path to the segmentation assumed to be stored on a GCS bucket.
+        use_img_embedding : bool, optional
             ...
 
         Returns
@@ -114,6 +120,7 @@ class InferencePipeline:
             confidence_threshold=self.ml_config.threshold,
             device=device,
             downsample_factor=self.ml_config.downsample_factor,
+            label_path=label_path
         )
 
         # Set output directory
@@ -396,6 +403,8 @@ class InferenceEngine:
         confidence_threshold=CONFIDENCE_THRESHOLD,
         device=None,
         downsample_factor=1,
+        label_path=None,
+        use_img_embedding=False
     ):
         """
         Initializes an inference engine by loading images and setting class
@@ -430,20 +439,15 @@ class InferenceEngine:
         self.batch_size = batch_size
         self.device = "cpu" if device is None else device
         self.is_gnn = True if "Graph" in model_type else False
-        self.model_type = model_type
         self.radius = radius
         self.threshold = confidence_threshold
 
-        # Load image
-        driver = "n5" if ".n5" in img_path else "zarr"
-        img = img_util.open_tensorstore(img_path, driver=driver)
-
         # Features
-        feature_factory = feature_generation.Factory()
-        self.feature_generator = feature_factory.create(
-            model_type,
-            img,
-            downsample_factor
+        self.feature_generator = FeatureGenerator(
+            img_path,
+            downsample_factor,
+            label_path=label_path,
+            use_img_embedding=use_img_embedding
         )
 
         # Model
@@ -545,7 +549,7 @@ class InferenceEngine:
         dataset = ml_util.init_dataset(
             neurograph,
             features,
-            self.model_type,
+            self.is_gnn,
             computation_graph=computation_graph,
         )
         return dataset
@@ -568,7 +572,7 @@ class InferenceEngine:
 
         """
         # Get predictions
-        if self.model_type == "GraphNeuralNet":
+        if self.is_gnn:
             with torch.no_grad():
                 # Get inputs
                 n = len(dataset.data["proposal"]["y"])
