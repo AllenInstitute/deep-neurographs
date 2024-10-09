@@ -283,6 +283,57 @@ def get_labels_mip(img, axis=0):
     return (255 * mip).astype(np.uint8)
 
 
+def get_chunk_profile(img, specs, profile_id):
+    """
+    Gets the image profile for a given proposal.
+
+    Parameters
+    ----------
+    img : tensorstore.TensorStore
+        Image that profiles are generated from.
+    specs : dict
+        Dictionary that contains the image bounding box and coordinates of the
+        image profile path.
+    profile_id : frozenset
+        ...
+
+    Returns
+    -------
+    dict
+        Dictionary that maps an id (e.g. node, edge, or proposal) to its image
+        profile.
+
+    """
+    pass
+
+
+def get_profile(img, spec, profile_id):
+    """
+    Gets the image profile for a given proposal.
+
+    Parameters
+    ----------
+    img : tensorstore.TensorStore
+        Image that profiles are generated from.
+    spec : dict
+        Dictionary that contains the image bounding box and coordinates of the
+        image profile path.
+    profile_id : frozenset
+        Identifier of profile.
+
+    Returns
+    -------
+    dict
+        Dictionary that maps an id (e.g. node, edge, or proposal) to its image
+        profile.
+
+    """
+    profile = read_profile(img, spec)
+    avg, std = util.get_avg_std(profile)
+    profile.extend([avg, std])
+    return {profile_id: profile}
+
+
 # --- coordinate conversions ---
 def img_to_patch(voxel, patch_centroid, patch_shape):
     """

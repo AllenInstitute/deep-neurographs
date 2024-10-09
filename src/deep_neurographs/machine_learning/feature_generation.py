@@ -559,7 +559,6 @@ def get_branching_path(neurograph, i):
     voxles_2 = geometry.truncate_path(neurograph.oriented_edge((i, j_2), i))
     return np.vstack([np.flip(voxels_1, axis=0), voxles_2])
 
-
 # --- Build feature matrix ---
 def get_matrix(neurographs, features, sample_ids=None):
     if sample_ids:
