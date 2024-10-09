@@ -6,6 +6,8 @@ Created on Sat July 15 9:00:00 2023
 
 Implementation of subclass of Networkx.Graph called "FragmentsGraph".
 
+NOTE: SAVE LABEL UPDATES --- THERE IS A BUG IN FEATURE GENERATION
+
 """
 import os
 import zipfile
@@ -637,6 +639,24 @@ class NeuroGraph(nx.Graph):
         i, j = tuple(proposal)
         return np.array([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
 
+    def proposal_labels(self, proposal):
+        """
+        Gets the xyz coordinates of the nodes that comprise "proposal".
+
+        Parameters
+        ----------
+        proposal : frozenset
+            Pair of nodes that form a proposal.
+
+        Returns
+        -------
+        numpy.ndarray
+            xyz coordinates of nodes that comprise "proposal".
+
+        """
+        i, j = tuple(proposal)
+        return [int(self.nodes[i]["swc_id"]), int(self.nodes[j]["swc_id"])]
+
     def proposal_directionals(self, proposal, depth):
         # Extract branches
         i, j = tuple(proposal)
@@ -914,14 +934,6 @@ class NeuroGraph(nx.Graph):
         """
         assert self.is_leaf(i)
         return list(self.neighbors(i))[0]
-
-    def to_patch_coords(self, edge, midpoint, chunk_size):
-        patch_coords = list()
-        for xyz in self.edges[edge]["xyz"]:
-            coord = self.to_voxels(xyz)
-            local_coord = util.voxels_to_patch(coord, midpoint, chunk_size)
-            patch_coords.append(local_coord)
-        return patch_coords
 
     def xyz_to_swc(self, xyz, return_node=False):
         if tuple(xyz) in self.xyz_to_edge.keys():

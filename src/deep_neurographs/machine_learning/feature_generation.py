@@ -13,21 +13,15 @@ Conventions:
 
 """
 
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from random import sample
 
 import numpy as np
-import tensorstore as ts
+from scipy.ndimage import zoom
 
 from deep_neurographs import geometry
 from deep_neurographs.utils import img_util, util
-
-CHUNK_SHAPE = [96, 96, 96]
-N_BRANCH_PTS = 50
-N_PROFILE_PTS = 16
-N_SKEL_FEATURES = 22
 
 
 class FeatureGenerator:
@@ -36,6 +30,10 @@ class FeatureGenerator:
     network to classify proposals.
 
     """
+    # Class attributes
+    chunk_shape = [96, 96, 96]
+    n_profile_points = 16
+
     def __init__(
         self,
         img_path,
@@ -48,14 +46,14 @@ class FeatureGenerator:
 
         Parameters
         ----------
-        img : tensorstore.Tensorstore
-            Raw image assumed to be stored in a GCS bucket.
+        img_path : str
+            Path to the raw image assumed to be stored in a GCS bucket.
         downsample_factor : int
             Downsampling factor that accounts for which level in the image
             pyramid the voxel coordinates must index into.
-        labels : tensorstore.TensorStore, optional
-            Segmentation assumed to be stored in a GCS bucket. The default is
-            None.
+        label_path : str, optional
+            Path to the segmentation assumed to be stored on a GCS bucket. The
+            default is None.
         use_img_embedding : bool, optional
             ...
 
@@ -74,31 +72,40 @@ class FeatureGenerator:
         if label_path:
             self.labels = img_util.open_tensorstore(label_path)
         else:
-            self.labels = None            
+            self.labels = None
 
         # Set chunk shapes
-        self.img_chunk_shape = self.set_img_chunk_shape()
-        self.label_chunk_shape = CHUNK_SHAPE
+        self.img_chunk_shape = self.set_chunk_shape(downsample_factor)
+        self.label_chunk_shape = self.set_chunk_shape(0)
 
         # Validate embedding requirements
         if self.use_img_embedding and not label_path:
             raise("Must provide labels to generate image embeddings")
 
-    def set_img_chunk_shape(self):
+    @classmethod
+    def set_chunk_shape(cls, downsample_factor):
         """
-        Sets the shape of chunks extracted from raw image.
+        Adjusts the chunk shape by downsampling each dimension by a specified
+        factor.
 
         Parameters
         ----------
-        None
+        downsample_factor : int
+            The factor by which to downsample each dimension of the current
+            chunk shape.
 
         Returns
         -------
         list
-            Shape of chunks extracted from raw image.
+            Adjusted chunk shape with each dimension reduced by the downsample
+            factor.
 
         """
-        return [s // 2 ** self.downsample_factor for s in CHUNK_SHAPE]
+        return [s // 2 ** downsample_factor for s in cls.chunk_shape]
+
+    @classmethod
+    def get_n_profile_points(cls):
+        return cls.n_profile_points
 
     def run(self, neurograph, proposals_dict, radius):
         """
@@ -365,17 +372,52 @@ class FeatureGenerator:
         """
         with ThreadPoolExecutor() as executor:
             # Assign threads
-            threads = len(proposals) * [None]
-            for i, p in enumerate(proposals):
+            threads = list()
+            for p in proposals:
+                n_points = self.get_n_profile_points()
                 xyz_1, xyz_2 = neurograph.proposal_xyz(p)
-                xyz_path = geometry.make_line(xyz_1, xyz_2, N_PROFILE_PTS)
-                threads[i] = executor.submit(self.get_profile, xyz_path, p)
+                xyz_path = geometry.make_line(xyz_1, xyz_2, n_points)
+                threads.append(executor.submit(self.get_profile, xyz_path, p))
 
             # Store results
             profiles = dict()
             for thread in as_completed(threads):
                 profiles.update(thread.result())
         return profiles
+
+    def proposal_chunks(self, neurograph, proposals):
+        """
+        Generates an image intensity profile along the proposal.
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            Graph that "proposals" belong to.
+        proposals : list[frozenset]
+            List of proposals for which features will be generated.
+
+        Returns
+        -------
+        dict
+            Dictonary such that each pair is the proposal id and image
+            intensity profile.
+
+        """
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            threads = list()
+            for p in proposals:
+                labels = neurograph.proposal_labels(p)
+                xyz_path = np.vstack(neurograph.proposal_xyz(p))
+                threads.append(
+                    executor.submit(self.get_chunk, labels, xyz_path, p)
+                )
+
+            # Store results
+            chunks = dict()
+            for thread in as_completed(threads):
+                chunks.update(thread.result())
+        return chunks
 
     def get_profile(self, xyz_path, profile_id):
         """
@@ -399,37 +441,6 @@ class FeatureGenerator:
         profile = img_util.read_profile(self.img, self.get_spec(xyz_path))
         profile.extend(list(util.get_avg_std(profile)))
         return {profile_id: profile}
-
-    def proposal_chunks(self, neurograph, proposals):
-        """
-        Generates an image intensity profile along each proposal.
-
-        Parameters
-        ----------
-        neurograph : NeuroGraph
-            Graph that "proposals" belong to.
-        proposals : list[frozenset]
-            List of proposals for which features will be generated.
-
-        Returns
-        -------
-        dict
-            Dictonary such that each pair is the proposal id and profile.
-
-        """
-        with ThreadPoolExecutor() as executor:
-            # Assign threads
-            threads = neurograph.n_proposals() * [None]
-            for i, p in enumerate(proposals):
-                xyz_1, xyz_2 = neurograph.proposal_xyz(p)
-                xyz_path = np.vstack([xyz_1, xyz_2])
-                threads[i] = executor.submit(self.get_chunk, xyz_path, p)
-
-            # Store results
-            chunks = dict()
-            for thread in as_completed(threads):
-                chunks.update(thread.result())
-        return chunks
 
     def get_spec(self, xyz_path):
         """
@@ -472,45 +483,51 @@ class FeatureGenerator:
             voxels[i] = img_util.to_voxels(xyz, self.downsample_factor)
         return voxels
 
-    def get_bbox(self, voxels):
+    def get_bbox(self, voxels, is_img=True):
         center = np.round(np.mean(voxels, axis=0)).astype(int)
+        shape = self.img_chunk_shape if is_img else self.label_chunk_shape
         bbox = {
-            "min": [c - s // 2 for c, s in zip(center, self.img_chunk_shape)],
-            "max": [c + s // 2 for c, s in zip(center, self.img_chunk_shape)],
+            "min": [c - s // 2 for c, s in zip(center, shape)],
+            "max": [c + s // 2 for c, s in zip(center, shape)],
         }
         return bbox
 
-    def get_chunk(self, xyz_path, proposal):
-        # Compute chunk centroids
-        center = np.round(np.mean(xyz_path, axis=0)).astype(int)
-        img_center = img_util.to_voxels(center, self.downsample_factor)
-        label_center = img_util.to_voxels(center)
+    def get_chunk(self, labels, xyz_path, proposal):
+        # Read image chunk
+        center = np.mean(xyz_path, axis=0)
+        img_chunk = self.read_img_chunk(center)
 
-        # Read chunks
-        img_chunk = img_util.read_tensorstore(
-            self.img, img_center, self.img_chunk_shape
-        )
-        label_chunk = img_util.read_tensorstore(
-            self.labels, label_center, self.label_chunk_shape
-        )
-
-        # Process results
-        img_chunk = img_util.normalize(img_chunk)
-        label_chunk = self.relabel(label_chunk, xyz_path)
-        return np.stack([img_chunk, label_chunk], axis=0)
-
-    def relabel(self, label_chunk, xyz_path):
-        # Initializations
+        # Read label chunk
         voxels = [img_util.to_voxels(xyz) for xyz in xyz_path]
-        label_1 = label_chunk[voxels[0]]
-        label_2 = label_chunk[voxels[1]]
-        line = geometry.make_line(voxels[0], voxels[1], N_PROFILE_PTS)
-        assert label_1 > 0 and label_2 > 0, "At least one label in background"
+        label_chunk = self.read_label_chunk(voxels, labels)
+        return {proposal: np.stack([img_chunk, label_chunk], axis=0)}
 
-        # Relabel
+    def read_img_chunk(self, xyz_centroid):
+        center = img_util.to_voxels(xyz_centroid, self.downsample_factor)
+        img_chunk = img_util.read_tensorstore(
+            self.img, center, self.img_chunk_shape
+        )
+        return img_util.normalize(img_chunk)
+
+    def read_label_chunk(self, voxels, labels):
+        bbox = self.get_bbox(voxels, is_img=False)
+        label_chunk = img_util.read_tensorstore_with_bbox(self.labels, bbox)
+        voxels = geometry.shift_path(voxels, bbox["min"])
+        return self.relabel(label_chunk, voxels, labels)
+
+    def relabel(self, label_chunk, voxels, labels):
+        # Initializations
+        n_points = self.get_n_profile_points()
+        scaling_factor = 2 ** self.downsample_factor
+        label_chunk = zoom(label_chunk, 1.0 / scaling_factor, order=0)
+        for i, voxel in enumerate(voxels):
+            voxels[i] = [v // scaling_factor for v in voxel]
+
+        # Main
         relabel_chunk = np.zeros(label_chunk.shape)
-        relabel_chunk[label_chunk == label_1] = 1
-        relabel_chunk[label_chunk == label_2] = 2
+        relabel_chunk[label_chunk == labels[0]] = 1
+        relabel_chunk[label_chunk == labels[1]] = 2
+        line = geometry.make_line(voxels[0], voxels[-1], n_points)
         return geometry.fill_path(relabel_chunk, line, val=-1)
 
 
@@ -558,6 +575,7 @@ def get_branching_path(neurograph, i):
     voxels_1 = geometry.truncate_path(neurograph.oriented_edge((i, j_1), i))
     voxles_2 = geometry.truncate_path(neurograph.oriented_edge((i, j_2), i))
     return np.vstack([np.flip(voxels_1, axis=0), voxles_2])
+
 
 # --- Build feature matrix ---
 def get_matrix(neurographs, features, sample_ids=None):
@@ -619,9 +637,9 @@ def combine_features(features):
     for edge in features["skel"].keys():
         combined[edge] = None
         for key in features.keys():
-            if combined[edge] is None:
+            if combined[edge] is None and key != "chunks":
                 combined[edge] = deepcopy(features[key][edge])
-            else:
+            elif key != "chunks":
                 combined[edge] = np.concatenate(
                     (combined[edge], features[key][edge])
                 )
@@ -629,22 +647,6 @@ def combine_features(features):
 
 
 # --- Utils ---
-def count_features():
-    """
-    Counts number of features based on the "model_type".
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    int
-        Number of features.
-    """
-    return N_SKEL_FEATURES + N_PROFILE_PTS + 2
-
-
 def n_node_features():
     """
     Returns the number of features for different node types.
@@ -682,32 +684,3 @@ def n_edge_features():
         ("branch", "edge", "proposal"): 3
     }
     return n_edge_features_dict
-
-
-def get_chunk(img, labels, voxel_1, voxel_2, thread_id=None):
-    # Extract chunks
-    midpoint = geometry.get_midpoint(voxel_1, voxel_2).astype(int)
-    if type(img) is ts.TensorStore:
-        chunk = util.read_tensorstore(img, midpoint, CHUNK_SHAPE)
-        labels_chunk = util.read_tensorstore(labels, midpoint, CHUNK_SHAPE)
-    else:
-        chunk = img_util.read_chunk(img, midpoint, CHUNK_SHAPE)
-        labels_chunk = img_util.read_chunk(labels, midpoint, CHUNK_SHAPE)
-
-    # Coordinate transform
-    chunk = util.normalize(chunk)
-    patch_voxel_1 = util.voxels_to_patch(voxel_1, midpoint, CHUNK_SHAPE)
-    patch_voxel_2 = util.voxels_to_patch(voxel_2, midpoint, CHUNK_SHAPE)
-
-    # Generate features
-    path = geometry.make_line(patch_voxel_1, patch_voxel_2, N_PROFILE_PTS)
-    profile = geometry.get_profile(chunk, path)
-    labels_chunk[labels_chunk > 0] = 1
-    labels_chunk = geometry.fill_path(labels_chunk, path, val=2)
-    chunk = np.stack([chunk, labels_chunk], axis=0)
-
-    # Output
-    if thread_id:
-        return thread_id, chunk, profile
-    else:
-        return chunk, profile

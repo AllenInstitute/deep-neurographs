@@ -20,12 +20,14 @@ from torch.nn.functional import sigmoid
 from tqdm import tqdm
 
 from deep_neurographs.graph_artifact_removal import remove_doubles
+from deep_neurographs.machine_learning.feature_generation import (
+    FeatureGenerator,
+)
 from deep_neurographs.utils import gnn_util
 from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import ml_util, util
 from deep_neurographs.utils.gnn_util import toCPU
 from deep_neurographs.utils.graph_util import GraphLoader
-from deep_neurographs.machine_learning.feature_generation import FeatureGenerator
 
 BATCH_SIZE = 2000
 CONFIDENCE_THRESHOLD = 0.7
@@ -120,7 +122,8 @@ class InferencePipeline:
             confidence_threshold=self.ml_config.threshold,
             device=device,
             downsample_factor=self.ml_config.downsample_factor,
-            label_path=label_path
+            label_path=label_path,
+            use_img_embedding=use_img_embedding,
         )
 
         # Set output directory
