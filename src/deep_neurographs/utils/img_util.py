@@ -10,7 +10,6 @@ Helper routines for working with images.
 
 from copy import deepcopy
 
-import fastremap
 import numpy as np
 import tensorstore as ts
 from skimage.color import label2rgb
@@ -122,7 +121,7 @@ def read_tensorstore(img, voxel, shape, from_center=True):
     return read(img, voxel, shape, from_center=from_center).read().result()
 
 
-def read_tensorstore_with_bbox(img, bbox, normalize=True):
+def read_tensorstore_with_bbox(img, bbox):
     """
     Reads a chunk from a subarray that is determined by "bbox".
 
@@ -143,6 +142,7 @@ def read_tensorstore_with_bbox(img, bbox, normalize=True):
         shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
         return read_tensorstore(img, bbox["min"], shape, from_center=False)
     except Exception:
+        print(f"Unable to read from image with bbox {bbox}")
         return np.zeros(shape)
 
 
@@ -214,7 +214,7 @@ def get_start_end(voxel, shape, from_center=True):
         end = [voxel[i] + shape[i] // 2 for i in range(3)]
     else:
         start = voxel
-        end = [voxel[i] + shape[i] + 1 for i in range(3)]
+        end = [voxel[i] + shape[i] for i in range(3)]
     return start, end
 
 
@@ -283,30 +283,6 @@ def get_labels_mip(img, axis=0):
     return (255 * mip).astype(np.uint8)
 
 
-def get_chunk_profile(img, specs, profile_id):
-    """
-    Gets the image profile for a given proposal.
-
-    Parameters
-    ----------
-    img : tensorstore.TensorStore
-        Image that profiles are generated from.
-    specs : dict
-        Dictionary that contains the image bounding box and coordinates of the
-        image profile path.
-    profile_id : frozenset
-        ...
-
-    Returns
-    -------
-    dict
-        Dictionary that maps an id (e.g. node, edge, or proposal) to its image
-        profile.
-
-    """
-    pass
-
-
 def get_profile(img, spec, profile_id):
     """
     Gets the image profile for a given proposal.
@@ -335,53 +311,6 @@ def get_profile(img, spec, profile_id):
 
 
 # --- coordinate conversions ---
-def img_to_patch(voxel, patch_centroid, patch_shape):
-    """
-    Converts coordinates from global to local image coordinates.
-
-    Parameters
-    ----------
-    voxel : numpy.ndarray
-        Voxel coordinate to be converted.
-    patch_centroid : numpy.ndarray
-        Centroid of image patch.
-    patch_shape : numpy.ndarray
-        Shape of image patch.
-
-    Returns
-    -------
-    tuple
-        Converted coordinates.
-
-    """
-    half_patch_shape = [patch_shape[i] // 2 for i in range(3)]
-    patch_voxel = voxel - patch_centroid + half_patch_shape
-    return tuple(patch_voxel.astype(int))
-
-
-def patch_to_img(voxel, patch_centroid, patch_dims):
-    """
-    Converts coordinates from local to global image coordinates.
-
-    Parameters
-    ----------
-    coord : numpy.ndarray
-        Coordinates to be converted.
-    patch_centroid : numpy.ndarray
-        Centroid of image patch.
-    patch_shape : numpy.ndarray
-        Shape of image patch.
-
-    Returns
-    -------
-    tuple
-        Converted coordinates.
-
-    """
-    half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
-    return np.round(voxel + patch_centroid - half_patch_dims).astype(int)
-
-
 def to_world(voxel, shift=[0, 0, 0]):
     """
     Converts coordinates from voxels to world.
@@ -478,33 +407,6 @@ def get_minimal_bbox(voxels):
         "max": np.ceil(np.max(voxels, axis=0) + 1).astype(int),
     }
     return bbox
-
-
-def get_chunk_labels(path, xyz, shape, from_center=True):
-    """
-    Gets the labels of segments contained in chunk centered at "xyz".
-
-    Parameters
-    ----------
-    path : str
-        Path to segmentation stored in a GCS bucket.
-    xyz : numpy.ndarray
-        Center point of chunk to be read.
-    shape : tuple
-        Shape of chunk to be read.
-    from_center : bool, optional
-        Indication of whether "xyz" is the center point or upper, left, front
-        corner of chunk to be read. The default is True.
-
-    Returns
-    -------
-    set
-        Labels of segments contained in chunk read from GCS bucket.
-
-    """
-    img = open_tensorstore(path)
-    img = read_tensorstore(img, xyz, shape, from_center=from_center)
-    return set(fastremap.unique(img).astype(int))
 
 
 def find_img_path(bucket_name, img_root, dataset_name):
