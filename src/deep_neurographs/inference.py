@@ -547,7 +547,9 @@ class InferenceEngine:
         ...
 
         """
+        t0 = time()
         features = self.feature_generator.run(neurograph, batch, self.radius)
+        print("Feature Generation:", time() - t0)
         computation_graph = batch["graph"] if type(batch) is dict else None
         dataset = ml_util.init_dataset(
             neurograph,
@@ -590,7 +592,7 @@ class InferenceEngine:
             preds = np.array(self.model.predict_proba(dataset.data.x)[:, 1])
 
         # Reformat prediction
-        idxs = dataset.idxs_proposals["idx_to_edge"]
+        idxs = dataset.idxs_proposals["idx_to_id"]
         return {idxs[i]: p for i, p in enumerate(preds)}
 
 

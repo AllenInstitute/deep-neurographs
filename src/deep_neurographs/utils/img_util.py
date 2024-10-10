@@ -13,6 +13,7 @@ from copy import deepcopy
 import numpy as np
 import tensorstore as ts
 from skimage.color import label2rgb
+from tifffile import imwrite
 
 from deep_neurographs.utils import util
 
@@ -164,28 +165,8 @@ def read_profile(img, spec):
         Image profile.
 
     """
-    img_chunk = normalize(read_tensorstore_with_bbox(img, spec["bbox"]))
-    return read_intensities(img_chunk, spec["profile_path"])
-
-
-def read_intensities(img, voxels):
-    """
-    Reads the image intensities of voxels.
-
-    Parameters
-    ----------
-    img : tensorstore.TensorStore
-        Image to be read.
-    voxels : list
-        Voxels to be read.
-
-    Returns
-    -------
-    list
-        Image intensities.
-
-    """
-    return [img[voxel] for voxel in map(tuple, voxels)]
+    img_patch = normalize(read_tensorstore_with_bbox(img, spec["bbox"]))
+    return [img_patch[voxel] for voxel in map(tuple, spec["profile_path"])]
 
 
 def get_start_end(voxel, shape, from_center=True):
@@ -384,7 +365,7 @@ def init_bbox(origin, shape):
         return None
 
 
-def get_minimal_bbox(voxels):
+def get_minimal_bbox(voxels, buffer=0):
     """
     Gets the min and max coordinates of a bounding box that contains "voxels".
 
@@ -403,8 +384,8 @@ def get_minimal_bbox(voxels):
 
     """
     bbox = {
-        "min": np.floor(np.min(voxels, axis=0) - 1).astype(int),
-        "max": np.ceil(np.max(voxels, axis=0) + 1).astype(int),
+        "min": np.floor(np.min(voxels, axis=0) - buffer).astype(int),
+        "max": np.ceil(np.max(voxels, axis=0) + buffer).astype(int),
     }
     return bbox
 

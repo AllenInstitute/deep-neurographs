@@ -93,7 +93,7 @@ class MLConfig:
     batch_size: int = 2000
     downsample_factor: int = 1
     high_threshold: float = 0.9
-    lr: float = 1e-3
+    lr: float = 1e-4
     threshold: float = 0.6
     model_type: str = "GraphNeuralNet"
     n_epochs: int = 1000

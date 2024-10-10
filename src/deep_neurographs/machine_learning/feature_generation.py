@@ -31,7 +31,7 @@ class FeatureGenerator:
 
     """
     # Class attributes
-    chunk_shape = [96, 96, 96]
+    patch_shape = [96, 96, 96]
     n_profile_points = 16
 
     def __init__(
@@ -75,15 +75,15 @@ class FeatureGenerator:
             self.labels = None
 
         # Set chunk shapes
-        self.img_chunk_shape = self.set_chunk_shape(downsample_factor)
-        self.label_chunk_shape = self.set_chunk_shape(0)
+        self.img_patch_shape = self.set_patch_shape(downsample_factor)
+        self.label_patch_shape = self.set_patch_shape(0)
 
         # Validate embedding requirements
         if self.use_img_embedding and not label_path:
             raise("Must provide labels to generate image embeddings")
 
     @classmethod
-    def set_chunk_shape(cls, downsample_factor):
+    def set_patch_shape(cls, downsample_factor):
         """
         Adjusts the chunk shape by downsampling each dimension by a specified
         factor.
@@ -101,7 +101,7 @@ class FeatureGenerator:
             factor.
 
         """
-        return [s // 2 ** downsample_factor for s in cls.chunk_shape]
+        return [s // 2 ** downsample_factor for s in cls.patch_shape]
 
     @classmethod
     def get_n_profile_points(cls):
@@ -139,9 +139,13 @@ class FeatureGenerator:
         # Main
         features = {
             "nodes": self.run_on_nodes(neurograph, computation_graph),
-            "edge": self.run_on_edges(neurograph, computation_graph),
+            "branches": self.run_on_branches(neurograph, computation_graph),
             "proposals": self.run_on_proposals(neurograph, proposals, radius)
         }
+
+        # Generate image patches (if applicable)
+        if self.use_img_embedding:
+            features["patches"] = self.proposal_patches(neurograph, proposals)
         return features
 
     def run_on_nodes(self, neurograph, computation_graph):
@@ -158,14 +162,12 @@ class FeatureGenerator:
         Returns
         -------
         dict
-            Dictionary whose keys are feature types (i.e. skeletal) and values
-            are a dictionary that maps a node id to the corresponding feature
-            vector.
+            Dictionary that maps a node id to a feature vector.
 
         """
-        return {"skel": self.node_skeletal(neurograph, computation_graph)}
+        return self.node_skeletal(neurograph, computation_graph)
 
-    def run_on_edges(self, neurograph, computation_graph):
+    def run_on_branches(self, neurograph, computation_graph):
         """
         Generates feature vectors for every edge in "computation_graph".
 
@@ -179,12 +181,10 @@ class FeatureGenerator:
         Returns
         -------
         dict
-            Dictionary whose keys are feature types (i.e. skeletal) and values
-            are a dictionary that maps an edge id to the corresponding feature
-            vector.
+            Dictionary that maps an edge id to a feature vector.
 
         """
-        return {"skel": self.edge_skeletal(neurograph, computation_graph)}
+        return self.branch_skeletal(neurograph, computation_graph)
 
     def run_on_proposals(self, neurograph, proposals, radius):
         """
@@ -202,23 +202,14 @@ class FeatureGenerator:
         Returns
         -------
         dict
-            Dictionary whose keys are feature types (i.e. skeletal, profiles,
-            chunks) and values are a dictionary that maps a proposal id to a
-            feature vector.
+            Dictionary that maps a proposal id to a feature vector.
 
         """
-        # Skeleton features
-        features = {
-            "skel": self.proposal_skeletal(neurograph, proposals, radius)
-        }
-
-        # Image features
-        if self.use_img_embedding:
-            chunks = self.proposal_chunks(neurograph, proposals)
-            features.update({"chunks": chunks})
-        else:
+        features = self.proposal_skeletal(neurograph, proposals, radius)
+        if not self.use_img_embedding:
             profiles = self.proposal_profiles(neurograph, proposals)
-            features.update({"profiles": profiles})
+            for p in proposals:
+                features[p] = np.concatenate((features[p], profiles[p]))
         return features
 
     # -- Skeletal Features --
@@ -251,7 +242,7 @@ class FeatureGenerator:
             )
         return node_skeletal_features
 
-    def edge_skeletal(self, neurograph, computation_graph):
+    def branch_skeletal(self, neurograph, computation_graph):
         """
         Generates skeleton-based features for edges in "computation_graph".
 
@@ -268,15 +259,15 @@ class FeatureGenerator:
             Dictionary that maps an edge id to a feature vector.
 
         """
-        edge_skeletal_features = dict()
+        branch_skeletal_features = dict()
         for edge in neurograph.edges:
-            edge_skeletal_features[frozenset(edge)] = np.array(
+            branch_skeletal_features[frozenset(edge)] = np.array(
                 [
                     np.mean(neurograph.edges[edge]["radius"]),
                     min(neurograph.edges[edge]["length"], 500) / 500,
                 ],
             )
-        return edge_skeletal_features
+        return branch_skeletal_features
 
     def proposal_skeletal(self, neurograph, proposals, radius):
         """
@@ -385,7 +376,7 @@ class FeatureGenerator:
                 profiles.update(thread.result())
         return profiles
 
-    def proposal_chunks(self, neurograph, proposals):
+    def proposal_patches(self, neurograph, proposals):
         """
         Generates an image intensity profile along the proposal.
 
@@ -410,7 +401,7 @@ class FeatureGenerator:
                 labels = neurograph.proposal_labels(p)
                 xyz_path = np.vstack(neurograph.proposal_xyz(p))
                 threads.append(
-                    executor.submit(self.get_chunk, labels, xyz_path, p)
+                    executor.submit(self.get_patch, labels, xyz_path, p)
                 )
 
             # Store results
@@ -485,50 +476,50 @@ class FeatureGenerator:
 
     def get_bbox(self, voxels, is_img=True):
         center = np.round(np.mean(voxels, axis=0)).astype(int)
-        shape = self.img_chunk_shape if is_img else self.label_chunk_shape
+        shape = self.img_patch_shape if is_img else self.label_patch_shape
         bbox = {
             "min": [c - s // 2 for c, s in zip(center, shape)],
             "max": [c + s // 2 for c, s in zip(center, shape)],
         }
         return bbox
 
-    def get_chunk(self, labels, xyz_path, proposal):
-        # Read image chunk
+    def get_patch(self, labels, xyz_path, proposal):
+        # Initializations
         center = np.mean(xyz_path, axis=0)
-        img_chunk = self.read_img_chunk(center)
-
-        # Read label chunk
         voxels = [img_util.to_voxels(xyz) for xyz in xyz_path]
-        label_chunk = self.read_label_chunk(voxels, labels)
-        return {proposal: np.stack([img_chunk, label_chunk], axis=0)}
 
-    def read_img_chunk(self, xyz_centroid):
+        # Read patches
+        img_patch = self.read_img_patch(center)
+        label_patch = self.read_label_patch(voxels, labels)
+        return {proposal: np.stack([img_patch, label_patch], axis=0)}
+
+    def read_img_patch(self, xyz_centroid):
         center = img_util.to_voxels(xyz_centroid, self.downsample_factor)
-        img_chunk = img_util.read_tensorstore(
-            self.img, center, self.img_chunk_shape
+        img_patch = img_util.read_tensorstore(
+            self.img, center, self.img_patch_shape
         )
-        return img_util.normalize(img_chunk)
+        return img_util.normalize(img_patch)
 
-    def read_label_chunk(self, voxels, labels):
+    def read_label_patch(self, voxels, labels):
         bbox = self.get_bbox(voxels, is_img=False)
-        label_chunk = img_util.read_tensorstore_with_bbox(self.labels, bbox)
+        label_patch = img_util.read_tensorstore_with_bbox(self.labels, bbox)
         voxels = geometry.shift_path(voxels, bbox["min"])
-        return self.relabel(label_chunk, voxels, labels)
+        return self.relabel(label_patch, voxels, labels)
 
-    def relabel(self, label_chunk, voxels, labels):
+    def relabel(self, label_patch, voxels, labels):
         # Initializations
         n_points = self.get_n_profile_points()
         scaling_factor = 2 ** self.downsample_factor
-        label_chunk = zoom(label_chunk, 1.0 / scaling_factor, order=0)
+        label_patch = zoom(label_patch, 1.0 / scaling_factor, order=0)
         for i, voxel in enumerate(voxels):
             voxels[i] = [v // scaling_factor for v in voxel]
 
         # Main
-        relabel_chunk = np.zeros(label_chunk.shape)
-        relabel_chunk[label_chunk == labels[0]] = 1
-        relabel_chunk[label_chunk == labels[1]] = 2
+        relabel_patch = np.zeros(label_patch.shape)
+        relabel_patch[label_patch == labels[0]] = 1
+        relabel_patch[label_patch == labels[1]] = 2
         line = geometry.make_line(voxels[0], voxels[-1], n_points)
-        return geometry.fill_path(relabel_chunk, line, val=-1)
+        return geometry.fill_path(relabel_patch, line, val=-1)
 
 
 # --- Profile utils ---
@@ -578,76 +569,37 @@ def get_branching_path(neurograph, i):
 
 
 # --- Build feature matrix ---
-def get_matrix(neurographs, features, sample_ids=None):
-    if sample_ids:
-        return stack_feature_matrices(neurographs, features, sample_ids)
-    else:
-        return get_feature_matrix(neurographs, features)
+def get_matrix(features, gt_accepts=set()):
+    # Initialize matrices
+    key = sample(list(features.keys()), 1)[0]
+    X = np.zeros((len(features.keys()), len(features[key])))
+    y = np.zeros((len(features.keys())))
+
+    # Populate
+    idx_to_id = dict()
+    for i, id_i in enumerate(features):
+        idx_to_id[i] = id_i
+        X[i, :] = features[id_i]
+        y[i] = 1 if id_i in gt_accepts else 0
+    return X, y, idx_to_id
 
 
-def stack_feature_matrices(neurographs, features, blocks):
-    # Initialize
-    X = None
-    y = None
-    idx_transforms = {"block_to_idxs": dict(), "idx_to_edge": dict()}
-
-    # Feature extraction
+def stack_matrices(neurographs, features, blocks):
+    idx_to_id = dict()
+    X, y = None, None
     for block_id in blocks:
-        # Extract feature matrix
-        idx_shift = 0 if X is None else X.shape[0]
-        X_i, y_i, idx_transforms_i = get_feature_matrix(
-            neurographs[block_id], features[block_id], shift=idx_shift
-        )
-
-        # Concatenate
+        X_i, y_i, _ = get_matrix(features[block_id])
         if X is None:
             X = deepcopy(X_i)
             y = deepcopy(y_i)
         else:
             X = np.concatenate((X, X_i), axis=0)
             y = np.concatenate((y, y_i), axis=0)
-
-        # Update dicts
-        idx_transforms["block_to_idxs"][block_id] = idx_transforms_i[
-            "block_to_idxs"
-        ]
-        idx_transforms["idx_to_edge"].update(idx_transforms_i["idx_to_edge"])
-    return X, y, idx_transforms
-
-
-def get_feature_matrix(neurograph, features, shift=0):
-    # Initialize
-    features = combine_features(features)
-    key = sample(list(features.keys()), 1)[0]
-    X = np.zeros((len(features.keys()), len(features[key])))
-    y = np.zeros((len(features.keys())))
-    idx_transforms = {"block_to_idxs": set(), "idx_to_edge": dict()}
-
-    # Build
-    for i, edge in enumerate(features.keys()):
-        X[i, :] = features[edge]
-        y[i] = 1 if edge in neurograph.target_edges else 0
-        idx_transforms["block_to_idxs"].add(i + shift)
-        idx_transforms["idx_to_edge"][i + shift] = edge
-    return X, y, idx_transforms
-
-
-def combine_features(features):
-    combined = dict()
-    for edge in features["skel"].keys():
-        combined[edge] = None
-        for key in features.keys():
-            if combined[edge] is None and key != "chunks":
-                combined[edge] = deepcopy(features[key][edge])
-            elif key != "chunks":
-                combined[edge] = np.concatenate(
-                    (combined[edge], features[key][edge])
-                )
-    return combined
+    return X, y
 
 
 # --- Utils ---
-def n_node_features():
+def get_node_dict(use_img_embedding=False):
     """
     Returns the number of features for different node types.
 
@@ -664,7 +616,7 @@ def n_node_features():
     return {"branch": 2, "proposal": 34}
 
 
-def n_edge_features():
+def get_edge_dict():
     """
     Returns the number of features for different edge types.
 
@@ -678,9 +630,9 @@ def n_edge_features():
         A dictionary containing the number of features for each edge type
 
     """
-    n_edge_features_dict = {
+    edge_dict = {
         ("proposal", "edge", "proposal"): 3,
         ("branch", "edge", "branch"): 3,
         ("branch", "edge", "proposal"): 3
     }
-    return n_edge_features_dict
+    return edge_dict

@@ -13,10 +13,10 @@ Terminology
 
 Leaf: a node with degree 1.
 
-Junction: a node with degree > 2.
+Branching: a node with degree > 2.
 
 Irreducibles: the irreducibles of a graph consists of 1) leaf nodes,
-2) junction nodes, and 3) edges connecting (1) and (2).
+2) branching nodes, and 3) edges connecting (1) and (2).
 
 Branch: a sequence of nodes between two irreducible nodes.
 
@@ -183,7 +183,7 @@ def get_irreducibles(
     -------
     list[dict]
         List of irreducibles stored in a dictionary where key-values are type
-        of irreducible (i.e. leaf, junction, or edge) and the corresponding
+        of irreducible (i.e. leaf, branching, or edge) and the corresponding
         set of all irreducibles from the graph of that type.
 
     """
@@ -249,7 +249,7 @@ def get_component_irreducibles(
     -------
     list
         List of irreducibles stored in a dictionary where key-values are type
-        of irreducible (i.e. leaf, junction, or edge) and corresponding set of
+        of irreducible (i.e. leaf, branching, or edge) and corresponding set of
         all irreducibles from the graph of that type.
 
     """
@@ -304,7 +304,7 @@ def clip_branches(graph, img_bbox):
 def prune_branches(graph, prune_depth):
     """
     Prunes all short branches from "graph". A short branch is a path between a
-    leaf and junction node where the path length is less than "prune_depth".
+    leaf and branching node where the path length is less than "prune_depth".
 
     Parameters
     ----------
@@ -350,7 +350,7 @@ def get_subcomponent_irreducibles(graph, swc_dict, smooth_bool, min_size):
 
     """
     # Extract nodes
-    leafs, junctions = get_irreducible_nodes(graph)
+    leafs, branchings = get_irreducible_nodes(graph)
     assert len(leafs) > 0, "No leaf nodes!"
 
     # Extract edges
@@ -372,7 +372,7 @@ def get_subcomponent_irreducibles(graph, swc_dict, smooth_bool, min_size):
 
         # Visit j
         attrs = upd_edge_attrs(swc_dict, attrs, j)
-        if j in leafs or j in junctions:
+        if j in leafs or j in branchings:
             # Check whether to smooth
             attrs["length"] = cur_length
             attrs = to_numpy(attrs)
@@ -392,9 +392,9 @@ def get_subcomponent_irreducibles(graph, swc_dict, smooth_bool, min_size):
     # Output
     if total_length > min_size:
         irreducibles = {
-            "leafs": set_node_attrs(swc_dict, leafs),
-            "junctions": set_node_attrs(swc_dict, junctions),
-            "edges": edges,
+            "leaf": set_node_attrs(swc_dict, leafs),
+            "branching": set_node_attrs(swc_dict, branchings),
+            "edge": edges,
             "swc_id": swc_dict["swc_id"],
         }
         return irreducibles
@@ -402,7 +402,7 @@ def get_subcomponent_irreducibles(graph, swc_dict, smooth_bool, min_size):
 
 def get_irreducible_nodes(graph):
     """
-    Gets irreducible nodes (i.e. leafs and junctions) of a graph.
+    Gets irreducible nodes (i.e. leafs and branchings) of a graph.
 
     Parameters
     ----------
@@ -416,13 +416,13 @@ def get_irreducible_nodes(graph):
 
     """
     leafs = set()
-    junctions = set()
+    branchings = set()
     for i in graph.nodes:
         if graph.degree[i] == 1:
             leafs.add(i)
         elif graph.degree[i] > 2:
-            junctions.add(i)
-    return leafs, junctions
+            branchings.add(i)
+    return leafs, branchings
 
 
 # --- Refine graph ---
@@ -686,7 +686,7 @@ def set_node_attrs(swc_dict, nodes):
     return attrs
 
 
-def upd_node_attrs(swc_dict, leafs, junctions, i):
+def upd_node_attrs(swc_dict, leafs, branchings, i):
     """
     Updates node attributes by extracting values from "swc_dict".
 
@@ -694,13 +694,13 @@ def upd_node_attrs(swc_dict, leafs, junctions, i):
     ----------
     swc_dict : dict
         Contents of an swc file that contains the smoothed xyz coordinates of
-        corresponding to "leafs" and "junctions". Note xyz coordinates are
+        corresponding to "leafs" and "branchings". Note xyz coordinates are
         smoothed during edge extraction.
     leafs : dict
         Dictionary where keys are leaf node ids and values are attribute
         dictionaries.
-    junctions : dict
-        Dictionary where keys are junction node ids and values are attribute
+    branchings : dict
+        Dictionary where keys are branching node ids and values are attribute
         dictionaries.
     i : int
         Node to be updated.
@@ -710,7 +710,7 @@ def upd_node_attrs(swc_dict, leafs, junctions, i):
     dict
         Updated dictionary if "i" was contained in "leafs.keys()".
     dict
-        Updated dictionary if "i" was contained in "junctions.keys()".
+        Updated dictionary if "i" was contained in "branchings.keys()".
 
     """
     j = swc_dict["idx"][i]
@@ -718,8 +718,8 @@ def upd_node_attrs(swc_dict, leafs, junctions, i):
     if i in leafs:
         leafs[i] = upd_attrs
     else:
-        junctions[i] = upd_attrs
-    return leafs, junctions
+        branchings[i] = upd_attrs
+    return leafs, branchings
 
 
 # -- miscellaneous --
