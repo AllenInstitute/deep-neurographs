@@ -54,18 +54,14 @@ class NeuroGraph(nx.Graph):
         super(NeuroGraph, self).__init__()
         # General class attributes
         self.leaf_kdtree = None
-
+        self.node_cnt = 0
         self.node_spacing = node_spacing
+        self.proposals = set()
+
         self.merged_ids = set()
         self.soma_ids = dict()
         self.swc_ids = set()
         self.xyz_to_edge = dict()
-
-        # Nodes and Edges
-        self.junctions = set()
-        self.proposals = set()
-        self.target_edges = set()
-        self.node_cnt = 0
 
         # Bounding box (if applicable)
         self.bbox = img_bbox
@@ -133,7 +129,7 @@ class NeuroGraph(nx.Graph):
         irreducibles : dict
             Dictionary containing the irreducibles of some connected component
             being added to "self". This dictionary must contain the keys:
-            'leafs', 'junctions', 'edges', and 'swc_id'.
+            'leaf', 'branching', 'edge', and 'swc_id'.
 
         Returns
         -------
@@ -144,11 +140,11 @@ class NeuroGraph(nx.Graph):
         if swc_id not in self.swc_ids:
             # Nodes
             self.swc_ids.add(swc_id)
-            ids = self.__add_nodes(irreducibles, "leafs", dict())
-            ids = self.__add_nodes(irreducibles, "junctions", ids)
+            ids = self.__add_nodes(irreducibles, "leaf", dict())
+            ids = self.__add_nodes(irreducibles, "branching", ids)
 
             # Edges
-            for (i, j), attrs in irreducibles["edges"].items():
+            for (i, j), attrs in irreducibles["edge"].items():
                 edge = (ids[i], ids[j])
                 idxs = util.spaced_idxs(attrs["radius"], self.node_spacing)
                 for key in ["radius", "xyz"]:
@@ -166,7 +162,7 @@ class NeuroGraph(nx.Graph):
             being added to "self".
         node_type : str
             Type of node being added to "self". This value must be either
-            'leafs' or 'junctions'.
+            'leaf' or 'branching'.
         node_ids : dict
             Dictionary containing conversion from a node id in "irreducibles"
             to the corresponding node id in "self".
@@ -349,8 +345,12 @@ class NeuroGraph(nx.Graph):
             progress_bar=progress_bar,
             trim_endpoints_bool=trim_endpoints_bool,
         )
+
+        # Establish groundtruth
         if groundtruth_graph:
-            self.target_edges = init_targets(self, groundtruth_graph)
+            self.gt_accepts = init_targets(self, groundtruth_graph)
+        else:
+            self.gt_accepts = set()
 
     def reset_proposals(self):
         """

@@ -22,6 +22,12 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
     Heterogeneous graph attention network that classifies proposals.
 
     """
+    # Class attributes
+    relation_types = [
+        ("proposal", "edge", "proposal"),
+        ("branch", "edge", "proposal"),
+        ("branch", "edge", "branch"),
+    ]
 
     def __init__(
         self,
@@ -73,6 +79,11 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
         # Initialize weights
         self.init_weights()
 
+    # --- Class methods ---
+    @classmethod
+    def get_relation_types(cls):
+        return cls.relation_types
+
     # --- Initialize architecture ---
     def init_linear_layer(self, hidden_dim, my_dict):
         linear_layer = dict()
@@ -81,23 +92,14 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
         return linear_layer
 
     def init_gat_layer(self, hidden_dim, edge_dim, heads):
-        gat_layers = HeteroConv(
-            {
-                ("proposal", "edge", "proposal"): self.init_gat_layer_same(
-                    hidden_dim, edge_dim, heads
-                ),
-                ("branch", "edge", "branch"): self.init_gat_layer_same(
-                    hidden_dim, edge_dim, heads
-                ),
-                ("branch", "edge", "proposal"): self.init_gat_layer_mixed(
-                    hidden_dim, edge_dim, heads
-                ),
-            },
-            aggr="sum",
-        )
-        return gat_layers
+        gat_dict = dict()
+        for r in self.get_relation_types():
+            is_same = True if r[0] == r[2] else False
+            init_gat = self.init_gat_same if is_same else self.init_gat_mixed
+            gat_dict[r] = init_gat(hidden_dim, edge_dim, heads)
+        return HeteroConv(gat_dict, aggr="sum")
 
-    def init_gat_layer_same(self, hidden_dim, edge_dim, heads):
+    def init_gat_same(self, hidden_dim, edge_dim, heads):
         gat_layer = GATConv(
             -1,
             hidden_dim,
@@ -107,7 +109,7 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
         )
         return gat_layer
 
-    def init_gat_layer_mixed(self, hidden_dim, edge_dim, heads):
+    def init_gat_mixed(self, hidden_dim, edge_dim, heads):
         gat_layer = GATConv(
             (hidden_dim, hidden_dim),
             hidden_dim,
@@ -130,32 +132,14 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
         None
 
         """
-        for layer in [self.input_nodes, self.output]:
-            for param in layer.parameters():
-                if len(param.shape) > 1:
-                    init.kaiming_normal_(param)
-                else:
-                    init.zeros_(param)
+        # Output layer
+        for params in self.output.parameters():
+            if len(params.shape) > 1:
+                init.kaiming_normal_(params)
+            else:
+                init.zeros_(params)
 
-    def activation(self, x_dict):
-        """
-        Applies nonlinear activation
-
-        Parameters
-        ----------
-        x_dict : dict
-            Dictionary that maps node/edge types to feature matrices.
-
-        Returns
-        -------
-        dict
-            Feature matrices with activation applied.
-
-        """
-        x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
-        x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
-        return x_dict
-
+    # --- Generate prediction ---
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
         # Input - Nodes
         x_dict = {key: f(x_dict[key]) for key, f in self.input_nodes.items()}
@@ -176,6 +160,25 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
 
         # Output
         x_dict = self.output(x_dict["proposal"])
+        return x_dict
+
+    def activation(self, x_dict):
+        """
+        Applies nonlinear activation
+
+        Parameters
+        ----------
+        x_dict : dict
+            Dictionary that maps node/edge types to feature matrices.
+
+        Returns
+        -------
+        dict
+            Feature matrices with activation applied.
+
+        """
+        x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
+        x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
         return x_dict
 
 
