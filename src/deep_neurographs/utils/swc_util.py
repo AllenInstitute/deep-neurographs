@@ -553,6 +553,7 @@ def set_radius(graph, i):
     -------
     float
         Radius of node "i".
+
     """
     try:
         radius = graph[i]["radius"]
@@ -567,15 +568,16 @@ def make_simple_entry(node, parent, xyz, radius=8):
 
     Parameters
     ----------
-    graph : networkx.Graph
-        Graph that "i" and "parent" belong to.
     node : int
         Node that entry corresponds to.
     parent : int
          Parent of node "i".
-    anisotropy : list[float]
-        Image to real-world coordinates scaling factors for (x, y, z) that is
-        applied to swc files.
+    xyz : numpy.ndarray
+        ...
+
+    Returns
+    -------
+    ...
 
     """
     x, y, z = tuple(xyz)
