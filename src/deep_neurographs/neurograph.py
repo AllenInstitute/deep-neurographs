@@ -6,6 +6,8 @@ Created on Sat July 15 9:00:00 2023
 
 Implementation of subclass of Networkx.Graph called "FragmentsGraph".
 
+NOTE: SAVE LABEL UPDATES --- THERE IS A BUG IN FEATURE GENERATION
+
 """
 import os
 import zipfile
@@ -52,18 +54,14 @@ class NeuroGraph(nx.Graph):
         super(NeuroGraph, self).__init__()
         # General class attributes
         self.leaf_kdtree = None
-
+        self.node_cnt = 0
         self.node_spacing = node_spacing
+        self.proposals = set()
+
         self.merged_ids = set()
         self.soma_ids = dict()
         self.swc_ids = set()
         self.xyz_to_edge = dict()
-
-        # Nodes and Edges
-        self.junctions = set()
-        self.proposals = set()
-        self.target_edges = set()
-        self.node_cnt = 0
 
         # Bounding box (if applicable)
         self.bbox = img_bbox
@@ -131,7 +129,7 @@ class NeuroGraph(nx.Graph):
         irreducibles : dict
             Dictionary containing the irreducibles of some connected component
             being added to "self". This dictionary must contain the keys:
-            'leafs', 'junctions', 'edges', and 'swc_id'.
+            'leaf', 'branching', 'edge', and 'swc_id'.
 
         Returns
         -------
@@ -142,11 +140,11 @@ class NeuroGraph(nx.Graph):
         if swc_id not in self.swc_ids:
             # Nodes
             self.swc_ids.add(swc_id)
-            ids = self.__add_nodes(irreducibles, "leafs", dict())
-            ids = self.__add_nodes(irreducibles, "junctions", ids)
+            ids = self.__add_nodes(irreducibles, "leaf", dict())
+            ids = self.__add_nodes(irreducibles, "branching", ids)
 
             # Edges
-            for (i, j), attrs in irreducibles["edges"].items():
+            for (i, j), attrs in irreducibles["edge"].items():
                 edge = (ids[i], ids[j])
                 idxs = util.spaced_idxs(attrs["radius"], self.node_spacing)
                 for key in ["radius", "xyz"]:
@@ -164,7 +162,7 @@ class NeuroGraph(nx.Graph):
             being added to "self".
         node_type : str
             Type of node being added to "self". This value must be either
-            'leafs' or 'junctions'.
+            'leaf' or 'branching'.
         node_ids : dict
             Dictionary containing conversion from a node id in "irreducibles"
             to the corresponding node id in "self".
@@ -236,8 +234,8 @@ class NeuroGraph(nx.Graph):
                 # Concatenate attributes
                 len_1 = self.edges[i, nbs[0]]["length"]
                 len_2 = self.edges[i, nbs[1]]["length"]
-                xyz = self.get_branches(i, key="xyz")
-                radius = self.get_branches(i, key="radius")
+                xyz = self.branches(i, key="xyz")
+                radius = self.branches(i, key="radius")
                 attrs = {
                     "length": len_1 + len_2,
                     "radius": concatenate([np.flip(radius[0]), radius[1]]),
@@ -347,8 +345,12 @@ class NeuroGraph(nx.Graph):
             progress_bar=progress_bar,
             trim_endpoints_bool=trim_endpoints_bool,
         )
+
+        # Establish groundtruth
         if groundtruth_graph:
-            self.target_edges = init_targets(self, groundtruth_graph)
+            self.gt_accepts = init_targets(self, groundtruth_graph)
+        else:
+            self.gt_accepts = set()
 
     def reset_proposals(self):
         """
@@ -615,8 +617,8 @@ class NeuroGraph(nx.Graph):
 
     def proposal_avg_radii(self, proposal):
         i, j = tuple(proposal)
-        radii_i = self.get_branches(i, ignore_reducibles=True, key="radius")
-        radii_j = self.get_branches(j, ignore_reducibles=True, key="radius")
+        radii_i = self.branches(i, key="radius")
+        radii_j = self.branches(j, key="radius")
         return np.array([avg_radius(radii_i), avg_radius(radii_j)])
 
     def proposal_xyz(self, proposal):
@@ -637,15 +639,35 @@ class NeuroGraph(nx.Graph):
         i, j = tuple(proposal)
         return np.array([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
 
-    def proposal_directionals(self, proposal, window):
-        # Compute tangent vectors
+    def proposal_labels(self, proposal):
+        """
+        Gets the xyz coordinates of the nodes that comprise "proposal".
+
+        Parameters
+        ----------
+        proposal : frozenset
+            Pair of nodes that form a proposal.
+
+        Returns
+        -------
+        numpy.ndarray
+            xyz coordinates of nodes that comprise "proposal".
+
+        """
         i, j = tuple(proposal)
-        direction = geometry.tangent(self.proposal_xyz(proposal))
+        return [int(self.nodes[i]["swc_id"]), int(self.nodes[j]["swc_id"])]
+
+    def proposal_directionals(self, proposal, depth):
+        # Extract branches
+        i, j = tuple(proposal)
+        branches_i = [geometry.truncate_path(b, depth) for b in self.branches(i)]
+        branches_j = [geometry.truncate_path(b, depth) for b in self.branches(j)]
         origin = self.proposal_midpoint(proposal)
-        branches_i = self.get_branches(i, ignore_reducibles=True)
-        branches_j = self.get_branches(j, ignore_reducibles=True)
-        direction_i = geometry.get_directional(branches_i, i, origin, window)
-        direction_j = geometry.get_directional(branches_j, j, origin, window)
+
+        # Compute tangent vectors
+        direction_i = geometry.get_directional(branches_i, origin, depth)
+        direction_j = geometry.get_directional(branches_j, origin, depth)
+        direction = geometry.tangent(self.proposal_xyz(proposal))
 
         # Compute features
         inner_product_1 = abs(np.dot(direction, direction_i))
@@ -789,7 +811,7 @@ class NeuroGraph(nx.Graph):
         """
         return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
-    def get_branches(self, i, ignore_reducibles=False, key="xyz"):
+    def branches(self, i, ignore_reducibles=True, key="xyz"):
         branches = list()
         for j in self.neighbors(i):
             branch = self.oriented_edge((i, j), i, key=key)
@@ -807,7 +829,7 @@ class NeuroGraph(nx.Graph):
             branches.append(branch)
         return branches
 
-    def get_branch(self, leaf, key="xyz"):
+    def branch(self, leaf, key="xyz"):
         """
         Gets the xyz coordinates or radii contained in the edge emanating from
         "leaf".
@@ -825,7 +847,7 @@ class NeuroGraph(nx.Graph):
 
         """
         assert self.is_leaf(leaf)
-        return self.get_branches(leaf, key=key)[0]
+        return self.branches(leaf, key=key)[0]
 
     def get_other_nb(self, i, j):
         """
@@ -912,14 +934,6 @@ class NeuroGraph(nx.Graph):
         """
         assert self.is_leaf(i)
         return list(self.neighbors(i))[0]
-
-    def to_patch_coords(self, edge, midpoint, chunk_size):
-        patch_coords = list()
-        for xyz in self.edges[edge]["xyz"]:
-            coord = self.to_voxels(xyz)
-            local_coord = util.voxels_to_patch(coord, midpoint, chunk_size)
-            patch_coords.append(local_coord)
-        return patch_coords
 
     def xyz_to_swc(self, xyz, return_node=False):
         if tuple(xyz) in self.xyz_to_edge.keys():
@@ -1077,3 +1091,9 @@ def avg_radius(radii_list):
         end = max(min(16, len(radii) - 1), 1)
         avg += np.mean(radii[0:end]) / len(radii_list)
     return avg
+
+
+def directional_origin(branch_1, branch_2):
+    origin_1 = np.mean(branch_1, axis=0)
+    origin_2 = np.mean(branch_2, axis=0)
+    return np.mean(np.vstack(origin_1, origin_2), axis=0)

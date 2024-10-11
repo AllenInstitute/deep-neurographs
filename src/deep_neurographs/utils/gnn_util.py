@@ -22,20 +22,16 @@ GNN_DEPTH = 2
 
 # --- Tensor Operations ---
 def get_inputs(data, device=None):
-    # Extract inputs
     x = data.x_dict
     edge_index = data.edge_index_dict
     edge_attr = data.edge_attr_dict
-
-    # Move to gpu (if applicable)
-    if "cuda" in device and torch.cuda.is_available():
-        x = toGPU(x, device)
-        edge_index = toGPU(edge_index, device)
-        edge_attr = toGPU(edge_attr, device)
-    return x, edge_index, edge_attr
+    if device and torch.cuda.is_available():
+        return toGPU(x), toGPU(edge_index), toGPU(edge_attr)
+    else:
+        return x, edge_index, edge_attr
 
 
-def toGPU(tensor_dict, device):
+def toGPU(tensor_dict):
     """
     Moves dictionary of tensors from CPU to GPU.
 

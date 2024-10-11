@@ -17,7 +17,8 @@ import numpy as np
 import torch
 from torch_geometric.data import HeteroData as HeteroGraphData
 
-from deep_neurographs.machine_learning import datasets, feature_generation
+from deep_neurographs.machine_learning import datasets
+from deep_neurographs.machine_learning.feature_generation import get_matrix
 from deep_neurographs.utils import gnn_util
 
 DTYPE = torch.float32
@@ -44,17 +45,21 @@ def init(neurograph, features, computation_graph):
         Custom dataset.
 
     """
+    # Check for groundtruth
+    if neurograph.gt_accepts is not None:
+        gt_accepts = neurograph.gt_accepts
+    else:
+        gt_accepts = set()
+
     # Extract features
-    x_branches, _, idxs_branches = feature_generation.get_matrix(
-        neurograph, features["edge"]
+    x_branches, _, idxs_branches = get_matrix(features["branches"])
+    x_proposals, y_proposals, idxs_proposals = get_matrix(
+        features["proposals"], gt_accepts
     )
-    x_proposals, y_proposals, idxs_proposals = feature_generation.get_matrix(
-        neurograph, features["proposals"]
-    )
-    x_nodes = feature_generation.combine_features(features["nodes"])
+    x_nodes = features["nodes"]
 
     # Initialize dataset
-    proposals = list(features["proposals"]["skel"].keys())
+    proposals = list(features["proposals"].keys())
     heterograph_dataset = HeteroGraphDataset(
         computation_graph,
         proposals,
@@ -63,7 +68,7 @@ def init(neurograph, features, computation_graph):
         x_proposals,
         y_proposals,
         idxs_branches,
-        idxs_proposals,
+        idxs_proposals
     )
     return heterograph_dataset
 
@@ -103,12 +108,9 @@ class HeteroGraphDataset:
             Feature matrix generated from "proposals" in "computation_graph".
         y_proposals : numpy.ndarray
             Ground truth of proposals.
-        idxs_branches : dict
-            Dictionary that maps edges in "computation_graph" to an index that
-            represents the edge's position in "x_branches".
-        idxs_proposals : dict
-            Dictionary that maps "proposals" to an index that represents the
-            edge's position in "x_proposals".
+        idx_to_id : dict
+            Dictionary that maps an edge id in "computation_graph" to its
+            index in either x_branches or x_proposals.
 
         Returns
         -------
@@ -116,8 +118,8 @@ class HeteroGraphDataset:
 
         """
         # Conversion idxs
-        self.idxs_branches = datasets.init_idxs(idxs_branches)
-        self.idxs_proposals = datasets.init_idxs(idxs_proposals)
+        self.idxs_branches = datasets.init_idx_mapping(idxs_branches)
+        self.idxs_proposals = datasets.init_idx_mapping(idxs_proposals)
         self.computation_graph = computation_graph
         self.proposals = proposals
 
@@ -214,11 +216,11 @@ class HeteroGraphDataset:
                 edges = [[n - 1, n - 2], [n - 2, n - 1]]
                 self.data[edge_type].edge_index = gnn_util.toTensor(edges)
                 if node_type == "branch":
-                    self.idxs_branches["idx_to_edge"][n - 1] = e_1
-                    self.idxs_branches["idx_to_edge"][n - 2] = e_2
+                    self.idxs_branches["idx_to_id"][n - 1] = e_1
+                    self.idxs_branches["idx_to_id"][n - 2] = e_2
                 else:
-                    self.idxs_proposals["idx_to_edge"][n - 1] = e_1
-                    self.idxs_proposals["idx_to_edge"][n - 2] = e_2
+                    self.idxs_proposals["idx_to_id"][n - 1] = e_1
+                    self.idxs_proposals["idx_to_id"][n - 2] = e_2
 
     # -- Getters --
     def n_branch_features(self):
@@ -289,8 +291,8 @@ class HeteroGraphDataset:
         edge_index = []
         line_graph = gnn_util.init_line_graph(self.proposals)
         for e1, e2 in line_graph.edges:
-            v1 = self.idxs_proposals["edge_to_idx"][frozenset(e1)]
-            v2 = self.idxs_proposals["edge_to_idx"][frozenset(e2)]
+            v1 = self.idxs_proposals["id_to_idx"][frozenset(e1)]
+            v2 = self.idxs_proposals["id_to_idx"][frozenset(e2)]
             edge_index.extend([[v1, v2], [v2, v1]])
         return gnn_util.toTensor(edge_index)
 
@@ -315,8 +317,8 @@ class HeteroGraphDataset:
             e1_edge_bool = frozenset(e1) not in self.proposals
             e2_edge_bool = frozenset(e2) not in self.proposals
             if e1_edge_bool and e2_edge_bool:
-                v1 = self.idxs_branches["edge_to_idx"][frozenset(e1)]
-                v2 = self.idxs_branches["edge_to_idx"][frozenset(e2)]
+                v1 = self.idxs_branches["id_to_idx"][frozenset(e1)]
+                v2 = self.idxs_branches["id_to_idx"][frozenset(e2)]
                 edge_index.extend([[v1, v2], [v2, v1]])
         return gnn_util.toTensor(edge_index)
 
@@ -339,14 +341,14 @@ class HeteroGraphDataset:
         edge_index = []
         for p in self.proposals:
             i, j = tuple(p)
-            v1 = self.idxs_proposals["edge_to_idx"][frozenset(p)]
+            v1 = self.idxs_proposals["id_to_idx"][frozenset(p)]
             for k in self.computation_graph.neighbors(i):
                 if frozenset((i, k)) not in self.proposals:
-                    v2 = self.idxs_branches["edge_to_idx"][frozenset((i, k))]
+                    v2 = self.idxs_branches["id_to_idx"][frozenset((i, k))]
                     edge_index.extend([[v2, v1]])
             for k in self.computation_graph.neighbors(j):
                 if frozenset((j, k)) not in self.proposals:
-                    v2 = self.idxs_branches["edge_to_idx"][frozenset((j, k))]
+                    v2 = self.idxs_branches["id_to_idx"][frozenset((j, k))]
                     edge_index.extend([[v2, v1]])
         return gnn_util.toTensor(edge_index)
 
@@ -419,8 +421,8 @@ def node_intersection(idx_map, e1, e2):
         Common node between "e1" and "e2".
 
     """
-    hat_e1 = idx_map["idx_to_edge"][int(e1)]
-    hat_e2 = idx_map["idx_to_edge"][int(e2)]
+    hat_e1 = idx_map["idx_to_id"][int(e1)]
+    hat_e2 = idx_map["idx_to_id"][int(e2)]
     node = list(hat_e1.intersection(hat_e2))
     assert len(node) == 1, "Node intersection is not unique!"
     return node[0]
@@ -444,8 +446,8 @@ def hetero_node_intersection(idx_map_1, idx_map_2, e1, e2):
         Common node between "e1" and "e2".
 
     """
-    hat_e1 = idx_map_1["idx_to_edge"][int(e1)]
-    hat_e2 = idx_map_2["idx_to_edge"][int(e2)]
+    hat_e1 = idx_map_1["idx_to_id"][int(e1)]
+    hat_e2 = idx_map_2["idx_to_id"][int(e2)]
     node = list(hat_e1.intersection(hat_e2))
     assert len(node) == 1, "Node intersection is empty or not unique!"
     return node[0]
