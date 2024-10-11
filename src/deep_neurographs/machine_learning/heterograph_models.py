@@ -57,12 +57,16 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
         self.dropout = dropout
 
         # Feature vector sizes
-        hidden_dim = scale_hidden_dim * np.max(list(node_dict.values()))
+        hidden_dim = scale_hidden_dim* np.max(list(node_dict.values()))
         output_dim = heads_1 * heads_2 * hidden_dim
 
         # Linear layers
-        self.input_nodes = self.init_linear_layer(hidden_dim, node_dict)
-        self.input_edges = self.init_linear_layer(hidden_dim, edge_dict)
+        self.input_nodes = nn.ModuleDict()
+        self.input_edges = dict()
+        for key, d in node_dict.items():
+            self.input_nodes[key] = nn.Linear(d, hidden_dim, device=device)
+        for key, d in edge_dict.items():
+            self.input_edges[key] = nn.Linear(d, hidden_dim, device=device)
         self.output = Linear(output_dim, 1).to(device)
 
         # Message passing layers
@@ -84,7 +88,7 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
     def get_relation_types(cls):
         return cls.relation_types
 
-    # --- Initialize architecture ---
+    # --- Architecture ---
     def init_linear_layer(self, hidden_dim, my_dict):
         linear_layer = dict()
         for key, dim in my_dict.items():
@@ -132,14 +136,32 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
         None
 
         """
-        # Output layer
-        for params in self.output.parameters():
-            if len(params.shape) > 1:
-                init.kaiming_normal_(params)
-            else:
-                init.zeros_(params)
+        for layer in [self.output, self.input_nodes]:
+            for param in layer.parameters():
+                if len(param.shape) > 1:
+                    init.kaiming_normal_(param)
+                else:
+                    init.zeros_(param)
 
-    # --- Generate prediction ---
+    def activation(self, x_dict):
+        """
+        Applies nonlinear activation
+
+        Parameters
+        ----------
+        x_dict : dict
+            Dictionary that maps node/edge types to feature matrices.
+
+        Returns
+        -------
+        dict
+            Feature matrices with activation applied.
+
+        """
+        x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
+        x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+        return x_dict
+
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
         # Input - Nodes
         x_dict = {key: f(x_dict[key]) for key, f in self.input_nodes.items()}
@@ -160,25 +182,6 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
 
         # Output
         x_dict = self.output(x_dict["proposal"])
-        return x_dict
-
-    def activation(self, x_dict):
-        """
-        Applies nonlinear activation
-
-        Parameters
-        ----------
-        x_dict : dict
-            Dictionary that maps node/edge types to feature matrices.
-
-        Returns
-        -------
-        dict
-            Feature matrices with activation applied.
-
-        """
-        x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
-        x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
         return x_dict
 
 

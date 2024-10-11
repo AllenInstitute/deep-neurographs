@@ -121,7 +121,7 @@ class GraphLoader:
 
         """
         # Load fragments and extract irreducibles
-        self.init_img_bbox(img_patch_origin, img_patch_shape)
+        self.img_bbox = img_util.init_bbox(img_patch_origin, img_patch_shape)
         swc_dicts = self.reader.load(fragments_pointer)
         irreducibles = get_irreducibles(
             swc_dicts,
@@ -138,25 +138,6 @@ class GraphLoader:
             irreducible_set = irreducibles.pop()
             neurograph.add_component(irreducible_set)
         return neurograph
-
-    def init_img_bbox(self, img_patch_origin, img_patch_shape):
-        """
-        Sets the bounding box of an image patch as a class attriubte.
-
-        Parameters
-        ----------
-        img_patch_origin : tuple[int]
-            Origin of bounding box which is assumed to be top, front, left
-            corner.
-        img_patch_shape : tuple[int]
-            Shape of bounding box.
-
-        Returns
-        -------
-        None
-
-        """
-        self.img_bbox = img_util.init_bbox(img_patch_origin, img_patch_shape)
 
 
 # --- Graph structure extraction ---
