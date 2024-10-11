@@ -390,15 +390,6 @@ def get_minimal_bbox(voxels, buffer=0):
     return bbox
 
 
-def get_fixed_bbox(voxels, shape):
-    centroid = np.round(np.mean(voxels, axis=0)).astype(int)
-    bbox = {
-        "min": [centroid[i] - shape[i] // 2 for i in range(3)],
-        "max": [centroid[i] + shape[i] // 2 for i in range(3)],
-    }
-    return bbox
-
-
 def find_img_path(bucket_name, img_root, dataset_name):
     """
     Find the path of a specific dataset in a GCS bucket.

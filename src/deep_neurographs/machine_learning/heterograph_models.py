@@ -14,17 +14,10 @@ import torch.nn.init as init
 from torch import nn
 from torch.nn import Dropout, LeakyReLU
 from torch_geometric.nn import GATv2Conv as GATConv
-from torch_geometric.nn import HEATConv, HeteroConv, Linear
-
-from deep_neurographs import machine_learning as ml
-
-CONV_TYPES = ["GATConv", "GCNConv"]
-DROPOUT = 0.3
-HEADS_1 = 1
-HEADS_2 = 1
+from torch_geometric.nn import HeteroConv, Linear
 
 
-class HeteroGNN(torch.nn.Module):
+class HeteroGNN(torch.nn.Module):  # change to HGAT
     """
     Heterogeneous graph attention network that classifies proposals.
 
@@ -82,10 +75,9 @@ class HeteroGNN(torch.nn.Module):
         hidden_dim = heads_1 * hidden_dim
 
         self.conv2 = self.init_gat_layer(hidden_dim, edge_dim, heads_2)  # change name
-        hidden_dim = heads_2 * hidden_dim
 
         # Nonlinear activation
-        self.dropout = Dropout(dropout)
+        self.dropout = Dropout(dropout)  # change name
         self.leaky_relu = LeakyReLU()
 
         # Initialize weights
