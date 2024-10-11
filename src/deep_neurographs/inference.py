@@ -162,7 +162,7 @@ class InferencePipeline:
         print(f"Total Runtime: {round(t, 4)} {unit}\n")
 
     def run_schedule(
-        self, fragments_pointer, radius_schedule, save_all_rounds=False
+        self, fragments_pointer, search_radius_schedule, save_all_rounds=False
     ):
         t0 = time()
         self.report_experiment()

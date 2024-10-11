@@ -57,8 +57,10 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
         self.dropout = dropout
 
         # Feature vector sizes
-        hidden_dim = scale_hidden_dim* np.max(list(node_dict.values()))
-        output_dim = heads_1 * heads_2 * hidden_dim
+        node_dict = ml.feature_generation.get_node_dict()
+        edge_dict = ml.feature_generation.get_edge_dict()
+        hidden = scale_hidden * np.max(list(node_dict.values()))
+        self.dropout = dropout
 
         # Linear layers
         self.input_nodes = nn.ModuleDict()
@@ -69,12 +71,9 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
             self.input_edges[key] = nn.Linear(d, hidden_dim, device=device)
         self.output = Linear(output_dim, 1).to(device)
 
-        # Message passing layers
-        self.conv1 = self.init_gat_layer(hidden_dim, hidden_dim, heads_1)  # change name
-        edge_dim = hidden_dim
-        hidden_dim = heads_1 * hidden_dim
-
-        self.conv2 = self.init_gat_layer(hidden_dim, edge_dim, heads_2)  # change name
+        # Convolutional layers
+        self.conv1 = self.init_gat_layer(hidden, hidden, heads_1)
+        self.conv2 = self.init_gat_layer(heads_1 * hidden, hidden, heads_2)
 
         # Nonlinear activation
         self.dropout = Dropout(dropout)  # change name
@@ -89,12 +88,6 @@ class HeteroGNN(torch.nn.Module):  # change to HGAT
         return cls.relation_types
 
     # --- Architecture ---
-    def init_linear_layer(self, hidden_dim, my_dict):
-        linear_layer = dict()
-        for key, dim in my_dict.items():
-            linear_layer[key] = nn.Linear(dim, hidden_dim, device=self.device)
-        return linear_layer
-
     def init_gat_layer(self, hidden_dim, edge_dim, heads):
         gat_dict = dict()
         for r in self.get_relation_types():
