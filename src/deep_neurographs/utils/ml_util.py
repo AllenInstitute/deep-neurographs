@@ -61,9 +61,7 @@ def save_model(path, model, model_type):
 
 
 # --- dataset utils ---
-def init_dataset(
-    neurograph, features, model_type, computation_graph=None, sample_ids=None
-):
+def init_dataset(neurograph, features, is_gnn=True, computation_graph=None):
     """
     Initializes a dataset given features generated from some set of proposals
     and neurograph.
@@ -79,9 +77,6 @@ def init_dataset(
     computation_graph : networkx.Graph, optional
         Computation graph used by gnn if the "model_type" is either
         "GraphNeuralNet" or "HeteroGraphNeuralNet". The default is None.
-    sample_ids : list[str], optional
-        List of ids of samples if features were generated from distinct
-        predictions. The default is None.
 
     Returns
     -------
@@ -89,15 +84,13 @@ def init_dataset(
         Dataset that stores features.
 
     """
-    if model_type == "GraphNeuralNet":
+    if is_gnn:
         assert computation_graph is not None, "Must input computation graph!"
         dataset = heterograph_datasets.init(
             neurograph, features, computation_graph
         )
     else:
-        dataset = datasets.init(
-            neurograph, features, sample_ids=sample_ids
-        )
+        dataset = datasets.init(neurograph, features)
     return dataset
 
 

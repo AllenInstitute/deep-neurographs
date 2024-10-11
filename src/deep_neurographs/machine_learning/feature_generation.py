@@ -6,353 +6,602 @@ Created on Sat July 15 9:00:00 2023
 
 Generates features for training a model and performing inference.
 
-Conventions:   (1) "xyz" refers to a real world coordinate such as those from
-                   an swc file.
+Conventions:
+    (1) "xyz" refers to a real world coordinate such as those from an swc file
 
-               (2) "voxel" refers to an voxel coordinate in a whole exaspim
-                   image.
+    (2) "voxel" refers to an voxel coordinate in a whole exaspim image.
 
 """
 
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from random import sample
 
 import numpy as np
-import tensorstore as ts
+from scipy.ndimage import zoom
 
 from deep_neurographs import geometry
-from deep_neurographs.machine_learning.feature_generation_graphs import (
-    generate_gnn_features,
-)
 from deep_neurographs.utils import img_util, util
 
-CHUNK_SIZE = [48, 48, 48]
-N_BRANCH_PTS = 50
-N_PROFILE_PTS = 16  # 10
-N_SKEL_FEATURES = 22
 
-
-def run(
-    neurograph,
-    img,
-    model_type,
-    proposals_dict,
-    radius,
-    downsample_factor=1,
-    labels=None,
-):
+class FeatureGenerator:
     """
-    Generates feature vectors that are used by a machine learning model to
-    classify proposals.
-
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        Graph that "proposals" belong to.
-    img : tensorstore.Tensorstore
-        Image stored in a GCS bucket.
-    model_type : str
-        Type of machine learning model used to classify proposals.
-    proposals_dict : dict
-        Dictionary that contains the items (1) "proposals" which are the
-        proposals from "neurograph" that features will be generated and
-        (2) "graph" which is the computation graph used by the gnn.
-    radius : float
-        Search radius used to generate proposals.
-    downsample_factor : int, optional
-        Downsampling factor that accounts for which level in the image pyramid
-        the voxel coordinates must index into. The default is 0.
-    labels : tensorstore.TensorStore, optional
-        Segmentation mask stored in a GCS bucket. The default is None.
-
-    Returns
-    -------
-    dict
-        Feature vectors.
+    Class that generates features vectors that are used by a graph neural
+    network to classify proposals.
 
     """
-    # Init leaf kd-tree (if applicable)
-    if neurograph.leaf_kdtree is None:
-        neurograph.init_kdtree(node_type="leaf")
+    # Class attributes
+    patch_shape = [96, 96, 96]
+    n_profile_points = 16
 
-    # Feature generation by type of machine learning model
-    if model_type == "GraphNeuralNet":
-        return generate_gnn_features(
-            neurograph, img, proposals_dict, radius, downsample_factor
-        )
-    else:
-        return generate_features(
-            neurograph, img, proposals_dict, radius, downsample_factor
-        )
+    def __init__(
+        self,
+        img_path,
+        downsample_factor,
+        label_path=None,
+        use_img_embedding=False,
+    ):
+        """
+        Initializes object that generates features for a graph.
 
+        Parameters
+        ----------
+        img_path : str
+            Path to the raw image assumed to be stored in a GCS bucket.
+        downsample_factor : int
+            Downsampling factor that accounts for which level in the image
+            pyramid the voxel coordinates must index into.
+        label_path : str, optional
+            Path to the segmentation assumed to be stored on a GCS bucket. The
+            default is None.
+        use_img_embedding : bool, optional
+            ...
 
-def generate_features(
-    neurograph, img, proposals_dict, radius, downsample_factor
-):
-    """
-    Generates feature vectors that are used by a general machine learning model
-    (e.g. random forest or feed forward neural network).
+        Returns
+        -------
+        None
 
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        Graph that "proposals" belong to.
-    img : tensorstore.Tensorstore
-        Image stored in a GCS bucket.
-    proposals_dict : dict
-        Dictionary containing the computation graph used by gnn and proposals
-        to be classified.
-    radius : float
-        Search radius used to generate proposals.
-    downsample_factor : int
-        Downsampling factor that accounts for which level in the image pyramid
-        the voxel coordinates must index into.
+        """
+        # Initialize instance attributes
+        self.downsample_factor = downsample_factor
+        self.use_img_embedding = use_img_embedding
 
-    Returns
-    -------
-    dict
-        Feature vectors.
+        # Initialize image-based attributes
+        driver = "n5" if ".n5" in img_path else "zarr"
+        self.img = img_util.open_tensorstore(img_path, driver=driver)
+        if label_path:
+            self.labels = img_util.open_tensorstore(label_path)
+        else:
+            self.labels = None
 
-    """
-    features = defaultdict(bool)
-    features["proposals"] = {
-        "skel": proposal_skeletal(
-            neurograph, proposals_dict["proposals"], radius
-        ),
-        "profiles": proposal_profiles(
-            neurograph, img, proposals_dict["proposals"], downsample_factor
-        ),
-    }
-    return features
+        # Set chunk shapes
+        self.img_patch_shape = self.set_patch_shape(downsample_factor)
+        self.label_patch_shape = self.set_patch_shape(0)
 
+        # Validate embedding requirements
+        if self.use_img_embedding and not label_path:
+            raise("Must provide labels to generate image embeddings")
 
-def proposal_profiles(neurograph, img, proposals, downsample_factor):
-    """
-    Generates an image intensity profile along each proposal by reading from
-    an image on the cloud.
+    @classmethod
+    def set_patch_shape(cls, downsample_factor):
+        """
+        Adjusts the chunk shape by downsampling each dimension by a specified
+        factor.
 
-    Parameters
-    ----------
-    neurograph : NeuroGraph
-        Graph that "proposals" belong to.
-    img : tensorstore.TensorStore
-        Image stored in a GCS bucket.
-    proposals : list[frozenset]
-        List of proposals for which features will be generated.
-    downsample_factor : int
-        Downsampling factor that accounts for which level in the image pyramid
-        the voxel coordinates must index into.
+        Parameters
+        ----------
+        downsample_factor : int
+            The factor by which to downsample each dimension of the current
+            chunk shape.
 
-    Returns
-    -------
-    dict
-        Dictonary such that each pair is the proposal id and image intensity
-        profile.
+        Returns
+        -------
+        list
+            Adjusted chunk shape with each dimension reduced by the downsample
+            factor.
 
-    """
-    with ThreadPoolExecutor() as executor:
-        threads = []
+        """
+        return [s // 2 ** downsample_factor for s in cls.patch_shape]
+
+    @classmethod
+    def get_n_profile_points(cls):
+        return cls.n_profile_points
+
+    def run(self, neurograph, proposals_dict, radius):
+        """
+        Generates feature vectors for nodes, edges, and
+        proposals in a graph.
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            Graph that "proposals" belong to.
+        proposals_dict : dict
+            Dictionary that contains the items (1) "proposals" which are the
+            proposals from "neurograph" that features will be generated and
+            (2) "graph" which is the computation graph used by the gnn.
+        radius : float
+            Search radius used to generate proposals.
+
+        Returns
+        -------
+        dict
+            Dictionary that contains different types of feature vectors for
+            nodes, edges, and proposals.
+
+        """
+        # Initializations
+        computation_graph = proposals_dict["graph"]
+        proposals = proposals_dict["proposals"]
+        if neurograph.leaf_kdtree is None:
+            neurograph.init_kdtree(node_type="leaf")
+
+        # Main
+        features = {
+            "nodes": self.run_on_nodes(neurograph, computation_graph),
+            "branches": self.run_on_branches(neurograph, computation_graph),
+            "proposals": self.run_on_proposals(neurograph, proposals, radius)
+        }
+
+        # Generate image patches (if applicable)
+        if self.use_img_embedding:
+            features["patches"] = self.proposal_patches(neurograph, proposals)
+        return features
+
+    def run_on_nodes(self, neurograph, computation_graph):
+        """
+        Generates feature vectors for every node in "computation_graph".
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            NeuroGraph generated from a predicted segmentation.
+        computation_graph : networkx.Graph
+            Graph used by gnn to classify proposals.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps a node id to a feature vector.
+
+        """
+        return self.node_skeletal(neurograph, computation_graph)
+
+    def run_on_branches(self, neurograph, computation_graph):
+        """
+        Generates feature vectors for every edge in "computation_graph".
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            NeuroGraph generated from a predicted segmentation.
+        computation_graph : networkx.Graph
+            Graph used by gnn to classify proposals.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps an edge id to a feature vector.
+
+        """
+        return self.branch_skeletal(neurograph, computation_graph)
+
+    def run_on_proposals(self, neurograph, proposals, radius):
+        """
+        Generates feature vectors for every proposal in "neurograph".
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            NeuroGraph generated from a predicted segmentation.
+        proposals : list[frozenset]
+            List of proposals for which features will be generated.
+        radius : float
+            Search radius used to generate proposals.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps a proposal id to a feature vector.
+
+        """
+        features = self.proposal_skeletal(neurograph, proposals, radius)
+        if not self.use_img_embedding:
+            profiles = self.proposal_profiles(neurograph, proposals)
+            for p in proposals:
+                features[p] = np.concatenate((features[p], profiles[p]))
+        return features
+
+    # -- Skeletal Features --
+    def node_skeletal(self, neurograph, computation_graph):
+        """
+        Generates skeleton-based features for nodes in "computation_graph".
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            NeuroGraph generated from a predicted segmentation.
+        computation_graph : networkx.Graph
+            Graph used by gnn to classify proposals.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps a node id to a feature vector.
+
+        """
+        node_skeletal_features = dict()
+        for i in computation_graph.nodes:
+            node_skeletal_features[i] = np.concatenate(
+                (
+                    neurograph.degree[i],
+                    neurograph.nodes[i]["radius"],
+                    len(neurograph.nodes[i]["proposals"]),
+                ),
+                axis=None,
+            )
+        return node_skeletal_features
+
+    def branch_skeletal(self, neurograph, computation_graph):
+        """
+        Generates skeleton-based features for edges in "computation_graph".
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            NeuroGraph generated from a predicted segmentation.
+        computation_graph : networkx.Graph
+            Graph used by gnn to classify proposals.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps an edge id to a feature vector.
+
+        """
+        branch_skeletal_features = dict()
+        for edge in neurograph.edges:
+            branch_skeletal_features[frozenset(edge)] = np.array(
+                [
+                    np.mean(neurograph.edges[edge]["radius"]),
+                    min(neurograph.edges[edge]["length"], 500) / 500,
+                ],
+            )
+        return branch_skeletal_features
+
+    def proposal_skeletal(self, neurograph, proposals, radius):
+        """
+        Generates skeleton-based features for "proposals".
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            NeuroGraph generated from a predicted segmentation.
+        proposals : list[frozenset]
+            List of proposals for which features will be generated.
+        radius : float
+            Search radius used to generate proposals.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps a node id to a feature vector.
+
+        """
+        proposal_skeletal_features = dict()
         for proposal in proposals:
-            xyz_1, xyz_2 = neurograph.proposal_xyz(proposal)
-            specs = get_profile_specs(xyz_1, xyz_2, downsample_factor)
-            threads.append(executor.submit(get_profile, img, specs, proposal))
+            proposal_skeletal_features[proposal] = np.concatenate(
+                (
+                    neurograph.proposal_length(proposal) / radius,
+                    neurograph.n_nearby_leafs(proposal, radius),
+                    neurograph.proposal_radii(proposal),
+                    neurograph.proposal_directionals(proposal, 16),
+                    neurograph.proposal_directionals(proposal, 32),
+                    neurograph.proposal_directionals(proposal, 64),
+                    neurograph.proposal_directionals(proposal, 128),
+                ),
+                axis=None,
+            )
+        return proposal_skeletal_features
 
-        profiles = dict()
-        for thread in as_completed(threads):
-            profiles.update(thread.result())
-    return profiles
+    # --- Image features ---
+    def node_profiles(self, neurograph, computation_graph):
+        """
+        Generates image profiles for nodes in "computation_graph".
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            NeuroGraph generated from a predicted segmentation.
+        computation_graph : networkx.Graph
+            Graph used by gnn to classify proposals.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps a node id to an image profile.
+
+        """
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            threads = computation_graph.number_of_nodes() * [None]
+            for idx, i in enumerate(computation_graph.nodes):
+                # Get profile path
+                if neurograph.is_leaf(i):
+                    xyz_path = self.get_leaf_path(neurograph, i)
+                else:
+                    xyz_path = self.get_branching_path(neurograph, i)
+
+                # Assign
+                threads[idx] = executor.submit(
+                    img_util.get_profile, self.img, self.get_spec(xyz_path), i
+                )
+
+            # Store results
+            node_profile_features = dict()
+            for thread in as_completed(threads):
+                node_profile_features.update(thread.result())
+        return node_profile_features
+
+    def proposal_profiles(self, neurograph, proposals):
+        """
+        Generates an image intensity profile along the proposal.
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            Graph that "proposals" belong to.
+        proposals : list[frozenset]
+            List of proposals for which features will be generated.
+
+        Returns
+        -------
+        dict
+            Dictonary such that each pair is the proposal id and image
+            intensity profile.
+
+        """
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            threads = list()
+            for p in proposals:
+                n_points = self.get_n_profile_points()
+                xyz_1, xyz_2 = neurograph.proposal_xyz(p)
+                xyz_path = geometry.make_line(xyz_1, xyz_2, n_points)
+                threads.append(executor.submit(self.get_profile, xyz_path, p))
+
+            # Store results
+            profiles = dict()
+            for thread in as_completed(threads):
+                profiles.update(thread.result())
+        return profiles
+
+    def proposal_patches(self, neurograph, proposals):
+        """
+        Generates an image intensity profile along the proposal.
+
+        Parameters
+        ----------
+        neurograph : NeuroGraph
+            Graph that "proposals" belong to.
+        proposals : list[frozenset]
+            List of proposals for which features will be generated.
+
+        Returns
+        -------
+        dict
+            Dictonary such that each pair is the proposal id and image
+            intensity profile.
+
+        """
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            threads = list()
+            for p in proposals:
+                labels = neurograph.proposal_labels(p)
+                xyz_path = np.vstack(neurograph.proposal_xyz(p))
+                threads.append(
+                    executor.submit(self.get_patch, labels, xyz_path, p)
+                )
+
+            # Store results
+            chunks = dict()
+            for thread in as_completed(threads):
+                chunks.update(thread.result())
+        return chunks
+
+    def get_profile(self, xyz_path, profile_id):
+        """
+        Gets the image intensity profile given xyz coordinates that form a
+        path.
+
+        Parameters
+        ----------
+        xyz_path : numpy.ndarray
+            xyz coordinates of a profile path.
+        profile_id : hashable
+            Identifier of profile.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps an id (e.g. node, edge, or proposal) to its
+            profile.
+
+        """
+        profile = img_util.read_profile(self.img, self.get_spec(xyz_path))
+        profile.extend(list(util.get_avg_std(profile)))
+        return {profile_id: profile}
+
+    def get_spec(self, xyz_path):
+        """
+        Gets image bounding box and voxel coordinates needed to compute an
+        image intensity profile or extract image chunk for cnn embedding.
+
+        Parameters
+        ----------
+        xyz_path : numpy.ndarray
+            xyz coordinates of a profile path.
+
+        Returns
+        -------
+        dict
+            Specifications needed to compute a profile.
+
+        """
+        voxels = self.transform_path(xyz_path)
+        bbox = self.get_bbox(voxels)
+        profile_path = geometry.shift_path(voxels, bbox["min"])
+        return {"bbox": bbox, "profile_path": profile_path}
+
+    def transform_path(self, xyz_path):
+        """
+        Converts "xyz_path" from world to voxel coordinates.
+
+        Parameters
+        ----------
+        xyz_path : numpy.ndarray
+            xyz coordinates of a profile path.
+
+        Returns
+        -------
+        numpy.ndarray
+            Voxel coordinates of given path.
+
+        """
+        voxels = np.zeros((len(xyz_path), 3), dtype=int)
+        for i, xyz in enumerate(xyz_path):
+            voxels[i] = img_util.to_voxels(xyz, self.downsample_factor)
+        return voxels
+
+    def get_bbox(self, voxels, is_img=True):
+        center = np.round(np.mean(voxels, axis=0)).astype(int)
+        shape = self.img_patch_shape if is_img else self.label_patch_shape
+        bbox = {
+            "min": [c - s // 2 for c, s in zip(center, shape)],
+            "max": [c + s // 2 for c, s in zip(center, shape)],
+        }
+        return bbox
+
+    def get_patch(self, labels, xyz_path, proposal):
+        # Initializations
+        center = np.mean(xyz_path, axis=0)
+        voxels = [img_util.to_voxels(xyz) for xyz in xyz_path]
+
+        # Read patches
+        img_patch = self.read_img_patch(center)
+        label_patch = self.read_label_patch(voxels, labels)
+        return {proposal: np.stack([img_patch, label_patch], axis=0)}
+
+    def read_img_patch(self, xyz_centroid):
+        center = img_util.to_voxels(xyz_centroid, self.downsample_factor)
+        img_patch = img_util.read_tensorstore(
+            self.img, center, self.img_patch_shape
+        )
+        return img_util.normalize(img_patch)
+
+    def read_label_patch(self, voxels, labels):
+        bbox = self.get_bbox(voxels, is_img=False)
+        label_patch = img_util.read_tensorstore_with_bbox(self.labels, bbox)
+        voxels = geometry.shift_path(voxels, bbox["min"])
+        return self.relabel(label_patch, voxels, labels)
+
+    def relabel(self, label_patch, voxels, labels):
+        # Initializations
+        n_points = self.get_n_profile_points()
+        scaling_factor = 2 ** self.downsample_factor
+        label_patch = zoom(label_patch, 1.0 / scaling_factor, order=0)
+        for i, voxel in enumerate(voxels):
+            voxels[i] = [v // scaling_factor for v in voxel]
+
+        # Main
+        relabel_patch = np.zeros(label_patch.shape)
+        relabel_patch[label_patch == labels[0]] = 1
+        relabel_patch[label_patch == labels[1]] = 2
+        line = geometry.make_line(voxels[0], voxels[-1], n_points)
+        return geometry.fill_path(relabel_patch, line, val=-1)
 
 
-def get_profile_specs(xyz_1, xyz_2, downsample_factor):
+# --- Profile utils ---
+def get_leaf_path(neurograph, i):
     """
-    Gets image bounding box and voxel coordinates needed to compute an image
-    profile.
-
-    Parameters
-    ----------
-    xyz_1 : numpy.ndarray
-        xyz coordinate of starting point of profile.
-    xyz_2 : numpy.ndarray
-        xyz coordinate of ending point of profile.
-    downsample_factor : int
-        Downsampling factor that accounts for which level in the image pyramid
-        the voxel coordinates must index into.
-
-    Returns
-    -------
-    dict
-        Specifications needed to compute an image profile for a given
-        proposal.
-
-    """
-    # Compute voxel coordinates
-    voxel_1 = img_util.to_voxels(xyz_1, downsample_factor=downsample_factor)
-    voxel_2 = img_util.to_voxels(xyz_2, downsample_factor=downsample_factor)
-
-    # Store local coordinates
-    bbox = img_util.get_fixed_bbox(np.vstack([voxel_1, voxel_2]), CHUNK_SIZE)
-    start = [voxel_1[i] - bbox["min"][i] for i in range(3)]
-    end = [voxel_2[i] - bbox["min"][i] for i in range(3)]
-    specs = {
-        "bbox": bbox,
-        "profile_path": geometry.make_line(start, end, N_PROFILE_PTS),
-    }
-    return specs
-
-
-def get_profile(img, specs, profile_id):
-    """
-    Gets the image profile for a given proposal.
-
-    Parameters
-    ----------
-    img : tensorstore.TensorStore
-        Image that profiles are generated from.
-    specs : dict
-        Dictionary that contains the image bounding box and coordinates of the
-        image profile path.
-    profile_id : frozenset
-        ...
-
-    Returns
-    -------
-    dict
-        Dictionary that maps an id (e.g. node, edge, or proposal) to its image
-        profile.
-
-    """
-    profile = img_util.read_profile(img, specs)
-    avg, std = util.get_avg_std(profile)
-    profile.extend([avg, std])
-    return {profile_id: profile}
-
-
-def proposal_skeletal(neurograph, proposals, radius):
-    """
-    Generates features from skeleton (i.e. graph) which are graph or
-    geometry type features.
+    Gets path that profile will be computed over for the leaf node "i".
 
     Parameters
     ----------
     neurograph : NeuroGraph
-        Graph that "proposals" belong to.
-    proposals : list
-        Proposals for which features will be generated
-    radius : float
-        Search radius used to generate proposals.
+        NeuroGraph generated from a predicted segmentation.
+    i : int
+        Leaf node in "neurograph".
 
     Returns
     -------
-    dict
-        Features generated from skeleton.
+    list
+        Voxel coordinates that profile is generated from.
 
     """
-    features = dict()
-    for proposal in proposals:
-        i, j = tuple(proposal)
-        features[proposal] = np.concatenate(
-            (
-                neurograph.proposal_length(proposal),
-                neurograph.degree[i],
-                neurograph.degree[j],
-                len(neurograph.nodes[i]["proposals"]),
-                len(neurograph.nodes[j]["proposals"]),
-                neurograph.n_nearby_leafs(proposal, radius),
-                neurograph.proposal_radii(proposal),
-                neurograph.proposal_avg_radii(proposal),
-                neurograph.proposal_directionals(proposal, 8),
-                neurograph.proposal_directionals(proposal, 16),
-                neurograph.proposal_directionals(proposal, 32),
-                neurograph.proposal_directionals(proposal, 64),
-            ),
-            axis=None,
-        )
-    return features
+    j = neurograph.leaf_neighbor(i)
+    xyz_path = neurograph.oriented_edge((i, j), i)
+    return geometry.truncate_path(xyz_path)
 
 
-# --- part 2: edge feature generation --
-def compute_curvature(neurograph, edge):
-    kappa = curvature(neurograph.edges[edge]["xyz"])
-    n_pts = len(kappa)
-    if n_pts <= N_BRANCH_PTS:
-        sampled_kappa = np.zeros((N_BRANCH_PTS))
-        sampled_kappa[0:n_pts] = kappa
-    else:
-        idxs = np.linspace(0, n_pts - 1, N_BRANCH_PTS).astype(int)
-        sampled_kappa = kappa[idxs]
-    return np.array(sampled_kappa)
+def get_branching_path(neurograph, i):
+    """
+    Gets path that profile will be computed over for the branching node "i".
+
+    Parameters
+    ----------
+    neurograph : NeuroGraph
+        NeuroGraph generated from a predicted segmentation.
+    i : int
+        branching node in "neurograph".
+
+    Returns
+    -------
+    list
+        Voxel coordinates that profile is generated from.
+
+    """
+    j_1, j_2 = tuple(neurograph.neighbors(i))
+    voxels_1 = geometry.truncate_path(neurograph.oriented_edge((i, j_1), i))
+    voxles_2 = geometry.truncate_path(neurograph.oriented_edge((i, j_2), i))
+    return np.vstack([np.flip(voxels_1, axis=0), voxles_2])
 
 
-def curvature(xyz_list):
-    a = np.linalg.norm(xyz_list[1:-1] - xyz_list[:-2], axis=1)
-    b = np.linalg.norm(xyz_list[2:] - xyz_list[1:-1], axis=1)
-    c = np.linalg.norm(xyz_list[2:] - xyz_list[:-2], axis=1)
-    s = 0.5 * (a + b + c)
-    delta = np.sqrt(s * (s - a) * (s - b) * (s - c))
-    return 4 * delta / (a * b * c)
+# --- Build feature matrix ---
+def get_matrix(features, gt_accepts=set()):
+    # Initialize matrices
+    key = sample(list(features.keys()), 1)[0]
+    X = np.zeros((len(features.keys()), len(features[key])))
+    y = np.zeros((len(features.keys())))
+
+    # Populate
+    idx_to_id = dict()
+    for i, id_i in enumerate(features):
+        idx_to_id[i] = id_i
+        X[i, :] = features[id_i]
+        y[i] = 1 if id_i in gt_accepts else 0
+    return X, y, idx_to_id
 
 
-# -- Build Feature Matrix --
-def get_matrix(neurographs, features, sample_ids=None):
-    if sample_ids:
-        return stack_feature_matrices(neurographs, features, sample_ids)
-    else:
-        return get_feature_matrix(neurographs, features)
-
-
-def stack_feature_matrices(neurographs, features, blocks):
-    # Initialize
-    X = None
-    y = None
-    idx_transforms = {"block_to_idxs": dict(), "idx_to_edge": dict()}
-
-    # Feature extraction
+def stack_matrices(neurographs, features, blocks):
+    idx_to_id = dict()
+    X, y = None, None
     for block_id in blocks:
-        # Extract feature matrix
-        idx_shift = 0 if X is None else X.shape[0]
-        X_i, y_i, idx_transforms_i = get_feature_matrix(
-            neurographs[block_id], features[block_id], shift=idx_shift
-        )
-
-        # Concatenate
+        X_i, y_i, _ = get_matrix(features[block_id])
         if X is None:
             X = deepcopy(X_i)
             y = deepcopy(y_i)
         else:
             X = np.concatenate((X, X_i), axis=0)
             y = np.concatenate((y, y_i), axis=0)
-
-        # Update dicts
-        idx_transforms["block_to_idxs"][block_id] = idx_transforms_i[
-            "block_to_idxs"
-        ]
-        idx_transforms["idx_to_edge"].update(idx_transforms_i["idx_to_edge"])
-    return X, y, idx_transforms
+    return X, y
 
 
-def get_feature_matrix(neurograph, features, shift=0):
-    # Initialize
-    features = combine_features(features)
-    key = sample(list(features.keys()), 1)[0]
-    X = np.zeros((len(features.keys()), len(features[key])))
-    y = np.zeros((len(features.keys())))
-    idx_transforms = {"block_to_idxs": set(), "idx_to_edge": dict()}
-
-    # Build
-    for i, edge in enumerate(features.keys()):
-        X[i, :] = features[edge]
-        y[i] = 1 if edge in neurograph.target_edges else 0
-        idx_transforms["block_to_idxs"].add(i + shift)
-        idx_transforms["idx_to_edge"][i + shift] = edge
-    return X, y, idx_transforms
-
-
-# -- util --
-def count_features():
+# --- Utils ---
+def get_node_dict(use_img_embedding=False):
     """
-    Counts number of features based on the "model_type".
+    Returns the number of features for different node types.
 
     Parameters
     ----------
@@ -360,95 +609,30 @@ def count_features():
 
     Returns
     -------
-    int
-        Number of features.
+    dict
+        A dictionary containing the number of features for each node type
+
     """
-    return N_SKEL_FEATURES + N_PROFILE_PTS + 2
+    return {"branch": 2, "proposal": 34}
 
 
-def combine_features(features):
-    combined = dict()
-    for edge in features["skel"].keys():
-        combined[edge] = None
-        for key in features.keys():
-            if combined[edge] is None:
-                combined[edge] = deepcopy(features[key][edge])
-            else:
-                combined[edge] = np.concatenate(
-                    (combined[edge], features[key][edge])
-                )
-    return combined
-
-
-def generate_chunks(neurograph, proposals, img, labels):
+def get_edge_dict():
     """
-    Generates an image chunk for each proposal such that the centroid of the
-    image chunk is the midpoint of the proposal. Image chunks contain two
-    channels: raw image and predicted segmentation.
+    Returns the number of features for different edge types.
 
     Parameters
     ----------
-    neurograph : NeuroGraph
-        Graph that "proposals" belong to.
-    img : tensorstore.TensorStore
-        Image stored in a GCS bucket.
-    labels : tensorstore.TensorStore
-        Predicted segmentation mask stored in a GCS bucket.
-    proposals : list[frozenset], optional
-        List of proposals for which features will be generated. The
-        default is None.
+    None
 
     Returns
     -------
     dict
-        Dictonary such that each pair is the proposal id and image chunk.
+        A dictionary containing the number of features for each edge type
 
     """
-    with ThreadPoolExecutor() as executor:
-        # Assign Threads
-        threads = [None] * len(proposals)
-        for t, proposal in enumerate(proposals):
-            xyz_0, xyz_1 = neurograph.proposal_xyz(proposal)
-            voxel_1 = util.to_voxels(xyz_0)
-            voxel_2 = util.to_voxels(xyz_1)
-            threads[t] = executor.submit(
-                get_chunk, img, labels, voxel_1, voxel_2, proposal
-            )
-
-        # Save result
-        chunks = dict()
-        profiles = dict()
-        for thread in as_completed(threads):
-            proposal, chunk, profile = thread.result()
-            chunks[proposal] = chunk
-            profiles[proposal] = profile
-    return chunks, profiles
-
-
-def get_chunk(img, labels, voxel_1, voxel_2, thread_id=None):
-    # Extract chunks
-    midpoint = geometry.get_midpoint(voxel_1, voxel_2).astype(int)
-    if type(img) is ts.TensorStore:
-        chunk = util.read_tensorstore(img, midpoint, CHUNK_SIZE)
-        labels_chunk = util.read_tensorstore(labels, midpoint, CHUNK_SIZE)
-    else:
-        chunk = img_util.read_chunk(img, midpoint, CHUNK_SIZE)
-        labels_chunk = img_util.read_chunk(labels, midpoint, CHUNK_SIZE)
-
-    # Coordinate transform
-    chunk = util.normalize(chunk)
-    patch_voxel_1 = util.voxels_to_patch(voxel_1, midpoint, CHUNK_SIZE)
-    patch_voxel_2 = util.voxels_to_patch(voxel_2, midpoint, CHUNK_SIZE)
-
-    # Generate features
-    path = geometry.make_line(patch_voxel_1, patch_voxel_2, N_PROFILE_PTS)
-    profile = geometry.get_profile(chunk, path)
-    labels_chunk[labels_chunk > 0] = 1
-    labels_chunk = geometry.fill_path(labels_chunk, path, val=2)
-    chunk = np.stack([chunk, labels_chunk], axis=0)
-
-    # Output
-    if thread_id:
-        return thread_id, chunk, profile
-    else:
-        return chunk, profile
+    edge_dict = {
+        ("proposal", "edge", "proposal"): 3,
+        ("branch", "edge", "branch"): 3,
+        ("branch", "edge", "proposal"): 3
+    }
+    return edge_dict

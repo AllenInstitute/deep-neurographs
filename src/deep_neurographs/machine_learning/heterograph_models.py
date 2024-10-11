@@ -26,9 +26,15 @@ HEADS_2 = 1
 
 class HeteroGNN(torch.nn.Module):
     """
-    Heterogeneous graph neural network that utilizes edge features.
+    Heterogeneous graph attention network that classifies proposals.
 
     """
+    # Class attributes
+    relation_types = [
+        ("proposal", "edge", "proposal"),
+        ("branch", "edge", "proposal"),
+        ("branch", "edge", "branch"),
+    ]
 
     def __init__(
         self,
@@ -44,9 +50,10 @@ class HeteroGNN(torch.nn.Module):
         """
         super().__init__()
         # Feature vector sizes
-        node_dict = ml.feature_generation_graphs.n_node_features()
-        edge_dict = ml.feature_generation_graphs.n_edge_features()
+        node_dict = ml.feature_generation.get_node_dict()
+        edge_dict = ml.feature_generation.get_edge_dict()
         hidden = scale_hidden * np.max(list(node_dict.values()))
+        self.dropout = dropout
 
         # Linear layers
         output_dim = heads_1 * heads_2 * hidden
@@ -59,62 +66,8 @@ class HeteroGNN(torch.nn.Module):
         self.output = Linear(output_dim, 1).to(device)
 
         # Convolutional layers
-        self.conv1 = HeteroConv(
-            {
-                ("proposal", "edge", "proposal"): GATConv(
-                    -1,
-                    hidden,
-                    dropout=dropout,
-                    edge_dim=hidden,
-                    heads=heads_1,
-                ),
-                ("branch", "edge", "branch"): GATConv(
-                    -1,
-                    hidden,
-                    dropout=dropout,
-                    edge_dim=hidden,
-                    heads=heads_1,
-                ),
-                ("branch", "edge", "proposal"): GATConv(
-                    (hidden, hidden),
-                    hidden,
-                    add_self_loops=False,
-                    edge_dim=hidden,
-                    heads=heads_1,
-                ),
-            },
-            aggr="sum",
-        )
-        edge_dim = hidden
-        hidden = heads_1 * hidden
-
-        self.conv2 = HeteroConv(
-            {
-                ("proposal", "edge", "proposal"): GATConv(
-                    -1,
-                    hidden,
-                    dropout=dropout,
-                    edge_dim=edge_dim,
-                    heads=heads_2,
-                ),
-                ("branch", "edge", "branch"): GATConv(
-                    -1,
-                    hidden,
-                    dropout=dropout,
-                    edge_dim=edge_dim,
-                    heads=heads_2,
-                ),
-                ("branch", "edge", "proposal"): GATConv(
-                    (hidden, hidden),
-                    hidden,
-                    add_self_loops=False,
-                    edge_dim=edge_dim,
-                    heads=heads_2,
-                ),
-            },
-            aggr="sum",
-        )
-        hidden = heads_2 * hidden
+        self.conv1 = self.init_gat_layer(hidden, hidden, heads_1)
+        self.conv2 = self.init_gat_layer(heads_1 * hidden, hidden, heads_2)
 
         # Nonlinear activation
         self.dropout = Dropout(dropout)
@@ -122,6 +75,40 @@ class HeteroGNN(torch.nn.Module):
 
         # Initialize weights
         self.init_weights()
+
+    # --- Class methods ---
+    @classmethod
+    def get_relation_types(cls):
+        return cls.relation_types
+
+    # --- Architecture ---
+    def init_gat_layer(self, hidden_dim, edge_dim, heads):
+        gat_dict = dict()
+        for r in self.get_relation_types():
+            is_same = True if r[0] == r[2] else False
+            init_gat = self.init_gat_same if is_same else self.init_gat_mixed
+            gat_dict[r] = init_gat(hidden_dim, edge_dim, heads)
+        return HeteroConv(gat_dict, aggr="sum")
+
+    def init_gat_same(self, hidden_dim, edge_dim, heads):
+        gat_layer = GATConv(
+            -1,
+            hidden_dim,
+            dropout=self.dropout,
+            edge_dim=edge_dim,
+            heads=heads,
+        )
+        return gat_layer
+
+    def init_gat_mixed(self, hidden_dim, edge_dim, heads):
+        gat_layer = GATConv(
+            (hidden_dim, hidden_dim),
+            hidden_dim,
+            add_self_loops=False,
+            edge_dim=edge_dim,
+            heads=heads,
+        )
+        return gat_layer
 
     def init_weights(self):
         """

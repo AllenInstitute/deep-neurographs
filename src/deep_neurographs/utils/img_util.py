@@ -10,10 +10,10 @@ Helper routines for working with images.
 
 from copy import deepcopy
 
-import fastremap
 import numpy as np
 import tensorstore as ts
 from skimage.color import label2rgb
+from tifffile import imwrite
 
 from deep_neurographs.utils import util
 
@@ -122,7 +122,7 @@ def read_tensorstore(img, voxel, shape, from_center=True):
     return read(img, voxel, shape, from_center=from_center).read().result()
 
 
-def read_tensorstore_with_bbox(img, bbox):
+def read_tensorstore_with_bbox(img, bbox, normalize=True):
     """
     Reads a chunk from a subarray that is determined by "bbox".
 
@@ -143,10 +143,11 @@ def read_tensorstore_with_bbox(img, bbox):
         shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
         return read_tensorstore(img, bbox["min"], shape, from_center=False)
     except Exception:
+        print(f"Unable to read from image with bbox {bbox}")
         return np.zeros(shape)
 
 
-def read_profile(img, specs):
+def read_profile(img, spec):
     """
     Reads an intensity profile from an image (i.e. image profile).
 
@@ -154,7 +155,7 @@ def read_profile(img, specs):
     ----------
     img : tensorstore.TensorStore
         Image to be read.
-    specs : dict
+    spec : dict
         Dictionary that stores the bounding box of chunk to be read and the
         voxel coordinates of the profile path.
 
@@ -164,28 +165,8 @@ def read_profile(img, specs):
         Image profile.
 
     """
-    img_chunk = normalize(read_tensorstore_with_bbox(img, specs["bbox"]))
-    return read_intensities(img_chunk, specs["profile_path"])
-
-
-def read_intensities(img, voxels):
-    """
-    Reads the image intensities of voxels.
-
-    Parameters
-    ----------
-    img : tensorstore.TensorStore
-        Image to be read.
-    voxels : list
-        Voxels to be read.
-
-    Returns
-    -------
-    list
-        Image intensities.
-
-    """
-    return [img[voxel] for voxel in map(tuple, voxels)]
+    img_patch = normalize(read_tensorstore_with_bbox(img, spec["bbox"]))
+    return [img_patch[voxel] for voxel in map(tuple, spec["profile_path"])]
 
 
 def get_start_end(voxel, shape, from_center=True):
@@ -214,7 +195,7 @@ def get_start_end(voxel, shape, from_center=True):
         end = [voxel[i] + shape[i] // 2 for i in range(3)]
     else:
         start = voxel
-        end = [voxel[i] + shape[i] + 1 for i in range(3)]
+        end = [voxel[i] + shape[i] for i in range(3)]
     return start, end
 
 
@@ -283,55 +264,35 @@ def get_labels_mip(img, axis=0):
     return (255 * mip).astype(np.uint8)
 
 
+def get_profile(img, spec, profile_id):
+    """
+    Gets the image profile for a given proposal.
+
+    Parameters
+    ----------
+    img : tensorstore.TensorStore
+        Image that profiles are generated from.
+    spec : dict
+        Dictionary that contains the image bounding box and coordinates of the
+        image profile path.
+    profile_id : frozenset
+        Identifier of profile.
+
+    Returns
+    -------
+    dict
+        Dictionary that maps an id (e.g. node, edge, or proposal) to its image
+        profile.
+
+    """
+    profile = read_profile(img, spec)
+    avg, std = util.get_avg_std(profile)
+    profile.extend([avg, std])
+    return {profile_id: profile}
+
+
 # --- coordinate conversions ---
-def img_to_patch(voxel, patch_centroid, patch_shape):
-    """
-    Converts coordinates from global to local image coordinates.
-
-    Parameters
-    ----------
-    voxel : numpy.ndarray
-        Voxel coordinate to be converted.
-    patch_centroid : numpy.ndarray
-        Centroid of image patch.
-    patch_shape : numpy.ndarray
-        Shape of image patch.
-
-    Returns
-    -------
-    tuple
-        Converted coordinates.
-
-    """
-    half_patch_shape = [patch_shape[i] // 2 for i in range(3)]
-    patch_voxel = voxel - patch_centroid + half_patch_shape
-    return tuple(patch_voxel.astype(int))
-
-
-def patch_to_img(voxel, patch_centroid, patch_dims):
-    """
-    Converts coordinates from local to global image coordinates.
-
-    Parameters
-    ----------
-    coord : numpy.ndarray
-        Coordinates to be converted.
-    patch_centroid : numpy.ndarray
-        Centroid of image patch.
-    patch_shape : numpy.ndarray
-        Shape of image patch.
-
-    Returns
-    -------
-    tuple
-        Converted coordinates.
-
-    """
-    half_patch_dims = [patch_dims[i] // 2 for i in range(3)]
-    return np.round(voxel + patch_centroid - half_patch_dims).astype(int)
-
-
-def to_world(voxel, anisotropy=ANISOTROPY, shift=[0, 0, 0]):
+def to_world(voxel, shift=[0, 0, 0]):
     """
     Converts coordinates from voxels to world.
 
@@ -348,10 +309,10 @@ def to_world(voxel, anisotropy=ANISOTROPY, shift=[0, 0, 0]):
         Converted coordinates.
 
     """
-    return tuple([voxel[i] * anisotropy[i] - shift[i] for i in range(3)])
+    return tuple([voxel[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
 
 
-def to_voxels(xyz, anisotropy=ANISOTROPY, downsample_factor=0):
+def to_voxels(xyz, downsample_factor=0):
     """
     Converts coordinates from world to voxel.
 
@@ -373,12 +334,12 @@ def to_voxels(xyz, anisotropy=ANISOTROPY, downsample_factor=0):
 
     """
     downsample_factor = 1.0 / 2 ** downsample_factor
-    voxel = downsample_factor * (xyz / np.array(anisotropy))
+    voxel = downsample_factor * (xyz / np.array(ANISOTROPY))
     return np.round(voxel).astype(int)
 
 
 # -- utils --
-def get_bbox(origin, shape):
+def init_bbox(origin, shape):
     """
     Gets the min and max coordinates of a bounding box based on "origin" and
     "shape".
@@ -404,7 +365,7 @@ def get_bbox(origin, shape):
         return None
 
 
-def get_minimal_bbox(voxels):
+def get_minimal_bbox(voxels, buffer=0):
     """
     Gets the min and max coordinates of a bounding box that contains "voxels".
 
@@ -423,8 +384,8 @@ def get_minimal_bbox(voxels):
 
     """
     bbox = {
-        "min": np.floor(np.min(voxels, axis=0) - 1).astype(int),
-        "max": np.ceil(np.max(voxels, axis=0) + 1).astype(int),
+        "min": np.floor(np.min(voxels, axis=0) - buffer).astype(int),
+        "max": np.ceil(np.max(voxels, axis=0) + buffer).astype(int),
     }
     return bbox
 
@@ -436,33 +397,6 @@ def get_fixed_bbox(voxels, shape):
         "max": [centroid[i] + shape[i] // 2 for i in range(3)],
     }
     return bbox
-
-
-def get_chunk_labels(path, xyz, shape, from_center=True):
-    """
-    Gets the labels of segments contained in chunk centered at "xyz".
-
-    Parameters
-    ----------
-    path : str
-        Path to segmentation stored in a GCS bucket.
-    xyz : numpy.ndarray
-        Center point of chunk to be read.
-    shape : tuple
-        Shape of chunk to be read.
-    from_center : bool, optional
-        Indication of whether "xyz" is the center point or upper, left, front
-        corner of chunk to be read. The default is True.
-
-    Returns
-    -------
-    set
-        Labels of segments contained in chunk read from GCS bucket.
-
-    """
-    img = open_tensorstore(path)
-    img = read_tensorstore(img, xyz, shape, from_center=from_center)
-    return set(fastremap.unique(img).astype(int))
 
 
 def find_img_path(bucket_name, img_root, dataset_name):

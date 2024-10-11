@@ -204,7 +204,7 @@ def is_valid(target_graph, pred_graph, kdtree, target_id, edge):
 def proj_branch(target_graph, pred_graph, kdtree, target_id, i):
     # Compute projections
     hits = defaultdict(list)
-    for branch in pred_graph.get_branches(i):
+    for branch in pred_graph.branches(i):
         for xyz in branch:
             hat_xyz = geometry.kdtree_query(kdtree, xyz)
             swc_id = target_graph.xyz_to_swc(hat_xyz)
