@@ -20,12 +20,10 @@ from torch.nn.functional import sigmoid
 from tqdm import tqdm
 
 from deep_neurographs.graph_artifact_removal import remove_doubles
-from deep_neurographs.machine_learning.feature_generation import (
-    FeatureGenerator,
-)
+from deep_neurographs.machine_learning import feature_generation
 from deep_neurographs.utils import gnn_util
 from deep_neurographs.utils import graph_util as gutil
-from deep_neurographs.utils import ml_util, util
+from deep_neurographs.utils import img_util, ml_util, util
 from deep_neurographs.utils.gnn_util import toCPU
 from deep_neurographs.utils.graph_util import GraphLoader
 
@@ -67,8 +65,6 @@ class InferencePipeline:
         output_dir,
         config,
         device=None,
-        label_path=None,
-        use_img_embedding=False,
     ):
         """
         Initializes an object that executes the full GraphTrace inference
@@ -83,7 +79,7 @@ class InferencePipeline:
             Identifier for the predicted segmentation to be processed by the
             inference pipeline.
         img_path : str
-            Path to the raw image assumed to be stored in a GCS bucket.
+            Path to the raw image of whole brain stored on a GCS bucket.
         model_path : str
             Path to machine learning model parameters.
         output_dir : str
@@ -92,10 +88,6 @@ class InferencePipeline:
             Configuration object containing parameters and settings required
             for the inference pipeline.
         device : str, optional
-            ...
-        label_path : str, optional
-            Path to the segmentation assumed to be stored on a GCS bucket.
-        use_img_embedding : bool, optional
             ...
 
         Returns
@@ -107,6 +99,7 @@ class InferencePipeline:
         self.accepted_proposals = list()
         self.sample_id = sample_id
         self.segmentation_id = segmentation_id
+        self.img_path = img_path
         self.model_path = model_path
 
         # Extract config settings
@@ -115,15 +108,13 @@ class InferencePipeline:
 
         # Inference engine
         self.inference_engine = InferenceEngine(
-            img_path,
+            self.img_path,
             self.model_path,
             self.ml_config.model_type,
             self.graph_config.search_radius,
             confidence_threshold=self.ml_config.threshold,
             device=device,
             downsample_factor=self.ml_config.downsample_factor,
-            label_path=label_path,
-            use_img_embedding=use_img_embedding,
         )
 
         # Set output directory
@@ -167,10 +158,10 @@ class InferencePipeline:
         t0 = time()
         self.report_experiment()
         self.build_graph(fragments_pointer)
-        for round_id, radius in enumerate(radius_schedule):
-            print(f"--- Round {round_id + 1}:  Radius = {radius} ---")
+        for round_id, search_radius in enumerate(search_radius_schedule):
+            print(f"--- Round {round_id + 1}:  Radius = {search_radius} ---")
             round_id += 1
-            self.generate_proposals(radius)
+            self.generate_proposals(search_radius)
             self.run_inference()
             if save_all_rounds:
                 self.save_results(round_id=round_id)
@@ -222,7 +213,7 @@ class InferencePipeline:
         print(f"Module Runtime: {round(t, 4)} {unit}\n")
         self.print_graph_overview()
 
-    def generate_proposals(self, radius=None):
+    def generate_proposals(self, search_radius=None):
         """
         Generates proposals for the fragment graph based on the specified
         configuration.
@@ -238,13 +229,13 @@ class InferencePipeline:
         """
         # Initializations
         print("(2) Generate Proposals")
-        if radius is None:
-            radius = self.graph_config.radius
+        if search_radius is None:
+            search_radius = self.graph_config.search_radius
 
         # Main
         t0 = time()
         self.graph.generate_proposals(
-            radius,
+            search_radius,
             complex_bool=self.graph_config.complex_bool,
             long_range_bool=self.graph_config.long_range_bool,
             proposals_per_leaf=self.graph_config.proposals_per_leaf,
@@ -401,13 +392,11 @@ class InferenceEngine:
         img_path,
         model_path,
         model_type,
-        radius,
+        search_radius,
         batch_size=BATCH_SIZE,
         confidence_threshold=CONFIDENCE_THRESHOLD,
         device=None,
         downsample_factor=1,
-        label_path=None,
-        use_img_embedding=False
     ):
         """
         Initializes an inference engine by loading images and setting class
@@ -421,7 +410,7 @@ class InferenceEngine:
             Path to machine learning model parameters.
         model_type : str
             Type of machine learning model used to perform inference.
-        radius : float
+        search_radius : float
             Search radius used to generate proposals.
         batch_size : int, optional
             Number of proposals to generate features and classify per batch.
@@ -440,20 +429,16 @@ class InferenceEngine:
         """
         # Set class attributes
         self.batch_size = batch_size
+        self.downsample_factor = downsample_factor
         self.device = "cpu" if device is None else device
         self.is_gnn = True if "Graph" in model_type else False
-        self.radius = radius
+        self.model_type = model_type
+        self.search_radius = search_radius
         self.threshold = confidence_threshold
 
-        # Features
-        self.feature_generator = FeatureGenerator(
-            img_path,
-            downsample_factor,
-            label_path=label_path,
-            use_img_embedding=use_img_embedding
-        )
-
-        # Model
+        # Load image and model
+        driver = "n5" if ".n5" in img_path else "zarr"
+        self.img = img_util.open_tensorstore(img_path, driver=driver)
         self.model = ml_util.load_model(model_path)
         if self.is_gnn:
             self.model = self.model.to(self.device)
@@ -547,14 +532,22 @@ class InferenceEngine:
         ...
 
         """
-        t0 = time()
-        features = self.feature_generator.run(neurograph, batch, self.radius)
-        print("Feature Generation:", time() - t0)
+        # Generate features
+        features = feature_generation.run(
+            neurograph,
+            self.img,
+            self.model_type,
+            batch,
+            self.search_radius,
+            downsample_factor=self.downsample_factor,
+        )
+
+        # Initialize dataset
         computation_graph = batch["graph"] if type(batch) is dict else None
         dataset = ml_util.init_dataset(
             neurograph,
             features,
-            self.is_gnn,
+            self.model_type,
             computation_graph=computation_graph,
         )
         return dataset
@@ -577,7 +570,7 @@ class InferenceEngine:
 
         """
         # Get predictions
-        if self.is_gnn:
+        if self.model_type == "GraphNeuralNet":
             with torch.no_grad():
                 # Get inputs
                 n = len(dataset.data["proposal"]["y"])
@@ -592,7 +585,7 @@ class InferenceEngine:
             preds = np.array(self.model.predict_proba(dataset.data.x)[:, 1])
 
         # Reformat prediction
-        idxs = dataset.idxs_proposals["idx_to_id"]
+        idxs = dataset.idxs_proposals["idx_to_edge"]
         return {idxs[i]: p for i, p in enumerate(preds)}
 
 

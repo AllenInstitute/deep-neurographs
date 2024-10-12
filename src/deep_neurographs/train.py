@@ -25,15 +25,15 @@ from torch.nn import BCEWithLogitsLoss
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 
-from deep_neurographs.machine_learning.feature_generation import FeatureGenerator
+from deep_neurographs.machine_learning import feature_generation
 from deep_neurographs.utils import gnn_util, img_util, ml_util, util
 from deep_neurographs.utils.gnn_util import toCPU
 from deep_neurographs.utils.graph_util import GraphLoader
 
 LR = 1e-3
-N_EPOCHS = 500
-SCHEDULER_GAMMA = 0.7
-SCHEDULER_STEP_SIZE = 100
+N_EPOCHS = 200
+SCHEDULER_GAMMA = 0.5
+SCHEDULER_STEP_SIZE = 1000
 WEIGHT_DECAY = 1e-3
 
 
@@ -50,7 +50,6 @@ class TrainPipeline:
         model_type,
         criterion=None,
         output_dir=None,
-        use_img_embedding=False,
         validation_ids=None,
         save_model_bool=True,
     ):
@@ -59,18 +58,17 @@ class TrainPipeline:
             raise ValueError("Must provide output_dir to save model.")
 
         # Set class attributes
-        self.feature_generators = dict()
         self.idx_to_ids = list()
         self.model = model
         self.model_type = model_type
         self.output_dir = output_dir
         self.save_model_bool = save_model_bool
-        self.use_img_embedding = use_img_embedding
         self.validation_ids = validation_ids
 
         # Set data structures for training examples
         self.gt_graphs = list()
         self.pred_graphs = list()
+        self.imgs = dict()
         self.train_dataset_list = list()
         self.validation_dataset_list = list()
 
@@ -144,16 +142,9 @@ class TrainPipeline:
             }
         )
 
-    def load_img(
-        self, sample_id, img_path, downsample_factor, label_path=None
-    ):
-        if sample_id not in self.feature_generators:
-            self.feature_generators[sample_id] = FeatureGenerator(
-                img_path,
-                downsample_factor,
-                label_path=label_path,
-                use_img_embedding=self.use_img_embedding,
-            )
+    def load_img(self, path, sample_id):
+        if sample_id not in self.imgs:
+            self.imgs[sample_id] = img_util.open_tensorstore(path, "zarr")
 
     # --- main pipeline ---
     def run(self):
@@ -209,8 +200,10 @@ class TrainPipeline:
 
             # Generate features
             sample_id = self.idx_to_ids[i]["sample_id"]
-            features = self.feature_generators[sample_id].run(
+            features = feature_generation.run(
                 self.pred_graphs[i],
+                self.imgs[sample_id],
+                self.model_type,
                 proposals_dict,
                 self.graph_config.search_radius,
             )
