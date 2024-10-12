@@ -21,7 +21,7 @@ GNN_DEPTH = 2
 
 
 # --- Tensor Operations ---
-def get_inputs(data, device=None):
+def get_inputs(data, device=None, is_multimodal=False):
     x = data.x_dict
     edge_index = data.edge_index_dict
     edge_attr = data.edge_attr_dict

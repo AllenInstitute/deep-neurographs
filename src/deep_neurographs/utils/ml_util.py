@@ -61,7 +61,13 @@ def save_model(path, model, model_type):
 
 
 # --- dataset utils ---
-def init_dataset(neurograph, features, is_gnn=True, computation_graph=None):
+def init_dataset(
+    neurograph,
+    features,
+    is_gnn=True,
+    is_multimodal=False,
+    computation_graph=None
+):
     """
     Initializes a dataset given features generated from some set of proposals
     and neurograph.

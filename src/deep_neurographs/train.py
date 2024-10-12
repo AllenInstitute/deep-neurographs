@@ -25,8 +25,10 @@ from torch.nn import BCEWithLogitsLoss
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 
-from deep_neurographs.machine_learning.feature_generation import FeatureGenerator
-from deep_neurographs.utils import gnn_util, img_util, ml_util, util
+from deep_neurographs.machine_learning.feature_generation import (
+    FeatureGenerator,
+)
+from deep_neurographs.utils import gnn_util, ml_util, util
 from deep_neurographs.utils.gnn_util import toCPU
 from deep_neurographs.utils.graph_util import GraphLoader
 
@@ -50,7 +52,7 @@ class TrainPipeline:
         model_type,
         criterion=None,
         output_dir=None,
-        use_img_embedding=False,
+        is_multimodal=False,
         validation_ids=None,
         save_model_bool=True,
     ):
@@ -65,7 +67,7 @@ class TrainPipeline:
         self.model_type = model_type
         self.output_dir = output_dir
         self.save_model_bool = save_model_bool
-        self.use_img_embedding = use_img_embedding
+        self.is_multimodal = is_multimodal
         self.validation_ids = validation_ids
 
         # Set data structures for training examples
@@ -116,7 +118,7 @@ class TrainPipeline:
         pred_pointer,
         sample_id,
         example_id=None,
-        pred_id=None,
+        segmentation_id=None,
         metadata_path=None,
     ):
         # Read metadata
@@ -140,7 +142,7 @@ class TrainPipeline:
             {
                 "sample_id": sample_id,
                 "example_id": example_id,
-                "pred_id": pred_id,
+                "segmentation_id": segmentation_id,
             }
         )
 
@@ -152,7 +154,7 @@ class TrainPipeline:
                 img_path,
                 downsample_factor,
                 label_path=label_path,
-                use_img_embedding=self.use_img_embedding,
+                is_multimodal=self.is_multimodal,
             )
 
     # --- main pipeline ---
@@ -360,7 +362,7 @@ class TrainEngine:
             Prediction.
 
         """
-        x, edge_index, edge_attr = gnn_util.get_inputs(data, "HeteroGNN")
+        x, edge_index, edge_attr = gnn_util.get_inputs(data)
         hat_y = self.model(x, edge_index, edge_attr)
         y = data["proposal"]["y"]
         return truncate(hat_y, y), y

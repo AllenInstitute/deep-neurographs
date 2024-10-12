@@ -8,23 +8,17 @@ Graph neural network architectures that learn to classify edge proposals.
 
 """
 
-import numpy as np
 import torch
 import torch.nn.init as init
 from torch import nn
 from torch.nn import Dropout, LeakyReLU
 from torch_geometric.nn import GATv2Conv as GATConv
-from torch_geometric.nn import HEATConv, HeteroConv, Linear
+from torch_geometric.nn import HeteroConv, Linear
 
-from deep_neurographs import machine_learning as ml
-
-CONV_TYPES = ["GATConv", "GCNConv"]
-DROPOUT = 0.3
-HEADS_1 = 1
-HEADS_2 = 1
+from deep_neurographs.machine_learning.models import ConvNet
 
 
-class HeteroGNN(torch.nn.Module):
+class HGAT(torch.nn.Module):
     """
     Heterogeneous graph attention network that classifies proposals.
 
@@ -38,40 +32,41 @@ class HeteroGNN(torch.nn.Module):
 
     def __init__(
         self,
+        node_dict,
+        edge_dict,
         device=None,
-        scale_hidden=2,
-        dropout=DROPOUT,
-        heads_1=HEADS_1,
-        heads_2=HEADS_2,
+        hidden_dim=64,
+        dropout=0.3,
+        heads_1=2,
+        heads_2=2,
     ):
         """
         Constructs a heterogeneous graph neural network.
 
         """
         super().__init__()
-        # Feature vector sizes
-        node_dict = ml.feature_generation.get_node_dict()
-        edge_dict = ml.feature_generation.get_edge_dict()
-        hidden_dim = scale_hidden * np.max(list(node_dict.values()))
-        output_dim = heads_1 * heads_2 * hidden_dim
+        # Layer dimensions
+        hidden_dim_1 = hidden_dim
+        hidden_dim_2 = hidden_dim_1 * heads_2
+        output_dim = hidden_dim * heads_1 * heads_2
 
         # Nonlinear activation
         self.dropout = dropout
         self.dropout_layer = Dropout(dropout)
         self.leaky_relu = LeakyReLU()
 
-        # Linear layers        
+        # Linear layers
         self.input_nodes = nn.ModuleDict()
         self.input_edges = dict()
         for key, d in node_dict.items():
-            self.input_nodes[key] = nn.Linear(d, hidden_dim, device=device)
+            self.input_nodes[key] = nn.Linear(d, hidden_dim_1, device=device)
         for key, d in edge_dict.items():
-            self.input_edges[key] = nn.Linear(d, hidden_dim, device=device)
+            self.input_edges[key] = nn.Linear(d, hidden_dim_1, device=device)
         self.output = Linear(output_dim, 1).to(device)
 
         # Message passing layers
-        self.gat1 = self.init_gat_layer(hidden_dim, hidden_dim, heads_1)
-        self.gat2 = self.init_gat_layer(hidden_dim * heads_2, hidden_dim, heads_2)
+        self.gat1 = self.init_gat_layer(hidden_dim_1, hidden_dim_1, heads_1)
+        self.gat2 = self.init_gat_layer(hidden_dim_2, hidden_dim_1, heads_2)
 
         # Initialize weights
         self.init_weights()
@@ -109,6 +104,7 @@ class HeteroGNN(torch.nn.Module):
             heads=heads,
         )
         return gat_layer
+
     def init_weights(self):
         """
         Initializes linear layers.
@@ -158,7 +154,68 @@ class HeteroGNN(torch.nn.Module):
             edge_attr_dict[key] = f(edge_attr_dict[key])
         edge_attr_dict = self.activation(edge_attr_dict)
 
-        # Convolutional layers
+        # Message passing layers
+        x_dict = self.gat1(
+            x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict
+        )
+        x_dict = self.gat2(
+            x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict
+        )
+
+        # Output
+        x_dict = self.output(x_dict["proposal"])
+        return x_dict
+
+
+class MultiModalHGAT(HGAT):
+    """
+    Heterogeneous graph attention network that uses multimodal features which
+    includes an image patch of the proposal and a vector of geometric and
+    graphical features.
+
+    """
+
+    def __init__(
+        self,
+        node_dict,
+        edge_dict,
+        device=None,
+        hidden_dim=64,
+        dropout=0.3,
+        heads_1=2,
+        heads_2=2,
+    ):
+        # Call super constructor
+        super().__init__(
+            node_dict,
+            edge_dict,
+            device,
+            hidden_dim,
+            dropout,
+            heads_1,
+            heads_2,
+        )
+
+        # Instance attributes
+        self.input_patches = ConvNet(hidden_dim)
+
+    def forward(self, x_dict, edge_index_dict, edge_attr_dict):
+        # Input - Patches
+        x_patches = self.input_patches(x_dict["patches"])
+        del x_dict["patches"]
+
+        # Input - Nodes
+        x_dict = {key: f(x_dict[key]) for key, f in self.input_nodes.items()}
+        x_dict = self.activation(x_dict)
+
+        # Input - Edges
+        for key, f in self.input_edges.items():
+            edge_attr_dict[key] = f(edge_attr_dict[key])
+        edge_attr_dict = self.activation(edge_attr_dict)
+
+        # Concatenate multimodal embeddings
+
+        # Message passing layers
         x_dict = self.gat1(
             x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict
         )

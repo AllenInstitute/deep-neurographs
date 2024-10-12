@@ -91,7 +91,7 @@ class ConvNet(nn.Module):
 
     """
 
-    def __init__(self):
+    def __init__(self, patch_shape, output_dim):
         """
         Constructs a ConvNet object.
 
@@ -105,10 +105,12 @@ class ConvNet(nn.Module):
 
         """
         nn.Module.__init__(self)
-        self.conv1 = self._init_conv_layer(2, 4)
-        self.conv2 = self._init_conv_layer(4, 4)
+        self.conv1 = self._init_conv_layer(2, 32)
+        self.conv2 = self._init_conv_layer(32, 64)
         self.output = nn.Sequential(
-            nn.Linear(10976, 64), nn.LeakyReLU(), nn.Linear(64, 1)
+            nn.Linear(-1, 64),
+            nn.LeakyReLU(),
+            nn.Linear(output_dim, output_dim),
         )
 
     def _init_conv_layer(self, in_channels, out_channels):
@@ -132,14 +134,14 @@ class ConvNet(nn.Module):
             nn.Conv3d(
                 in_channels,
                 out_channels,
-                kernel_size=(3, 3, 3),
+                kernel_size=3,
                 stride=1,
                 padding=0,
             ),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(),
-            nn.Dropout(p=0.2),
-            nn.MaxPool3d(kernel_size=(2, 2, 2), stride=2),
+            nn.Dropout(p=0.3),
+            nn.MaxPool3d(kernel_size=2, stride=2),
         )
         return conv_layer
 
@@ -162,9 +164,6 @@ class ConvNet(nn.Module):
         x = self.conv2(x)
         x = self.output(vectorize(x))
         return x
-
-    def model_type(self):
-        return "ConvNet"
 
 
 class MultiModalNet(nn.Module):

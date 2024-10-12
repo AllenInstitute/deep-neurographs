@@ -15,7 +15,6 @@ Conventions:
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
-from random import sample
 
 import numpy as np
 from scipy.ndimage import zoom
@@ -39,7 +38,7 @@ class FeatureGenerator:
         img_path,
         downsample_factor,
         label_path=None,
-        use_img_embedding=False,
+        is_multimodal=False,
     ):
         """
         Initializes object that generates features for a graph.
@@ -54,7 +53,7 @@ class FeatureGenerator:
         label_path : str, optional
             Path to the segmentation assumed to be stored on a GCS bucket. The
             default is None.
-        use_img_embedding : bool, optional
+        is_multimodal : bool, optional
             ...
 
         Returns
@@ -64,7 +63,7 @@ class FeatureGenerator:
         """
         # Initialize instance attributes
         self.downsample_factor = downsample_factor
-        self.use_img_embedding = use_img_embedding
+        self.is_multimodal = is_multimodal
 
         # Initialize image-based attributes
         driver = "n5" if ".n5" in img_path else "zarr"
@@ -79,7 +78,7 @@ class FeatureGenerator:
         self.label_patch_shape = self.set_patch_shape(0)
 
         # Validate embedding requirements
-        if self.use_img_embedding and not label_path:
+        if self.is_multimodal and not label_path:
             raise("Must provide labels to generate image embeddings")
 
     @classmethod
@@ -144,7 +143,7 @@ class FeatureGenerator:
         }
 
         # Generate image patches (if applicable)
-        if self.use_img_embedding:
+        if self.is_multimodal:
             features["patches"] = self.proposal_patches(neurograph, proposals)
         return features
 
@@ -206,7 +205,7 @@ class FeatureGenerator:
 
         """
         features = self.proposal_skeletal(neurograph, proposals, radius)
-        if not self.use_img_embedding:
+        if not self.is_multimodal:
             profiles = self.proposal_profiles(neurograph, proposals)
             for p in proposals:
                 features[p] = np.concatenate((features[p], profiles[p]))
@@ -571,35 +570,66 @@ def get_branching_path(neurograph, i):
 # --- Build feature matrix ---
 def get_matrix(features, gt_accepts=set()):
     # Initialize matrices
-    key = sample(list(features.keys()), 1)[0]
-    X = np.zeros((len(features.keys()), len(features[key])))
+    key = util.sample_once(list(features.keys()))
+    x = np.zeros((len(features.keys()), len(features[key])))
     y = np.zeros((len(features.keys())))
 
     # Populate
     idx_to_id = dict()
     for i, id_i in enumerate(features):
         idx_to_id[i] = id_i
-        X[i, :] = features[id_i]
+        x[i, :] = features[id_i]
         y[i] = 1 if id_i in gt_accepts else 0
-    return X, y, idx_to_id
+    return x, y, init_idx_mapping(idx_to_id)
+
+
+def get_patches_matrix(patches, id_to_idx):
+    patch = util.sample_once(list(patches.values()))
+    x = np.zeros((len(id_to_idx),) + patch.shape)
+    for key, patch in patches.items():
+        x[id_to_idx[key], ...] = patch
+    return x
 
 
 def stack_matrices(neurographs, features, blocks):
-    idx_to_id = dict()
-    X, y = None, None
+    x, y = None, None
     for block_id in blocks:
-        X_i, y_i, _ = get_matrix(features[block_id])
-        if X is None:
-            X = deepcopy(X_i)
+        x_i, y_i, _ = get_matrix(features[block_id])
+        if x is None:
+            x = deepcopy(x_i)
             y = deepcopy(y_i)
         else:
-            X = np.concatenate((X, X_i), axis=0)
+            x = np.concatenate((x, x_i), axis=0)
             y = np.concatenate((y, y_i), axis=0)
-    return X, y
+    return x, y
+
+
+def init_idx_mapping(idx_to_id):
+    """
+    Adds dictionary item called "edge_to_index" which maps a branch/proposal
+    in a neurograph to an idx that represents it's position in the feature
+    matrix.
+
+    Parameters
+    ----------
+    idxs : dict
+        Dictionary that maps indices to edges in some neurograph.
+
+    Returns
+    -------
+    dict
+        Updated dictionary.
+
+    """
+    idx_mapping = {
+        "idx_to_id": idx_to_id,
+        "id_to_idx": {v: k for k, v in idx_to_id.items()}
+    }
+    return idx_mapping
 
 
 # --- Utils ---
-def get_node_dict(use_img_embedding=False):
+def get_node_dict(is_multimodal=False):
     """
     Returns the number of features for different node types.
 
@@ -613,7 +643,10 @@ def get_node_dict(use_img_embedding=False):
         A dictionary containing the number of features for each node type
 
     """
-    return {"branch": 2, "proposal": 34}
+    if is_multimodal:
+        return {"branch": 2, "proposal": 16}
+    else:
+        return {"branch": 2, "proposal": 34}
 
 
 def get_edge_dict():

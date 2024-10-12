@@ -13,7 +13,6 @@ from copy import deepcopy
 import numpy as np
 import tensorstore as ts
 from skimage.color import label2rgb
-from tifffile import imwrite
 
 from deep_neurographs.utils import util
 

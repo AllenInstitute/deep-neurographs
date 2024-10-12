@@ -82,7 +82,7 @@ class Dataset:
         """
         # Conversion idxs
         self.block_to_idxs = idxs_proposals["block_to_idxs"]
-        self.idxs_proposals = init_idxs(idxs_proposals)
+        self.idxs_proposals = idxs_proposals
         self.proposals = proposals
 
         # Features
@@ -291,27 +291,3 @@ def reformat(arr):
 
     """
     return np.expand_dims(arr, axis=1).astype(np.float32)
-
-
-def init_idx_mapping(idx_to_id):
-    """
-    Adds dictionary item called "edge_to_index" which maps a branch/proposal
-    in a neurograph to an idx that represents it's position in the feature
-    matrix.
-
-    Parameters
-    ----------
-    idxs : dict
-        Dictionary that maps indices to edges in some neurograph.
-
-    Returns
-    -------
-    dict
-        Updated dictionary.
-
-    """
-    idx_mapping = {
-        "idx_to_id": idx_to_id,
-        "id_to_idx": {v: k for k, v in idx_to_id.items()}
-    }
-    return idx_mapping

@@ -17,8 +17,10 @@ import numpy as np
 import torch
 from torch_geometric.data import HeteroData as HeteroGraphData
 
-from deep_neurographs.machine_learning import datasets
-from deep_neurographs.machine_learning.feature_generation import get_matrix
+from deep_neurographs.machine_learning.feature_generation import (
+    get_matrix,
+    get_patches_matrix,
+)
 from deep_neurographs.utils import gnn_util
 
 DTYPE = torch.float32
@@ -52,24 +54,35 @@ def init(neurograph, features, computation_graph):
         gt_accepts = set()
 
     # Extract features
-    x_branches, _, idxs_branches = get_matrix(features["branches"])
-    x_proposals, y_proposals, idxs_proposals = get_matrix(
+    idxs, x_dict = dict(), dict()
+    x_dict["branches"], _, idxs["branches"] = get_matrix(features["branches"])
+    x_dict["proposals"], y_proposals, idxs["proposals"] = get_matrix(
         features["proposals"], gt_accepts
     )
-    x_nodes = features["nodes"]
+    x_dict["nodes"] = features["nodes"]
+
+    # Build patch matrix
+    is_multimodel = "patches" in features
+    if is_multimodel:
+        x_dict["patches"] = get_patches_matrix(
+            features["patches"], idxs["proposals"]["id_to_idx"]
+        )
 
     # Initialize dataset
     proposals = list(features["proposals"].keys())
-    heterograph_dataset = HeteroGraphDataset(
+    if is_multimodel:
+        heterograph_dataset_class = HeteroGraphMultiModalDataset
+    else:
+        heterograph_dataset_class = HeteroGraphDataset
+
+    heterograph_dataset = heterograph_dataset_class(
         computation_graph,
         proposals,
-        x_nodes,
-        x_branches,
-        x_proposals,
+        x_dict,
         y_proposals,
-        idxs_branches,
-        idxs_proposals
+        idxs,
     )
+
     return heterograph_dataset
 
 
@@ -84,12 +97,9 @@ class HeteroGraphDataset:
         self,
         computation_graph,
         proposals,
-        x_nodes,
-        x_branches,
-        x_proposals,
+        x_dict,
         y_proposals,
-        idxs_branches,
-        idxs_proposals,
+        idxs,
     ):
         """
         Constructs a HeteroGraphDataset object.
@@ -118,8 +128,8 @@ class HeteroGraphDataset:
 
         """
         # Conversion idxs
-        self.idxs_branches = datasets.init_idx_mapping(idxs_branches)
-        self.idxs_proposals = datasets.init_idx_mapping(idxs_proposals)
+        self.idxs_branches = idxs["branches"]
+        self.idxs_proposals = idxs["proposals"]
         self.computation_graph = computation_graph
         self.proposals = proposals
 
@@ -133,15 +143,15 @@ class HeteroGraphDataset:
 
         # Features
         self.data = HeteroGraphData()
-        self.data["branch"].x = torch.tensor(x_branches, dtype=DTYPE)
-        self.data["proposal"].x = torch.tensor(x_proposals, dtype=DTYPE)
+        self.data["branch"].x = torch.tensor(x_dict["branches"], dtype=DTYPE)
+        self.data["proposal"].x = torch.tensor(x_dict["proposals"], dtype=DTYPE)
         self.data["proposal"].y = torch.tensor(y_proposals, dtype=DTYPE)
 
         # Edges
         self.init_edges()
         self.check_missing_edge_types()
-        self.init_edge_attrs(x_nodes)
-        self.n_edge_attrs = n_edge_features(x_nodes)
+        self.init_edge_attrs(x_dict["nodes"])
+        self.n_edge_attrs = n_edge_features(x_dict["nodes"])
 
     def init_edges(self):
         """
@@ -400,6 +410,28 @@ class HeteroGraphDataset:
             attrs.append(x_nodes[v])
         arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
         self.data[edge_type].edge_attr = arrs
+
+
+class HeteroGraphMultiModalDataset(HeteroGraphDataset):
+    def __init__(
+        self,
+        computation_graph,
+        proposals,
+        x_dict,
+        y_proposals,
+        idxs,
+    ):
+        # Call super constructor
+        super().__init__(
+            computation_graph,
+            proposals,
+            x_dict,
+            y_proposals,
+            idxs,
+        )
+
+        # Instance attributes
+        self.data["patches"].x = torch.tensor(x_dict["patches"], dtype=DTYPE)
 
 
 # -- util --
