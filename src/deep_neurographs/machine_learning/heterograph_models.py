@@ -45,28 +45,29 @@ class HGAT(torch.nn.Module):
 
         """
         super().__init__()
-        # Layer dimensions
-        hidden_dim_1 = hidden_dim
-        hidden_dim_2 = hidden_dim_1 * heads_2
-        output_dim = hidden_dim * heads_1 * heads_2
-
         # Nonlinear activation
         self.dropout = dropout
         self.dropout_layer = Dropout(dropout)
         self.leaky_relu = LeakyReLU()
 
-        # Linear layers
+        # Initial Embedding
         self.input_nodes = nn.ModuleDict()
-        self.input_edges = dict()
         for key, d in node_dict.items():
-            self.input_nodes[key] = nn.Linear(d, hidden_dim_1, device=device)
+            self.input_nodes[key] = nn.Linear(d, hidden_dim, device=device)
+
+        self.input_edges = dict()
         for key, d in edge_dict.items():
-            self.input_edges[key] = nn.Linear(d, hidden_dim_1, device=device)
-        self.output = Linear(output_dim, 1).to(device)
+            self.input_edges[key] = nn.Linear(d, hidden_dim, device=device)
+
+        # Layer dimensions
+        hidden_dim_1 = hidden_dim
+        hidden_dim_2 = hidden_dim_1 * heads_2
+        output_dim = hidden_dim_1 * heads_1 * heads_2
 
         # Message passing layers
         self.gat1 = self.init_gat_layer(hidden_dim_1, hidden_dim_1, heads_1)
         self.gat2 = self.init_gat_layer(hidden_dim_2, hidden_dim_1, heads_2)
+        self.output = Linear(output_dim, 1).to(device)
 
         # Initialize weights
         self.init_weights()
@@ -190,22 +191,41 @@ class MultiModalHGAT(HGAT):
             node_dict,
             edge_dict,
             device,
-            hidden_dim,
+            hidden_dim * 2,
             dropout,
             heads_1,
             heads_2,
         )
 
-        # Instance attributes
-        self.input_patches = ConvNet(hidden_dim)
+        # Patch Embedding
+        self.input_patches = ConvNet((48, 48, 48), hidden_dim)
+
+        # Node Embedding
+        proposal_dim = node_dict["proposal"]
+        branch_dim = node_dict["branch"]
+        self.input_nodes = nn.ModuleDict({
+            "proposal": nn.Linear(proposal_dim, hidden_dim, device=device),
+            "branch": nn.Linear(branch_dim, hidden_dim * 2, device=device),
+        })
+
+        # Edge Embedding
+        self.input_edges = dict()
+        for key, d in edge_dict.items():
+            self.input_edges[key] = nn.Linear(
+                d, hidden_dim * 2, device=device
+            )
+
+        # Initialize weights
+        self.init_weights()
 
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
         # Input - Patches
-        x_patches = self.input_patches(x_dict["patches"])
-        del x_dict["patches"]
+        x_patch = self.input_patches(x_dict["patch"])
+        del x_dict["patch"]
 
         # Input - Nodes
-        x_dict = {key: f(x_dict[key]) for key, f in self.input_nodes.items()}
+        for key, f in self.input_nodes.items():
+            x_dict[key] = f(x_dict[key])
         x_dict = self.activation(x_dict)
 
         # Input - Edges
@@ -214,6 +234,7 @@ class MultiModalHGAT(HGAT):
         edge_attr_dict = self.activation(edge_attr_dict)
 
         # Concatenate multimodal embeddings
+        x_dict["proposal"] = torch.cat((x_dict["proposal"], x_patch), dim=1)
 
         # Message passing layers
         x_dict = self.gat1(

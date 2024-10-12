@@ -4,11 +4,11 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Generates features for training a model and performing inference.
+Generates features for training a machine learning model and performing
+inference.
 
 Conventions:
     (1) "xyz" refers to a real world coordinate such as those from an swc file
-
     (2) "voxel" refers to an voxel coordinate in a whole exaspim image.
 
 """
@@ -26,7 +26,7 @@ from deep_neurographs.utils import img_util, util
 class FeatureGenerator:
     """
     Class that generates features vectors that are used by a graph neural
-    network to classify proposals.
+    network (GNN) to classify proposals.
 
     """
     # Class attributes
@@ -54,7 +54,8 @@ class FeatureGenerator:
             Path to the segmentation assumed to be stored on a GCS bucket. The
             default is None.
         is_multimodal : bool, optional
-            ...
+            Indication of whether to generate multimodal features (i.e. image
+            and label patch for each proposal). The default is False.
 
         Returns
         -------
@@ -118,7 +119,7 @@ class FeatureGenerator:
         proposals_dict : dict
             Dictionary that contains the items (1) "proposals" which are the
             proposals from "neurograph" that features will be generated and
-            (2) "graph" which is the computation graph used by the gnn.
+            (2) "graph" which is the computation graph used by the GNN.
         radius : float
             Search radius used to generate proposals.
 
@@ -156,7 +157,7 @@ class FeatureGenerator:
         neurograph : NeuroGraph
             NeuroGraph generated from a predicted segmentation.
         computation_graph : networkx.Graph
-            Graph used by gnn to classify proposals.
+            Graph used by GNN to classify proposals.
 
         Returns
         -------
@@ -175,12 +176,12 @@ class FeatureGenerator:
         neurograph : NeuroGraph
             NeuroGraph generated from a predicted segmentation.
         computation_graph : networkx.Graph
-            Graph used by gnn to classify proposals.
+            Graph used by GNN to classify proposals.
 
         Returns
         -------
         dict
-            Dictionary that maps an edge id to a feature vector.
+            Dictionary that maps an branch id to a feature vector.
 
         """
         return self.branch_skeletal(neurograph, computation_graph)
@@ -221,7 +222,7 @@ class FeatureGenerator:
         neurograph : NeuroGraph
             NeuroGraph generated from a predicted segmentation.
         computation_graph : networkx.Graph
-            Graph used by gnn to classify proposals.
+            Graph used by GNN to classify proposals.
 
         Returns
         -------
@@ -250,7 +251,7 @@ class FeatureGenerator:
         neurograph : NeuroGraph
             NeuroGraph generated from a predicted segmentation.
         computation_graph : networkx.Graph
-            Graph used by gnn to classify proposals.
+            Graph used by GNN to classify proposals.
 
         Returns
         -------
@@ -313,7 +314,7 @@ class FeatureGenerator:
         neurograph : NeuroGraph
             NeuroGraph generated from a predicted segmentation.
         computation_graph : networkx.Graph
-            Graph used by gnn to classify proposals.
+            Graph used by GNN to classify proposals.
 
         Returns
         -------
@@ -435,7 +436,7 @@ class FeatureGenerator:
     def get_spec(self, xyz_path):
         """
         Gets image bounding box and voxel coordinates needed to compute an
-        image intensity profile or extract image chunk for cnn embedding.
+        image intensity profile or extract image patch.
 
         Parameters
         ----------
