@@ -293,7 +293,7 @@ def reformat(arr):
     return np.expand_dims(arr, axis=1).astype(np.float32)
 
 
-def init_idxs(idxs):
+def init_idx_mapping(idx_to_id):
     """
     Adds dictionary item called "edge_to_index" which maps a branch/proposal
     in a neurograph to an idx that represents it's position in the feature
@@ -310,7 +310,8 @@ def init_idxs(idxs):
         Updated dictionary.
 
     """
-    idxs["edge_to_idx"] = dict()
-    for idx, edge in idxs["idx_to_edge"].items():
-        idxs["edge_to_idx"][edge] = idx
-    return idxs
+    idx_mapping = {
+        "idx_to_id": idx_to_id,
+        "id_to_idx": {v: k for k, v in idx_to_id.items()}
+    }
+    return idx_mapping
