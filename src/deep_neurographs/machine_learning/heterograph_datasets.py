@@ -64,7 +64,7 @@ def init(neurograph, features, computation_graph):
     # Build patch matrix
     is_multimodel = "patches" in features
     if is_multimodel:
-        x_dict["patches"] = get_patches_matrix(
+        x_dict["patch"] = get_patches_matrix(
             features["patches"], idxs["proposals"]["id_to_idx"]
         )
 
@@ -142,16 +142,17 @@ class HeteroGraphDataset:
         ]
 
         # Features
-        self.data = HeteroGraphData()
-        self.data["branch"].x = torch.tensor(x_dict["branches"], dtype=DTYPE)
-        self.data["proposal"].x = torch.tensor(x_dict["proposals"], dtype=DTYPE)
-        self.data["proposal"].y = torch.tensor(y_proposals, dtype=DTYPE)
-
-        # Edges
+        self.init_nodes(x_dict, y_proposals)
         self.init_edges()
         self.check_missing_edge_types()
         self.init_edge_attrs(x_dict["nodes"])
         self.n_edge_attrs = n_edge_features(x_dict["nodes"])
+
+    def init_nodes(self, x_dict, y_proposals):
+        self.data = HeteroGraphData()
+        self.data["branch"].x = torch.tensor(x_dict["branches"], dtype=DTYPE)
+        self.data["proposal"].x = torch.tensor(x_dict["proposals"], dtype=DTYPE)
+        self.data["proposal"].y = torch.tensor(y_proposals, dtype=DTYPE)
 
     def init_edges(self):
         """
@@ -430,8 +431,49 @@ class HeteroGraphMultiModalDataset(HeteroGraphDataset):
             idxs,
         )
 
-        # Instance attributes
-        self.data["patches"].x = torch.tensor(x_dict["patches"], dtype=DTYPE)
+    def init_nodes(self, x_dict, y_proposals):
+        self.data = HeteroGraphData()
+        self.data["branch"].x = torch.tensor(x_dict["branches"], dtype=DTYPE)
+        self.data["proposal"].x = torch.tensor(x_dict["proposals"], dtype=DTYPE)
+        self.data["proposal"].y = torch.tensor(y_proposals, dtype=DTYPE)
+        self.data["patch"].x = torch.tensor(x_dict["patch"], dtype=DTYPE)
+
+    def check_missing_edge_types(self):
+        for node_type in ["branch", "proposal"]:
+            edge_type = (node_type, "edge", node_type)
+            if len(self.data[edge_type].edge_index) == 0:
+                # Add dummy features - nodes
+                dtype = self.data[node_type].x.dtype
+                if node_type == "branch":
+                    d = self.n_branch_features()
+                else:
+                    d = self.n_proposal_features()
+
+                zeros = torch.zeros(2, d, dtype=dtype)
+                self.data[node_type].x = torch.cat(
+                    (self.data[node_type].x, zeros), dim=0
+                )
+
+                # Add dummy features - patches
+                if node_type == "proposal":
+                    patch_shape = self.data["patch"].x.size()[1:]
+                    zeros = torch.zeros((2,) + patch_shape, dtype=dtype)
+                    self.data["patch"].x = torch.cat(
+                        (self.data["patch"].x, zeros), dim=0
+                    )
+
+                # Update edge_index
+                n = self.data[node_type]["x"].size(0)
+                e_1 = frozenset({-1, -2})
+                e_2 = frozenset({-2, -3})
+                edges = [[n - 1, n - 2], [n - 2, n - 1]]
+                self.data[edge_type].edge_index = gnn_util.toTensor(edges)
+                if node_type == "branch":
+                    self.idxs_branches["idx_to_id"][n - 1] = e_1
+                    self.idxs_branches["idx_to_id"][n - 2] = e_2
+                else:
+                    self.idxs_proposals["idx_to_id"][n - 1] = e_1
+                    self.idxs_proposals["idx_to_id"][n - 2] = e_2
 
 
 # -- util --

@@ -108,7 +108,7 @@ class ConvNet(nn.Module):
         self.conv1 = self._init_conv_layer(2, 32)
         self.conv2 = self._init_conv_layer(32, 64)
         self.output = nn.Sequential(
-            nn.Linear(-1, 64),
+            nn.Linear(64000, 64),
             nn.LeakyReLU(),
             nn.Linear(output_dim, output_dim),
         )
