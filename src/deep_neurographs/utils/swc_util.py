@@ -177,7 +177,6 @@ class Reader:
                 processes.append(
                     executor.submit(self.load_from_cloud_zip, zip_content)
                 )
-                break
 
             # Store results
             swc_dicts = list()
