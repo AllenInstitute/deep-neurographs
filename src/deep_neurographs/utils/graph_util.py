@@ -123,14 +123,7 @@ class GraphLoader:
         # Load fragments and extract irreducibles
         self.img_bbox = img_util.init_bbox(img_patch_origin, img_patch_shape)
         swc_dicts = self.reader.load(fragments_pointer)
-        irreducibles = get_irreducibles(
-            swc_dicts,
-            self.min_size,
-            self.img_bbox,
-            self.progress_bar,
-            self.prune_depth,
-            self.smooth_bool,
-        )
+        irreducibles = self.schedule_processes(swc_dicts)
 
         # Build FragmentsGraph
         neurograph = NeuroGraph(node_spacing=self.node_spacing)
@@ -139,248 +132,225 @@ class GraphLoader:
             neurograph.add_component(irreducible_set)
         return neurograph
 
+    # --- Graph structure extraction ---
+    def schedule_processes(self, swc_dicts):
+        """
+        Gets irreducible components of each graph stored in "swc_dicts" by setting
+        up a parellelization scheme that sends each swc_dict to a CPU and calling
+        the subroutine "get_irreducibles".
 
-# --- Graph structure extraction ---
-def get_irreducibles(
-    swc_dicts,
-    min_size,
-    img_bbox=None,
-    progress_bar=True,
-    prune_depth=PRUNE_DEPTH,
-    smooth_bool=True,
-):
-    """
-    Gets irreducible components of each graph stored in "swc_dicts" by setting
-    up a parellelization scheme that sends each swc_dict to a CPU and calling
-    the subroutine "gutil.get_irreducibles".
+        Parameters
+        ----------
+        swc_dicts : list[dict]
+            List of dictionaries such that each entry contains the conents of an
+            swc file.
 
-    Parameters
-    ----------
-    swc_dicts : list[dict]
-        List of dictionaries such that each entry contains the conents of an
-        swc file.
+        Returns
+        -------
+        list[dict]
+            List of irreducibles stored in a dictionary where key-values are type
+            of irreducible (i.e. leaf, branching, or edge) and the corresponding
+            set of all irreducibles from the graph of that type.
 
-    Returns
-    -------
-    list[dict]
-        List of irreducibles stored in a dictionary where key-values are type
-        of irreducible (i.e. leaf, branching, or edge) and the corresponding
-        set of all irreducibles from the graph of that type.
+        """
+        with ProcessPoolExecutor() as executor:
+            # Assign Processes
+            i = 0
+            processes = [None] * len(swc_dicts)
+            while swc_dicts:
+                swc_dict = swc_dicts.pop()
+                processes[i] = executor.submit(
+                    self.get_irreducibles, swc_dict
+                )
+                i += 1
 
-    """
-    with ProcessPoolExecutor() as executor:
-        # Assign Processes
-        i = 0
-        processes = [None] * len(swc_dicts)
-        while swc_dicts:
-            swc_dict = swc_dicts.pop()
-            processes[i] = executor.submit(
-                get_component_irreducibles,
-                swc_dict,
-                min_size,
-                img_bbox,
-                prune_depth,
-                smooth_bool,
-            )
-            i += 1
-
-        # Store results
-        irreducibles = list()
-        if progress_bar:
-            with tqdm(total=len(processes), desc="Extract Graphs") as pbar:
+            # Store results
+            irreducibles = list()
+            if self.progress_bar:
+                with tqdm(total=len(processes), desc="Extract Graphs") as pbar:
+                    for process in as_completed(processes):
+                        irreducibles.extend(process.result())
+                        pbar.update(1)
+            else:
                 for process in as_completed(processes):
                     irreducibles.extend(process.result())
-                    pbar.update(1)
-        else:
-            for process in as_completed(processes):
-                irreducibles.extend(process.result())
-    return irreducibles
-
-
-def get_component_irreducibles(
-    swc_dict,
-    min_size,
-    img_bbox=None,
-    prune_depth=PRUNE_DEPTH,
-    smooth_bool=True,
-):
-    """
-    Gets irreducible components of the graph stored in "swc_dict" by building
-    the graph store in the swc_dict and parsing it. In addition, this function
-    also calls routines prunes spurious branches and short paths connecting
-    branches (i.e. possible merge mistakes).
-
-    Parameters
-    ----------
-    swc_dict : dict
-        Contents of an swc file.
-    min_size : float
-        Minimum path length of individual fragments that are stored in
-        NeuroGraph.
-    img_bbox : dict, optional
-        Dictionary with the keys "min" and "max" which specify a bounding box
-        in the image. The default is None.
-    prune_depth : float, optional
-        Path length microns that determines whether a branch is short and
-        should be pruned. The default is 16.0.
-    smooth_bool : bool, optional
-        Indication of whether to smooth each branch. The default is True.
-
-    Returns
-    -------
-    list
-        List of irreducibles stored in a dictionary where key-values are type
-        of irreducible (i.e. leaf, branching, or edge) and corresponding set of
-        all irreducibles from the graph of that type.
-
-    """
-    # Build dense graph
-    swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
-    graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
-    graph = clip_branches(graph, img_bbox)
-    graph = prune_branches(graph, prune_depth)
-
-    # Extract irreducibles
-    irreducibles = list()
-    if graph.number_of_nodes() > 1:
-        for nodes in nx.connected_components(graph):
-            if len(nodes) > 1:
-                subgraph = graph.subgraph(nodes)
-                irreducibles_i = get_subcomponent_irreducibles(
-                    subgraph, swc_dict, smooth_bool, min_size
-                )
-                if irreducibles_i:
-                    irreducibles.append(irreducibles_i)
-    return irreducibles
-
-
-def clip_branches(graph, img_bbox):
-    """
-    Deletes all nodes from "graph" that are not contained in "img_bbox".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched
-    img_bbox : dict
-        Dictionary with the keys "min" and "max" which specify a bounding box
-        in the image. The default is None.
-
-    Returns
-    -------
-    networkx.Graph
-        "graph" with nodes deleted that were not contained in "img_bbox".
-
-    """
-    if img_bbox:
-        delete_nodes = set()
-        for i in graph.nodes:
-            xyz = img_util.to_voxels(graph.nodes[i]["xyz"])
-            if not util.is_contained(img_bbox, xyz):
-                delete_nodes.add(i)
-        graph.remove_nodes_from(delete_nodes)
-    return graph
-
-
-def prune_branches(graph, prune_depth):
-    """
-    Prunes all short branches from "graph". A short branch is a path between a
-    leaf and branching node where the path length is less than "prune_depth".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be pruned.
-    prune_depth : float
-        Path length microns that determines whether a branch is short. The
-        default is 16.0.
-
-    Returns
-    -------
-    networkx.Graph
-        Graph with short branches pruned.
-
-    """
-    remove_nodes = list()
-    for leaf in get_leafs(graph):
-        remove_nodes.extend(prune_branch(graph, leaf, prune_depth))
-    graph.remove_nodes_from(remove_nodes)
-    return graph
-
-
-def get_subcomponent_irreducibles(graph, swc_dict, smooth_bool, min_size):
-    """
-    Gets the irreducible components of "graph".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-    swc_dict : dict
-        Dictionary used to build "graph".
-    smooth : bool
-        Indication of whether to smooth edges.
-    min_size : float
-        Minimum path length of individual fragments that are stored in
-        NeuroGraph.
-
-    Returns
-    -------
-    dict
-        Dictionary containing irreducible components of "graph".
-
-    """
-    # Extract nodes
-    leafs, branchings = get_irreducible_nodes(graph)
-    assert len(leafs) > 0, "No leaf nodes!"
-
-    # Extract edges
-    edges = dict()
-    nbs = defaultdict(list)
-    root = None
-    total_length = 0
-    cur_length = 0
-    for (i, j) in nx.dfs_edges(graph, source=util.sample_once(leafs)):
-        # Check if starting new or continuing current path
-        if root is None:
-            root = i
-            cur_length = 0
-            attrs = init_edge_attrs(swc_dict, root)
-        else:
-            xyz_i = swc_dict["xyz"][swc_dict["idx"][i]]
-            xyz_j = swc_dict["xyz"][swc_dict["idx"][j]]
-            cur_length += geometry.dist(xyz_i, xyz_j)
-
-        # Visit j
-        attrs = upd_edge_attrs(swc_dict, attrs, j)
-        if j in leafs or j in branchings:
-            # Check whether to smooth
-            attrs["length"] = cur_length
-            attrs = to_numpy(attrs)
-            if smooth_bool:
-                swc_dict, edges = smooth_branch(
-                    swc_dict, attrs, edges, nbs, root, j
-                )
-            else:
-                edges[(root, j)] = attrs
-
-            # Finish
-            nbs[root].append(j)
-            nbs[j].append(root)
-            root = None
-            total_length += cur_length
-
-    # Output
-    if total_length > min_size:
-        irreducibles = {
-            "leaf": set_node_attrs(swc_dict, leafs),
-            "branching": set_node_attrs(swc_dict, branchings),
-            "edge": edges,
-            "swc_id": swc_dict["swc_id"],
-        }
         return irreducibles
 
+    def get_irreducibles(self, swc_dict):
+        """
+        Gets irreducible components of the graph stored in "swc_dict" by building
+        the graph store in the swc_dict and parsing it. In addition, this function
+        also calls routines prunes spurious branches and short paths connecting
+        branches (i.e. possible merge mistakes).
 
+        Parameters
+        ----------
+        swc_dict : dict
+            Contents of an swc file.
+
+        Returns
+        -------
+        list
+            List of irreducibles stored in a dictionary where key-values are type
+            of irreducible (i.e. leaf, branching, or edge) and corresponding set of
+            all irreducibles from the graph of that type.
+
+        """
+        # Build dense graph
+        swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
+        graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
+        graph = self.clip_branches(graph)
+        graph = self.prune_branches(graph)
+
+        # Extract irreducibles
+        irreducibles = list()
+        if graph.number_of_nodes() > 1:
+            for nodes in nx.connected_components(graph):
+                if len(nodes) > 1:
+                    subgraph = graph.subgraph(nodes)
+                    irreducibles_i = self.get_component_irreducibles(
+                        subgraph, swc_dict
+                    )
+                    if irreducibles_i:
+                        irreducibles.append(irreducibles_i)
+        return irreducibles
+
+    def clip_branches(self, graph):
+        """
+        Deletes all nodes from "graph" that are not contained in "img_bbox".
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be searched
+        img_bbox : dict
+            Dictionary with the keys "min" and "max" which specify a bounding box
+            in the image. The default is None.
+
+        Returns
+        -------
+        networkx.Graph
+            "graph" with nodes deleted that were not contained in "img_bbox".
+
+        """
+        if self.img_bbox:
+            delete_nodes = set()
+            for i in graph.nodes:
+                xyz = img_util.to_voxels(graph.nodes[i]["xyz"])
+                if not util.is_contained(self.img_bbox, xyz):
+                    delete_nodes.add(i)
+            graph.remove_nodes_from(delete_nodes)
+        return graph
+
+    def prune_branches(self, graph):
+        """
+        Prunes all short branches from "graph". A short branch is a path between a
+        leaf and branching node where the path length is less than "prune_depth".
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be pruned.
+        prune_depth : float
+            Path length microns that determines whether a branch is short. The
+            default is 16.0.
+
+        Returns
+        -------
+        networkx.Graph
+            Graph with short branches pruned.
+
+        """
+        for leaf in get_leafs(graph):
+            branch = [leaf]
+            depth = 2 * self.prune_depth
+            length = 0
+            for (i, j) in nx.dfs_edges(graph, source=leaf, depth_limit=depth):
+                # Visit edge
+                length += compute_dist(graph, i, j)
+                if graph.degree(j) == 2:
+                    branch.append(j)
+                elif graph.degree(j) > 2:
+                    graph.remove_nodes_from(branch)
+                    break
+
+                # Check whether to stop
+                if length > self.prune_depth:
+                    graph.remove_nodes_from(branch[0:min(5, len(branch))])
+                    break
+        return graph
+
+    def get_component_irreducibles(self, graph, swc_dict):
+        """
+        Gets the irreducible components of "graph".
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be searched.
+        swc_dict : dict
+            Dictionary used to build "graph".
+
+        Returns
+        -------
+        dict
+            Dictionary containing irreducible components of "graph".
+
+        """
+        # Extract nodes
+        leafs, branchings = get_irreducible_nodes(graph)
+        assert len(leafs) > 0, "No leaf nodes!"
+
+        # Extract edges
+        edges = dict()
+        nbs = defaultdict(list)
+        root = None
+        total_length = 0
+        branch_length = 0
+        for (i, j) in nx.dfs_edges(graph, source=util.sample_once(leafs)):
+            # Check if starting new or continuing current path
+            if root is None:
+                root = i
+                branch_length = 0
+                attrs = init_edge_attrs(swc_dict, root)
+            else:
+                xyz_i = swc_dict["xyz"][swc_dict["idx"][i]]
+                xyz_j = swc_dict["xyz"][swc_dict["idx"][j]]
+                branch_length += geometry.dist(xyz_i, xyz_j)
+
+            # Visit j
+            attrs = upd_edge_attrs(swc_dict, attrs, j)
+            if j in leafs or j in branchings:
+                # Check whether to smooth
+                attrs["length"] = branch_length
+                attrs = to_numpy(attrs)
+                if self.smooth_bool:
+                    swc_dict, edges = smooth_branch(
+                        swc_dict, attrs, edges, nbs, root, j
+                    )
+                else:
+                    edges[(root, j)] = attrs
+
+                # Finish
+                nbs[root].append(j)
+                nbs[j].append(root)
+                root = None
+                total_length += branch_length
+
+        # Output
+        if total_length > self.min_size:
+            irreducibles = {
+                "leaf": set_node_attrs(swc_dict, leafs),
+                "branching": set_node_attrs(swc_dict, branchings),
+                "edge": edges,
+                "swc_id": swc_dict["swc_id"],
+            }
+            return irreducibles
+        else:
+            return False
+
+
+# --- Utils ---
 def get_irreducible_nodes(graph):
     """
     Gets irreducible nodes (i.e. leafs and branchings) of a graph.
@@ -404,46 +374,6 @@ def get_irreducible_nodes(graph):
         elif graph.degree[i] > 2:
             branchings.add(i)
     return leafs, branchings
-
-
-# --- Refine graph ---
-def prune_branch(graph, leaf, prune_depth):
-    """
-    Determines whether the branch emanating from "leaf" should be pruned and
-    returns nodes that should be pruned. If applicable (i.e. trim_depth > 0),
-    every branch is trimmed by"trim_depth" microns.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-    leaf : int
-        Leaf node being inspected to determine whether it is the endpoint of
-        a short branch that should be pruned.
-    prune_depth : int
-        Path length microns that determines whether a branch is short.
-
-    Returns
-    -------
-    list
-        If branch is short, then the list of nodes in the branch is returned.
-        Otherwise, an empty list is returned.
-
-    """
-    branch = [leaf]
-    node_dists = list()
-    for (i, j) in nx.dfs_edges(graph, source=leaf, depth_limit=2*prune_depth):
-        # Visit edge
-        node_dists.append(compute_dist(graph, i, j))
-        if graph.degree(j) > 2:
-            return branch
-        elif graph.degree(j) == 2:
-            branch.append(j)
-
-        # Check whether to stop
-        if np.sum(node_dists) > prune_depth:
-            break
-    return branch[0:min(5, len(branch))]
 
 
 def smooth_branch(swc_dict, attrs, edges, nbs, root, j):
@@ -549,7 +479,6 @@ def upd_endpoint_xyz(edges, key, old_xyz, new_xyz):
     return edges
 
 
-# -- attribute utils --
 def init_edge_attrs(swc_dict, i):
     """
     Initializes edge attribute dictionary with attributes from node "i" which
@@ -703,7 +632,6 @@ def upd_node_attrs(swc_dict, leafs, branchings, i):
     return leafs, branchings
 
 
-# -- miscellaneous --
 def compute_dist(graph, i, j):
     """
     Computes Euclidean distance between nodes i and j.

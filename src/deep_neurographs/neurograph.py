@@ -946,11 +946,19 @@ class NeuroGraph(nx.Graph):
         else:
             return None
 
+    def component_path_length(self, root):
+        path_length = 0
+        for i, j in nx.dfs_edges(self, source=root):
+            path_length += self.edges[i, j]["length"]
+        return path_length
+
     # --- write graph to swcs ---
-    def to_zipped_swcs(self, zip_path, color=None):
+    def to_zipped_swcs(self, zip_path, color=None, min_size=100):
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
             for nodes in nx.connected_components(self):
-                self.to_zipped_swc(zip_writer, nodes, color)
+                root = util.sample_once(nodes)
+                if self.component_path_length(root) > min_size:
+                    self.to_zipped_swc(zip_writer, nodes, color)
 
     def to_zipped_swc(self, zip_writer, nodes, color):
         with StringIO() as text_buffer:
@@ -967,7 +975,7 @@ class NeuroGraph(nx.Graph):
                 if n_entries == 0:
                     swc_id = self.nodes[i]["swc_id"]
                     x, y, z = tuple(self.nodes[i]["xyz"])
-                    r = self.nodes[i]["radius"]
+                    r = 2  #self.nodes[i]["radius"]
 
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
@@ -1070,7 +1078,7 @@ class NeuroGraph(nx.Graph):
         idxs = np.arange(1, len(branch_xyz))
         for k in util.spaced_idxs(idxs, 6):
             x, y, z = tuple(branch_xyz[k])
-            r = branch_radius[k]
+            r = 2  #branch_radius[k]
 
             node_id = n_entries + 1
             parent = n_entries if k > 1 else parent

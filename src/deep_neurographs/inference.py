@@ -239,7 +239,7 @@ class InferencePipeline:
         # Initializations
         print("(2) Generate Proposals")
         if radius is None:
-            radius = self.graph_config.radius
+            radius = self.graph_config.search_radius
 
         # Main
         t0 = time()
@@ -273,7 +273,7 @@ class InferencePipeline:
         """
         print("(3) Run Inference")
         t0 = time()
-        n_proposals = self.graph.n_proposals()
+        n_proposals = max(self.graph.n_proposals(), 1)
         self.graph, accepts = self.inference_engine.run(
             self.graph, self.graph.list_proposals()
         )
