@@ -68,7 +68,7 @@ def remove_doubles(neurograph, max_size, node_spacing, output_dir=None):
                         )
                     neurograph = delete(neurograph, components[idx], swc_id)
                     deleted.add(swc_id)
-    print("# Doubles detected:", util.reformat_number(len(deleted)))
+    return len(deleted)
 
 
 def compute_projections(neurograph, kdtree, edge):
