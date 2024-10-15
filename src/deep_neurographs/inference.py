@@ -169,7 +169,6 @@ class InferencePipeline:
         # Finish
         self.report("Final Graph...")
         self.report_graph()
-        self.report("\n")
 
         t, unit = util.time_writer(time() - t0)
         self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
@@ -231,12 +230,17 @@ class InferencePipeline:
         # Save valid labels and current graph
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
         labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        self.graph.to_zipped_swcs(swcs_path)
+        n_saved = self.graph.to_zipped_swcs(swcs_path)
         self.graph.save_labels(labels_path)
+        self.report(f"# SWCs Saved: {n_saved}")
 
+        # Report runtime
         t, unit = util.time_writer(time() - t0)
+        self.report(f"Module Runtime: {round(t, 4)} {unit}")
+
+        # Report graph overview 
+        self.report("\nInitial Graph...")
         self.report_graph()
-        self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def generate_proposals(self, radius=None):
         """
@@ -410,7 +414,7 @@ class InferencePipeline:
         self.report(f"# Connected Components: {n_components}")
         self.report(f"# Nodes: {n_nodes}")
         self.report(f"# Edges: {n_edges}")
-        self.report(f"Memory Consumption: {usage} GBs")
+        self.report(f"Memory Consumption: {usage} GBs\n")
 
 
 class InferenceEngine:
@@ -571,9 +575,9 @@ class InferenceEngine:
         ...
 
         """
-        t0 = time()
+        #t0 = time()
         features = self.feature_generator.run(neurograph, batch, self.radius)
-        print("Feature Generation:", time() - t0)
+        #print("Feature Generation:", time() - t0)
         computation_graph = batch["graph"] if type(batch) is dict else None
         dataset = ml_util.init_dataset(
             neurograph,

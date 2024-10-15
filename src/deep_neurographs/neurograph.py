@@ -955,10 +955,13 @@ class NeuroGraph(nx.Graph):
     # --- write graph to swcs ---
     def to_zipped_swcs(self, zip_path, color=None, min_size=100):
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
+            cnt = 0
             for nodes in nx.connected_components(self):
                 root = util.sample_once(nodes)
                 if self.component_path_length(root) > min_size:
                     self.to_zipped_swc(zip_writer, nodes, color)
+                    cnt += 1
+            return cnt
 
     def to_zipped_swc(self, zip_writer, nodes, color):
         with StringIO() as text_buffer:
