@@ -8,8 +8,10 @@ Graph neural network architectures that learn to classify edge proposals.
 
 """
 
+import re
 import torch
 import torch.nn.init as init
+
 from torch import nn
 from torch.nn import Dropout, LeakyReLU
 from torch_geometric.nn import GATv2Conv as GATConv
@@ -35,7 +37,7 @@ class HGAT(torch.nn.Module):
         node_dict,
         edge_dict,
         device=None,
-        hidden_dim=64,
+        hidden_dim=96,
         dropout=0.3,
         heads_1=2,
         heads_2=2,
@@ -55,9 +57,9 @@ class HGAT(torch.nn.Module):
         for key, d in node_dict.items():
             self.input_nodes[key] = nn.Linear(d, hidden_dim, device=device)
 
-        self.input_edges = dict()
+        self.input_edges = nn.ModuleDict()
         for key, d in edge_dict.items():
-            self.input_edges[key] = nn.Linear(d, hidden_dim, device=device)
+            self.input_edges[str(key)] = nn.Linear(d, hidden_dim, device=device)
 
         # Layer dimensions
         hidden_dim_1 = hidden_dim
@@ -152,6 +154,7 @@ class HGAT(torch.nn.Module):
 
         # Input - Edges
         for key, f in self.input_edges.items():
+            key = reformat_edge_key(key)
             edge_attr_dict[key] = f(edge_attr_dict[key])
         edge_attr_dict = self.activation(edge_attr_dict)
 
@@ -230,6 +233,7 @@ class MultiModalHGAT(HGAT):
 
         # Input - Edges
         for key, f in self.input_edges.items():
+            key = tuple(key)
             edge_attr_dict[key] = f(edge_attr_dict[key])
         edge_attr_dict = self.activation(edge_attr_dict)
 
@@ -247,3 +251,12 @@ class MultiModalHGAT(HGAT):
         # Output
         x_dict = self.output(x_dict["proposal"])
         return x_dict
+
+
+# --- Utils ---
+def reformat_edge_key(key):
+    return tuple([rm_non_alphanumeric(s) for s in key.split(",")])
+
+
+def rm_non_alphanumeric(s):
+    return re.sub(r'\W+', '', s)
