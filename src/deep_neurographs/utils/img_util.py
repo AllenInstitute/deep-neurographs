@@ -142,7 +142,6 @@ def read_tensorstore_with_bbox(img, bbox, normalize=True):
         shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
         return read_tensorstore(img, bbox["min"], shape, from_center=False)
     except Exception:
-        print(f"Unable to read from image with bbox {bbox}")
         return np.zeros(shape)
 
 
