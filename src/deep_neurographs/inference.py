@@ -19,7 +19,7 @@ import torch
 from torch.nn.functional import sigmoid
 from tqdm import tqdm
 
-from deep_neurographs.graph_artifact_removal import remove_doubles
+from deep_neurographs import fragment_filtering
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator,
 )
@@ -221,11 +221,15 @@ class InferencePipeline:
         self.graph = graph_builder.run(fragments_pointer)
 
         # Remove doubles (if applicable)
+        n_curvy = fragment_filtering.remove_curvy(self.graph, 100)
+        n_curvy = util.reformat_number(n_curvy)
         if self.graph_config.remove_doubles_bool:
-            n_doubles = remove_doubles(
+            n_doubles = fragment_filtering.remove_doubles(
                 self.graph, 200, self.graph_config.node_spacing
             )
-            self.report(f"# Doubles Detected: {n_doubles}")
+            n_doubles = util.reformat_number(n_doubles)
+            self.report(f"# Double Fragments Deleted: {n_doubles}")
+        self.report(f"# Curvy Fragments Deleted: {n_curvy}")
 
         # Save valid labels and current graph
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
@@ -238,7 +242,7 @@ class InferencePipeline:
         t, unit = util.time_writer(time() - t0)
         self.report(f"Module Runtime: {round(t, 4)} {unit}")
 
-        # Report graph overview 
+        # Report graph overview
         self.report("\nInitial Graph...")
         self.report_graph()
 
@@ -263,17 +267,20 @@ class InferencePipeline:
 
         # Main
         t0 = time()
-        self.graph.generate_proposals(
+        n_trimmed = self.graph.generate_proposals(
             radius,
             complex_bool=self.graph_config.complex_bool,
             long_range_bool=self.graph_config.long_range_bool,
             proposals_per_leaf=self.graph_config.proposals_per_leaf,
             trim_endpoints_bool=self.graph_config.trim_endpoints_bool,
         )
+
         n_proposals = util.reformat_number(self.graph.n_proposals())
+        n_trimmed = util.reformat_number(n_trimmed)
 
         # Report results
         t, unit = util.time_writer(time() - t0)
+        self.report(f"# Trimmed: {n_trimmed}")
         self.report(f"# Proposals: {n_proposals}")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
 
@@ -575,9 +582,7 @@ class InferenceEngine:
         ...
 
         """
-        #t0 = time()
         features = self.feature_generator.run(neurograph, batch, self.radius)
-        #print("Feature Generation:", time() - t0)
         computation_graph = batch["graph"] if type(batch) is dict else None
         dataset = ml_util.init_dataset(
             neurograph,

@@ -337,7 +337,7 @@ class NeuroGraph(nx.Graph):
         # Main
         self.reset_proposals()
         self.set_proposals_per_leaf(proposals_per_leaf)
-        generate_proposals.run(
+        n_trimmed = generate_proposals.run(
             self,
             search_radius,
             complex_bool=complex_bool,
@@ -351,6 +351,7 @@ class NeuroGraph(nx.Graph):
             self.gt_accepts = init_targets(self, groundtruth_graph)
         else:
             self.gt_accepts = set()
+        return n_trimmed
 
     def reset_proposals(self):
         """
@@ -686,8 +687,8 @@ class NeuroGraph(nx.Graph):
         if somas_check and self.check_proposal_degrees(i, j):
             # Dense attributes
             attrs = dict()
-            self.nodes[i]["radius"] = 7.0
-            self.nodes[j]["radius"] = 7.0
+            self.nodes[i]["radius"] = 7.3141592
+            self.nodes[j]["radius"] = 7.3141592
             for k in ["xyz", "radius"]:
                 combine = np.vstack if k == "xyz" else np.array
                 attrs[k] = combine([self.nodes[i][k], self.nodes[j][k]])
@@ -978,7 +979,10 @@ class NeuroGraph(nx.Graph):
                 if n_entries == 0:
                     swc_id = self.nodes[i]["swc_id"]
                     x, y, z = tuple(self.nodes[i]["xyz"])
-                    r = 2  #self.nodes[i]["radius"]
+                    if self.nodes[i]["radius"] == 7.3141592:
+                        r = 6
+                    else:
+                        r = 2
 
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
@@ -991,83 +995,6 @@ class NeuroGraph(nx.Graph):
                 )
                 node_to_idx[j] = n_entries
             zip_writer.writestr(f"{swc_id}.swc", text_buffer.getvalue())
-
-    def to_swcs(self, swc_dir):
-        """
-        Write a neurograph to "swc_dir" such that each connected component is
-        saved as an swc file.
-
-        Parameters
-        ----------
-        swc_dir : str
-            Directory that neurograph is to be written to
-
-        Returns
-        -------
-        None
-
-        """
-        with ThreadPoolExecutor() as executor:
-            threads = list()
-            for i, nodes in enumerate(nx.connected_components(self)):
-                threads.append(executor.submit(self.to_swc, swc_dir, nodes))
-
-    def to_swc(self, swc_dir, nodes, color=None):
-        """
-        Generates list of swc entries for a given connected component.
-
-        Parameters
-        ----------
-        swc_dir : str
-            Directory that swc will be written to.
-        nodes : list[int]
-            Nodes to be written to an swc file.
-        color : None or str
-            Color that swc files should be given.
-
-        Returns
-        -------
-        None.
-
-        """
-        entry_list = list()
-        node_to_idx = dict()
-        for i, j in nx.dfs_edges(self.subgraph(nodes)):
-            # Initialize
-            if len(entry_list) == 0:
-                x, y, z = tuple(self.nodes[i]["xyz"])
-                r = self.nodes[i]["radius"]
-                entry_list.append(f"1 2 {x} {y} {z} {r} -1")
-                node_to_idx[i] = 1
-
-                filename = self.nodes[i]["swc_id"] + ".swc"
-                path = os.path.join(swc_dir, filename)
-
-            # Create entry
-            parent = node_to_idx[i]
-            entry_list = self.branch_to_entries(entry_list, i, j, parent)
-            node_to_idx[j] = len(entry_list)
-
-        # Write
-        swc_util.write(path, entry_list, color=color)
-
-    def branch_to_entries(self, entry_list, i, j, parent):
-        # Orient branch
-        branch_xyz = self.edges[i, j]["xyz"]
-        branch_radius = self.edges[i, j]["radius"]
-        if (branch_xyz[0] != self.nodes[i]["xyz"]).any():
-            branch_xyz = np.flip(branch_xyz, axis=0)
-            branch_radius = np.flip(branch_radius, axis=0)
-
-        # Make entries
-        for k in range(1, len(branch_xyz)):
-            x, y, z = tuple(branch_xyz[k])
-            r = branch_radius[k]
-            node_id = len(entry_list) + 1
-            parent = len(entry_list) if k > 1 else parent
-            entry = f"{node_id} 2 {x} {y} {z} {r} {parent}"
-            entry_list.append(entry)
-        return entry_list
 
     def branch_to_zip(self, text_buffer, n_entries, i, j, parent, color):
         # Orient branch
