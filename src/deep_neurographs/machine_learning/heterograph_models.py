@@ -9,9 +9,9 @@ Graph neural network architectures that learn to classify edge proposals.
 """
 
 import re
+
 import torch
 import torch.nn.init as init
-
 from torch import nn
 from torch.nn import Dropout, LeakyReLU
 from torch_geometric.nn import GATv2Conv as GATConv
@@ -255,6 +255,7 @@ class MultiModalHGAT(HGAT):
 
 # --- Utils ---
 def reformat_edge_key(key):
+    print(key)
     return tuple([rm_non_alphanumeric(s) for s in key.split(",")])
 
 
