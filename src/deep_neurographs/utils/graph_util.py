@@ -340,7 +340,7 @@ class GraphLoader:
 
                     # Check whether to stop
                     if length > self.prune_depth or first_pass:
-                        graph.remove_nodes_from(branch[0:min(3, len(branch))])
+                        graph.remove_nodes_from(branch[0:min(5, len(branch))])
                         break
 
             first_pass = False
