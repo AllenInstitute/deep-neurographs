@@ -337,7 +337,7 @@ class NeuroGraph(nx.Graph):
         # Main
         self.reset_proposals()
         self.set_proposals_per_leaf(proposals_per_leaf)
-        generate_proposals.run(
+        n_trimmed = generate_proposals.run(
             self,
             search_radius,
             complex_bool=complex_bool,
@@ -351,6 +351,7 @@ class NeuroGraph(nx.Graph):
             self.gt_accepts = init_targets(self, groundtruth_graph)
         else:
             self.gt_accepts = set()
+        return n_trimmed
 
     def reset_proposals(self):
         """
