@@ -152,7 +152,7 @@ class GraphLoader:
             a connected component of the graph corresponding to "swc_dicts".
 
         """
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=1) as executor:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
@@ -195,7 +195,7 @@ class GraphLoader:
         # Build dense graph
         swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
         graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
-        self.clip_branches(graph)
+        self.clip_branches(graph, swc_dict["swc_id"])
         self.prune_branches(graph)
 
         # Extract irreducibles
@@ -210,7 +210,7 @@ class GraphLoader:
                         irreducibles.append(result)
         return irreducibles
 
-    def clip_branches(self, graph):
+    def clip_branches(self, graph, swc_id):
         """
         Deletes all nodes from "graph" that are not contained in "img_bbox".
 
@@ -231,6 +231,49 @@ class GraphLoader:
                 if not util.is_contained(self.img_bbox, xyz):
                     delete_nodes.add(i)
             graph.remove_nodes_from(delete_nodes)
+
+    def prune_branches(self, graph):
+        """
+        Prunes all short branches from "graph". A short branch is a path
+        between a leaf and branching node where the path length is less than
+        "self.prune_depth".
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be pruned.
+
+        Returns
+        -------
+        networkx.Graph
+            Graph with short branches pruned.
+
+        """
+        first_pass = True
+        deleted_nodes = list()
+        n_passes = 0
+        while len(deleted_nodes) > 0 or first_pass:
+            # Visit leafs
+            n_passes += 1
+            deleted_nodes = list()
+            for leaf in get_leafs(graph):
+                branch = [leaf]
+                length = 0
+                for (i, j) in nx.dfs_edges(graph, source=leaf):
+                    # Visit edge
+                    length += compute_dist(graph, i, j)
+                    if graph.degree(j) == 2:
+                        branch.append(j)
+                    elif graph.degree(j) > 2:
+                        deleted_nodes.extend(branch)
+                        graph.remove_nodes_from(branch)
+                        break
+
+                    # Check whether to stop
+                    if length > self.prune_depth or first_pass:
+                        graph.remove_nodes_from(branch[0:min(3, len(branch))])
+                        break
+            first_pass = False
 
     def get_component_irreducibles(self, graph, swc_dict):
         """
@@ -300,50 +343,6 @@ class GraphLoader:
             return irreducibles
         else:
             return False
-
-    def prune_branches(self, graph):
-        """
-        Prunes all short branches from "graph". A short branch is a path
-        between a leaf and branching node where the path length is less than
-        "self.prune_depth".
-
-        Parameters
-        ----------
-        graph : networkx.Graph
-            Graph to be pruned.
-
-        Returns
-        -------
-        networkx.Graph
-            Graph with short branches pruned.
-
-        """
-        first_pass = True
-        deleted_nodes = list()
-        n_passes = 0
-        while len(deleted_nodes) > 0 or first_pass:
-            # Visit leafs
-            n_passes += 1
-            deleted_nodes = list()
-            for leaf in get_leafs(graph):
-                branch = [leaf]
-                length = 0
-                for (i, j) in nx.dfs_edges(graph, source=leaf):
-                    # Visit edge
-                    length += compute_dist(graph, i, j)
-                    if graph.degree(j) == 2:
-                        branch.append(j)
-                    elif graph.degree(j) > 2:
-                        deleted_nodes.extend(branch)
-                        graph.remove_nodes_from(branch)
-                        break
-
-                    # Check whether to stop
-                    if length > self.prune_depth or first_pass:
-                        graph.remove_nodes_from(branch[0:min(5, len(branch))])
-                        break
-
-            first_pass = False
 
 
 # --- Utils ---
