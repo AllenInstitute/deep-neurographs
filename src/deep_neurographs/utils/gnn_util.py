@@ -25,7 +25,7 @@ def get_inputs(data, device=None, is_multimodal=False):
     x = data.x_dict
     edge_index = data.edge_index_dict
     edge_attr = data.edge_attr_dict
-    if device and torch.cuda.is_available():
+    if "cuda" in device and torch.cuda.is_available():
         return toGPU(x), toGPU(edge_index), toGPU(edge_attr)
     else:
         return x, edge_index, edge_attr
