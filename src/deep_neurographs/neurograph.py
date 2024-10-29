@@ -979,10 +979,7 @@ class NeuroGraph(nx.Graph):
                 if n_entries == 0:
                     swc_id = self.nodes[i]["swc_id"]
                     x, y, z = tuple(self.nodes[i]["xyz"])
-                    if self.nodes[i]["radius"] == 7.3141592:
-                        r = 6
-                    else:
-                        r = 2
+                    r = 6 if self.nodes[i]["radius"] == 7.3141592 else 2
 
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
@@ -1008,7 +1005,7 @@ class NeuroGraph(nx.Graph):
         idxs = np.arange(1, len(branch_xyz))
         for k in util.spaced_idxs(idxs, 6):
             x, y, z = tuple(branch_xyz[k])
-            r = 2  #branch_radius[k]
+            r = 6 if self.nodes[i]["radius"] == 7.3141592 else 2
 
             node_id = n_entries + 1
             parent = n_entries if k > 1 else parent
