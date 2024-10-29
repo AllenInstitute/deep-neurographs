@@ -232,6 +232,47 @@ class GraphLoader:
                     delete_nodes.add(i)
             graph.remove_nodes_from(delete_nodes)
 
+    def prune_branches(self, graph):
+        """
+        Prunes all short branches from "graph". A short branch is a path
+        between a leaf and branching node where the path length is less than
+        "self.prune_depth".
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be pruned.
+
+        Returns
+        -------
+        networkx.Graph
+            Graph with short branches pruned.
+
+        """
+        deleted_nodes = list()
+        n_passes = 0
+        while len(deleted_nodes) > 0 or n_passes < 3:
+            # Visit leafs
+            n_passes += 1
+            deleted_nodes = list()
+            for leaf in get_leafs(graph):
+                branch = [leaf]
+                length = 0
+                for (i, j) in nx.dfs_edges(graph, source=leaf):
+                    # Visit edge
+                    length += compute_dist(graph, i, j)
+                    if graph.degree(j) == 2:
+                        branch.append(j)
+                    elif graph.degree(j) > 2:
+                        deleted_nodes.extend(branch)
+                        graph.remove_nodes_from(branch)
+                        break
+
+                    # Check whether to stop
+                    if length > self.prune_depth or n_passes == 1:
+                        graph.remove_nodes_from(branch[0:min(3, len(branch))])
+                        break
+
     def get_component_irreducibles(self, graph, swc_dict):
         """
         Gets the irreducible components of "graph".
@@ -300,47 +341,6 @@ class GraphLoader:
             return irreducibles
         else:
             return False
-
-    def prune_branches(self, graph):
-        """
-        Prunes all short branches from "graph". A short branch is a path
-        between a leaf and branching node where the path length is less than
-        "self.prune_depth".
-
-        Parameters
-        ----------
-        graph : networkx.Graph
-            Graph to be pruned.
-
-        Returns
-        -------
-        networkx.Graph
-            Graph with short branches pruned.
-
-        """
-        deleted_nodes = list()
-        n_passes = 0
-        while len(deleted_nodes) > 0 or n_passes < 3:
-            # Visit leafs
-            n_passes += 1
-            deleted_nodes = list()
-            for leaf in get_leafs(graph):
-                branch = [leaf]
-                length = 0
-                for (i, j) in nx.dfs_edges(graph, source=leaf):
-                    # Visit edge
-                    length += compute_dist(graph, i, j)
-                    if graph.degree(j) == 2:
-                        branch.append(j)
-                    elif graph.degree(j) > 2:
-                        deleted_nodes.extend(branch)
-                        graph.remove_nodes_from(branch)
-                        break
-
-                    # Check whether to stop
-                    if length > self.prune_depth or n_passes == 1:
-                        graph.remove_nodes_from(branch[0:min(3, len(branch))])
-                        break
 
 
 # --- Utils ---
