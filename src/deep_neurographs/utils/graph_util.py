@@ -249,10 +249,9 @@ class GraphLoader:
             Graph with short branches pruned.
 
         """
-        first_pass = True
         deleted_nodes = list()
         n_passes = 0
-        while len(deleted_nodes) > 0 or first_pass:
+        while len(deleted_nodes) > 0 or n_passes < 3:
             # Visit leafs
             n_passes += 1
             deleted_nodes = list()
@@ -270,10 +269,9 @@ class GraphLoader:
                         break
 
                     # Check whether to stop
-                    if length > self.prune_depth or first_pass:
+                    if length > self.prune_depth or n_passes == 1:
                         graph.remove_nodes_from(branch[0:min(3, len(branch))])
                         break
-            first_pass = False
 
     def get_component_irreducibles(self, graph, swc_dict):
         """
