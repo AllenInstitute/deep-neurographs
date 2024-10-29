@@ -126,10 +126,15 @@ class GraphLoader:
         irreducibles = self.schedule_processes(swc_dicts)
 
         # Build FragmentsGraph
+        if self.progress_bar:
+            pbar = tqdm(total=len(irreducibles), desc="Combine Graphs")
+
         neurograph = NeuroGraph(node_spacing=self.node_spacing)
         while len(irreducibles):
             irreducible_set = irreducibles.pop()
             neurograph.add_component(irreducible_set)
+            if self.progress_bar:
+                pbar.update(1)
         return neurograph
 
     # --- Graph structure extraction ---
@@ -152,27 +157,26 @@ class GraphLoader:
             a connected component of the graph corresponding to "swc_dicts".
 
         """
+        # Initializations
+        if self.progress_bar:
+            pbar = tqdm(total=len(swc_dicts), desc="Extract Graphs")
+
+        # Main
         with ProcessPoolExecutor(max_workers=1) as executor:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
             while swc_dicts:
                 swc_dict = swc_dicts.pop()
-                processes[i] = executor.submit(
-                    self.get_irreducibles, swc_dict
-                )
+                processes[i] = executor.submit(self.get_irreducibles, swc_dict)
                 i += 1
 
             # Store results
             irreducibles = list()
-            if self.progress_bar:
-                with tqdm(total=len(processes), desc="Extract Graphs") as pbar:
-                    for process in as_completed(processes):
-                        irreducibles.extend(process.result())
-                        pbar.update(1)
-            else:
-                for process in as_completed(processes):
-                    irreducibles.extend(process.result())
+            for process in as_completed(processes):
+                irreducibles.extend(process.result())
+                if self.progress_bar:
+                    pbar.update(1)
         return irreducibles
 
     def get_irreducibles(self, swc_dict):
@@ -251,7 +255,7 @@ class GraphLoader:
         """
         deleted_nodes = list()
         n_passes = 0
-        while len(deleted_nodes) > 0 or n_passes < 3:
+        while len(deleted_nodes) > 0 or n_passes < 2:
             # Visit leafs
             n_passes += 1
             deleted_nodes = list()

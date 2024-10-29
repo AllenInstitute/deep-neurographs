@@ -217,11 +217,12 @@ class InferencePipeline:
             anisotropy=self.graph_config.anisotropy,
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,
+            progress_bar=True,
         )
         self.graph = graph_builder.run(fragments_pointer)
 
         # Remove doubles (if applicable)
-        n_curvy = fragment_filtering.remove_curvy(self.graph, 100)
+        n_curvy = fragment_filtering.remove_curvy(self.graph, 200)
         n_curvy = util.reformat_number(n_curvy)
         if self.graph_config.remove_doubles_bool:
             n_doubles = fragment_filtering.remove_doubles(
