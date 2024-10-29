@@ -642,8 +642,8 @@ def __add_attributes(swc_dict, graph):
 
     """
     attrs = dict()
-    for idx, node_id in enumerate(swc_dict["id"]):
-        attrs[node_id] = {
+    for idx, node in enumerate(swc_dict["id"]):
+        attrs[node] = {
             "xyz": swc_dict["xyz"][idx],
             "radius": swc_dict["radius"][idx],
         }
