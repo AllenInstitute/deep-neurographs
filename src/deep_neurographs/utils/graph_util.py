@@ -152,7 +152,7 @@ class GraphLoader:
             a connected component of the graph corresponding to "swc_dicts".
 
         """
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=1) as executor:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
@@ -318,10 +318,9 @@ class GraphLoader:
             Graph with short branches pruned.
 
         """
-        first_pass = True
         deleted_nodes = list()
         n_passes = 0
-        while len(deleted_nodes) > 0 or first_pass:
+        while len(deleted_nodes) > 0 or n_passes < 3:
             # Visit leafs
             n_passes += 1
             deleted_nodes = list()
@@ -339,11 +338,9 @@ class GraphLoader:
                         break
 
                     # Check whether to stop
-                    if length > self.prune_depth or first_pass:
+                    if length > self.prune_depth or n_passes == 1:
                         graph.remove_nodes_from(branch[0:min(3, len(branch))])
                         break
-
-            first_pass = False
 
 
 # --- Utils ---
