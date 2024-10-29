@@ -195,7 +195,7 @@ class GraphLoader:
         # Build dense graph
         swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
         graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
-        self.clip_branches(graph)
+        self.clip_branches(graph, swc_dict["swc_id"])
         self.prune_branches(graph)
 
         # Extract irreducibles
@@ -210,7 +210,7 @@ class GraphLoader:
                         irreducibles.append(result)
         return irreducibles
 
-    def clip_branches(self, graph):
+    def clip_branches(self, graph, swc_id):
         """
         Deletes all nodes from "graph" that are not contained in "img_bbox".
 

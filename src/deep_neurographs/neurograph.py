@@ -954,7 +954,7 @@ class NeuroGraph(nx.Graph):
         return path_length
 
     # --- write graph to swcs ---
-    def to_zipped_swcs(self, zip_path, color=None, min_size=100):
+    def to_zipped_swcs(self, zip_path, color=None, min_size=0):
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
             cnt = 0
             for nodes in nx.connected_components(self):

@@ -154,7 +154,7 @@ class HGAT(torch.nn.Module):
 
         # Input - Edges
         for key, f in self.input_edges.items():
-            key = reformat_edge_key(key)
+            #key = reformat_edge_key(key)
             edge_attr_dict[key] = f(edge_attr_dict[key])
         edge_attr_dict = self.activation(edge_attr_dict)
 
@@ -255,7 +255,6 @@ class MultiModalHGAT(HGAT):
 
 # --- Utils ---
 def reformat_edge_key(key):
-    print(key)
     return tuple([rm_non_alphanumeric(s) for s in key.split(",")])
 
 
