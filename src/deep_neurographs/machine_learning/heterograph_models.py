@@ -255,7 +255,7 @@ class MultiModalHGAT(HGAT):
 
 # --- Utils ---
 def reformat_edge_key(key):
-    if type(key) is str
+    if type(key) is str:
         return tuple([rm_non_alphanumeric(s) for s in key.split(",")])
     else:
         return key
