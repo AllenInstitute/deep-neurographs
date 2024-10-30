@@ -22,6 +22,7 @@ dependencies = [
     'more_itertools',
     'networkx',
     'plotly',
+    'scikit-image',
     'scikit-learn',
     'scipy',
     'tensorboard',
