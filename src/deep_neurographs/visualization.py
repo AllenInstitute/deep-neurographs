@@ -16,7 +16,7 @@ from plotly.subplots import make_subplots
 
 
 def visualize_connected_components(
-    graph, line_width=5, return_data=False, title=""
+    graph, line_width=3, return_data=False, title=""
 ):
     """
     Visualizes the connected components in "graph".
@@ -202,11 +202,15 @@ def plot_nodes(graph):
     )
 
 
-def plot_proposals(graph, proposals, color=None, line_width=3.5):
+def plot_proposals(graph, proposals, color=None, line_width=5):
+    # Set preferences
+    if color is None:
+        line = dict(width=line_width)
+    else:
+        line = dict(color=color, width=line_width)
+
+    # Add traces
     traces = []
-    line = (
-        dict(width=5) if color is None else dict(color=color, width=line_width)
-    )
     for p in proposals:
         xyz = graph.proposal_xyz(p)
         trace = go.Scatter3d(
@@ -221,7 +225,7 @@ def plot_proposals(graph, proposals, color=None, line_width=3.5):
     return traces
 
 
-def plot_edges(graph, edges, color=None, line_width=3.5):
+def plot_edges(graph, edges, color=None, line_width=3):
     traces = []
     line = (
         dict(width=5) if color is None else dict(color=color, width=line_width)

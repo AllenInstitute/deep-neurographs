@@ -133,7 +133,7 @@ class InferencePipeline:
 
         # Set output directory
         date = datetime.today().strftime("%Y-%m-%d")
-        self.output_dir = f"{output_dir}/{segmentation_id}-{date}"
+        self.output_dir = output_dir
         util.mkdir(self.output_dir, delete=True)
         if self.log_runtimes:
             log_path = os.path.join(self.output_dir, "runtimes.txt")
@@ -221,17 +221,7 @@ class InferencePipeline:
             prune_depth=self.graph_config.prune_depth,
         )
         self.graph = graph_builder.run(fragments_pointer)
-
-        # Filter fragments
-        n_curvy = fragment_filtering.remove_curvy(self.graph, 200)
-        n_curvy = util.reformat_number(n_curvy)
-        if self.graph_config.remove_doubles_bool:
-            n_doubles = fragment_filtering.remove_doubles(
-                self.graph, 200, self.graph_config.node_spacing
-            )
-            n_doubles = util.reformat_number(n_doubles)
-            self.report(f"# Double Fragments Deleted: {n_doubles}")
-        self.report(f"# Curvy Fragments Deleted: {n_curvy}")
+        self.filter_fragments()
 
         # Save valid labels and current graph
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
@@ -247,6 +237,20 @@ class InferencePipeline:
         # Report graph overview
         self.report("\nInitial Graph...")
         self.report_graph()
+
+    def filter_fragments(self):
+        # Filter curvy fragments
+        n_curvy = fragment_filtering.remove_curvy(self.graph, 200)
+        n_curvy = util.reformat_number(n_curvy)
+
+        # Filter doubles
+        if self.graph_config.remove_doubles_bool:
+            n_doubles = fragment_filtering.remove_doubles(
+                self.graph, 200, self.graph_config.node_spacing
+            )
+            n_doubles = util.reformat_number(n_doubles)
+            self.report(f"# Double Fragments Deleted: {n_doubles}")
+        self.report(f"# Curvy Fragments Deleted: {n_curvy}")
 
     def generate_proposals(self, radius=None):
         """
