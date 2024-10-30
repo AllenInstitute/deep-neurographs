@@ -715,8 +715,6 @@ class NeuroGraph(nx.Graph):
             self.upd_ids(swc_id, j if swc_id == swc_id_i else i)
             self.__add_edge((i, j), attrs, swc_id)
             self.proposals.remove(proposal)
-        else:
-            print("Skip! -- Failed Degree Check")
 
     def check_proposal_degrees(self, i, j):
         one_leaf = self.degree[i] == 1 or self.degree[j] == 1

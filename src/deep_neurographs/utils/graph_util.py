@@ -162,7 +162,7 @@ class GraphLoader:
             pbar = tqdm(total=len(swc_dicts), desc="Extract Graphs")
 
         # Main
-        with ProcessPoolExecutor(max_workers=1) as executor:
+        with ProcessPoolExecutor() as executor:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
@@ -273,8 +273,9 @@ class GraphLoader:
                         break
 
                     # Check whether to stop
-                    if length > self.prune_depth or n_passes == 1:
-                        graph.remove_nodes_from(branch[0:min(3, len(branch))])
+                    if length > self.prune_depth:
+                        if n_passes == 1:
+                            graph.remove_nodes_from(branch[0:min(3, len(branch))])
                         break
 
     def get_component_irreducibles(self, graph, swc_dict):
