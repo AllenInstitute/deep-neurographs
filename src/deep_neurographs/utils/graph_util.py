@@ -305,6 +305,7 @@ class GraphLoader:
         root = None
         total_length = 0
         branch_length = 0
+        print("Line 308 -", leafs)
         for (i, j) in nx.dfs_edges(graph, source=util.sample_once(leafs)):
             # Check if starting new or continuing current path
             if root is None:
