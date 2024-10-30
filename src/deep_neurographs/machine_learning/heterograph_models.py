@@ -59,7 +59,6 @@ class HGAT(torch.nn.Module):
 
         self.input_edges = nn.ModuleDict()
         for key, d in edge_dict.items():
-            key = str(key)
             self.input_edges[str(key)] = nn.Linear(d, hidden_dim, device=device)
 
         # Layer dimensions
@@ -256,7 +255,10 @@ class MultiModalHGAT(HGAT):
 
 # --- Utils ---
 def reformat_edge_key(key):
-    return tuple([rm_non_alphanumeric(s) for s in key.split(",")])
+    if type(key) is str
+        return tuple([rm_non_alphanumeric(s) for s in key.split(",")])
+    else:
+        return key
 
 
 def rm_non_alphanumeric(s):
