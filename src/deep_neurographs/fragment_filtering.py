@@ -25,7 +25,7 @@ QUERY_DIST = 15
 def remove_curvy(graph, max_length, ratio=0.5):
     deleted_ids = set()
     components = [c for c in connected_components(graph) if len(c) == 2]
-    for nodes in tqdm(components, desc="Curvy Fragment Filtering"):
+    for nodes in tqdm(components, desc="Filter Curvy Fragment"):
         if len(nodes) == 2:
             i, j = tuple(nodes)
             length = graph.edges[i, j]["length"]
@@ -67,7 +67,7 @@ def remove_doubles(graph, max_length, node_spacing, output_dir=None):
         util.mkdir(output_dir, delete=True)
 
     # Main
-    desc = "Doubled Fragment Filtering"
+    desc = "Filter Doubled Fragment"
     for idx in tqdm(np.argsort([len(c) for c in components]), desc=desc):
         i, j = tuple(components[idx])
         swc_id = graph.nodes[i]["swc_id"]

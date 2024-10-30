@@ -172,7 +172,7 @@ class Reader:
         with ProcessPoolExecutor() as executor:
             # Assign processes
             processes = list()
-            for path in tqdm(zip_paths, desc="Downloading SWCs"):
+            for path in tqdm(zip_paths, desc="Download SWCs"):
                 zip_content = bucket.blob(path).download_as_bytes()
                 processes.append(
                     executor.submit(self.load_from_cloud_zip, zip_content)

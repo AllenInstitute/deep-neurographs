@@ -59,6 +59,7 @@ class HGAT(torch.nn.Module):
 
         self.input_edges = nn.ModuleDict()
         for key, d in edge_dict.items():
+            key = str(key)
             self.input_edges[str(key)] = nn.Linear(d, hidden_dim, device=device)
 
         # Layer dimensions
@@ -154,7 +155,7 @@ class HGAT(torch.nn.Module):
 
         # Input - Edges
         for key, f in self.input_edges.items():
-            #key = reformat_edge_key(key)
+            key = reformat_edge_key(key)
             edge_attr_dict[key] = f(edge_attr_dict[key])
         edge_attr_dict = self.activation(edge_attr_dict)
 
