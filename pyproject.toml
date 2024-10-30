@@ -19,6 +19,7 @@ dynamic = ["version"]
 dependencies = [
     'boto3',
     'fastremap',
+    'google-cloud-storage',
     'more_itertools',
     'networkx',
     'plotly',
