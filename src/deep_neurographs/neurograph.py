@@ -1003,7 +1003,7 @@ class NeuroGraph(nx.Graph):
         idxs = np.arange(1, len(branch_xyz))
         for k in util.spaced_idxs(idxs, 6):
             x, y, z = tuple(branch_xyz[k])
-            r = 6 if self.nodes[i]["radius"] == 7.3141592 else 2
+            r = 6 if branch_radius[k] == 7.3141592 else 2
 
             node_id = n_entries + 1
             parent = n_entries if k > 1 else parent
