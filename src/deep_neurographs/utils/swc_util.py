@@ -239,7 +239,7 @@ class Reader:
 
         """
         content = util.read_zip(zip_file, path).splitlines()
-        if len(content) > self.min_size:
+        if len(content) > self.min_size - 10:
             result = self.parse(content)
             result["swc_id"] = util.get_swc_id(path)
             return result
