@@ -477,10 +477,7 @@ def sample_once(my_container):
     sample
 
     """
-    if type(my_container) is list:
-        return sample(my_container, 1)[0]
-    else:
-        return sample(list(my_container), 1)[0]
+    return sample(my_container, 1)[0]
 
 
 # --- dictionary utils ---
