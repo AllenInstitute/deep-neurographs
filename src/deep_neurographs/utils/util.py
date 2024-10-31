@@ -10,6 +10,7 @@ General helper routines for various tasks.
 
 import json
 import math
+import networkx as nx
 import os
 import shutil
 from io import BytesIO
@@ -21,6 +22,7 @@ import numpy as np
 import psutil
 from google.cloud import storage
 
+from deep_neurographs.utils import graph_util as gutil, swc_util
 
 # --- os utils ---
 def mkdir(path, delete=False):
@@ -537,6 +539,28 @@ def find_best(my_dict, maximize=True):
 
 
 # --- miscellaneous ---
+def count_fragments(fragments_pointer, min_size=0):
+    """
+    Counts the number of fragments in a given predicted segmentation.
+
+    Parameters
+    ----------
+    swc_pointer : dict, list, str
+        Object that points to swcs to be read, see class documentation for
+        details.
+    min_size : float, optional
+
+    """
+    # Extract fragments
+    graph_loader = gutil.GraphLoader(min_size=min_size, progress_bar=True)
+    graph = graph_loader.run(fragments_pointer)
+
+    # Report results
+    print("# Connected Components:", nx.number_connected_components(graph))
+    print("# Nodes:", graph.number_of_nodes())
+    print("# Edges:", graph.number_of_edges())
+
+
 def time_writer(t, unit="seconds"):
     """
     Converts a runtime "t" to a larger unit of time if applicable.
