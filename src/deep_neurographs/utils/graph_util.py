@@ -37,7 +37,7 @@ from deep_neurographs.utils import img_util, swc_util, util
 MIN_SIZE = 30
 NODE_SPACING = 1
 SMOOTH_BOOL = True
-PRUNE_DEPTH = 20
+PRUNE_DEPTH = 16
 
 
 class GraphLoader:

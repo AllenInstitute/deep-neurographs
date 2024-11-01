@@ -20,7 +20,8 @@ from scipy.spatial import KDTree
 
 from deep_neurographs import generate_proposals, geometry
 from deep_neurographs.groundtruth_generation import init_targets
-from deep_neurographs.utils import graph_util as gutil, img_util, util
+from deep_neurographs.utils import graph_util as gutil
+from deep_neurographs.utils import img_util, util
 
 
 class NeuroGraph(nx.Graph):
