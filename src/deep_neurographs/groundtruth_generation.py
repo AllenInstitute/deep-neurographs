@@ -15,7 +15,6 @@ import networkx as nx
 import numpy as np
 
 from deep_neurographs import geometry
-from deep_neurographs.geometry import dist as get_dist
 from deep_neurographs.utils import util
 
 ALIGNED_THRESHOLD = 4.5
@@ -141,7 +140,7 @@ def is_component_aligned(target_graph, pred_graph, nodes, kdtree):
         for xyz in pred_graph.edges[edge]["xyz"]:
             hat_xyz = geometry.kdtree_query(kdtree, xyz)
             hat_swc_id = target_graph.xyz_to_swc(hat_xyz)
-            d = get_dist(hat_xyz, xyz)
+            d = geometry.dist(hat_xyz, xyz)
             dists[hat_swc_id].append(d)
 
     # Deterine whether aligned

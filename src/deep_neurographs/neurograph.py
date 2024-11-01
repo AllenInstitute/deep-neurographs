@@ -9,9 +9,7 @@ Implementation of subclass of Networkx.Graph called "FragmentsGraph".
 NOTE: SAVE LABEL UPDATES --- THERE IS A BUG IN FEATURE GENERATION
 
 """
-import os
 import zipfile
-from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from io import StringIO
 
@@ -21,10 +19,8 @@ from numpy import concatenate
 from scipy.spatial import KDTree
 
 from deep_neurographs import generate_proposals, geometry
-from deep_neurographs.geometry import dist as get_dist
 from deep_neurographs.groundtruth_generation import init_targets
-from deep_neurographs.utils import graph_util as gutil
-from deep_neurographs.utils import img_util, swc_util, util
+from deep_neurographs.utils import graph_util as gutil, img_util, util
 
 
 class NeuroGraph(nx.Graph):
@@ -808,7 +804,7 @@ class NeuroGraph(nx.Graph):
             Euclidean distance between nodes "i" and "j".
 
         """
-        return get_dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
+        return geometry.dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
     def branches(self, i, ignore_reducibles=True, key="xyz"):
         branches = list()

@@ -132,7 +132,6 @@ class InferencePipeline:
         )
 
         # Set output directory
-        date = datetime.today().strftime("%Y-%m-%d")
         self.output_dir = output_dir
         util.mkdir(self.output_dir, delete=True)
         if self.log_runtimes:

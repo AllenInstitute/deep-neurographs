@@ -10,7 +10,6 @@ General helper routines for various tasks.
 
 import json
 import math
-import networkx as nx
 import os
 import shutil
 from io import BytesIO
@@ -18,11 +17,13 @@ from random import sample
 from zipfile import ZipFile
 
 import boto3
+import networkx as nx
 import numpy as np
 import psutil
 from google.cloud import storage
 
-from deep_neurographs.utils import graph_util as gutil, swc_util
+from deep_neurographs.utils import graph_util as gutil
+
 
 # --- os utils ---
 def mkdir(path, delete=False):
