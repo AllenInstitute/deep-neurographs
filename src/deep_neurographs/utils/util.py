@@ -560,6 +560,7 @@ def count_fragments(fragments_pointer, min_size=0):
     print("# Connected Components:", nx.number_connected_components(graph))
     print("# Nodes:", graph.number_of_nodes())
     print("# Edges:", graph.number_of_edges())
+    del graph
 
 
 def time_writer(t, unit="seconds"):
@@ -649,7 +650,7 @@ def reformat_number(number):
 
 def get_memory_usage():
     """
-    Gets the current memory usage.
+    Gets the current memory usage in gigabytes.
 
     Parameters
     ----------
@@ -658,10 +659,27 @@ def get_memory_usage():
     Returns
     -------
     float
-        Current memory usage.
+        Current memory usage in gigabytes.
 
     """
     return psutil.virtual_memory().used / 1e9
+
+
+def get_memory_available():
+    """
+    Gets the available memory in gigabytes.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    float
+        Available memory usage in gigabytes.
+
+    """
+    return psutil.virtual_memory().available / 1e9
 
 
 def spaced_idxs(container, k):

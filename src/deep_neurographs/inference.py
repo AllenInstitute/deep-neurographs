@@ -70,6 +70,8 @@ class InferencePipeline:
         is_multimodal=False,
         label_path=None,
         log_runtimes=True,
+        save_to_s3_bool=False,
+        s3_dict=None,
     ):
         """
         Initializes an object that executes the full GraphTrace inference
@@ -101,6 +103,10 @@ class InferencePipeline:
             default is None.
         log_runtimes : bool, optional
             Indication of whether to log runtimes. The default is True.
+        save_to_s3_bool : bool, optional
+            Indication of whether to save result to s3. The default is False.
+        s3_dict : dict, optional
+            ...
 
         Returns
         -------
@@ -113,6 +119,8 @@ class InferencePipeline:
         self.model_path = model_path
         self.sample_id = sample_id
         self.segmentation_id = segmentation_id
+        self.save_to_s3_bool = save_to_s3_bool
+        self.s3_dict = s3_dict
 
         # Extract config settings
         self.graph_config = config.graph_config
@@ -330,12 +338,44 @@ class InferencePipeline:
         None
 
         """
+        # Save result locally
         suffix = f"-{round_id}" if round_id else ""
         filename = f"corrected-processed-swcs{suffix}.zip"
         path = os.path.join(self.output_dir, filename)
         self.graph.to_zipped_swcs(path)
         self.save_connections(round_id=round_id)
         self.write_metadata()
+
+        # Save result on s3
+        if self.save_to_s3_bool:
+            self.save_to_s3()
+
+    def save_to_s3(self):
+        """
+        Saves a corrected swc files to s3 along with metadata and runtimes.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        # Initializations
+        bucket_name = self.s3_dict["bucket_name"]
+        date = datetime.today().strftime("%Y%m%d")
+        subdir_name = f"/corrected_{self.sample_id}_{self.segmentation_id}_{date}"
+        prefix = self.s3_dict["prefix"] + subdir_name
+
+        # Move result files
+        for filename in os.listdir(self.output_dir):
+            if filename != "processed-swcs.zip":
+                local_path = os.path.join(self.output_dir, filename)
+                s3_path = os.path.join(prefix, filename)
+                util.write_to_s3(local_path, bucket_name, s3_path)
+        print("Results written to S3 prefix -->", prefix)
 
     # --- io ---
     def save_connections(self, round_id=None):
