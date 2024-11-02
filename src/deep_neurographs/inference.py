@@ -342,7 +342,7 @@ class InferencePipeline:
         suffix = f"-{round_id}" if round_id else ""
         filename = f"corrected-processed-swcs{suffix}.zip"
         path = os.path.join(self.output_dir, filename)
-        self.graph.to_zipped_swcs(path)
+        self.graph.to_zipped_swcs(path, min_size=200)
         self.save_connections(round_id=round_id)
         self.write_metadata()
 
@@ -363,17 +363,11 @@ class InferencePipeline:
         None
 
         """
-        # Initializations
         bucket_name = self.s3_dict["bucket_name"]
-        date = datetime.today().strftime("%Y%m%d")
-        subdir_name = f"/corrected_{self.sample_id}_{self.segmentation_id}_{date}"
-        prefix = self.s3_dict["prefix"] + subdir_name
-
-        # Move result files
         for filename in os.listdir(self.output_dir):
             if filename != "processed-swcs.zip":
                 local_path = os.path.join(self.output_dir, filename)
-                s3_path = os.path.join(prefix, filename)
+                s3_path = os.path.join(self.s3_dict["prefix"], filename)
                 util.write_to_s3(local_path, bucket_name, s3_path)
         print("Results written to S3 prefix -->", prefix)
 
