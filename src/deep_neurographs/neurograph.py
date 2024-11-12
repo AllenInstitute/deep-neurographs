@@ -18,13 +18,12 @@ import numpy as np
 from numpy import concatenate
 from scipy.spatial import KDTree
 
-from deep_neurographs import generate_proposals, geometry
+from deep_neurographs import generate_proposals, geometry, utils
 from deep_neurographs.groundtruth_generation import init_targets
-from deep_neurographs.utils import graph_util as gutil
 from deep_neurographs.utils import img_util, util
 
 
-class NeuroGraph(nx.Graph):
+class FragmentsGraph(nx.Graph):
     """
     A class of graphs whose nodes correspond to irreducible nodes from the
     predicted swc files.
@@ -48,7 +47,7 @@ class NeuroGraph(nx.Graph):
         None
 
         """
-        super(NeuroGraph, self).__init__()
+        super(FragmentsGraph, self).__init__()
         # General class attributes
         self.leaf_kdtree = None
         self.node_cnt = 0
@@ -97,7 +96,7 @@ class NeuroGraph(nx.Graph):
         None
 
         """
-        for i in gutil.largest_components(self, k):
+        for i in utils.graph_util.largest_components(self, k):
             self.soma_ids[self.nodes[i]["swc_id"]] = i
 
     def get_leafs(self):
