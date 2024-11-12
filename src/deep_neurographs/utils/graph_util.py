@@ -5,7 +5,7 @@ Created on Wed June 5 16:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 
-Routines for loading fragments and building a neurograph.
+Routines for loading fragments and building a fragments_graph.
 
 
 Terminology
@@ -31,7 +31,6 @@ import numpy as np
 from tqdm import tqdm
 
 from deep_neurographs import geometry
-from deep_neurographs.neurograph import NeuroGraph
 from deep_neurographs.utils import img_util, swc_util, util
 
 MIN_SIZE = 30
@@ -82,8 +81,7 @@ class GraphLoader:
 
         Returns
         -------
-        FragmentsGraph
-            FragmentsGraph generated from swc files.
+        None
 
         """
         self.anisotropy = anisotropy
@@ -120,6 +118,8 @@ class GraphLoader:
             FragmentsGraph generated from swc files.
 
         """
+        from deep_neurographs.neurograph import FragmentsGraph
+
         # Load fragments and extract irreducibles
         self.img_bbox = img_util.init_bbox(img_patch_origin, img_patch_shape)
         swc_dicts = self.reader.load(fragments_pointer)
@@ -129,13 +129,13 @@ class GraphLoader:
         if self.progress_bar:
             pbar = tqdm(total=len(irreducibles), desc="Combine Graphs")
 
-        neurograph = NeuroGraph(node_spacing=self.node_spacing)
+        fragments_graph = FragmentsGraph(node_spacing=self.node_spacing)
         while len(irreducibles):
             irreducible_set = irreducibles.pop()
-            neurograph.add_component(irreducible_set)
+            fragments_graph.add_component(irreducible_set)
             if self.progress_bar:
                 pbar.update(1)
-        return neurograph
+        return fragments_graph
 
     # --- Graph structure extraction ---
     def schedule_processes(self, swc_dicts):
@@ -645,7 +645,8 @@ def compute_dist(graph, i, j):
 
     Returns
     -------
-    Euclidean distance between i and j.
+    float
+        Euclidean distance between i and j.
 
     """
     return geometry.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
@@ -686,6 +687,7 @@ def get_leafs(graph):
     -------
     list
         Leaf nodes "graph".
+
     """
     return [i for i in graph.nodes if graph.degree[i] == 1]
 
@@ -746,20 +748,21 @@ def count_components(graph):
         Graph to be searched.
 
     Returns
-    -------
-    Number of connected components.
+    -------'
+    int
+        Number of connected components.
 
     """
     return nx.number_connected_components(graph)
 
 
-def largest_components(neurograph, k):
+def largest_components(graph, k):
     """
-    Finds the "k" largest connected components in "neurograph".
+    Finds the "k" largest connected components in "graph".
 
     Parameters
     ----------
-    neurograph : NeuroGraph
+    graph : nx.Graph
         Graph to be searched.
     k : int
         Number of largest connected components to return.
@@ -773,7 +776,7 @@ def largest_components(neurograph, k):
     """
     component_cardinalities = k * [-1]
     node_ids = k * [-1]
-    for nodes in nx.connected_components(neurograph):
+    for nodes in nx.connected_components(graph):
         if len(nodes) > component_cardinalities[-1]:
             i = 0
             while i < k:

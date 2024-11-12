@@ -16,7 +16,7 @@ from plotly.subplots import make_subplots
 
 
 def visualize_connected_components(
-    graph, line_width=3, return_data=False, title=""
+    graph, width=3, return_data=False, title=""
 ):
     """
     Visualizes the connected components in "graph".
@@ -25,8 +25,8 @@ def visualize_connected_components(
     ----------
     graph : networkx.Graph
         Graph to be visualized.
-    line_width : int, optional
-        Line width used to plot "subset". The default is 5.
+    width : int, optional
+        Line width used to plot edges in "subset". The default is 5.
     return_data : bool, optional
         Indication of whether to return data object that is used to generate
         plot. The default is False.
@@ -50,7 +50,7 @@ def visualize_connected_components(
             color = colors[cnt % len(colors)]
             data.extend(
                 plot_edges(
-                    graph, subgraph.edges, color=color, line_width=line_width
+                    graph, subgraph.edges, color=color, width=width
                 )
             )
             cnt += 1
@@ -85,16 +85,18 @@ def visualize_graph(graph, title=""):
     plot(data, title)
 
 
-def visualize_proposals(graph, target_graph=None, title="Proposals"):
+def visualize_proposals(
+    graph, color=None, groundtruth_graph=None, title="Proposals"
+):
     """
-    Visualizes a graph with proposals.
+    Visualizes a graph and its proposals.
 
     Parameters
     ----------
     graph : networkx.Graph
         Graph to be visualized.
-    target_graph : networkx.Graph, optional
-        Graph generated from ground truth tracings. The default is None.
+    groundtruth_graph : networkx.Graph, optional
+        Graph generated from groundtruth tracings. The default is None.
     title : str, optional
         Title of the plot. Default is "Proposals".
 
@@ -106,24 +108,25 @@ def visualize_proposals(graph, target_graph=None, title="Proposals"):
     visualize_subset(
         graph,
         graph.proposals,
+        color=color,
         proposal_subset=True,
-        target_graph=target_graph,
+        groundtruth_graph=groundtruth_graph,
         title=title,
     )
 
 
-def visualize_targets(
-    graph, target_graph=None, title="Ground Truth - Accepted Proposals"
+def visualize_groundtruth(
+    graph, groundtruth_graph=None, title="Ground Truth - Accepted Proposals"
 ):
     """
-    Visualizes a graph and its ground truth accept proposals.
+    Visualizes a graph and its groundtruth accepted proposals.
 
     Parameters
     ----------
     graph : networkx.Graph
         Graph to be visualized.
-    target_graph : networkx.Graph, optional
-        Graph generated from ground truth tracings. The default is None.
+    groundtruth_graph : networkx.Graph, optional
+        Graph generated from groundtruth tracings. The default is None.
     title : str, optional
         Title of the plot. Default is "Ground Truth - Accepted Proposals".
 
@@ -136,7 +139,7 @@ def visualize_targets(
         graph,
         graph.target_edges,
         proposal_subset=True,
-        target_graph=target_graph,
+        groundtruth_graph=groundtruth_graph,
         title=title,
     )
 
@@ -144,9 +147,10 @@ def visualize_targets(
 def visualize_subset(
     graph,
     subset,
-    line_width=5,
+    color=None,
+    width=5,
     proposal_subset=False,
-    target_graph=None,
+    groundtruth_graph=None,
     title="",
 ):
     """
@@ -158,12 +162,12 @@ def visualize_subset(
         Graph to be visualized.
     subset : container
         Subset of edges or proposals to be visualized.
-    line_width : int, optional
+    width : int, optional
         Line width used to plot "subset". The default is 5.
     proposals_subset : bool, optional
         Indication of whether "subset" is a subset of proposals. The default
         is False.
-    target_graph : networkx.Graph, optional
+    groundtruth_graph : networkx.Graph, optional
         Graph generated from ground truth tracings. The default is None.
     title : str, optional
         Title of the plot. Default is "Proposals".
@@ -177,13 +181,15 @@ def visualize_subset(
     data = plot_edges(graph, graph.edges, color="black")
     data.append(plot_nodes(graph))
     if proposal_subset:
-        data.extend(plot_proposals(graph, subset, line_width=line_width))
+        data.extend(
+            plot_proposals(graph, subset, color=color, width=width)
+        )
     else:
-        data.extend(plot_edges(graph, subset, line_width=line_width))
+        data.extend(plot_edges(graph, subset, width=width))
 
     # Add target graph (if applicable)
-    if target_graph:
-        cc = visualize_connected_components(target_graph, return_data=True)
+    if groundtruth_graph:
+        cc = visualize_connected_components(groundtruth_graph, return_data=True)
         data.extend(cc)
     plot(data, title)
 
@@ -202,12 +208,12 @@ def plot_nodes(graph):
     )
 
 
-def plot_proposals(graph, proposals, color=None, line_width=5):
+def plot_proposals(graph, proposals, color=None, width=5):
     # Set preferences
     if color is None:
-        line = dict(width=line_width)
+        line = dict(width=width)
     else:
-        line = dict(color=color, width=line_width)
+        line = dict(color=color, width=width)
 
     # Add traces
     traces = []
@@ -225,10 +231,10 @@ def plot_proposals(graph, proposals, color=None, line_width=5):
     return traces
 
 
-def plot_edges(graph, edges, color=None, line_width=3):
+def plot_edges(graph, edges, color=None, width=3):
     traces = []
     line = (
-        dict(width=5) if color is None else dict(color=color, width=line_width)
+        dict(width=5) if color is None else dict(color=color, width=width)
     )
     for i, j in edges:
         trace = go.Scatter3d(
