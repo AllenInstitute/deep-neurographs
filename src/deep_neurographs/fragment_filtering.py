@@ -10,10 +10,10 @@ other from a FragmentsGraph.
 """
 
 from collections import defaultdict
-from tqdm import tqdm
 
 import networkx as nx
 import numpy as np
+from tqdm import tqdm
 
 from deep_neurographs import geometry
 
