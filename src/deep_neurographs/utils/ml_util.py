@@ -34,7 +34,12 @@ def load_model(path):
     ...
 
     """
-    return joblib.load(path) if ".joblib" in path else torch.load(path)
+    if ".joblib" in path:
+        model = joblib.load(path)
+    else:
+        model = torch.load(path)
+        model.eval()
+    return model
 
 
 def save_model(path, model, model_type):
@@ -62,7 +67,7 @@ def save_model(path, model, model_type):
 
 # --- dataset utils ---
 def init_dataset(
-    neurograph,
+    fragments_graph,
     features,
     is_gnn=True,
     is_multimodal=False,
@@ -70,14 +75,14 @@ def init_dataset(
 ):
     """
     Initializes a dataset given features generated from some set of proposals
-    and neurograph.
+    and fragments_graph.
 
     Parameters
     ----------
-    neurograph : NeuroGraph
+    fragments_graph : FragmentsGraph
         Graph that "features" were generated from.
     features : dict
-        Feaures generated from some set of proposals and "neurograph".
+        Feaures generated from some set of proposals and "fragments_graph".
     model_type : str
         Type of machine learning model used to perform inference.
     computation_graph : networkx.Graph, optional
@@ -93,10 +98,10 @@ def init_dataset(
     if is_gnn:
         assert computation_graph is not None, "Must input computation graph!"
         dataset = heterograph_datasets.init(
-            neurograph, features, computation_graph
+            fragments_graph, features, computation_graph
         )
     else:
-        dataset = datasets.init(neurograph, features)
+        dataset = datasets.init(fragments_graph, features)
     return dataset
 
 
