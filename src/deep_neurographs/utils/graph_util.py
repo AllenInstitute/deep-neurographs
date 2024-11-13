@@ -118,7 +118,7 @@ class GraphLoader:
             FragmentsGraph generated from swc files.
 
         """
-        from deep_neurographs.neurograph import FragmentsGraph
+        from deep_neurographs.fragments_graph import FragmentsGraph
 
         # Load fragments and extract irreducibles
         self.img_bbox = img_util.init_bbox(img_patch_origin, img_patch_shape)
