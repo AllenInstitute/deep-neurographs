@@ -369,7 +369,7 @@ class InferencePipeline:
                 local_path = os.path.join(self.output_dir, filename)
                 s3_path = os.path.join(self.s3_dict["prefix"], filename)
                 util.write_to_s3(local_path, bucket_name, s3_path)
-        print("Results written to S3 prefix -->", prefix)
+        print("Results written to S3 prefix -->", self.s3_dict["prefix"])
 
     # --- io ---
     def save_connections(self, round_id=None):
@@ -529,9 +529,8 @@ class InferenceEngine:
 
         # Model
         self.model = ml_util.load_model(model_path)
-        if self.is_gnn:
+        if self.is_gnn and "cuda" in device:
             self.model = self.model.to(self.device)
-            self.model.eval()
 
     def run(self, neurograph, proposals):
         """
@@ -638,9 +637,9 @@ class InferenceEngine:
 
         Parameters
         ----------
-        data : ...
-            Dataset on which the model inference is to be run.
-
+        data : HeteroGeneousDataset
+            Dataset containing graph information, including feature matrices
+            and other relevant attributes needed for GNN input.
         Returns
         -------
         dict
@@ -650,16 +649,7 @@ class InferenceEngine:
         """
         # Get predictions
         if self.is_gnn:
-            with torch.no_grad():
-                # Get inputs
-                n = len(dataset.data["proposal"]["y"])
-                x, edge_index, edge_attr = gnn_util.get_inputs(
-                    dataset.data, device=self.device
-                )
-
-                # Run model
-                preds = sigmoid(self.model(x, edge_index, edge_attr))
-                preds = toCPU(preds[0:n, 0])
+            preds = predict_with_gnn(self.model, dataset.data, self.device)
         else:
             preds = np.array(self.model.predict_proba(dataset.data.x)[:, 1])
 
@@ -669,6 +659,38 @@ class InferenceEngine:
 
 
 # --- Accepting Proposals ---
+def predict_with_gnn(model, data, device=None):
+    """
+    Generates predictions using a Graph Neural Network (GNN) on the given
+    dataset.
+
+    Parameters:
+    ----------
+    model : torch.nn.Module
+        GNN model used to generate predictions. It should accept node
+        features, edge indices, and edge attributes as input and output
+        predictions.
+    data : dict
+        Dataset containing graph information, including feature matrices
+        and other relevant attributes needed for GNN input.
+    device : str, optional
+        The device (CPU or GPU) on which the prediction will be run. The
+        default is None.
+
+    Returns:
+    -------
+    torch.Tensor
+        A tensor of predictions, converted to CPU, for the 'proposal' entries
+        in the dataset. Only the relevant predictions for 'proposal' nodes are
+        returned.
+
+    """
+    with torch.no_grad():
+        x, edge_index, edge_attr = gnn_util.get_inputs(data, device)
+        preds = sigmoid(model(x, edge_index, edge_attr))
+    return toCPU(preds[0:len(data["proposal"]["y"]), 0])
+
+
 def get_accepts(neurograph, preds, threshold, high_threshold=0.9):
     """
     Determines which proposals to accept based on prediction scores and the
