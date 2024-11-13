@@ -66,7 +66,7 @@ class InferencePipeline:
         model_path,
         output_dir,
         config,
-        device=None,
+        device="cpu",
         is_multimodal=False,
         label_path=None,
         log_runtimes=True,
