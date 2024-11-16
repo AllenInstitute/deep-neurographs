@@ -388,7 +388,7 @@ def write_list(path, entry_list, color=None):
         if color is not None:
             f.write("# COLOR " + color)
         else:
-            f.write("# id, type, z, y, x, r, pid")
+            f.write("# id, type, x, y, z, r, pid")
 
         # Entries
         for i, entry in enumerate(entry_list):
@@ -449,7 +449,7 @@ def write_graph(path, graph, color=None):
     write_list(path, entry_list)
 
 
-def save_point(path, xyz, color=None):
+def save_point(path, xyz, radius=5, color=None):
     """
     Writes an swc file.
 
@@ -457,8 +457,10 @@ def save_point(path, xyz, color=None):
     ----------
     path : str
         Path on local machine that swc file will be written to.
-    entry_list : list[list]
-        List of entries that will be written to an swc file.
+    xyz : ArrayLike
+        xyz coordinate to be written to an swc file.
+    radius : float, optional
+        Radius of point. The default is 5um.
     color : str, optional
         Color of nodes. The default is None.
 
@@ -472,23 +474,25 @@ def save_point(path, xyz, color=None):
         if color is not None:
             f.write("# COLOR " + color)
         else:
-            f.write("# id, type, z, y, x, r, pid")
+            f.write("# id, type, x, y, z, r, pid")
         f.write("\n")
 
         # Entries
-        f.write(make_simple_entry(1, -1, xyz))
+        f.write(make_simple_entry(1, -1, xyz, radius=radius))
 
 
-def save_edge(path, xyz_1, xyz_2, color=None, radius=6):
+def save_edge(path, xyz_1, xyz_2, color=None, radius=5):
     """
-    Writes an swc file.
+    Writes the line segment formed by "xyz_1" and "xyz_2" to an swc file.
 
     Parameters
     ----------
     path : str
         Path on local machine that swc file will be written to.
-    entry_list : list[list]
-        List of entries to be written to an swc file.
+    xyz_1 : ArrayLike
+        xyz coordinate to be written to an swc file.
+    xyz_2 : ArrayLike
+        xyz coordinate to be written to an swc file.
     color : str, optional
         Color of nodes. The default is None.
 
@@ -502,7 +506,7 @@ def save_edge(path, xyz_1, xyz_2, color=None, radius=6):
         if color is not None:
             f.write("# COLOR " + color)
         else:
-            f.write("# id, type, z, y, x, r, pid")
+            f.write("# id, type, x, y, z, r, pid")
         f.write("\n")
 
         # Entries
@@ -562,7 +566,7 @@ def set_radius(graph, i):
     return radius
 
 
-def make_simple_entry(node, parent, xyz, radius=8):
+def make_simple_entry(node, parent, xyz, radius=5):
     """
     Makes an entry to be written in an swc file.
 
