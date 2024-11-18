@@ -312,7 +312,7 @@ def query_ball(kdtree, xyz, radius):
         target coordinate.
 
     """
-    idxs = kdtree.query_ball_point(xyz, radius, return_sorted=True)
+    idxs = kdtree.query_ball_point(xyz, radius)
     return kdtree.data[idxs]
 
 
