@@ -200,7 +200,7 @@ class GraphLoader:
         # Extract irreducibles
         irreducibles = list()
         path_length = compute_path_length(graph)
-        if path_length > min_size and graph.number_of_nodes() > 1:
+        if path_length > self.min_size and graph.number_of_nodes() > 1:
             for nodes in nx.connected_components(graph):
                 if len(nodes) > 1:
                     result = self.get_component_irreducibles(
@@ -306,10 +306,11 @@ class GraphLoader:
                 root = i
                 branch_length = 0
                 attrs = init_edge_attrs(swc_dict, root)
-            else:
-                xyz_i = swc_dict["xyz"][swc_dict["idx"][i]]
-                xyz_j = swc_dict["xyz"][swc_dict["idx"][j]]
-                branch_length += geometry.dist(xyz_i, xyz_j)
+
+            # Vist i
+            xyz_i = swc_dict["xyz"][swc_dict["idx"][i]]
+            xyz_j = swc_dict["xyz"][swc_dict["idx"][j]]
+            branch_length += geometry.dist(xyz_i, xyz_j)
 
             # Visit j
             attrs = upd_edge_attrs(swc_dict, attrs, j)
@@ -621,7 +622,7 @@ def upd_node_attrs(swc_dict, leafs, branchings, i):
     return leafs, branchings
 
 
-def compute_path_length(self, graph):
+def compute_path_length(graph):
     path_length = 0
     for i, j in nx.dfs_edges(graph):
         path_length += compute_dist(graph, i, j)
