@@ -148,6 +148,38 @@ class Reader:
         else:
             return False
 
+    def load_from_local_zip(self, zip_path):
+        """
+        Reads swc files from zip on the local machine, then returns either the
+        xyz coordinates or graph. Note this routine is hard coded for computing
+        projected run length.
+
+        Paramters
+        ---------
+        swc_paths : list or dict
+            If swc files are on local machine, list of paths to swc files where
+            each file corresponds to a neuron in the prediction. If swc files
+            are on cloud, then dict with keys "bucket_name" and "path".
+
+        Returns
+        -------
+        dict
+            Dictionary that maps an swc_id to the the xyz coordinates read from
+            that swc file.
+
+        """
+        with ZipFile(zip_path, "r") as zip:
+            swc_files = [f for f in zip.namelist() if f.endswith(".swc")]
+            swc_dicts = list()
+            for f in tqdm(swc_files, desc="Loading Fragments"):
+                # Check whether to store content
+                content = utils.read_zip(zip, f).splitlines()
+                if len(content) > self.min_size - 10:
+                    result = self.parse(content)
+                    result["swc_id"] = util.get_swc_id(path)
+                    swc_dicts.append(result)
+        return swc_dicts
+    
     def load_from_gcs(self, gcs_dict):
         """
         Reads swc files from zips on a GCS bucket.
