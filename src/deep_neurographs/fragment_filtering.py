@@ -52,6 +52,7 @@ def remove_curvy(fragments_graph, max_length, ratio=0.5):
         length = fragments_graph.edges[i, j]["length"]
         endpoint_dist = fragments_graph.dist(i, j)
         if endpoint_dist / length < ratio and length < max_length:
+            print(i, j)
             deleted_ids.add(fragments_graph.edges[i, j]["swc_id"])
             delete_fragment(fragments_graph, i, j)
     return len(deleted_ids)
@@ -218,7 +219,10 @@ def remove_xyz_entries(fragments_graph, i, j):
 
     """
     for xyz in fragments_graph.edges[i, j]["xyz"]:
-        del fragments_graph.xyz_to_edge[tuple(xyz)]
+        try:
+            del fragments_graph.xyz_to_edge[tuple(xyz)]
+        except KeyError:
+            pass
     return fragments_graph
 
 
