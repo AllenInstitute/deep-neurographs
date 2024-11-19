@@ -142,7 +142,7 @@ class FragmentsGraph(nx.Graph):
             # Edges
             for (i, j), attrs in irreducibles["edge"].items():
                 edge = (ids[i], ids[j])
-                idxs = util.spaced_idxs(attrs["radius"], self.node_spacing)
+                idxs = util.spaced_idxs(len(attrs["radius"]), self.node_spacing)
                 for key in ["radius", "xyz"]:
                     attrs[key] = attrs[key][idxs]
                 self.__add_edge(edge, attrs, swc_id)
@@ -996,8 +996,7 @@ class FragmentsGraph(nx.Graph):
             branch_radius = np.flip(branch_radius, axis=0)
 
         # Make entries
-        idxs = np.arange(1, len(branch_xyz))
-        for k in util.spaced_idxs(idxs, 6):
+        for k in util.spaced_idxs(len(branch_xyz), 5):
             x, y, z = tuple(branch_xyz[k])
             r = 6 if branch_radius[k] == 7.3141592 else 2
 
