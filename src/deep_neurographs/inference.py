@@ -349,7 +349,7 @@ class InferencePipeline:
         # Save result on s3
         filename = f"corrected-processed-swcs-s3.zip"
         path = os.path.join(self.output_dir, filename)
-        self.graph.to_zipped_swcs(path)
+        self.graph.to_zipped_swcs(path, min_size=200)
         if self.save_to_s3_bool:
             self.save_to_s3()
 
