@@ -233,7 +233,7 @@ class InferencePipeline:
         # Save valid labels and current graph
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
         labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        n_saved = self.graph.to_zipped_swcs(swcs_path, min_size=100)
+        n_saved = self.graph.to_zipped_swcs(swcs_path)
         self.graph.save_labels(labels_path)
         self.report(f"# SWCs Saved: {n_saved}")
 
@@ -342,11 +342,14 @@ class InferencePipeline:
         suffix = f"-{round_id}" if round_id else ""
         filename = f"corrected-processed-swcs{suffix}.zip"
         path = os.path.join(self.output_dir, filename)
-        self.graph.to_zipped_swcs(path, min_size=200)
+        self.graph.to_zipped_swcs(path)
         self.save_connections(round_id=round_id)
         self.write_metadata()
 
         # Save result on s3
+        filename = f"corrected-processed-swcs-s3.zip"
+        path = os.path.join(self.output_dir, filename)
+        self.graph.to_zipped_swcs(path)
         if self.save_to_s3_bool:
             self.save_to_s3()
 
@@ -365,7 +368,7 @@ class InferencePipeline:
         """
         bucket_name = self.s3_dict["bucket_name"]
         for filename in os.listdir(self.output_dir):
-            if filename != "processed-swcs.zip":
+            if "processed-swcs.zip" not in filename:
                 local_path = os.path.join(self.output_dir, filename)
                 s3_path = os.path.join(self.s3_dict["prefix"], filename)
                 util.write_to_s3(local_path, bucket_name, s3_path)
