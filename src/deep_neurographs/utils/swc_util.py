@@ -41,7 +41,7 @@ class Reader:
 
         Parameters
         ----------
-        anisotropy : list[float], optional
+        anisotropy : List[float], optional
             Image to world scaling factors applied to xyz coordinates to
             account for anisotropy of the microscope. The default is
             [1.0, 1.0, 1.0].
@@ -70,7 +70,7 @@ class Reader:
 
         Returns
         -------
-        list[dict]
+        List[dict]
             List of dictionaries whose keys and values are the attribute name
             and values from an swc file.
 
@@ -102,7 +102,7 @@ class Reader:
 
         Returns
         -------
-        list[dict]
+        List[dict]
             List of dictionaries whose keys and values are the attribute name
             and values from an swc file.
 
@@ -135,7 +135,7 @@ class Reader:
 
         Returns
         -------
-        list[dict]
+        List[dict]
             List of dictionaries whose keys and values are the attribute name
             and values from an swc file.
 
@@ -156,7 +156,7 @@ class Reader:
 
         Paramters
         ---------
-        swc_paths : list or dict
+        swc_paths : Container
             If swc files are on local machine, list of paths to swc files where
             each file corresponds to a neuron in the prediction. If swc files
             are on cloud, then dict with keys "bucket_name" and "path".
@@ -284,7 +284,7 @@ class Reader:
 
         Parameters
         ----------
-        content : list[str]
+        content : List[str]
             List of entries from an swc file.
 
         Returns
@@ -461,7 +461,7 @@ def write_graph(path, graph, color=None):
 
     Returns
     -------
-    list[str]
+    List[str]
         List of swc file entries to be written.
 
     """
@@ -571,6 +571,29 @@ def make_entry(graph, i, parent, node_to_idx):
     return entry, node_to_idx
 
 
+def make_simple_entry(node, parent, xyz, radius=5):
+    """
+    Makes an entry to be written in an swc file.
+
+    Parameters
+    ----------
+    node : int
+        Node that entry corresponds to.
+    parent : int
+         Parent of node "i".
+    xyz : numpy.ndarray
+        xyz coordinate to be written to an swc file.
+
+    Returns
+    -------
+    str
+        Entry of an swc file
+
+    """
+    x, y, z = tuple(xyz)
+    return f"{node} 2 {x} {y} {z} {radius} {parent}"
+
+
 def set_radius(graph, i):
     """
     Sets the radius of node "i".
@@ -593,28 +616,6 @@ def set_radius(graph, i):
     except ValueError:
         radius = 1.0
     return radius
-
-
-def make_simple_entry(node, parent, xyz, radius=5):
-    """
-    Makes an entry to be written in an swc file.
-
-    Parameters
-    ----------
-    node : int
-        Node that entry corresponds to.
-    parent : int
-         Parent of node "i".
-    xyz : numpy.ndarray
-        ...
-
-    Returns
-    -------
-    ...
-
-    """
-    x, y, z = tuple(xyz)
-    return f"{node} 2 {x} {y} {z} {radius} {parent}"
 
 
 # --- Miscellaneous ---
