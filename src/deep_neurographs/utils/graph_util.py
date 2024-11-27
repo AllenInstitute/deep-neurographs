@@ -36,7 +36,7 @@ from deep_neurographs.utils import img_util, swc_util, util
 MIN_SIZE = 30
 NODE_SPACING = 1
 SMOOTH_BOOL = True
-PRUNE_DEPTH = 16
+PRUNE_DEPTH = 20
 
 
 class GraphLoader:
@@ -271,7 +271,8 @@ class GraphLoader:
                     # Check whether to stop
                     if length > self.prune_depth:
                         if n_passes == 1:
-                            graph.remove_nodes_from(branch[0:min(3, len(branch))])
+                            k = min(3, len(branch))
+                            graph.remove_nodes_from(branch[0:k])
                         break
 
     def get_component_irreducibles(self, graph, swc_dict):
@@ -623,6 +624,21 @@ def upd_node_attrs(swc_dict, leafs, branchings, i):
 
 
 def compute_path_length(graph):
+    """
+    Computes the path length of the given graph.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph whose nodes have an attribute called "xyz" which represents
+        a 3d coordinate.
+
+    Returns
+    -------
+    float
+        Path length of graph.
+
+    """
     path_length = 0
     for i, j in nx.dfs_edges(graph):
         path_length += compute_dist(graph, i, j)
