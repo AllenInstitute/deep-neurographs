@@ -176,7 +176,7 @@ class Reader:
                 if result:
                     swc_dicts.append(result)
         return swc_dicts
-    
+
     def load_from_gcs(self, gcs_dict):
         """
         Reads swc files from zips on a GCS bucket.

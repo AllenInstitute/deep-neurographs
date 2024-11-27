@@ -492,6 +492,39 @@ class FragmentsGraph(nx.Graph):
         """
         return list(self.proposals)
 
+    def proposal_connected_component(self, proposal):
+        """
+        Extracts the connected component that "proposal" belongs to in the
+        proposal induced subgraph.
+
+        Parameters
+        ----------
+        proposal : frozenset
+            Proposal used to as the root to extract its connected component
+            in the proposal induced subgraph.
+
+        Returns
+        -------
+        List[frozenset]
+            List of proposals in the connected component that "proposal"
+            belongs to in the proposal induced subgraph.
+
+        """
+        queue = [proposal]
+        visited = set()
+        while len(queue) > 0:
+            # Visit proposal
+            p = queue.pop()
+            visited.add(p)
+
+            # Update queue
+            for i in p:
+                for j in self.nodes[i]["proposals"]:
+                    p_ij = frozenset({i, j})
+                    if p_ij not in visited:
+                        queue.append(p_ij)
+        return visited
+
     # -- KDTree --
     def init_kdtree(self, node_type):
         """
