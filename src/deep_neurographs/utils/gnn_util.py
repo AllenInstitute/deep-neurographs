@@ -153,13 +153,14 @@ def get_batch(
         root = tuple(util.sample_once(proposals))
         queue = [(root[0], 0), (root[1], 0)]
         while len(queue) > 0:
-            # Visit node
+            # Visit node's neighbors
             i, d = queue.pop()
             visited.add(i)
             for j in fragments_graph.neighbors(i):
                 if (i, j) not in batch["graph"].edges:
                     batch["graph"].add_edge(i, j)
 
+            # Visit node's proposals
             for j in fragments_graph.nodes[i]["proposals"]:
                 p = frozenset({i, j})
                 if p in proposals and p in flagged_proposals:
