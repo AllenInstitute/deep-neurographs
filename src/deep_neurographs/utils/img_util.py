@@ -16,7 +16,6 @@ from skimage.color import label2rgb
 
 from deep_neurographs.utils import util
 
-ANISOTROPY = [0.748, 0.748, 1.0]
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
 
@@ -290,15 +289,19 @@ def get_profile(img, spec, profile_id):
 
 
 # --- coordinate conversions ---
-def to_world(voxel, shift=[0, 0, 0]):
+def to_physical(voxel, anisotropy, shift=[0, 0, 0]):
     """
-    Converts coordinates from voxels to world.
+    Converts a voxel coordinate to a physical coordinate by applying the
+    anisotropy scaling factors.
 
     Parameters
     ----------
-    coord : numpy.ndarray
+    coord : ArrayLike
         Coordinate to be converted.
-    shift : list, optional
+    anisotropy : ArrayLike
+        Image to physical coordinates scaling factors to account for the
+        anisotropy of the microscope.
+    shift : ArrayLike, optional
         Shift to be applied to "coord". The default is [0, 0, 0].
 
     Returns
@@ -307,20 +310,20 @@ def to_world(voxel, shift=[0, 0, 0]):
         Converted coordinates.
 
     """
-    return tuple([voxel[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
+    return tuple([voxel[i] * anisotropy[i] - shift[i] for i in range(3)])
 
 
-def to_voxels(xyz, downsample_factor=0):
+def to_voxels(xyz, anisotropy, downsample_factor=0):
     """
     Converts coordinates from world to voxel.
 
     Parameters
     ----------
-    xyz : numpy.ndarray
+    xyz : ArrayLike
         xyz coordinate to be converted to voxels.
-    anisotropy : list, optional
-        Anisotropy to be applied to values of interest. The default is
-        [1.0, 1.0, 1.0].
+    anisotropy : ArrayLike
+        Image to physical coordinates scaling factors to account for the
+        anisotropy of the microscope.
     downsample_factor : int, optional
         Downsampling factor that accounts for which level in the image pyramid
         the voxel coordinates must index into. The default is 0.
@@ -332,7 +335,7 @@ def to_voxels(xyz, downsample_factor=0):
 
     """
     downsample_factor = 1.0 / 2 ** downsample_factor
-    voxel = downsample_factor * (xyz / np.array(ANISOTROPY))
+    voxel = downsample_factor * (xyz / np.array(anisotropy))
     return np.round(voxel).astype(int)
 
 

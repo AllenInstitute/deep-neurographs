@@ -61,7 +61,7 @@ class GraphLoader:
         Parameters
         ----------
         anisotropy : list[float], optional
-            Scaling factors applied to xyz coordinates to account for
+            Scaling factors applied to xyz coordinates to account for the
             anisotropy of microscope. The default is [1.0, 1.0, 1.0].
         min_size : float, optional
             Minimum path length of swc files which are stored as connected
@@ -227,7 +227,7 @@ class GraphLoader:
         if self.img_bbox:
             delete_nodes = set()
             for i in graph.nodes:
-                xyz = img_util.to_voxels(graph.nodes[i]["xyz"])
+                xyz = img_util.to_voxels(graph.nodes[i]["xyz"], self.to_anisotropy)
                 if not util.is_contained(self.img_bbox, xyz):
                     delete_nodes.add(i)
             graph.remove_nodes_from(delete_nodes)

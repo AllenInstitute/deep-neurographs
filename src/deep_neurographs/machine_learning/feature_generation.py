@@ -36,7 +36,8 @@ class FeatureGenerator:
     def __init__(
         self,
         img_path,
-        downsample_factor,
+        multiscale,
+        anisotropy=[1.0, 1.0, 1.0],
         label_path=None,
         is_multimodal=False,
     ):
@@ -47,9 +48,11 @@ class FeatureGenerator:
         ----------
         img_path : str
             Path to the raw image assumed to be stored in a GCS bucket.
-        downsample_factor : int
-            Downsampling factor that accounts for which level in the image
-            pyramid the voxel coordinates must index into.
+        multiscale : int
+            Level in the image pyramid that voxel coordinates must index into.
+        anisotropy : ArrayLike, optional
+            Image to physical coordinates scaling factors to account for the
+            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
         label_path : str, optional
             Path to the segmentation assumed to be stored on a GCS bucket. The
             default is None.
@@ -62,11 +65,12 @@ class FeatureGenerator:
         None
 
         """
-        # Initialize instance attributes
-        self.downsample_factor = downsample_factor
+        # General instance attributes
+        self.anisotropy = anisotropy
+        self.multiscale = multiscale
         self.is_multimodal = is_multimodal
 
-        # Initialize image-based attributes
+        # Open images
         driver = "n5" if ".n5" in img_path else "zarr"
         self.img = img_util.open_tensorstore(img_path, driver=driver)
         if label_path:
@@ -75,7 +79,7 @@ class FeatureGenerator:
             self.labels = None
 
         # Set chunk shapes
-        self.img_patch_shape = self.set_patch_shape(downsample_factor)
+        self.img_patch_shape = self.set_patch_shape(multiscale)
         self.label_patch_shape = self.set_patch_shape(0)
 
         # Validate embedding requirements
@@ -83,16 +87,14 @@ class FeatureGenerator:
             raise("Must provide labels to generate image embeddings")
 
     @classmethod
-    def set_patch_shape(cls, downsample_factor):
+    def set_patch_shape(cls, multiscale):
         """
         Adjusts the chunk shape by downsampling each dimension by a specified
         factor.
 
         Parameters
         ----------
-        downsample_factor : int
-            The factor by which to downsample each dimension of the current
-            chunk shape.
+        None
 
         Returns
         -------
@@ -101,7 +103,7 @@ class FeatureGenerator:
             factor.
 
         """
-        return [s // 2 ** downsample_factor for s in cls.patch_shape]
+        return [s // 2 ** multiscale for s in cls.patch_shape]
 
     @classmethod
     def get_n_profile_points(cls):
@@ -114,7 +116,7 @@ class FeatureGenerator:
 
         Parameters
         ----------
-        neurograph : NeuroGraph
+        neurograph : FragmentsGraph
             Graph that "proposals" belong to.
         proposals_dict : dict
             Dictionary that contains the items (1) "proposals" which are the
@@ -154,7 +156,7 @@ class FeatureGenerator:
 
         Parameters
         ----------
-        neurograph : NeuroGraph
+        neurograph : FragmentsGraph
             NeuroGraph generated from a predicted segmentation.
         computation_graph : networkx.Graph
             Graph used by GNN to classify proposals.
@@ -173,7 +175,7 @@ class FeatureGenerator:
 
         Parameters
         ----------
-        neurograph : NeuroGraph
+        neurograph : FragmentsGraph
             NeuroGraph generated from a predicted segmentation.
         computation_graph : networkx.Graph
             Graph used by GNN to classify proposals.
@@ -192,7 +194,7 @@ class FeatureGenerator:
 
         Parameters
         ----------
-        neurograph : NeuroGraph
+        neurograph : FragmentsGraph
             NeuroGraph generated from a predicted segmentation.
         proposals : list[frozenset]
             List of proposals for which features will be generated.
@@ -219,7 +221,7 @@ class FeatureGenerator:
 
         Parameters
         ----------
-        neurograph : NeuroGraph
+        neurograph : FragmentsGraph
             NeuroGraph generated from a predicted segmentation.
         computation_graph : networkx.Graph
             Graph used by GNN to classify proposals.
@@ -248,8 +250,8 @@ class FeatureGenerator:
 
         Parameters
         ----------
-        neurograph : NeuroGraph
-            NeuroGraph generated from a predicted segmentation.
+        neurograph : FragmentsGraph
+            Fragments graph that features are to be generated from.
         computation_graph : networkx.Graph
             Graph used by GNN to classify proposals.
 
@@ -275,7 +277,7 @@ class FeatureGenerator:
 
         Parameters
         ----------
-        neurograph : NeuroGraph
+        neurograph : FragmentsGraph
             NeuroGraph generated from a predicted segmentation.
         proposals : list[frozenset]
             List of proposals for which features will be generated.
@@ -311,7 +313,7 @@ class FeatureGenerator:
 
         Parameters
         ----------
-        neurograph : NeuroGraph
+        neurograph : FragmentsGraph
             NeuroGraph generated from a predicted segmentation.
         computation_graph : networkx.Graph
             Graph used by GNN to classify proposals.
@@ -349,7 +351,7 @@ class FeatureGenerator:
 
         Parameters
         ----------
-        neurograph : NeuroGraph
+        neurograph : FragmentsGraph
             Graph that "proposals" belong to.
         proposals : list[frozenset]
             List of proposals for which features will be generated.
@@ -382,7 +384,7 @@ class FeatureGenerator:
 
         Parameters
         ----------
-        neurograph : NeuroGraph
+        neurograph : FragmentsGraph
             Graph that "proposals" belong to.
         proposals : list[frozenset]
             List of proposals for which features will be generated.
@@ -471,7 +473,7 @@ class FeatureGenerator:
         """
         voxels = np.zeros((len(xyz_path), 3), dtype=int)
         for i, xyz in enumerate(xyz_path):
-            voxels[i] = img_util.to_voxels(xyz, self.downsample_factor)
+            voxels[i] = img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
         return voxels
 
     def get_bbox(self, voxels, is_img=True):
@@ -486,7 +488,7 @@ class FeatureGenerator:
     def get_patch(self, labels, xyz_path, proposal):
         # Initializations
         center = np.mean(xyz_path, axis=0)
-        voxels = [img_util.to_voxels(xyz) for xyz in xyz_path]
+        voxels = [img_util.to_voxels(xyz, self.anisotropy) for xyz in xyz_path]
 
         # Read patches
         img_patch = self.read_img_patch(center)
@@ -494,7 +496,7 @@ class FeatureGenerator:
         return {proposal: np.stack([img_patch, label_patch], axis=0)}
 
     def read_img_patch(self, xyz_centroid):
-        center = img_util.to_voxels(xyz_centroid, self.downsample_factor)
+        center = img_util.to_voxels(xyz_centroid, self.anisotropy, self.multiscale)
         img_patch = img_util.read_tensorstore(
             self.img, center, self.img_patch_shape
         )
@@ -509,7 +511,7 @@ class FeatureGenerator:
     def relabel(self, label_patch, voxels, labels):
         # Initializations
         n_points = self.get_n_profile_points()
-        scaling_factor = 2 ** self.downsample_factor
+        scaling_factor = 2 ** self.multiscale
         label_patch = zoom(label_patch, 1.0 / scaling_factor, order=0)
         for i, voxel in enumerate(voxels):
             voxels[i] = [v // scaling_factor for v in voxel]
@@ -529,7 +531,7 @@ def get_leaf_path(neurograph, i):
 
     Parameters
     ----------
-    neurograph : NeuroGraph
+    neurograph : FragmentsGraph
         NeuroGraph generated from a predicted segmentation.
     i : int
         Leaf node in "neurograph".
@@ -551,7 +553,7 @@ def get_branching_path(neurograph, i):
 
     Parameters
     ----------
-    neurograph : NeuroGraph
+    neurograph : FragmentsGraph
         NeuroGraph generated from a predicted segmentation.
     i : int
         branching node in "neurograph".
