@@ -42,9 +42,8 @@ class Reader:
         Parameters
         ----------
         anisotropy : List[float], optional
-            Image to world scaling factors applied to xyz coordinates to
-            account for anisotropy of the microscope. The default is
-            [1.0, 1.0, 1.0].
+            Image to physical coordinates scaling factors to account for the
+            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
         min_size : int, optional
             Threshold on the number of nodes in swc file. Only swc files with
             more than "min_size" nodes are stored in "xyz_coords". The default

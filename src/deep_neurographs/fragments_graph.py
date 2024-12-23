@@ -4,9 +4,9 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Implementation of subclass of Networkx.Graph called "FragmentsGraph".
-
-NOTE: SAVE LABEL UPDATES --- THERE IS A BUG IN FEATURE GENERATION
+Implementation of subclass of Networkx.Graph called "FragmentsGraph" which is
+a graph that is initialized by loading swc files (i.e. fragments) from a
+predicted segmentation.
 
 """
 import zipfile
@@ -30,17 +30,23 @@ class FragmentsGraph(nx.Graph):
 
     """
 
-    def __init__(self, img_bbox=None, node_spacing=1):
+    def __init__(
+        self, anisotropy=[1.0, 1.0, 1.0], img_bbox=None, node_spacing=1
+    ):
         """
         Initializes an instance of NeuroGraph.
 
         Parameters
         ----------
+        anisotropy : ArrayLike, optional
+            Image to physical coordinates scaling factors to account for the
+            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
         img_bbox : dict or None, optional
             Dictionary with the keys "min" and "max" which specify a bounding
             box in an image. The default is None.
         node_spacing : int, optional
-            Spacing (in microns) between nodes. The default is 1.
+            Physical spacing (in microns) between nodes in swcs. The default
+            is 1.
 
         Returns
         -------
@@ -49,6 +55,7 @@ class FragmentsGraph(nx.Graph):
         """
         super(FragmentsGraph, self).__init__()
         # General class attributes
+        self.anisotropy = anisotropy
         self.leaf_kdtree = None
         self.node_cnt = 0
         self.node_spacing = node_spacing
@@ -908,8 +915,8 @@ class FragmentsGraph(nx.Graph):
 
     def is_contained(self, node_or_xyz, buffer=0):
         if self.bbox:
-            coord = self.to_voxels(node_or_xyz)
-            return util.is_contained(self.bbox, coord, buffer=buffer)
+            voxel = self.to_voxels(node_or_xyz, self.anisotropy)
+            return util.is_contained(self.bbox, voxel, buffer=buffer)
         else:
             return True
 
@@ -921,13 +928,17 @@ class FragmentsGraph(nx.Graph):
         else:
             return True
 
-    def to_voxels(self, node_or_xyz, shift=False):
+    def to_voxels(self, node_or_xyz, shift=np.array([0, 0, 0])):
+        # Get xyz coordinate
         shift = self.origin if shift else np.zeros((3))
         if type(node_or_xyz) is int:
-            coord = img_util.to_voxels(self.nodes[node_or_xyz]["xyz"])
+            xyz = self.nodes[node_or_xyz]["xyz"]
         else:
-            coord = img_util.to_voxels(node_or_xyz)
-        return coord - shift
+            xyz = node_or_xyz
+        
+        # Coordinate conversion
+        voxel = img_util.to_voxels(xyz, self.anisotropy)
+        return voxel - shift
 
     def is_leaf(self, i):
         """

@@ -164,7 +164,7 @@ class InferencePipeline:
 
         """
         # Initializations
-        self.report_experiment()
+        self.log_experiment()
         self.write_metadata()
         t0 = time()
 
@@ -181,22 +181,16 @@ class InferencePipeline:
         t, unit = util.time_writer(time() - t0)
         self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
 
-    def run_schedule(
-        self, fragments_pointer, radius_schedule, save_all_rounds=False
-    ):
+    def run_schedule(self, fragments_pointer, radius_schedule):
         t0 = time()
-        self.report_experiment()
+        self.log_experiment()
         self.build_graph(fragments_pointer)
         for round_id, radius in enumerate(radius_schedule):
             self.report(f"--- Round {round_id + 1}:  Radius = {radius} ---")
             round_id += 1
             self.generate_proposals(radius)
             self.run_inference()
-            if save_all_rounds:
-                self.save_results(round_id=round_id)
-
-        if not save_all_rounds:
-            self.save_results(round_id=round_id)
+        self.save_results(round_id=round_id)
 
         t, unit = util.time_writer(time() - t0)
         self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
@@ -433,7 +427,7 @@ class InferencePipeline:
             self.log_handle.write(txt)
             self.log_handle.write("\n")
 
-    def report_experiment(self):
+    def log_experiment(self):
         self.report("\nExperiment Overview")
         self.report("-------------------------------------------------------")
         self.report(f"Sample_ID: {self.sample_id}")
