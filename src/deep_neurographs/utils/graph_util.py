@@ -5,8 +5,20 @@ Created on Wed June 5 16:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 
-Routines for loading fragments and building a fragments_graph.
+Overview
+--------
+Code that reads and preprocesses neuron fragments stored as swc files, then
+constructs a custom graph object called a "FragmentsGraph".
 
+    Graph Construction Algorithm:
+        1. Read Neuron Fragments
+            to do...
+
+        2. Preprocess Fragments and Extract Irreducibles
+            to do...
+
+        3. Build FragmentsGraph
+            to do...
 
 Terminology
 ------------
@@ -31,12 +43,7 @@ import numpy as np
 from tqdm import tqdm
 
 from deep_neurographs import geometry
-from deep_neurographs.utils import img_util, swc_util, util
-
-MIN_SIZE = 30
-NODE_SPACING = 1
-SMOOTH_BOOL = True
-PRUNE_DEPTH = 20
+from deep_neurographs.utils import swc_util, util
 
 
 class GraphLoader:
@@ -48,11 +55,11 @@ class GraphLoader:
     def __init__(
         self,
         anisotropy=[1.0, 1.0, 1.0],
-        min_size=MIN_SIZE,
-        node_spacing=NODE_SPACING,
+        min_size=30,
+        node_spacing=1,
         progress_bar=False,
-        prune_depth=PRUNE_DEPTH,
-        smooth_bool=SMOOTH_BOOL,
+        prune_depth=20,
+        smooth_bool=True,
     ):
         """
         Builds a FragmentsGraph by reading swc files stored either on the
@@ -60,24 +67,23 @@ class GraphLoader:
 
         Parameters
         ----------
-        anisotropy : list[float], optional
-            Scaling factors applied to xyz coordinates to account for the
-            anisotropy of microscope. The default is [1.0, 1.0, 1.0].
+        anisotropy : List[float], optional
+            Image to physical coordinates scaling factors to account for the
+            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
         min_size : float, optional
             Minimum path length of swc files which are stored as connected
-            components in the FragmentsGraph. The default is 30ums.
+            components in the FragmentsGraph. The default is 30.0 (microns).
         node_spacing : int, optional
-            Spacing (in microns) between nodes. The default is the global
-            variable "NODE_SPACING".
+            Spacing (in microns) between nodes. The default is 1.
         progress_bar : bool, optional
             Indication of whether to print out a progress bar while building
             graph. The default is True.
         prune_depth : int, optional
             Branches less than "prune_depth" microns are pruned if "prune" is
-            True. The default is the global variable "PRUNE_DEPTH".
+            True. The default is 20.0 (microns).
         smooth_bool : bool, optional
             Indication of whether to smooth branches from swc files. The
-            default is the global variable "SMOOTH".
+            default is True.
 
         Returns
         -------
@@ -90,12 +96,9 @@ class GraphLoader:
         self.progress_bar = progress_bar
         self.prune_depth = prune_depth
         self.smooth_bool = smooth_bool
-
         self.reader = swc_util.Reader(anisotropy, min_size)
 
-    def run(
-        self, fragments_pointer, img_patch_origin=None, img_patch_shape=None
-    ):
+    def run(self, fragments_pointer):
         """
         Builds a FragmentsGraph by reading swc files stored either on the
         cloud or local machine, then extracting the irreducible components.
@@ -105,12 +108,6 @@ class GraphLoader:
         fragments_pointer : dict, list, str
             Pointer to swc files used to build an instance of FragmentsGraph,
             see "swc_util.Reader" for further documentation.
-        img_patch_origin : list[int], optional
-            An xyz coordinate which is the upper, left, front corner of the
-            image patch that contains the swc files. The default is None.
-        img_patch_shape : list[int], optional
-            Shape of the image patch which contains the swc files. The default
-            is None.
 
         Returns
         -------
@@ -120,12 +117,13 @@ class GraphLoader:
         """
         from deep_neurographs.fragments_graph import FragmentsGraph
 
-        # Load fragments and extract irreducibles
-        self.img_bbox = img_util.init_bbox(img_patch_origin, img_patch_shape)
+        # Step 1: Read Neuron Fragments
         swc_dicts = self.reader.load(fragments_pointer)
+
+        # Step: Preprocess Fragments and Extract Irreducibles 
         irreducibles = self.schedule_processes(swc_dicts)
 
-        # Build FragmentsGraph
+        # Step 3: Build FragmentsGraph
         fragments_graph = FragmentsGraph(node_spacing=self.node_spacing)
         while len(irreducibles):
             irreducible_set = irreducibles.pop()
@@ -186,7 +184,7 @@ class GraphLoader:
 
         Returns
         -------
-        list
+        List[dict]
             List of dictionaries such that each is the set of irreducibles in
             a connected component of the graph corresponding to "swc_dict".
 
@@ -194,7 +192,6 @@ class GraphLoader:
         # Build dense graph
         swc_dict["idx"] = dict(zip(swc_dict["id"], range(len(swc_dict["id"]))))
         graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
-        self.clip_branches(graph, swc_dict["swc_id"])
         self.prune_branches(graph)
 
         # Extract irreducibles
@@ -209,28 +206,6 @@ class GraphLoader:
                     if result:
                         irreducibles.append(result)
         return irreducibles
-
-    def clip_branches(self, graph, swc_id):
-        """
-        Deletes all nodes from "graph" that are not contained in "img_bbox".
-
-        Parameters
-        ----------
-        graph : networkx.Graph
-            Graph to be searched
-
-        Returns
-        -------
-        None
-
-        """
-        if self.img_bbox:
-            delete_nodes = set()
-            for i in graph.nodes:
-                xyz = img_util.to_voxels(graph.nodes[i]["xyz"], self.to_anisotropy)
-                if not util.is_contained(self.img_bbox, xyz):
-                    delete_nodes.add(i)
-            graph.remove_nodes_from(delete_nodes)
 
     def prune_branches(self, graph):
         """
@@ -316,7 +291,6 @@ class GraphLoader:
             # Visit j
             attrs = upd_edge_attrs(swc_dict, attrs, j)
             if j in leafs or j in branchings:
-                # Check whether to smooth
                 attrs["length"] = branch_length
                 attrs = to_numpy(attrs)
                 if self.smooth_bool:
