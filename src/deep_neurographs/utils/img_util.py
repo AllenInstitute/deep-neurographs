@@ -4,7 +4,8 @@ Created on Sat May 9 11:00:00 2024
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Helper routines for working with images.
+
+Helper routines for processing images.
 
 """
 
@@ -313,29 +314,29 @@ def to_physical(voxel, anisotropy, shift=[0, 0, 0]):
     return tuple([voxel[i] * anisotropy[i] - shift[i] for i in range(3)])
 
 
-def to_voxels(xyz, anisotropy, downsample_factor=0):
+def to_voxels(xyz, anisotropy, multiscale=0):
     """
     Converts coordinates from world to voxel.
 
     Parameters
     ----------
     xyz : ArrayLike
-        xyz coordinate to be converted to voxels.
+        Physical coordiante to be converted to a voxel coordinate.
     anisotropy : ArrayLike
         Image to physical coordinates scaling factors to account for the
         anisotropy of the microscope.
-    downsample_factor : int, optional
-        Downsampling factor that accounts for which level in the image pyramid
-        the voxel coordinates must index into. The default is 0.
+    multiscale : int, optional
+        Level in the image pyramid that the voxel coordinate must index into.
+        The default is 0.
 
     Returns
     -------
     numpy.ndarray
-        Coordinates converted to voxels.
+        Voxel coordinate of the input.
 
     """
-    downsample_factor = 1.0 / 2 ** downsample_factor
-    voxel = downsample_factor * (xyz / np.array(anisotropy))
+    scaling_factor = 1.0 / 2 ** multiscale
+    voxel = scaling_factor * xyz / np.array(anisotropy)
     return np.round(voxel).astype(int)
 
 
@@ -348,9 +349,10 @@ def init_bbox(origin, shape):
     Parameters
     ----------
     origin : tuple[int]
-        Origin of bounding box which is assumed to be top, front, left corner.
-    shape : tuple[int]
-        Shape of bounding box.
+        Voxel coordinate of the origin of the bounding box, which is assumed
+        to be top-front-left corner.
+    shape : Tuple[int]
+        Shape of the bounding box.
 
     Returns
     -------

@@ -4,7 +4,7 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Module used to generate edge proposals.
+Module used to generate edge proposals for a fragments graph.
 
 """
 

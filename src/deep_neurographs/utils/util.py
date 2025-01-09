@@ -4,7 +4,8 @@ Created on Sun July 16 14:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-General helper routines for various tasks.
+
+Miscellaneous helper routines.
 
 """
 
