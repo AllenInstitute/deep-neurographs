@@ -178,11 +178,10 @@ class GraphLoader:
         irreducibles = None
         self.prune_branches(graph)
         if compute_path_length(graph) > self.min_size:
-            # Extract irreducible nodes
+            # Irreducible nodes
             leafs, branchings = get_irreducible_nodes(graph)
-            assert len(leafs) > 0, "No leaf nodes!"
 
-            # Extract irreducible edges
+            # Irreducible edges
             edges = dict()
             root = None
             for (i, j) in nx.dfs_edges(graph, source=util.sample_once(leafs)):
@@ -282,20 +281,20 @@ def get_irreducible_nodes(graph):
 
 def set_node_attrs(graph, nodes):
     """
-    Set node attributes by extracting values from "swc_dict".
+    Set node attributes by extracting information from "graph".
 
     Parameters
     ----------
-    swc_dict : dict
-        Contents of an swc file.
+    graph : networkx.Graph
+        Graph that contains "nodes".
     nodes : list
         List of node ids to set attributes.
 
     Returns
     -------
     dict
-        Dictionary in which keys are node ids and values are a dictionary of
-        attributes extracted from "swc_dict".
+        Dictionary where keys are node ids and values are a dictionary of
+        attributes extracted from the input graph.
 
     """
     node_attrs = dict()
@@ -310,14 +309,17 @@ def set_edge_attrs(graph, edges):
     edge_attrs = dict()
     for edge, path in edges.items():
         # Extract attributes
+        length = 0
         radius_list, xyz_list = list(), list()
-        for i in path:
+        for idx, i in enumerate(path):
             radius_list.append(graph.nodes[i]["radius"])
             xyz_list.append(graph.nodes[i]["xyz"])
+            if idx > 0:
+                length += compute_dist(graph, path[idx], path[idx - 1])
 
         # Set attributes
         edge_attrs[edge] = {
-            "length": 1000,
+            "length": length,
             "radius": np.array(radius_list),
             "xyz": np.array(xyz_list)
         }
