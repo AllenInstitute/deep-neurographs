@@ -141,9 +141,9 @@ class Reader:
         """
         content = util.read_txt(path)
         if len(content) > self.min_size - 10:
-            result = self.parse(content)
-            result["swc_id"] = util.get_swc_id(path)
-            return result
+            graph = self.parse(content)
+            graph.graph["swc_id"] = util.get_swc_id(path)
+            return graph
         else:
             return False
 
@@ -268,14 +268,45 @@ class Reader:
         """
         content = util.read_zip(zip_file, path).splitlines()
         if len(content) > self.min_size - 10:
-            result = self.parse(content)
-            result["swc_id"] = util.get_swc_id(path)
-            return result
+            graph = self.parse(content)
+            graph.graph["swc_id"] = util.get_swc_id(path)
+            return graph
         else:
             return False
 
     # --- Process swc content ---
     def parse(self, content):
+        """
+        Reads an swc file and builds an undirected graph from it.
+
+        Parameters
+        ----------
+        path : str
+            Path to swc file to be read.
+
+        Returns
+        -------
+        networkx.Graph
+            Graph built from an swc file.
+
+        """
+        graph = nx.Graph()
+        content, offset = self.process_content(content)
+        for line in content:
+            # Extract node info
+            parts = line.split()
+            child = int(parts[0])
+            parent = int(parts[-1])
+            radius = read_radius(parts[-2])
+            xyz = self.read_xyz(parts[2:5], offset=offset)
+
+            # Add node
+            graph.add_node(child, radius=radius, xyz=xyz)
+            if parent != -1:
+                graph.add_edge(parent, child)
+        return graph
+
+    def parse_old(self, content):
         """
         Parses an swc file to extract the content which is stored in a dict.
         Note that node_ids from swc are refactored to index from 0 to n-1
@@ -618,6 +649,11 @@ def set_radius(graph, i):
 
 
 # --- Miscellaneous ---
+def read_radius(radius_str):
+    radius = float(radius_str)
+    return radius / 1000 if radius > 100 else radius
+
+
 def to_graph(swc_dict, swc_id=None, set_attrs=False):
     """
     Converts an dictionary containing swc attributes to a graph.
