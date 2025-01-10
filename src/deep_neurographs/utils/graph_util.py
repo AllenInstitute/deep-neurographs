@@ -8,7 +8,7 @@ Created on Wed June 5 16:00:00 2023
 Overview
 --------
 Code that reads and preprocesses neuron fragments stored as swc files, then
-constructs a custom graph object called a "FragmentsGraph" from them.
+constructs a custom graph object called a "FragmentsGraph" from the fragments.
 
     Graph Construction Algorithm:
         1. Read Neuron Fragments
