@@ -68,7 +68,7 @@ class InferencePipeline:
         config,
         device="cpu",
         is_multimodal=False,
-        label_path=None,
+        labels_path=None,
         log_runtimes=True,
         save_to_s3_bool=False,
         s3_dict=None,
@@ -98,7 +98,7 @@ class InferencePipeline:
             ...
         is_multimodal : bool, optional
             ...
-        label_path : str, optional
+        labels_path : str, optional
             Path to the segmentation assumed to be stored on a GCS bucket. The
             default is None.
         log_runtimes : bool, optional
@@ -132,11 +132,12 @@ class InferencePipeline:
             self.model_path,
             self.ml_config.model_type,
             self.graph_config.search_radius,
+            anisotropy=self.ml_config.anisotropy,
             batch_size=self.ml_config.batch_size,
             confidence_threshold=self.ml_config.threshold,
             device=device,
-            downsample_factor=self.ml_config.downsample_factor,
-            label_path=label_path,
+            multiscale=self.ml_config.multiscale,
+            labels_path=labels_path,
             is_multimodal=is_multimodal,
         )
 
@@ -474,11 +475,12 @@ class InferenceEngine:
         model_path,
         model_type,
         radius,
+        anisotropy=[1.0, 1.0, 1.0],
         batch_size=BATCH_SIZE,
         confidence_threshold=CONFIDENCE_THRESHOLD,
         device=None,
-        downsample_factor=1,
-        label_path=None,
+        multiscale=1,
+        labels_path=None,
         is_multimodal=False
     ):
         """
@@ -501,9 +503,9 @@ class InferenceEngine:
         confidence_threshold : float, optional
             Threshold on acceptance probability for proposals. The default is
             the global variable "CONFIDENCE_THRESHOLD".
-        downsample_factor : int, optional
-            Downsampling factor that accounts for which level in the image
-            pyramid the voxel coordinates must index into. The default is 0.
+        multiscale : int, optional
+            Level in the image pyramid that voxel coordinates must index into.
+            The default is 1.
 
         Returns
         -------
@@ -520,8 +522,9 @@ class InferenceEngine:
         # Features
         self.feature_generator = FeatureGenerator(
             img_path,
-            downsample_factor,
-            label_path=label_path,
+            multiscale,
+            anisotropy=anisotropy,
+            labels_path=labels_path,
             is_multimodal=is_multimodal
         )
 

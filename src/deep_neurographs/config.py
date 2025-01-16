@@ -23,7 +23,8 @@ class GraphConfig:
     ----------
     anisotropy : list[float], optional
         Scaling factors applied to xyz coordinates to account for anisotropy
-        of microscope. The default is [1.0, 1.0, 1.0].
+        of microscope. Note this instance of "anisotropy" is only used while
+        reading fragments (i.e. swcs). The default is [1.0, 1.0, 1.0].
     complex_bool : bool
         Indication of whether to generate complex proposals, meaning proposals
         between leaf and non-leaf nodes. The default is False.
@@ -74,12 +75,15 @@ class MLConfig:
 
     Attributes
     ----------
+    anisotropy : list[float], optional
+        Scaling factors applied to xyz coordinates to account for anisotropy
+        of microscope. Note this instance of "anisotropy" is only used while
+        generating features. The default is [1.0, 1.0, 1.0].
     batch_size : int
         The number of samples processed in one batch during training or
         inference. Default is 1000.
-    downsample_factor : int
-        Downsampling factor that accounts for which level in the image pyramid
-        the voxel coordinates must index into. The default is 0.
+    multiscale : int
+        Level in the image pyramid that voxel coordinates must index into.
     high_threshold : float
         A threshold value used for classification, above which predictions are
         considered to be high-confidence. Default is 0.9.
@@ -89,14 +93,14 @@ class MLConfig:
         Type of machine learning model to use. Default is "GraphNeuralNet".
 
     """
-
+    anisotropy: List[float] = field(default_factory=list)
     batch_size: int = 2000
-    downsample_factor: int = 1
     high_threshold: float = 0.9
     lr: float = 1e-3
-    threshold: float = 0.6
     model_type: str = "GraphNeuralNet"
+    multiscale: int = 1
     n_epochs: int = 1000
+    threshold: float = 0.6
     validation_split: float = 0.15
     weight_decay: float = 1e-3
 

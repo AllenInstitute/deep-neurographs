@@ -9,162 +9,228 @@ Helper routines for processing images.
 
 """
 
-from copy import deepcopy
+from abc import ABC, abstractmethod
+from skimage.color import label2rgb
 
 import numpy as np
 import tensorstore as ts
-from skimage.color import label2rgb
 
 from deep_neurographs.utils import util
 
-SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
-
-# --- io utils ---
-def open_tensorstore(path, driver="neuroglancer_precomputed"):
+class ImageReader(ABC):
     """
-    Opens an image that is assumed to be stored as a directory of shard files.
-
-    Parameters
-    ----------
-    path : str
-        Path to directory containing shard files.
-    driver : str, optional
-        Storage driver needed to read data at "path". The default is
-        "neuroglancer_precomputed".
-
-    Returns
-    -------
-    tensorstore.TensorStore
-        Pointer to image stored at "path" in a GCS bucket.
+    Abstract class to create image readers classes.
 
     """
-    assert driver in SUPPORTED_DRIVERS, "Driver is not supported!"
-    img = ts.open(
-        {
-            "driver": driver,
-            "kvstore": {
-                "driver": "gcs",
-                "bucket": "allen-nd-goog",
-                "path": path,
-            },
-            "context": {
-                "cache_pool": {"total_bytes_limit": 1000000000},
-                "cache_pool#remote": {"total_bytes_limit": 1000000000},
-                "data_copy_concurrency": {"limit": 8},
-            },
-            "recheck_cached_data": "open",
-        }
-    ).result()
-    if driver == "neuroglancer_precomputed":
-        return img[ts.d["channel"][0]]
-    elif driver == "zarr":
-        img = img[0, 0, :, :, :]
-        img = img[ts.d[0].transpose[2]]
-        img = img[ts.d[0].transpose[1]]
-    return img
+
+    def __init__(self, img_path):
+        """
+        Class constructor of image reader.
+
+        Parameters
+        ----------
+        img_path : str
+            Path to image.
+
+        Returns
+        -------
+        None
+
+        """
+        self.img = None
+        self.img_path = img_path
+        self._load_image()
+
+    @abstractmethod
+    def _load_image(self):
+        """
+        This method should be implemented by subclasses to load the image
+        based on img_path.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        pass
+
+    def read(self, voxel, shape, from_center=True):
+        """
+        Reads a patch from an image given a voxel coordinate and patch shape.
+
+        Parameters
+        ----------
+        voxel : Tuple[int]
+            Voxel coordinate that is either the center or top-left-front
+            corner of the image patch to be read.
+        shape : Tuple[int]
+            Shape of the image patch to be read.
+        from_center : bool, optional
+            Indication of whether "voxel" is the center or top-left-front
+            corner of the image patch to be read. The default is True.
+
+        Returns
+        -------
+        ArrayLike
+            Image patch.
+
+        """
+        s, e = get_start_end(voxel, shape, from_center=from_center)
+        if len(self.shape()) == 3:
+            return self.img[s[0]: e[0], s[1]: e[1], s[2]: e[2]]
+        elif len(self.shape()) == 5:
+            return self.img[0, 0, s[0]: e[0], s[1]: e[1], s[2]: e[2]]
+
+    def read_with_bbox(self, bbox):
+        """
+        Reads an image patch by using a "bbox".
+
+        Parameters
+        ----------
+        bbox : dict
+            Dictionary that contains min and max coordinates of a bounding
+            box.
+
+        Returns
+        -------
+        numpy.ndarray
+            Image patch.
+
+        """
+        try:
+            shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
+            return self.read(bbox["min"], shape, from_center=False)
+        except Exception:
+            return np.zeros(shape)
+
+    def read_profile(self, spec):
+        """
+        Reads an intensity profile from an image (i.e. image profile).
+
+        Parameters
+        ----------
+        spec : dict
+            Dictionary that stores the bounding box of patch to be read and the
+            voxel coordinates of the profile path.
+
+        Returns
+        -------
+        List[float]
+            Image profile.
+
+        """
+        img_patch = normalize(self.read_with_bbox(spec["bbox"]))
+        return [img_patch[voxel] for voxel in map(tuple, spec["profile_path"])]
+
+    def shape(self):
+        """
+        Gets the shape of image.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        Tuple[int]
+            Shape of image.
+
+        """
+        return self.img.shape
 
 
-def read(img, voxel, shape, from_center=True):
+class TensorStoreReader(ImageReader):
     """
-    Reads a chunk of data from an image given a voxel coordinate and shape.
-
-    Parameters
-    ----------
-    img : numpy.ndarray
-        Image to be read.
-    voxel : tuple
-        Voxel coordinate that specifies either the center or top, left, front
-        corner of the chunk to be read.
-    shape : tuple
-        Shape (dimensions) of the chunk to be read.
-    from_center : bool, optional
-        Indication of whether the provided coordinates represent the center of
-        the chunk or the top, left, front corner. The default is True.
-
-    Returns
-    -------
-    numpy.ndarray
-        Chunk of data read from an image.
+    Class that reads image with tensorstore.
 
     """
-    start, end = get_start_end(voxel, shape, from_center=from_center)
-    return deepcopy(
-        img[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
-    )
+
+    def __init__(self, img_path, driver):
+        """
+        Constructs a TensorStore image reader.
+
+        Parameters
+        ----------
+        img_path : str
+            Path to image.
+        driver : str
+            Storage driver needed to read image at "path".
+
+        Returns
+        -------
+        None
+
+        """
+        self.driver = driver
+        super().__init__(img_path)
+
+    def _load_image(self):
+        """
+        This method should be implemented by subclasses to load the image
+        based on img_path.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        self.img = ts.open(
+            {
+                "driver": self.driver,
+                "kvstore": {
+                    "driver": "gcs",
+                    "bucket": "allen-nd-goog",
+                    "path": self.img_path,
+                },
+                "context": {
+                    "cache_pool": {"total_bytes_limit": 1000000000},
+                    "cache_pool#remote": {"total_bytes_limit": 1000000000},
+                    "data_copy_concurrency": {"limit": 8},
+                },
+                "recheck_cached_data": "open",
+            }
+        ).result()
+        if self.driver == "neuroglancer_precomputed":
+            self.img = self.img[ts.d["channel"][0]]
+        elif self.driver == "zarr":
+            self.img = self.img[ts.d[2].transpose[4]]
+            self.img = self.img[ts.d[2].transpose[3]]
+
+    def read(self, voxel, shape, from_center=True):
+        img_patch = super().read(voxel, shape, from_center)
+        return img_patch.read().result()
 
 
-def read_tensorstore(img, voxel, shape, from_center=True):
+def ZarrReader(ImageReader):
     """
-    Reads a chunk from an image given a voxel coordinate and the desired shape
-    of the chunk.
-
-    Parameters
-    ----------
-    img : tensorstore.TensorStore
-        Image to be read.
-    voxel : tuple
-        Voxel coordinate that specifies either the center or top, left, front
-        corner of the chunk to be read.
-    shape : tuple
-        Shape (dimensions) of the chunk to be read.
-    from_center : bool, optional
-        Indication of whether the provided coordinates represent the center of
-        the chunk or the starting point. The default is True.
-
-    Returns
-    -------
-    numpy.ndarray
-        Chunk of data read from an image.
-
-    """
-    return read(img, voxel, shape, from_center=from_center).read().result()
-
-
-def read_tensorstore_with_bbox(img, bbox, normalize=True):
-    """
-    Reads a chunk from a subarray that is determined by "bbox".
-
-    Parameters
-    ----------
-    img : tensorstore.TensorStore
-        Image to be read.
-    bbox : dict
-        Dictionary that contains min and max coordinates of a bounding box.
-
-    Returns
-    -------
-    numpy.ndarray
-        Chunk of data read from an image.
-
-    """
-    try:
-        shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
-        return read_tensorstore(img, bbox["min"], shape, from_center=False)
-    except Exception:
-        return np.zeros(shape)
-
-
-def read_profile(img, spec):
-    """
-    Reads an intensity profile from an image (i.e. image profile).
-
-    Parameters
-    ----------
-    img : tensorstore.TensorStore
-        Image to be read.
-    spec : dict
-        Dictionary that stores the bounding box of chunk to be read and the
-        voxel coordinates of the profile path.
-
-    Returns
-    -------
-    numpy.ndarray
-        Image profile.
+    Class that reads image with zarr.
 
     """
-    img_patch = normalize(read_tensorstore_with_bbox(img, spec["bbox"]))
-    return [img_patch[voxel] for voxel in map(tuple, spec["profile_path"])]
+
+    def __init__(self, img_path):
+        """
+        Constructs a TensorStore image reader.
+
+        Parameters
+        ----------
+        img_path : str
+            Path to image.
+
+        Returns
+        -------
+        None
+
+        """
+        super().__init__(img_path)
 
 
 def get_start_end(voxel, shape, from_center=True):
@@ -174,18 +240,18 @@ def get_start_end(voxel, shape, from_center=True):
     Parameters
     ----------
     voxel : tuple
-        Voxel coordinate that specifies either the center or top, left, front
-        corner of the chunk to be read.
-    shape : tuple
-        Shape (dimensions) of the chunk to be read.
+        Voxel coordinate that is either the center or top-left-front corner of
+        the image patch to be read.
+    shape : Tuple[int]
+        Shape of the image patch to be read.
     from_center : bool, optional
-        Indication of whether the provided coordinates represent the center of
-        the chunk or the starting point. The default is True.
+        Indication of whether "voxel" is the center or top-left-front corner
+        of the image patch to be read. The default is True.
 
     Return
     ------
-    tuple[list[int]]
-        Start and end indices of the chunk to be read.
+    Tuple[List[int]]
+        Start and end indices of the image patch to be read.
 
     """
     if from_center:
@@ -197,7 +263,7 @@ def get_start_end(voxel, shape, from_center=True):
     return start, end
 
 
-# -- operations --
+# -- Operations --
 def normalize(img):
     """
     Normalizes an image so that the minimum and maximum intensity values are 0
@@ -241,7 +307,7 @@ def get_mip(img, axis=0):
 def get_labels_mip(img, axis=0):
     """
     Compute the maximum intensity projection (MIP) of a segmentation along
-    "axis". This routine differs from "get_mip" because it retuns an rgb
+    "axis". This routine differs from "get_mip" because it retuns an RGB
     image.
 
     Parameters
@@ -262,18 +328,18 @@ def get_labels_mip(img, axis=0):
     return (255 * mip).astype(np.uint8)
 
 
-def get_profile(img, spec, profile_id):
+def get_profile(img_reader, spec, profile_id):
     """
     Gets the image profile for a given proposal.
 
     Parameters
     ----------
-    img : tensorstore.TensorStore
-        Image that profiles are generated from.
+    img_reader : ImageReader
+        Image reader.
     spec : dict
         Dictionary that contains the image bounding box and coordinates of the
         image profile path.
-    profile_id : frozenset
+    profile_id : Frozenset[int]
         Identifier of profile.
 
     Returns
@@ -283,13 +349,13 @@ def get_profile(img, spec, profile_id):
         profile.
 
     """
-    profile = read_profile(img, spec)
+    profile = img_reader.read_profile(spec)
     avg, std = util.get_avg_std(profile)
     profile.extend([avg, std])
     return {profile_id: profile}
 
 
-# --- coordinate conversions ---
+# --- Coordinate Conversions ---
 def to_physical(voxel, anisotropy, shift=[0, 0, 0]):
     """
     Converts a voxel coordinate to a physical coordinate by applying the
@@ -307,7 +373,7 @@ def to_physical(voxel, anisotropy, shift=[0, 0, 0]):
 
     Returns
     -------
-    tuple
+    Tuple[float]
         Converted coordinates.
 
     """
@@ -316,7 +382,7 @@ def to_physical(voxel, anisotropy, shift=[0, 0, 0]):
 
 def to_voxels(xyz, anisotropy, multiscale=0):
     """
-    Converts coordinates from world to voxel.
+    Converts coordinate from a physical to voxel space.
 
     Parameters
     ----------
@@ -332,11 +398,11 @@ def to_voxels(xyz, anisotropy, multiscale=0):
     Returns
     -------
     numpy.ndarray
-        Voxel coordinate of the input.
+        Voxel coordinate.
 
     """
     scaling_factor = 1.0 / 2 ** multiscale
-    voxel = scaling_factor * xyz / np.array(anisotropy)
+    voxel = [scaling_factor * xyz[i] / anisotropy[i] for i in range(3)]
     return np.round(voxel).astype(int)
 
 

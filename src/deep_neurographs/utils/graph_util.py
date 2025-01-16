@@ -7,11 +7,11 @@ Created on Wed June 5 16:00:00 2023
 
 Overview
 --------
-Code that reads and preprocesses neuron fragments stored as swc files, then
+Code that loads and preprocesses neuron fragments stored as swc files, then
 constructs a custom graph object called a "FragmentsGraph" from the fragments.
 
     Graph Construction Algorithm:
-        1. Read Neuron Fragments
+        1. Load Neuron Fragments
             to do...
 
         2. Extract Irreducibles
@@ -177,7 +177,7 @@ class GraphLoader:
         """
         irreducibles = None
         self.prune_branches(graph)
-        if compute_path_length(graph) > self.min_size:
+        if compute_path_length(graph, self.min_size) > self.min_size:
             # Irreducible nodes
             leafs, branchings = get_irreducible_nodes(graph)
 
@@ -355,7 +355,7 @@ def smooth_path(graph, path, xyz_list):
     return graph
 
 
-def compute_path_length(graph):
+def compute_path_length(graph, max_length=np.inf):
     """
     Computes the path length of the given graph.
 
@@ -374,6 +374,8 @@ def compute_path_length(graph):
     path_length = 0
     for i, j in nx.dfs_edges(graph):
         path_length += compute_dist(graph, i, j)
+        if path_length > max_length:
+            break
     return path_length
 
 
