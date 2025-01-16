@@ -22,6 +22,7 @@ constructs a custom graph object called a "FragmentsGraph" from the fragments.
 
 """
 
+from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from random import sample
 
@@ -30,7 +31,7 @@ import numpy as np
 from tqdm import tqdm
 
 from deep_neurographs import geometry
-from deep_neurographs.utils import swc_util, util
+from deep_neurographs.utils import img_util, swc_util, util
 
 
 class GraphLoader:
@@ -42,10 +43,10 @@ class GraphLoader:
     def __init__(
         self,
         anisotropy=[1.0, 1.0, 1.0],
-        min_size=30,
+        min_size=30.0,
         node_spacing=1,
         progress_bar=False,
-        prune_depth=20,
+        prune_depth=20.0,
         smooth_bool=True,
     ):
         """
@@ -83,6 +84,7 @@ class GraphLoader:
         self.progress_bar = progress_bar
         self.prune_depth = prune_depth
         self.smooth_bool = smooth_bool
+
         self.reader = swc_util.Reader(anisotropy, min_size)
 
     def run(self, fragments_pointer):
@@ -104,50 +106,50 @@ class GraphLoader:
         """
         from deep_neurographs.fragments_graph import FragmentsGraph
 
-        # Step 1: Read Neuron Fragments
-        graph_list = self.reader.load(fragments_pointer)
+        # Load fragments and extract irreducibles
+        swc_dicts = self.reader.load(fragments_pointer)
+        irreducibles = self.get_irreducibles(swc_dicts)
 
-        # Step: Extract Irreducibles
-        irreducibles = self.process_graphs(graph_list)
-
-        # Step 3: Build FragmentsGraph
+        # Build FragmentsGraph
         fragments_graph = FragmentsGraph(node_spacing=self.node_spacing)
         while len(irreducibles):
             irreducible_set = irreducibles.pop()
             fragments_graph.add_component(irreducible_set)
         return fragments_graph
 
-    def process_graphs(self, graphs_list):
+    # --- Graph structure extraction ---
+    def get_irreducibles(self, swc_dicts):
         """
-        Processes a list of graphs in parallel and extracts irreducible
-        subgraphs from each graph.
+        Processes a list of swc dictionaries in parallel and extracts the
+        parts of the irreducible subgraphs from each swc file.
 
         Parameters
         ----------
-        graphs_list : List[network.Graph]
-            List of graphs to be processed. Each graph is passed to the
-            "process_graph" method, which extracts the irreducible subgraphs
-            from each graph.
+        swc_dicts : List[dict]
+            List of dictionaries such that each contains the contents of an
+            swc file.
 
         Returns
         -------
         List[dict]
-            List of irreducible subgraphs extracted from the input graphs.
+            List of dictionaries such that each contains the components of an
+            irreducible subgraph extracted from an swc file.
 
         """
         # Initializations
         if self.progress_bar:
-            pbar = tqdm(total=len(graphs_list), desc="Process Graphs")
+            pbar = tqdm(total=len(swc_dicts), desc="Extract Graphs")
 
         # Main
-        with ProcessPoolExecutor(max_workers=1) as executor:
+        with ProcessPoolExecutor() as executor:
             # Assign Processes
-            processes = list()
-            while graphs_list:
-                graph = graphs_list.pop()
-                processes.append(
-                    executor.submit(self.extract_irreducibles, graph)
-                )
+            i = 0
+            processes = [None] * len(swc_dicts)
+            while swc_dicts:
+                swc_dict = swc_dicts.pop()
+                processes[i] = executor.submit(
+                    self.extract_irreducibles, swc_dict)
+                i += 1
 
             # Store results
             irreducibles = list()
@@ -159,61 +161,65 @@ class GraphLoader:
                     pbar.update(1)
         return irreducibles
 
-    def extract_irreducibles(self, graph):
+    def extract_irreducibles(self, swc_dict):
         """
-        Gets the irreducible subgraph from the input graph.
+        Gets the irreducible subgraph from the given swc file.
 
         Parameters
         ----------
-        graph : dict
-            Graph that irreducible subgraph is to be extracted from.
+        swc_dict : dict
+            Contents of an swc file.
 
         Returns
         -------
-        List[dict]
-            List of dictionaries such that each is the set of irreducibles
-            from the input graph.
+        dict
+            Dictionary that each contains the components of an irreducible
+            subgraph.
 
         """
-        irreducibles = None
+        graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
         self.prune_branches(graph)
-        if compute_path_length(graph, self.min_size) > self.min_size:
+        if compute_path_length(graph) > self.min_size:
             # Irreducible nodes
             leafs, branchings = get_irreducible_nodes(graph)
 
-            # Irreducible edges
+            # Irreducible nodes
             edges = dict()
             root = None
             for (i, j) in nx.dfs_edges(graph, source=util.sample_once(leafs)):
                 # Check for start of irreducible edge
                 if root is None:
                     root = i
-                    path = [i]
-                    xyz_list = [graph.nodes[i]["xyz"]]
+                    attrs = init_edge_attrs(graph, root)
 
                 # Check for end of irreducible edge
-                path.append(j)
-                xyz_list.append(graph.nodes[j]["xyz"])
+                upd_edge_attrs(graph, attrs, i, j)
                 if j in leafs or j in branchings:
-                    edges[(root, j)] = path
+                    # Smooth (if applicable)
+                    attrs = to_numpy(attrs)
                     if self.smooth_bool:
-                        graph = smooth_path(graph, path, xyz_list)
+                        smooth_branch(graph, attrs, root, j)
+
+                    # Finish
+                    edges[(root, j)] = attrs
                     root = None
 
-            # Set irreducible attributes
+            # Output
             irreducibles = {
                 "leaf": set_node_attrs(graph, leafs),
                 "branching": set_node_attrs(graph, branchings),
                 "edge": set_edge_attrs(graph, edges),
-                "swc_id": graph.graph["swc_id"],
+                "swc_id": swc_dict["swc_id"],
             }
-        return irreducibles
+            return irreducibles
+        else:
+            return None
 
     def prune_branches(self, graph):
         """
         Prunes all short branches from "graph". A short branch is a path
         between a leaf and branching node where the path length is less than
-        "self.prune_depth".
+        "self.prune_depth" microns.
 
         Parameters
         ----------
@@ -253,7 +259,7 @@ class GraphLoader:
                         break
 
 
-# --- Extract Irreducibles  ---
+# --- Utils ---
 def get_irreducible_nodes(graph):
     """
     Gets irreducible nodes (i.e. leafs and branchings) of a graph.
@@ -281,81 +287,161 @@ def get_irreducible_nodes(graph):
 
 def set_node_attrs(graph, nodes):
     """
-    Set node attributes by extracting information from "graph".
+    Set node attributes by extracting values from "graph".
 
     Parameters
     ----------
-    graph : networkx.Graph
-        Graph that contains "nodes".
+    swc_dict : dict
+        Contents of an swc file.
     nodes : list
-        List of node ids to set attributes.
+        List of nodes to set attributes.
 
     Returns
     -------
     dict
-        Dictionary where keys are node ids and values are a dictionary of
-        attributes extracted from the input graph.
+        Dictionary in which keys are node ids and values are a dictionary of
+        attributes extracted from "swc_dict".
 
     """
-    node_attrs = dict()
+    attrs = dict()
     for i in nodes:
-        node_attrs[i] = {
+        attrs[i] = {
             "radius": graph.nodes[i]["radius"], "xyz": graph.nodes[i]["xyz"]
         }
-    return node_attrs
+    return attrs
 
 
-def set_edge_attrs(graph, edges):
-    edge_attrs = dict()
-    for edge, path in edges.items():
-        # Extract attributes
-        length = 0
-        radius_list, xyz_list = list(), list()
-        for idx, i in enumerate(path):
-            radius_list.append(graph.nodes[i]["radius"])
-            xyz_list.append(graph.nodes[i]["xyz"])
-            if idx > 0:
-                length += compute_dist(graph, path[idx], path[idx - 1])
-
-        # Set attributes
-        edge_attrs[edge] = {
-            "length": length,
-            "radius": np.array(radius_list),
-            "xyz": np.array(xyz_list)
-        }
-    return edge_attrs
-
-
-# --- Miscellaneous ---
-def smooth_path(graph, path, xyz_list):
+def init_edge_attrs(graph, i):
     """
-    Smooths a given path on a graph by applying smoothing to the coordinates
-    of the nodes along the path and updating the graph with the smoothed
-    coordinates.
+    Initializes edge attribute dictionary with attributes from node "i" which
+    is an end point of the edge.
+
+    Parameters
+    ----------
+    swc_dict : dict
+        Contents of an swc file.
+    i : int
+        End point of edge and the swc attributes of this node are used to
+        initialize the edge attriubte dictionary.
+
+    Returns
+    -------
+    dict
+        Edge attribute dictionary.
+
+    """
+    attrs = {
+        "length": 0,
+        "radius": [graph.nodes[i]["radius"]],
+        "xyz": [graph.nodes[i]["xyz"]],
+    }
+    return attrs
+
+
+def upd_edge_attrs(graph, attrs, i, j):
+    """
+    Updates an edge attribute dictionary with attributes of node i.
+
+    Parameters
+    ----------
+    swc_dict : dict
+        Contents of an swc file.
+    attrs : dict
+        Attributes (from "swc_dict") of edge being updated.
+    i : int
+        Node of edge whose attributes will be added to "attrs".
+
+    Returns
+    -------
+    dict
+        Edge attribute dictionary.
+
+    """
+    attrs["length"] += compute_dist(graph, i, j)
+    attrs["radius"].append(graph.nodes[i]["radius"])
+    attrs["xyz"].append(graph.nodes[i]["xyz"])
+
+
+def set_edge_attrs(graph, attrs):
+    for e, attrs_e in attrs.items():
+        i, j = tuple(e)
+        attrs_e["xyz"][0] = graph.nodes[i]["xyz"]
+        attrs_e["xyz"][-1] = graph.nodes[j]["xyz"]
+        attrs[e] = attrs_e
+    return attrs
+
+
+def get_edge_attr(graph, edge, attr):
+    """
+    Gets the attribute "attr" of "edge".
 
     Parameters
     ----------
     graph : networkx.Graph
-        Graph containing path to be smoothed.
-    path : List[int]
-        List of node indices representing the path in the graph.
-    xyz_list : List[Tuple[float]]
-        List of xyz coordinates of path in the graph to be smoothed.
+        Graph which "edge" belongs to.
+    edge : tuple
+        Edge to be queried for its attributes.
+    attr : str
+        Attribute to be queried.
 
     Returns
     -------
-    networkx.Graph
-        Input graph with updated "xyz" attributes for the nodes from the input
-        path.
+    Attribute "attr" of "edge"
 
     """
-    smoothed_xyz_list = geometry.smooth_branch(np.array(xyz_list), s=2)
-    for i, xyz in zip(path, smoothed_xyz_list):
-        graph.nodes[i]["xyz"] = xyz
-    return graph
+    return graph.edges[edge][attr]
 
 
-def compute_path_length(graph, max_length=np.inf):
+def to_numpy(attrs):
+    """
+    Converts edge attributes from a list to NumPy array.
+
+    Parameters
+    ----------
+    attrs : dict
+        Dictionary containing attributes of some edge.
+
+    Returns
+    -------
+    dict
+        Updated edge attribute dictionary.
+
+    """
+    attrs["xyz"] = np.array(attrs["xyz"], dtype=np.float32)
+    attrs["radius"] = np.array(attrs["radius"], dtype=np.float16)
+    return attrs
+
+
+# --- Miscellaneous ---
+def smooth_branch(graph, attrs, i, j):
+    """
+    Smoothes a branch then updates "swc_dict" and "edges" with the new xyz
+    coordinates of the branch end points. Note that this branch is an edge
+    in the irreducible graph being built.
+
+    Parameters
+    ----------
+    graph : dict
+        Contents of an swc file.
+    attrs : dict
+        Attributes (from "swc_dict") of branch being smoothed.
+    i : int
+        End point of branch to be smoothed.
+    j : int
+        End point of branch to be smoothed.
+
+    Returns
+    -------
+    dict, dict
+        Dictionaries that have been updated with respect to smoothed edges.
+
+    """
+    attrs["xyz"] = geometry.smooth_branch(attrs["xyz"], s=2)
+    graph.nodes[i]["xyz"] = attrs["xyz"][0]
+    graph.nodes[j]["xyz"] = attrs["xyz"][-1]
+
+
+def compute_path_length(graph):
     """
     Computes the path length of the given graph.
 
@@ -374,8 +460,6 @@ def compute_path_length(graph, max_length=np.inf):
     path_length = 0
     for i, j in nx.dfs_edges(graph):
         path_length += compute_dist(graph, i, j)
-        if path_length > max_length:
-            break
     return path_length
 
 
