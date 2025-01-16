@@ -10,12 +10,13 @@ other from a FragmentsGraph.
 """
 
 from collections import defaultdict
+from tqdm import tqdm
 
 import networkx as nx
 import numpy as np
-from tqdm import tqdm
 
 from deep_neurographs import geometry
+from deep_neurographs.utils import util
 
 QUERY_DIST = 15
 
@@ -46,15 +47,14 @@ def remove_curvy(fragments_graph, max_length, ratio=0.5):
 
     """
     deleted_ids = set()
-    components = get_line_components(fragments_graph)
-    for nodes in tqdm(components, desc="Filter Curvy Fragments"):
+    for nodes in get_line_components(fragments_graph):
         i, j = tuple(nodes)
         length = fragments_graph.edges[i, j]["length"]
         endpoint_dist = fragments_graph.dist(i, j)
         if endpoint_dist / length < ratio and length < max_length:
             deleted_ids.add(fragments_graph.edges[i, j]["swc_id"])
             delete_fragment(fragments_graph, i, j)
-    return len(deleted_ids)
+    return util.reformat_number(len(deleted_ids))
 
 
 # --- Doubles Removal ---
@@ -96,7 +96,7 @@ def remove_doubles(fragments_graph, max_length, node_spacing):
                 if check_doubles_criteria(hits, n_points):
                     delete_fragment(fragments_graph, i, j)
                     deleted_ids.add(swc_id)
-    return len(deleted_ids)
+    return util.reformat_number(len(deleted_ids))
 
 
 def compute_projections(fragments_graph, kdtree, edge):
