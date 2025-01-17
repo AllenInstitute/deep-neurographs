@@ -8,7 +8,7 @@ Created on Wed June 5 16:00:00 2023
 Overview
 --------
 Code that loads and preprocesses neuron fragments stored as swc files, then
-constructs a custom graph object called a "FragmentsGraph" from the fragments.
+constructs a custom graph object called a "FragmentsGraph".
 
     Graph Construction Algorithm:
         1. Load Neuron Fragments
@@ -22,16 +22,15 @@ constructs a custom graph object called a "FragmentsGraph" from the fragments.
 
 """
 
-from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from random import sample
+from tqdm import tqdm
 
 import networkx as nx
 import numpy as np
-from tqdm import tqdm
 
 from deep_neurographs import geometry
-from deep_neurographs.utils import img_util, swc_util, util
+from deep_neurographs.utils import swc_util, util
 
 
 class GraphLoader:
@@ -45,9 +44,9 @@ class GraphLoader:
         anisotropy=[1.0, 1.0, 1.0],
         min_size=30.0,
         node_spacing=1,
-        progress_bar=False,
         prune_depth=20.0,
         smooth_bool=True,
+        verbose=False,
     ):
         """
         Builds a FragmentsGraph by reading swc files stored either on the
@@ -63,15 +62,15 @@ class GraphLoader:
             components in the FragmentsGraph. The default is 30.0 (microns).
         node_spacing : int, optional
             Spacing (in microns) between nodes. The default is 1.
-        progress_bar : bool, optional
-            Indication of whether to print out a progress bar while building
-            graph. The default is True.
         prune_depth : int, optional
             Branches less than "prune_depth" microns are pruned if "prune" is
             True. The default is 20.0 (microns).
         smooth_bool : bool, optional
             Indication of whether to smooth branches from swc files. The
             default is True.
+        verbose : bool, optional
+            Indication of whether to print out a progress bar while building
+            graph. The default is True.
 
         Returns
         -------
@@ -81,9 +80,9 @@ class GraphLoader:
         self.anisotropy = anisotropy
         self.min_size = min_size
         self.node_spacing = node_spacing
-        self.progress_bar = progress_bar
         self.prune_depth = prune_depth
         self.smooth_bool = smooth_bool
+        self.verbose = verbose
 
         self.reader = swc_util.Reader(anisotropy, min_size)
 
@@ -101,7 +100,7 @@ class GraphLoader:
         Returns
         -------
         FragmentsGraph
-            FragmentsGraph generated from swc files.
+            Graph generated from swc files.
 
         """
         from deep_neurographs.fragments_graph import FragmentsGraph
@@ -121,7 +120,7 @@ class GraphLoader:
     def get_irreducibles(self, swc_dicts):
         """
         Processes a list of swc dictionaries in parallel and extracts the
-        parts of the irreducible subgraphs from each swc file.
+        components of the irreducible subgraph from each swc file.
 
         Parameters
         ----------
@@ -132,12 +131,12 @@ class GraphLoader:
         Returns
         -------
         List[dict]
-            List of dictionaries such that each contains the components of an
+            List of dictionaries such that each contains the components of the
             irreducible subgraph extracted from an swc file.
 
         """
         # Initializations
-        if self.progress_bar:
+        if self.verbose:
             pbar = tqdm(total=len(swc_dicts), desc="Extract Graphs")
 
         # Main
@@ -157,13 +156,18 @@ class GraphLoader:
                 result = process.result()
                 if result is not None:
                     irreducibles.append(result)
-                if self.progress_bar:
+                if self.verbose:
                     pbar.update(1)
+            pbar.update(1)
         return irreducibles
 
     def extract_irreducibles(self, swc_dict):
         """
-        Gets the irreducible subgraph from the given swc file.
+        Gets the components of the irreducible subgraph from a given swc file.
+        Note that the irreducible components consist of the following:
+            (1) Leafs: Nodes of degree 1
+            (2) Branchings: Nodes of degree 3+
+            (3) Edges that contain the path between irreducible nodes
 
         Parameters
         ----------
@@ -217,14 +221,13 @@ class GraphLoader:
 
     def prune_branches(self, graph):
         """
-        Prunes all short branches from "graph". A short branch is a path
-        between a leaf and branching node where the path length is less than
-        "self.prune_depth" microns.
+        Prunes short branches from the graph, defined as paths between a leaf
+        and a branching node with a length less than self.prune_depth microns.
 
         Parameters
         ----------
         graph : networkx.Graph
-            Graph to be pruned.
+            Graph to be searched.
 
         Returns
         -------
@@ -259,7 +262,7 @@ class GraphLoader:
                         break
 
 
-# --- Utils ---
+# --- Irreducible Extraction Utils ---
 def get_irreducible_nodes(graph):
     """
     Gets irreducible nodes (i.e. leafs and branchings) of a graph.
@@ -271,8 +274,8 @@ def get_irreducible_nodes(graph):
 
     Returns
     -------
-    set, set
-        Nodes with degreee 1 and degree > 2.
+    Tuple[set]
+        Sets of leaf and branching nodes.
 
     """
     leafs = set()
@@ -287,20 +290,18 @@ def get_irreducible_nodes(graph):
 
 def set_node_attrs(graph, nodes):
     """
-    Set node attributes by extracting values from "graph".
+    Extracts attributes for each node in the graph.
 
     Parameters
     ----------
-    swc_dict : dict
-        Contents of an swc file.
-    nodes : list
-        List of nodes to set attributes.
+    nodes : List[int]
+        Nodes whose attributes are to be extracted from the graph.
 
     Returns
     -------
     dict
-        Dictionary in which keys are node ids and values are a dictionary of
-        attributes extracted from "swc_dict".
+        Dictionary where the keys are node ids and values are dictionaries
+        containing the "radius" and "xyz" attributes of the nodes.
 
     """
     attrs = dict()
@@ -313,16 +314,15 @@ def set_node_attrs(graph, nodes):
 
 def init_edge_attrs(graph, i):
     """
-    Initializes edge attribute dictionary with attributes from node "i" which
-    is an end point of the edge.
+    Initializes an attribute dictionary for a single irreducible edge.
 
     Parameters
     ----------
     swc_dict : dict
         Contents of an swc file.
     i : int
-        End point of edge and the swc attributes of this node are used to
-        initialize the edge attriubte dictionary.
+        Node that is the start of a path between irreducible nodes. The
+        attributes of this node are used to initialize the edge dictionary.
 
     Returns
     -------
@@ -347,9 +347,10 @@ def upd_edge_attrs(graph, attrs, i, j):
     swc_dict : dict
         Contents of an swc file.
     attrs : dict
-        Attributes (from "swc_dict") of edge being updated.
+        Edge attribute dictionary to be updated.
     i : int
-        Node of edge whose attributes will be added to "attrs".
+        Node in the path between irreducible nodes whose attributes will be
+        added to the "attrs" dictionary.
 
     Returns
     -------
@@ -371,27 +372,6 @@ def set_edge_attrs(graph, attrs):
     return attrs
 
 
-def get_edge_attr(graph, edge, attr):
-    """
-    Gets the attribute "attr" of "edge".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph which "edge" belongs to.
-    edge : tuple
-        Edge to be queried for its attributes.
-    attr : str
-        Attribute to be queried.
-
-    Returns
-    -------
-    Attribute "attr" of "edge"
-
-    """
-    return graph.edges[edge][attr]
-
-
 def to_numpy(attrs):
     """
     Converts edge attributes from a list to NumPy array.
@@ -399,7 +379,7 @@ def to_numpy(attrs):
     Parameters
     ----------
     attrs : dict
-        Dictionary containing attributes of some edge.
+        Edge attribute dictionary.
 
     Returns
     -------
@@ -422,9 +402,9 @@ def smooth_branch(graph, attrs, i, j):
     Parameters
     ----------
     graph : dict
-        Contents of an swc file.
+        Graph containing branch to be smoothed.
     attrs : dict
-        Attributes (from "swc_dict") of branch being smoothed.
+        Edge attributes dictionary.
     i : int
         End point of branch to be smoothed.
     j : int
@@ -432,8 +412,7 @@ def smooth_branch(graph, attrs, i, j):
 
     Returns
     -------
-    dict, dict
-        Dictionaries that have been updated with respect to smoothed edges.
+    None
 
     """
     attrs["xyz"] = geometry.smooth_branch(attrs["xyz"], s=2)

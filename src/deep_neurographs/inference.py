@@ -223,8 +223,8 @@ class InferencePipeline:
             anisotropy=self.graph_config.anisotropy,
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,
-            progress_bar=True,
             prune_depth=self.graph_config.prune_depth,
+            verbose=True,
         )
         self.graph = graph_builder.run(fragments_pointer)
         self.filter_fragments()
@@ -505,7 +505,8 @@ class InferenceEngine:
             Threshold for accepting proposals, where proposals with predicted
             likelihood above this threshold are accepted. The default is 0.7.
         anisotropy : List[float], optional
-            ...
+            Image to physical coordinates scaling factors to account for the
+            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
         batch_size : int, optional
             Number of proposals to classify in each batch.The default is 2000.
         multiscale : int, optional
