@@ -8,8 +8,9 @@ Neural network architectures that learn to classify edge proposals.
 
 """
 
-import torch
 from torch import nn
+
+import torch
 
 
 class FeedForwardNet(nn.Module):

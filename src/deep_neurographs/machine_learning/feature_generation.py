@@ -15,9 +15,9 @@ Conventions:
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
+from scipy.ndimage import zoom
 
 import numpy as np
-from scipy.ndimage import zoom
 
 from deep_neurographs import geometry
 from deep_neurographs.utils import img_util, util

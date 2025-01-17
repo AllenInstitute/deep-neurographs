@@ -13,7 +13,9 @@ from abc import ABC, abstractmethod
 from skimage.color import label2rgb
 
 import numpy as np
+import s3fs
 import tensorstore as ts
+import zarr
 
 from deep_neurographs.utils import util
 
@@ -85,6 +87,8 @@ class ImageReader(ABC):
             return self.img[s[0]: e[0], s[1]: e[1], s[2]: e[2]]
         elif len(self.shape()) == 5:
             return self.img[0, 0, s[0]: e[0], s[1]: e[1], s[2]: e[2]]
+        else:
+            raise ValueError(f"Unsupported image shape: {self.shape()}")
 
     def read_with_bbox(self, bbox):
         """
@@ -159,7 +163,7 @@ class TensorStoreReader(ImageReader):
         img_path : str
             Path to image.
         driver : str
-            Storage driver needed to read image at "path".
+            Storage driver needed to read the image at "path".
 
         Returns
         -------
@@ -171,8 +175,7 @@ class TensorStoreReader(ImageReader):
 
     def _load_image(self):
         """
-        This method should be implemented by subclasses to load the image
-        based on img_path.
+        Load the image using the TensorStore library.
 
         Parameters
         ----------
@@ -201,16 +204,15 @@ class TensorStoreReader(ImageReader):
         ).result()
         if self.driver == "neuroglancer_precomputed":
             self.img = self.img[ts.d["channel"][0]]
-        elif self.driver == "zarr":
-            self.img = self.img[ts.d[2].transpose[4]]
-            self.img = self.img[ts.d[2].transpose[3]]
+            self.img = self.img[ts.d[0].transpose[2]]
+            self.img = self.img[ts.d[0].transpose[1]]
 
     def read(self, voxel, shape, from_center=True):
         img_patch = super().read(voxel, shape, from_center)
         return img_patch.read().result()
 
 
-def ZarrReader(ImageReader):
+class ZarrReader(ImageReader):
     """
     Class that reads image with zarr.
 
@@ -231,6 +233,22 @@ def ZarrReader(ImageReader):
 
         """
         super().__init__(img_path)
+
+    def _load_image(self):
+        """
+        Load the image using the zarr library.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        store = s3fs.S3Map(root=self.img_path, s3=s3fs.S3FileSystem(anon=True))
+        self.img = zarr.open(store, mode="r")
 
 
 def get_start_end(voxel, shape, from_center=True):
@@ -377,6 +395,7 @@ def to_physical(voxel, anisotropy, shift=[0, 0, 0]):
         Converted coordinates.
 
     """
+    voxel = voxel[::-1]
     return tuple([voxel[i] * anisotropy[i] - shift[i] for i in range(3)])
 
 
@@ -403,7 +422,7 @@ def to_voxels(xyz, anisotropy, multiscale=0):
     """
     scaling_factor = 1.0 / 2 ** multiscale
     voxel = [scaling_factor * xyz[i] / anisotropy[i] for i in range(3)]
-    return np.round(voxel).astype(int)
+    return np.round(voxel[::-1]).astype(int)
 
 
 # -- utils --
