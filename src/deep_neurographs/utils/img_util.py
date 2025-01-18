@@ -20,6 +20,8 @@ import zarr
 from deep_neurographs.utils import util
 
 
+### PERMUTE COORDINATE ORDER IS TURNED OFF
+
 class ImageReader(ABC):
     """
     Abstract class to create image readers classes.
@@ -395,7 +397,7 @@ def to_physical(voxel, anisotropy, shift=[0, 0, 0]):
         Converted coordinates.
 
     """
-    voxel = voxel[::-1]
+    #voxel = voxel[::-1]
     return tuple([voxel[i] * anisotropy[i] - shift[i] for i in range(3)])
 
 
@@ -422,7 +424,8 @@ def to_voxels(xyz, anisotropy, multiscale=0):
     """
     scaling_factor = 1.0 / 2 ** multiscale
     voxel = [scaling_factor * xyz[i] / anisotropy[i] for i in range(3)]
-    return np.round(voxel[::-1]).astype(int)
+    #return np.round(voxel[::-1]).astype(int)
+    return np.round(voxel).astype(int)
 
 
 # -- utils --
