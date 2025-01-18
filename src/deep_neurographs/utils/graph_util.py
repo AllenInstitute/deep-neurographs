@@ -12,13 +12,23 @@ constructs a custom graph object called a "FragmentsGraph".
 
     Graph Construction Algorithm:
         1. Load Neuron Fragments
-            to do...
+            Reads SWC files and stores the contents as a dictionary with the
+            keys: "id", "xyz", "radius", "pid", and "swc_id". Each SWC file is
+            assumed to contain unformly spaced points, each are separated by 1
+            voxel.
 
         2. Extract Irreducibles
-            to do...
+            Finds the components of the irreducible subgraph from each SWC
+            file. The irreducible components of a graph are the following:
+                (1) Leafs: Nodes of degree 1
+                (2) Branchings: Nodes of degree 3+
+                (3) Paths between irreducible nodes
 
         3. Build FragmentsGraph
             to do...
+
+Note: We use the term "branch" to refer to a path in a graph from a branching
+      node to a leaf.
 
 """
 
@@ -35,7 +45,8 @@ from deep_neurographs.utils import swc_util, util
 
 class GraphLoader:
     """
-    Class that is used to build an instance of FragmentsGraph.
+    Class that loads SWC files and constructs a FragmentsGraph instance from
+    the data.
 
     """
 
@@ -49,7 +60,7 @@ class GraphLoader:
         verbose=False,
     ):
         """
-        Builds a FragmentsGraph by reading swc files stored either on the
+        Builds a FragmentsGraph by reading swc files stored on either the
         cloud or local machine, then extracting the irreducible components.
 
         Parameters
@@ -58,49 +69,52 @@ class GraphLoader:
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
         min_size : float, optional
-            Minimum path length of swc files which are stored as connected
-            components in the FragmentsGraph. The default is 30.0 (microns).
+            Minimum path length of swc files that are loaded into the
+            FragmentsGraph. The default is 30.0 (microns).
         node_spacing : int, optional
-            Spacing (in microns) between nodes. The default is 1.
+            Sampling rate for nodes in FragmentsGraph. Every "node_spacing"
+            node is retained.
         prune_depth : int, optional
-            Branches less than "prune_depth" microns are pruned if "prune" is
-            True. The default is 20.0 (microns).
+            Branches with length less than "prune_depth" microns are pruned.
+            The default is 20.0 microns.
         smooth_bool : bool, optional
-            Indication of whether to smooth branches from swc files. The
-            default is True.
+            Indication of whether to smooth xyz coordinates from SWC files.
+            The default is True.
         verbose : bool, optional
-            Indication of whether to print out a progress bar while building
-            graph. The default is True.
+            Indication of whether to display a progress bar while building
+            FragmentsGraph. The default is True.
 
         Returns
         -------
         None
 
         """
-        self.anisotropy = anisotropy
+        # Class attributes
         self.min_size = min_size
         self.node_spacing = node_spacing
         self.prune_depth = prune_depth
         self.smooth_bool = smooth_bool
         self.verbose = verbose
 
+        # SWC Reader
         self.reader = swc_util.Reader(anisotropy, min_size)
 
     def run(self, fragments_pointer):
         """
         Builds a FragmentsGraph by reading swc files stored either on the
-        cloud or local machine, then extracting the irreducible components.
+        cloud or local machine, then extracting the irreducible components
+        from each SWC file.
 
         Parameters
         ----------
         fragments_pointer : dict, list, str
-            Pointer to swc files used to build an instance of FragmentsGraph,
+            Pointer to SWC files used to build an instance of FragmentsGraph,
             see "swc_util.Reader" for further documentation.
 
         Returns
         -------
         FragmentsGraph
-            Graph generated from swc files.
+            Graph generated from SWC files.
 
         """
         from deep_neurographs.fragments_graph import FragmentsGraph
@@ -120,19 +134,19 @@ class GraphLoader:
     def get_irreducibles(self, swc_dicts):
         """
         Processes a list of swc dictionaries in parallel and extracts the
-        components of the irreducible subgraph from each swc file.
+        components of the irreducible subgraph from each.
 
         Parameters
         ----------
         swc_dicts : List[dict]
             List of dictionaries such that each contains the contents of an
-            swc file.
+            SWC file.
 
         Returns
         -------
         List[dict]
             List of dictionaries such that each contains the components of the
-            irreducible subgraph extracted from an swc file.
+            irreducible subgraph extracted from each SWC dictionary.
 
         """
         # Initializations
@@ -163,16 +177,13 @@ class GraphLoader:
 
     def extract_irreducibles(self, swc_dict):
         """
-        Gets the components of the irreducible subgraph from a given swc file.
-        Note that the irreducible components consist of the following:
-            (1) Leafs: Nodes of degree 1
-            (2) Branchings: Nodes of degree 3+
-            (3) Edges that contain the path between irreducible nodes
+        Gets the components of the irreducible subgraph from a given SWC
+        dictionary.
 
         Parameters
         ----------
         swc_dict : dict
-            Contents of an swc file.
+            Contents of an SWC file.
 
         Returns
         -------
@@ -221,8 +232,7 @@ class GraphLoader:
 
     def prune_branches(self, graph):
         """
-        Prunes short branches from the graph, defined as paths between a leaf
-        and a branching node with a length less than self.prune_depth microns.
+        Prunes branches with length less than "self.prune_depth" microns.
 
         Parameters
         ----------
@@ -262,7 +272,7 @@ class GraphLoader:
                         break
 
 
-# --- Irreducible Extraction Utils ---
+# --- Irreducibles Extraction ---
 def get_irreducible_nodes(graph):
     """
     Gets irreducible nodes (i.e. leafs and branchings) of a graph.
@@ -345,7 +355,7 @@ def upd_edge_attrs(graph, attrs, i, j):
     Parameters
     ----------
     swc_dict : dict
-        Contents of an swc file.
+        Contents of an SWC file.
     attrs : dict
         Edge attribute dictionary to be updated.
     i : int
@@ -395,9 +405,8 @@ def to_numpy(attrs):
 # --- Miscellaneous ---
 def smooth_branch(graph, attrs, i, j):
     """
-    Smoothes a branch then updates "swc_dict" and "edges" with the new xyz
-    coordinates of the branch end points. Note that this branch is an edge
-    in the irreducible graph being built.
+    Smoothes branch then updates "graph" and "attrs" with the new xyz
+    coordinates.
 
     Parameters
     ----------
@@ -458,7 +467,7 @@ def compute_dist(graph, i, j):
     Returns
     -------
     float
-        Euclidean distance between i and j.
+        Euclidean distance between nodes i and j.
 
     """
     return geometry.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
@@ -466,7 +475,7 @@ def compute_dist(graph, i, j):
 
 def cycle_exists(graph):
     """
-    Checks whether a cycle exists in "graph".
+    Checks the given graph has a cycle.
 
     Paramaters
     ----------
@@ -476,7 +485,7 @@ def cycle_exists(graph):
     Returns
     -------
     bool
-        Indication of whether there exists a cycle.
+        Indication of whether graph has a cycle.
 
     """
     try:
@@ -497,8 +506,8 @@ def get_leafs(graph):
 
     Returns
     -------
-    list
-        Leaf nodes "graph".
+    List[int]
+        Leaf nodes of "graph".
 
     """
     return [i for i in graph.nodes if graph.degree[i] == 1]
@@ -536,7 +545,7 @@ def get_component(graph, root):
 
     Returns
     -------
-    set[int]
+    Set[int]
         Set of nodes in the connected component corresponding to "root".
 
     """
@@ -560,7 +569,7 @@ def count_components(graph):
         Graph to be searched.
 
     Returns
-    -------'
+    -------
     int
         Number of connected components.
 
@@ -581,7 +590,7 @@ def largest_components(graph, k):
 
     Returns
     -------
-    list
+    List[int]
         List where each entry is a random node from one of the k largest
         connected components.
 

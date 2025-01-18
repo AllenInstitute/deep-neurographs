@@ -20,6 +20,8 @@ import zarr
 from deep_neurographs.utils import util
 
 
+### PERMUTE COORDINATE ORDER IS TURNED OFF
+
 class ImageReader(ABC):
     """
     Abstract class to create image readers classes.
