@@ -172,11 +172,13 @@ class GraphLoader:
                     irreducibles.append(result)
                 if self.verbose:
                     pbar.update(1)
+            pbar.update(1)
         return irreducibles
 
     def extract_irreducibles(self, swc_dict):
         """
-        Gets the components of the irreducible subgraph from a given swc file.
+        Gets the components of the irreducible subgraph from a given SWC
+        dictionary.
 
         Parameters
         ----------
