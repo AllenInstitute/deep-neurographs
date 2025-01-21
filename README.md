@@ -24,7 +24,7 @@ Briefly describe inference pipeline, to do...
 - Graph Update: Integrates inference results by merging fragments corresponding to an accepted proposal.
 
 <p>
-  <img src="imgs/pipeline.png" width="900" alt="Visualization of split correction pipeline. See Inference section for description of each step.>
+  <img src="imgs/pipeline.png" width="600" alt="Visualization of split correction pipeline. See Inference section for description of each step.>
 </p>
 
 ## Inference
