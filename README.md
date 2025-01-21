@@ -23,8 +23,8 @@ Briefly describe inference pipeline, to do...
 - Graph Neural Network (GNN) Inference: Predicts whether to accept or reject proposals based on the generated features and graphical structure.
 - Graph Update: Integrates inference results by merging fragments corresponding to an accepted proposal.
 
-<p>
-  <img src="imgs/pipeline.png" width="600" alt="Visualization of split correction pipeline. See Inference section for description of each step.>
+<p style="text-align: center;">
+  <img src="imgs/pipeline.png" width="700" alt="Visualization of split correction pipeline. See Inference section for description of each step.">
 </p>
 
 ## Inference
