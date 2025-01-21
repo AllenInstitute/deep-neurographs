@@ -12,7 +12,8 @@
 GraphTrace is a Python library that leverages machine learning to automatically correct splits in fragmented neuron segmentations from whole-brain images. A demo Jupyter notebook is provided to showcase the process: it loads fragmented neuron segments from a predicted segmentation and corrects them using GraphTrace. You can also use the provided code to train a deep learning model and evaluate it against ground truth data.
 
 <p>
-  <img src="imgs/result.png" width="900" alt="Example of before and after run obtained with GraphTrace">
+  <img src="imgs/result.png" width="900" alt="">
+   <b> Figure: </b>Split correction result obtained with GraphTrace
 </p>
 
 Briefly describe inference pipeline, to do...
@@ -24,7 +25,9 @@ Briefly describe inference pipeline, to do...
 - Graph Update: Integrates inference results by merging fragments corresponding to an accepted proposal.
 
 <p align="center">
-  <img src="imgs/pipeline.png" width="700" alt="Visualization of split correction pipeline. See Inference section for description of each step.">
+  <img src="imgs/pipeline.png" width="700" alt="pipeline">
+    <br>
+  <b> Figure: </b>Visualization of split correction pipeline. See Inference section for description of each step.
 </p>
 
 ## Inference
