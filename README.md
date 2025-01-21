@@ -13,6 +13,7 @@ GraphTrace is a Python library that leverages machine learning to automatically 
 
 <p>
   <img src="imgs/result.png" width="900" alt="">
+  <br>
    <b> Figure: </b>Split correction result obtained with GraphTrace
 </p>
 
