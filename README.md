@@ -7,14 +7,15 @@
 ![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen?logo=codecov)
 ![Python](https://img.shields.io/badge/python->=3.7-blue?logo=python)
 
+## Overview
 
-GraphTrace is a Python library that utilizes machine learning to perform automated reconstruction of a fragmented neuron segmentation from whole brain images. For a demo, we provide a Jupyter notebook that loads fragments from a predicted segmentation and automatically merges them by running GraphTrace. You can use our github code to train a deep learning model and test with a ground-truth.
+GraphTrace is a Python library that leverages machine learning to automatically correct splits in fragmented neuron segmentations from whole-brain images. A demo Jupyter notebook is provided to showcase the process: it loads fragmented neuron segments from a predicted segmentation and corrects them using GraphTrace. You can also use the provided code to train a deep learning model and evaluate it against ground truth data.
 
 <p>
   <img src="imgs/result.png" width="1200" alt="Example of before and after run obtained with GraphTrace">
 </p>
 
-## Key Features
+Briefly describe inference pipeline, to do...
 
 - Graph Construction: Reads neuron fragments stored as swc files and loads them into a Networkx graph
 - Proposals: Generates potential connections between nearby fragments to correct false splits in the segmentation
@@ -22,20 +23,15 @@ GraphTrace is a Python library that utilizes machine learning to perform automat
 - Graph Neural Network (GNN) Inference: Predicts whether to accept or reject proposals based on the generated features and graphical structure.
 - Graph Update: Integrates inference results by merging fragments corresponding to an accepted proposal.
 
+## Inference
+
+To do...
+
 ## Installation
 To use the software, in the root directory, run
 ```bash
 pip install -e .
 ```
-
-To develop the code, run
-```bash
-git clone 
-pip install -e .[dev]
-```
-
-## Contributing
-We welcome contributions from the community! If you have suggestions, improvements, or bug reports, please open an issue or submit a pull request.
 
 ## License
 GraphTrace is licensed under the MIT License.
