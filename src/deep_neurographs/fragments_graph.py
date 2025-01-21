@@ -30,9 +30,7 @@ class FragmentsGraph(nx.Graph):
 
     """
 
-    def __init__(
-        self, anisotropy=[1.0, 1.0, 1.0], img_bbox=None, node_spacing=1
-    ):
+    def __init__(self, anisotropy=[1.0, 1.0, 1.0], node_spacing=1):
         """
         Initializes an instance of NeuroGraph.
 
@@ -41,9 +39,6 @@ class FragmentsGraph(nx.Graph):
         anisotropy : ArrayLike, optional
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
-        img_bbox : dict or None, optional
-            Dictionary with the keys "min" and "max" which specify a bounding
-            box in an image. The default is None.
         node_spacing : int, optional
             Physical spacing (in microns) between nodes in swcs. The default
             is 1.
@@ -66,15 +61,6 @@ class FragmentsGraph(nx.Graph):
         self.swc_ids = set()
         self.xyz_to_edge = dict()
 
-        # Bounding box (if applicable)
-        self.bbox = img_bbox
-        if self.bbox:
-            self.origin = img_bbox["min"].astype(int)
-            self.shape = (img_bbox["max"] - img_bbox["min"]).astype(int)
-        else:
-            self.origin = np.array([0, 0, 0], dtype=int)
-            self.shape = None
-
     def copy_graph(self, add_attrs=False):
         graph = nx.Graph()
         nodes = deepcopy(self.nodes(data=add_attrs))
@@ -86,25 +72,6 @@ class FragmentsGraph(nx.Graph):
         else:
             graph.add_edges_from(deepcopy(self.edges))
         return graph
-
-    def set_proxy_soma_ids(self, k):
-        """
-        Sets class attribute called "self.soma_swc_ids" which stores the swc
-        ids of the "k" largest components. These components are used as a proxy
-        for soma locations.
-
-        Paramters
-        ---------
-        k : int
-            Number of largest components to be set as proxy soma locations.
-
-        Returns
-        -------
-        None
-
-        """
-        for i in utils.graph_util.largest_components(self, k):
-            self.soma_ids[self.nodes[i]["swc_id"]] = i
 
     def get_leafs(self):
         """
@@ -302,7 +269,6 @@ class FragmentsGraph(nx.Graph):
         long_range_bool=False,
         progress_bar=True,
         proposals_per_leaf=3,
-        return_trimmed_proposals=False,
         trim_endpoints_bool=False,
     ):
         """
@@ -326,9 +292,6 @@ class FragmentsGraph(nx.Graph):
         proposals_per_leaf : int, optional
             Maximum number of proposals generated for each leaf. The default
             is 3.
-        return_trimmed_proposals, optional
-            Indication of whether to return trimmed proposal ids. The default
-            is False.
         trim_endpoints_bool : bool, optional
             Indication of whether to trim endpoints. The default is False.
 
@@ -349,7 +312,7 @@ class FragmentsGraph(nx.Graph):
             trim_endpoints_bool=trim_endpoints_bool,
         )
 
-        # Establish groundtruth
+        # Set groundtruth
         if groundtruth_graph:
             self.gt_accepts = init_targets(self, groundtruth_graph)
         else:
@@ -723,8 +686,8 @@ class FragmentsGraph(nx.Graph):
         if somas_check and self.check_proposal_degrees(i, j):
             # Dense attributes
             attrs = dict()
-            self.nodes[i]["radius"] = 7.3141592
-            self.nodes[j]["radius"] = 7.3141592
+            self.nodes[i]["radius"] = 5.3141592
+            self.nodes[j]["radius"] = 5.3141592
             for k in ["xyz", "radius"]:
                 combine = np.vstack if k == "xyz" else np.array
                 attrs[k] = combine([self.nodes[i][k], self.nodes[j][k]])
@@ -913,21 +876,6 @@ class FragmentsGraph(nx.Graph):
         else:
             return np.flip(self.edges[edge][key], axis=0)
 
-    def is_contained(self, node_or_xyz, buffer=0):
-        if self.bbox:
-            voxel = self.to_voxels(node_or_xyz, self.anisotropy)
-            return util.is_contained(self.bbox, voxel, buffer=buffer)
-        else:
-            return True
-
-    def branch_contained(self, xyz_list):
-        if self.bbox:
-            return all(
-                [self.is_contained(xyz, buffer=-32) for xyz in xyz_list]
-            )
-        else:
-            return True
-
     def to_voxels(self, node_or_xyz, shift=np.array([0, 0, 0])):
         # Get xyz coordinate
         shift = self.origin if shift else np.zeros((3))
@@ -1017,7 +965,7 @@ class FragmentsGraph(nx.Graph):
                 if n_entries == 0:
                     swc_id = self.nodes[i]["swc_id"]
                     x, y, z = tuple(self.nodes[i]["xyz"])
-                    r = 6 if self.nodes[i]["radius"] == 7.3141592 else 2
+                    r = 5 if self.nodes[i]["radius"] == 5.3141592 else 2
 
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
@@ -1042,7 +990,7 @@ class FragmentsGraph(nx.Graph):
         # Make entries
         for k in util.spaced_idxs(len(branch_xyz), 5):
             x, y, z = tuple(branch_xyz[k])
-            r = 6 if branch_radius[k] == 7.3141592 else 2
+            r = 5 if branch_radius[k] == 5.3141592 else 2
 
             node_id = n_entries + 1
             parent = n_entries if k > 1 else parent

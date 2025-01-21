@@ -152,6 +152,7 @@ class GraphLoader:
         # Initializations
         if self.verbose:
             pbar = tqdm(total=len(swc_dicts), desc="Extract Graphs")
+            pbar.update(1)
 
         # Main
         with ProcessPoolExecutor() as executor:
@@ -172,7 +173,6 @@ class GraphLoader:
                     irreducibles.append(result)
                 if self.verbose:
                     pbar.update(1)
-            pbar.update(1)
         return irreducibles
 
     def extract_irreducibles(self, swc_dict):
