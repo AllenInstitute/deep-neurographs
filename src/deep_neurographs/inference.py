@@ -587,7 +587,7 @@ class InferenceEngine:
                     fragments_graph.merge_proposal(p)
                     accepts.append(p)
                 pbar.update(len(batch["proposals"]))
-            fragments_graph.absorb_reducibles()
+            #fragments_graph.absorb_reducibles() - extremely slow
         return fragments_graph, accepts
 
     def get_batch(self, fragments_graph, proposals, flagged_proposals):
