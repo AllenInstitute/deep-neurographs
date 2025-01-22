@@ -31,6 +31,10 @@ Briefly describe inference pipeline, to do...
   <b> Figure: </b>Visualization of split correction pipeline, see Inference section for description of each step.
 </p>
 
+## Usage
+
+To do...
+
 ## Inference
 
 ### Step 1: Graph Construction
