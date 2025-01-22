@@ -28,7 +28,7 @@ Briefly describe inference pipeline, to do...
 <p align="center">
   <img src="imgs/pipeline.png" width="800" alt="pipeline">
     <br>
-  <b> Figure: </b>Visualization of split correction pipeline. See Inference section for description of each step.
+  <b> Figure: </b>Visualization of split correction pipeline, see Inference section for description of each step.
 </p>
 
 ## Inference
