@@ -57,60 +57,6 @@ def get_inputs(data, device="cpu", is_multimodal=False):
         return x, edge_index, edge_attr
 
 
-def toGPU(tensor_dict):
-    """
-    Moves dictionary of tensors from CPU to GPU.
-
-    Parameters
-    ----------
-    tensor_dict : dict
-        Tensor to be moved to GPU.
-
-    Returns
-    -------
-    None
-
-    """
-    return {k: tensor.to("cuda") for k, tensor in tensor_dict.items()}
-
-
-def toCPU(tensor):
-    """
-    Moves tensor from GPU to CPU.
-
-    Parameters
-    ----------
-    tensor : torch.Tensor
-        Tensor to be moved to CPU.
-
-    Returns
-    -------
-    list
-        Tensor moved to CPU and converted into a list.
-
-    """
-    return tensor.detach().cpu().tolist()
-
-
-def toTensor(my_list):
-    """
-    Converts a list to a tensor with contiguous memory.
-
-    Parameters
-    ----------
-    my_list : list
-        List to be converted into a tensor.
-
-    Returns
-    -------
-    torch.Tensor
-        Tensor.
-
-    """
-    arr = np.array(my_list, dtype=np.int64).tolist()
-    return torch.Tensor(arr).t().contiguous().long()
-
-
 # --- Batch Generation ---
 def get_batch(
     fragments_graph, proposals, batch_size, flagged_proposals=set()

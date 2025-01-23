@@ -19,8 +19,7 @@ from scipy.ndimage import zoom
 
 import numpy as np
 
-from deep_neurographs import geometry
-from deep_neurographs.utils import img_util, util
+from deep_neurographs.utils import geometry_util, img_util, util
 from deep_neurographs.utils.img_util import TensorStoreReader, ZarrReader
 
 
@@ -399,7 +398,7 @@ class FeatureGenerator:
             for p in proposals:
                 n_points = self.get_n_profile_points()
                 xyz_1, xyz_2 = fragments_graph.proposal_xyz(p)
-                xyz_path = geometry.make_line(xyz_1, xyz_2, n_points)
+                xyz_path = geometry_util.make_line(xyz_1, xyz_2, n_points)
                 threads.append(executor.submit(self.get_profile, xyz_path, p))
 
             # Store results
@@ -483,7 +482,7 @@ class FeatureGenerator:
         """
         voxels = np.vstack([self.to_voxels(xyz) for xyz in xyz_path])
         bbox = self.get_bbox(voxels)
-        profile_path = geometry.shift_path(voxels, bbox["min"])
+        profile_path = geometry_util.shift_path(voxels, bbox["min"])
         return {"bbox": bbox, "profile_path": profile_path}
 
     def get_bbox(self, voxels, is_img=True):
@@ -514,7 +513,7 @@ class FeatureGenerator:
     def read_label_patch(self, voxels, labels):
         bbox = self.get_bbox(voxels, is_img=False)
         label_patch = img_util.read_tensorstore_with_bbox(self.labels, bbox)
-        voxels = geometry.shift_path(voxels, bbox["min"])
+        voxels = geometry_util.shift_path(voxels, bbox["min"])
         return self.relabel(label_patch, voxels, labels)
 
     def relabel(self, label_patch, voxels, labels):
@@ -528,8 +527,8 @@ class FeatureGenerator:
         relabel_patch = np.zeros(label_patch.shape)
         relabel_patch[label_patch == labels[0]] = 1
         relabel_patch[label_patch == labels[1]] = 2
-        line = geometry.make_line(voxels[0], voxels[-1], n_points)
-        return geometry.fill_path(relabel_patch, line, val=-1)
+        line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
+        return geometry_util.fill_path(relabel_patch, line, val=-1)
 
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
@@ -554,7 +553,7 @@ def get_leaf_path(fragments_graph, i):
     """
     j = fragments_graph.leaf_neighbor(i)
     xyz_path = fragments_graph.oriented_edge((i, j), i)
-    return geometry.truncate_path(xyz_path)
+    return geometry_util.truncate_path(xyz_path)
 
 
 def get_branching_path(fragments_graph, i):
@@ -575,8 +574,8 @@ def get_branching_path(fragments_graph, i):
 
     """
     j1, j2 = tuple(fragments_graph.neighbors(i))
-    voxels_1 = geometry.truncate_path(fragments_graph.oriented_edge((i, j1), i))
-    voxles_2 = geometry.truncate_path(fragments_graph.oriented_edge((i, j2), i))
+    voxels_1 = geometry_util.truncate_path(fragments_graph.oriented_edge((i, j1), i))
+    voxles_2 = geometry_util.truncate_path(fragments_graph.oriented_edge((i, j2), i))
     return np.vstack([np.flip(voxels_1, axis=0), voxles_2])
 
 

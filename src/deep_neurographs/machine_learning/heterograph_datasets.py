@@ -21,7 +21,7 @@ from deep_neurographs.machine_learning.feature_generation import (
     get_matrix,
     get_patches_matrix,
 )
-from deep_neurographs.utils import gnn_util
+from deep_neurographs.utils import gnn_util, ml_util
 
 DTYPE = torch.float32
 
@@ -225,7 +225,7 @@ class HeteroGraphDataset:
                 e_1 = frozenset({-1, -2})
                 e_2 = frozenset({-2, -3})
                 edges = [[n - 1, n - 2], [n - 2, n - 1]]
-                self.data[edge_type].edge_index = gnn_util.toTensor(edges)
+                self.data[edge_type].edge_index = ml_util.toTensor(edges)
                 if node_type == "branch":
                     self.idxs_branches["idx_to_id"][n - 1] = e_1
                     self.idxs_branches["idx_to_id"][n - 2] = e_2
@@ -305,7 +305,7 @@ class HeteroGraphDataset:
             v1 = self.idxs_proposals["id_to_idx"][frozenset(e1)]
             v2 = self.idxs_proposals["id_to_idx"][frozenset(e2)]
             edge_index.extend([[v1, v2], [v2, v1]])
-        return gnn_util.toTensor(edge_index)
+        return ml_util.toTensor(edge_index)
 
     def branch_to_branch(self):
         """
@@ -331,7 +331,7 @@ class HeteroGraphDataset:
                 v1 = self.idxs_branches["id_to_idx"][frozenset(e1)]
                 v2 = self.idxs_branches["id_to_idx"][frozenset(e2)]
                 edge_index.extend([[v1, v2], [v2, v1]])
-        return gnn_util.toTensor(edge_index)
+        return ml_util.toTensor(edge_index)
 
     def branch_to_proposal(self):
         """
@@ -361,7 +361,7 @@ class HeteroGraphDataset:
                 if frozenset((j, k)) not in self.proposals:
                     v2 = self.idxs_branches["id_to_idx"][frozenset((j, k))]
                     edge_index.extend([[v2, v1]])
-        return gnn_util.toTensor(edge_index)
+        return ml_util.toTensor(edge_index)
 
     # Set Edge Attributes
     def set_edge_attrs(self, x_nodes, edge_type, idx_map):
@@ -475,7 +475,7 @@ class HeteroGraphMultiModalDataset(HeteroGraphDataset):
                 e_1 = frozenset({-1, -2})
                 e_2 = frozenset({-2, -3})
                 edges = [[n - 1, n - 2], [n - 2, n - 1]]
-                self.data[edge_type].edge_index = gnn_util.toTensor(edges)
+                self.data[edge_type].edge_index = ml_util.toTensor(edges)
                 if node_type == "branch":
                     self.idxs_branches["idx_to_id"][n - 1] = e_1
                     self.idxs_branches["idx_to_id"][n - 2] = e_2

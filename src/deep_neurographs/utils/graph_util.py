@@ -10,23 +10,6 @@ Overview
 Code that loads and preprocesses neuron fragments stored as swc files, then
 constructs a custom graph object called a "FragmentsGraph".
 
-    Graph Construction Algorithm:
-        1. Load Neuron Fragments
-            Reads SWC files and stores the contents as a dictionary with the
-            keys: "id", "xyz", "radius", "pid", and "swc_id". Each SWC file is
-            assumed to contain unformly spaced points, each are separated by 1
-            voxel.
-
-        2. Extract Irreducibles
-            Finds the components of the irreducible subgraph from each SWC
-            file. The irreducible components of a graph are the following:
-                (1) Leafs: Nodes of degree 1
-                (2) Branchings: Nodes of degree 3+
-                (3) Paths between irreducible nodes
-
-        3. Build FragmentsGraph
-            to do...
-
 Note: We use the term "branch" to refer to a path in a graph from a branching
       node to a leaf.
 
@@ -39,8 +22,7 @@ from tqdm import tqdm
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry
-from deep_neurographs.utils import swc_util, util
+from deep_neurographs.utils import geometry_util, swc_util, util
 
 
 class GraphLoader:
@@ -152,7 +134,6 @@ class GraphLoader:
         # Initializations
         if self.verbose:
             pbar = tqdm(total=len(swc_dicts), desc="Extract Graphs")
-            pbar.update(1)
 
         # Main
         with ProcessPoolExecutor() as executor:
@@ -424,7 +405,7 @@ def smooth_branch(graph, attrs, i, j):
     None
 
     """
-    attrs["xyz"] = geometry.smooth_branch(attrs["xyz"], s=2)
+    attrs["xyz"] = geometry_util.smooth_branch(attrs["xyz"], s=2)
     graph.nodes[i]["xyz"] = attrs["xyz"][0]
     graph.nodes[j]["xyz"] = attrs["xyz"][-1]
 
@@ -470,7 +451,7 @@ def compute_dist(graph, i, j):
         Euclidean distance between nodes i and j.
 
     """
-    return geometry.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
+    return geometry_util.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
 
 
 def cycle_exists(graph):

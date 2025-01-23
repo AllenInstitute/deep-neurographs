@@ -15,8 +15,7 @@ from tqdm import tqdm
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry
-from deep_neurographs.utils import util
+from deep_neurographs.utils import geometry_util, util
 
 QUERY_DIST = 15
 
@@ -129,11 +128,11 @@ def compute_projections(fragments_graph, kdtree, edge):
         # Compute projections
         best_id = None
         best_dist = np.inf
-        for hit_xyz in geometry.query_ball(kdtree, xyz, QUERY_DIST):
+        for hit_xyz in geometry_util.query_ball(kdtree, xyz, QUERY_DIST):
             hit_id = fragments_graph.xyz_to_swc(hit_xyz)
             if hit_id is not None and hit_id != query_id:
-                if geometry.dist(hit_xyz, xyz) < best_dist:
-                    best_dist = geometry.dist(hit_xyz, xyz)
+                if geometry_util.dist(hit_xyz, xyz) < best_dist:
+                    best_dist = geometry_util.dist(hit_xyz, xyz)
                     best_id = hit_id
 
         # Store best

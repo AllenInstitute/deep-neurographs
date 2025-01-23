@@ -29,7 +29,6 @@ from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator,
 )
 from deep_neurographs.utils import gnn_util, ml_util, util
-from deep_neurographs.utils.gnn_util import toCPU
 from deep_neurographs.utils.graph_util import GraphLoader
 
 LR = 1e-3
@@ -322,8 +321,8 @@ class TrainEngine:
                 self.optimizer.step()
 
                 # Store prediction
-                y.extend(toCPU(y_i))
-                hat_y.extend(toCPU(hat_y_i))
+                y.extend(ml_util.toCPU(y_i))
+                hat_y.extend(ml_util.toCPU(hat_y_i))
 
             self.compute_metrics(y, hat_y, "train", epoch)
             self.scheduler.step()
@@ -334,8 +333,8 @@ class TrainEngine:
                 self.model.eval()
                 for dataset in validation_dataset_list:
                     hat_y_i, y_i = self.predict(dataset.data)
-                    y.extend(toCPU(y_i))
-                    hat_y.extend(toCPU(hat_y_i))
+                    y.extend(ml_util.toCPU(y_i))
+                    hat_y.extend(ml_util.toCPU(hat_y_i))
                 test_score = self.compute_metrics(y, hat_y, "val", epoch)
 
                 # Check for best
