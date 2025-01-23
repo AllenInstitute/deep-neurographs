@@ -14,12 +14,15 @@ import networkx as nx
 
 from deep_neurographs.machine_learning import feature_generation
 from deep_neurographs.neurograph import NeuroGraph
-from deep_neurographs.utils import graph_util as gutil
-from deep_neurographs.utils import img_util, ml_util, util
+from deep_neurographs.utils import (
+    graph_util as gutil,
+    img_util,
+    ml_util,
+    util
+)
 
 BATCH_SIZE_PROPOSALS = 1000
 CHUNK_SHAPE = (256, 256, 256)
-N_SEED_GRAPHS = 16
 
 
 def run(

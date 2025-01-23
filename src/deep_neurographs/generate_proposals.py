@@ -4,9 +4,8 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Overview
---------
-Code that generate edge proposals for a fragments graph.
+
+Code that generate edge proposals for a given fragments graph.
 
     Proposal Generation Algorithm:
 
@@ -17,7 +16,7 @@ from copy import deepcopy
 import numpy as np
 from tqdm import tqdm
 
-from deep_neurographs import geometry
+from deep_neurographs.utils import geometry_util as geometry
 
 DOT_THRESHOLD = -0.3
 RADIUS_SCALING_FACTOR = 1.5

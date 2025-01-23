@@ -4,9 +4,26 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Implementation of subclass of Networkx.Graph called "FragmentsGraph" which is
-a graph that is initialized by loading swc files (i.e. fragments) from a
-predicted segmentation.
+Implementation of a custom subclass of Networkx.Graph called "FragmentsGraph".
+This graph instance is initialized by reading and processing SWC files (i.e.
+neuron fragments).
+
+    Graph Construction Algorithm:
+        1. Load Neuron Fragments
+            Reads SWC files and stores the contents as a dictionary with the
+            keys: "id", "xyz", "radius", "pid", and "swc_id". Each SWC file is
+            assumed to contain uniformly spaced points, each separated by 1
+            voxel.
+
+        2. Extract Irreducibles
+            Finds the components of the irreducible subgraph from each SWC
+            file. The irreducible components of a graph are the following:
+                (1) Leafs: Nodes of degree 1
+                (2) Branchings: Nodes of degree 3+
+                (3) Paths between irreducible nodes
+
+        3. Ingest Irreducibles
+            to do...
 
 """
 import zipfile
@@ -18,9 +35,9 @@ import numpy as np
 from numpy import concatenate
 from scipy.spatial import KDTree
 
-from deep_neurographs import generate_proposals, geometry, utils
-from deep_neurographs.groundtruth_generation import init_targets
-from deep_neurographs.utils import img_util, util
+from deep_neurographs import generate_proposals
+from deep_neurographs.utils import geometry_util as geometry, img_util, util
+from deep_neurographs.machine_learning.groundtruth_generation import init_targets
 
 
 class FragmentsGraph(nx.Graph):
@@ -89,7 +106,10 @@ class FragmentsGraph(nx.Graph):
         """
         return [i for i in self.nodes if self.is_leaf(i)]
 
-    # --- Edit Graph --
+    # --- Build Graph --
+    def load(self, fragments_pointer):
+        pass
+
     def add_component(self, irreducibles):
         """
         Adds a connected component to "self".
@@ -838,7 +858,7 @@ class FragmentsGraph(nx.Graph):
             Leaf node.
 
         Returns
-        ----------
+        -------
         numpy.ndarray
             xyz coordinates or radii contained in the edge emanating from
             "leaf".

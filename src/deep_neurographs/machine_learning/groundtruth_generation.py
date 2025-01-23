@@ -4,8 +4,8 @@ Created on Sat March 2 16:00:00 2024
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Generates ground truth for edge proposals (i.e. determines whether a proposal
-should be accepted or rejected).
+Generates ground truth for proposals by determining whether a proposal should
+be accepted or rejected based on comparing fragments to ground truth tracings.
 
 """
 
@@ -14,8 +14,7 @@ from collections import defaultdict
 import networkx as nx
 import numpy as np
 
-from deep_neurographs import geometry
-from deep_neurographs.utils import util
+from deep_neurographs.utils import geometry_util, util
 
 ALIGNED_THRESHOLD = 4.5
 MIN_INTERSECTION = 10
@@ -138,9 +137,9 @@ def is_component_aligned(target_graph, pred_graph, nodes, kdtree):
     dists = defaultdict(list)
     for edge in pred_graph.subgraph(nodes).edges:
         for xyz in pred_graph.edges[edge]["xyz"]:
-            hat_xyz = geometry.kdtree_query(kdtree, xyz)
+            hat_xyz = geometry_util.kdtree_query(kdtree, xyz)
             hat_swc_id = target_graph.xyz_to_swc(hat_xyz)
-            d = geometry.dist(hat_xyz, xyz)
+            d = geometry_util.dist(hat_xyz, xyz)
             dists[hat_swc_id].append(d)
 
     # Deterine whether aligned
@@ -205,7 +204,7 @@ def proj_branch(target_graph, pred_graph, kdtree, target_id, i):
     hits = defaultdict(list)
     for branch in pred_graph.branches(i):
         for xyz in branch:
-            hat_xyz = geometry.kdtree_query(kdtree, xyz)
+            hat_xyz = geometry_util.kdtree_query(kdtree, xyz)
             swc_id = target_graph.xyz_to_swc(hat_xyz)
             if swc_id == target_id:
                 hat_edge = target_graph.xyz_to_edge[hat_xyz]
@@ -218,7 +217,7 @@ def proj_branch(target_graph, pred_graph, kdtree, target_id, i):
     if len(hits.keys()) > 1:
         swc_id = pred_graph.nodes[i]["swc_id"]
         for edge in hits.keys():
-            nb, d = geometry.nearest_neighbor(hits[edge], xyz_i)
+            nb, d = geometry_util.nearest_neighbor(hits[edge], xyz_i)
             if d < min_dist:
                 min_dist = d
                 best_edge = edge
@@ -256,10 +255,10 @@ def is_adjacent(neurograph, edge_i, edge_j):
 
 def is_adjacent_aligned(hat_branch_i, hat_branch_j, xyz_i, xyz_j):
     hat_branch_i, hat_branch_j = orient_branch(hat_branch_i, hat_branch_j)
-    hat_i, _ = geometry.nearest_neighbor(hat_branch_i, xyz_i)
-    hat_j, _ = geometry.nearest_neighbor(hat_branch_j, xyz_j)
+    hat_i, _ = geometry_util.nearest_neighbor(hat_branch_i, xyz_i)
+    hat_j, _ = geometry_util.nearest_neighbor(hat_branch_j, xyz_j)
     hat_path_dist = hat_i + hat_j
-    path_dist = geometry.dist(xyz_i, xyz_j)
+    path_dist = geometry_util.dist(xyz_i, xyz_j)
     return True if 2 * path_dist / (path_dist + hat_path_dist) > 0.5 else False
 
 

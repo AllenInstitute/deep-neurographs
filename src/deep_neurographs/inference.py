@@ -4,8 +4,28 @@ Created on Sat November 04 15:30:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Routines for running inference with a machine model that classifies edge
-proposals.
+Routines that execute the full GraphTrace inference pipeline.
+
+    Inference Algorithm:
+        1. Graph Construction
+            Builds a graph from neuron fragments.
+
+        2. Proposal Generation
+            Generates proposals for potential connections between fragments.
+
+        3. Proposal Classification
+            a. Feature Generation
+                Extracts features from proposals and graph for a machine
+                learning model.
+            b. Predict with Graph Neural Network (GNN)
+                Runs a GNN to classify proposals as accept/reject
+                based on the learned features.
+            c. Merge Accepted Proposals
+                Adds accepted proposals to the fragments graph as edges.
+
+Note: Steps 2 and 3 of the inference pipeline can be iterated in a loop that
+      repeats multiple times by calling the routine "run_schedule" within the
+      InferencePipeline class.
 
 """
 
@@ -23,41 +43,26 @@ from deep_neurographs import fragment_filtering
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator,
 )
-from deep_neurographs.utils import gnn_util
-from deep_neurographs.utils import graph_util as gutil
-from deep_neurographs.utils import ml_util, util
-from deep_neurographs.utils.gnn_util import toCPU
+from deep_neurographs.utils import (
+    gnn_util,
+    graph_util as gutil,
+    ml_util,
+    util
+)
 from deep_neurographs.utils.graph_util import GraphLoader
 
 
 class InferencePipeline:
     """
-    Class that executes the full GraphTrace inference pipeline that performs
-    the following steps:
-
-    1. Graph Construction
-        Builds a graph representation from fragmented neuron segments.
-
-    2. Connection Proposals
-        Generates proposals for potential connections between fragments.
-
-    3. Feature Generation
-        Extracts relevant features from the proposals and graph to be used by
-        a machine learning model.
-
-    4. Inference
-        Applies a machine learning model classify proposals as accept/reject
-        based on the learned features.
-
-    5. Graph Update
-        Integrates the inference results to refine and merge the fragments
-        into a cohesive structure.
+    Class that executes the full GraphTrace inference pipeline by performing
+    the following steps: (1) Graph Construction, (2) Proposal Generation, and
+    (3) Proposal Classification.
 
     """
 
     def __init__(
         self,
-        sample_id,
+        brain_id,
         segmentation_id,
         img_path,
         model_path,
@@ -76,14 +81,12 @@ class InferencePipeline:
 
         Parameters
         ----------
-        sample_id : int
-            Identifier for the brain sample to be used in the inference
-            pipeline.
+        brain_id : str
+            Identifier for the whole-brain dataset.
         segmentation_id : str
-            Identifier for the predicted segmentation to be processed by the
-            inference pipeline.
+            Identifier for the segmentation model that generated fragments.
         img_path : str
-            Path to the raw image assumed to be stored in a GCS bucket.
+            Path to the whole-brain image stored in a GCS or S3 bucket.
         model_path : str
             Path to machine learning model parameters.
         output_dir : str
@@ -114,7 +117,7 @@ class InferencePipeline:
         self.accepted_proposals = list()
         self.log_runtimes = log_runtimes
         self.model_path = model_path
-        self.sample_id = sample_id
+        self.brain_id = brain_id
         self.segmentation_id = segmentation_id
         self.save_to_s3_bool = save_to_s3_bool
         self.s3_dict = s3_dict
@@ -153,7 +156,7 @@ class InferencePipeline:
         Parameters
         ----------
         fragments_pointer : dict, list, str
-            Pointer to swc files used to build an instance of FragmentGraph,
+            Pointer to SWC files used to build an instance of FragmentGraph,
             see "swc_util.Reader" for further documentation.
 
         Returns
@@ -169,13 +172,12 @@ class InferencePipeline:
         # Main
         self.build_graph(fragments_pointer)
         self.generate_proposals()
-        self.run_inference()
+        self.classify_proposals()
         self.save_results()
 
         # Finish
-        self.report("Final Graph...")
-        self.report_graph()
         t, unit = util.time_writer(time() - t0)
+        self.report_graph(prefix="\nFinal")
         self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
 
     def run_schedule(self, fragments_pointer, radius_schedule):
@@ -188,26 +190,25 @@ class InferencePipeline:
         self.build_graph(fragments_pointer)
         for round_id, radius in enumerate(radius_schedule):
             round_id += 1
-            self.report(f"--- Round {round_id}:  Radius = {radius} ---")
+            self.report(f"\n--- Round {round_id}:  Radius = {radius} ---")
             self.generate_proposals(radius)
-            self.run_inference()
+            self.classify_proposals()
+            self.report_graph(prefix="Current")
         self.save_results(round_id=round_id)
 
         # Finish
-        self.report("Final Graph...")
-        self.report_graph()
         t, unit = util.time_writer(time() - t0)
+        self.report_graph(prefix="\nFinal")
         self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
 
     def build_graph(self, fragments_pointer):
         """
-        Initializes and constructs the fragments graph based on the provided
-        fragment data.
+        Builds a graph from the given fragments.
 
         Parameters
         ----------
         fragment_pointer : dict, list, str
-            Pointer to swc files used to build an instance of FragmentGraph,
+            Pointer to SWC files used to build an instance of FragmentGraph,
             see "swc_util.Reader" for further documentation.
 
         Returns
@@ -215,7 +216,7 @@ class InferencePipeline:
         None
 
         """
-        self.report("Step 1: Building FragmentGraph")
+        self.report("Step 1: Build Fragments Graph")
         t0 = time()
 
         # Initialize Graph
@@ -238,9 +239,8 @@ class InferencePipeline:
 
         # Report results
         t, unit = util.time_writer(time() - t0)
+        self.report_graph(prefix="\nInitial")
         self.report(f"Module Runtime: {round(t, 4)} {unit}")
-        self.report("\nInitial Graph...")
-        self.report_graph()
 
     def filter_fragments(self):
         # Curvy fragments
@@ -275,27 +275,26 @@ class InferencePipeline:
 
         # Main
         t0 = time()
-        n_trimmed = self.graph.generate_proposals(
+        self.graph.generate_proposals(
             radius,
             complex_bool=self.graph_config.complex_bool,
             long_range_bool=self.graph_config.long_range_bool,
             proposals_per_leaf=self.graph_config.proposals_per_leaf,
             trim_endpoints_bool=self.graph_config.trim_endpoints_bool,
         )
-
         n_proposals = util.reformat_number(self.graph.n_proposals())
-        n_trimmed = util.reformat_number(n_trimmed)
 
         # Report results
         t, unit = util.time_writer(time() - t0)
-        self.report(f"# Trimmed: {n_trimmed}")
         self.report(f"# Proposals: {n_proposals}")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
 
-    def run_inference(self):
+    def classify_proposals(self):
         """
-        Executes the inference process using the configured inference engine
-        and updates the graph.
+        Classifies proposals by calling "self.inference_engine". This routine
+        generates features and runs a GNN to make predictions. Proposals with
+        a prediction above "self.threshold" are accepted and added to the
+        graph as an edge.
 
         Parameters
         ----------
@@ -318,15 +317,14 @@ class InferencePipeline:
 
         # Report results
         t, unit = util.time_writer(time() - t0)
-        n_accepts = len(self.accepted_proposals)
-        self.report(f"# Accepted: {util.reformat_number(n_accepts)}")
-        self.report(f"% Accepted: {round(n_accepts / n_proposals, 4)}")
+        self.report(f"# Accepted: {util.reformat_number(len(accepts))}")
+        self.report(f"% Accepted: {round(len(accepts) / n_proposals, 4)}")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def save_results(self, round_id=None):
         """
         Saves the processed results from running the inference pipeline,
-        namely the corrected swc files and a list of the merged swc ids.
+        namely the corrected SWC files and a list of the merged SWC ids.
 
         Parameters
         ----------
@@ -409,7 +407,7 @@ class InferencePipeline:
         """
         metadata = {
             "date": datetime.today().strftime("%Y-%m-%d"),
-            "sample_id": self.sample_id,
+            "brain_id": self.brain_id,
             "segmentation_id": self.segmentation_id,
             "min_fragment_size": f"{self.graph_config.min_size}um",
             "model_type": self.ml_config.model_type,
@@ -435,11 +433,11 @@ class InferencePipeline:
     def log_experiment(self):
         self.report("\nExperiment Overview")
         self.report("-------------------------------------------------------")
-        self.report(f"Sample_ID: {self.sample_id}")
+        self.report(f"brain_id: {self.brain_id}")
         self.report(f"Segmentation_ID: {self.segmentation_id}")
         self.report("\n")
 
-    def report_graph(self):
+    def report_graph(self, prefix="\n"):
         """
         Prints an overview of the graph's structure and memory usage.
 
@@ -460,10 +458,11 @@ class InferencePipeline:
         usage = round(util.get_memory_usage(), 2)
 
         # Report
+        self.report(f"{prefix} Graph")
         self.report(f"# Connected Components: {n_components}")
         self.report(f"# Nodes: {n_nodes}")
         self.report(f"# Edges: {n_edges}")
-        self.report(f"Memory Consumption: {usage} GBs\n")
+        self.report(f"Memory Consumption: {usage} GBs")
 
 
 class InferenceEngine:
@@ -707,7 +706,7 @@ def predict_with_gnn(model, data, device=None):
     with torch.no_grad():
         x, edge_index, edge_attr = gnn_util.get_inputs(data, device)
         preds = sigmoid(model(x, edge_index, edge_attr))
-    return toCPU(preds[0:len(data["proposal"]["y"]), 0])
+    return ml_util.toCPU(preds[0:len(data["proposal"]["y"]), 0])
 
 
 def get_accepts(fragments_graph, preds, threshold, high_threshold=0.9):
