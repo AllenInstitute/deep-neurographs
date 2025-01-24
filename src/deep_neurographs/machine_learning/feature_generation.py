@@ -14,7 +14,6 @@ Conventions:
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from copy import deepcopy
 from scipy.ndimage import zoom
 
 import numpy as np
@@ -30,7 +29,7 @@ class FeatureGenerator:
 
     """
     # Class attributes
-    patch_shape = [96, 96, 96]
+    patch_shape = [256, 256, 256]
     n_profile_points = 16
 
     def __init__(
@@ -376,7 +375,7 @@ class FeatureGenerator:
 
     def proposal_profiles(self, fragments_graph, proposals):
         """
-        Generates an image intensity profile along the proposal.
+        Generates an image intensity profile along proposals.
 
         Parameters
         ----------
@@ -388,7 +387,7 @@ class FeatureGenerator:
         Returns
         -------
         dict
-            Dictonary such that each pair is the proposal id and image
+            Dictonary such that each item is a proposal id and image
             intensity profile.
 
         """
@@ -477,13 +476,13 @@ class FeatureGenerator:
         Returns
         -------
         dict
-            Specifications needed to compute a profile.
+            Specifications needed to read image patch and generate profile.
 
         """
-        voxels = np.vstack([self.to_voxels(xyz) for xyz in xyz_path])
-        bbox = self.get_bbox(voxels)
-        profile_path = geometry_util.shift_path(voxels, bbox["min"])
-        return {"bbox": bbox, "profile_path": profile_path}
+        voxel_path = np.vstack([self.to_voxels(xyz) for xyz in xyz_path])
+        bbox = self.get_bbox(voxel_path)
+        voxel_path = geometry_util.shift_path(voxel_path, bbox["min"])
+        return {"bbox": bbox, "profile_path": voxel_path}
 
     def get_bbox(self, voxels, is_img=True):
         center = np.round(np.mean(voxels, axis=0)).astype(int)
@@ -521,7 +520,7 @@ class FeatureGenerator:
         n_points = self.get_n_profile_points()
         label_patch = zoom(label_patch, 1.0 / 2 ** self.multiscale, order=0)
         for i, voxel in enumerate(voxels):
-            voxels[i] = [v // scaling_factor for v in voxel]
+            voxels[i] = [v // 2 ** self.multiscale for v in voxel]
 
         # Main
         relabel_patch = np.zeros(label_patch.shape)
@@ -532,6 +531,7 @@ class FeatureGenerator:
 
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
+
 
 # --- Profile utils ---
 def get_leaf_path(fragments_graph, i):

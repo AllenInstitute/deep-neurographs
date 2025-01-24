@@ -65,7 +65,7 @@ def save_model(path, model, model_type):
     else:
         joblib.dump(model, path)
 
-        
+
 def toGPU(tensor_dict):
     """
     Moves dictionary of tensors from CPU to GPU.

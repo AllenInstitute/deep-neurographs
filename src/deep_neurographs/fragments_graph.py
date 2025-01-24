@@ -26,14 +26,16 @@ neuron fragments).
             to do...
 
 """
-import zipfile
+
 from copy import deepcopy
 from io import StringIO
+from numpy import concatenate
+from scipy.spatial import KDTree
+from tqdm import tqdm
 
 import networkx as nx
 import numpy as np
-from numpy import concatenate
-from scipy.spatial import KDTree
+import zipfile
 
 from deep_neurographs import generate_proposals
 from deep_neurographs.utils import geometry_util as geometry, img_util, util
@@ -218,14 +220,14 @@ class FragmentsGraph(nx.Graph):
         -------
         """
         nodes = deepcopy(self.nodes)
-        for i in nodes:
+        for i in tqdm(nodes):
             nbs = list(self.neighbors(i))
             if len(nbs) == 2 and len(self.nodes[i]["proposals"]) == 0:
                 # Concatenate attributes
                 len_1 = self.edges[i, nbs[0]]["length"]
                 len_2 = self.edges[i, nbs[1]]["length"]
-                xyz = self.branches(i, key="xyz")
-                radius = self.branches(i, key="radius")
+                xyz = self.branches(i, key="xyz", ignore_reducibles=False)
+                radius = self.branches(i, key="radius", ignore_reducibles=False)
                 attrs = {
                     "length": len_1 + len_2,
                     "radius": concatenate([np.flip(radius[0]), radius[1]]),
@@ -495,7 +497,7 @@ class FragmentsGraph(nx.Graph):
 
         Returns
         -------
-        List[frozenset]
+        List[Frozenset[int]]
             List of proposals in the connected component that "proposal"
             belongs to in the proposal induced subgraph.
 
@@ -903,7 +905,7 @@ class FragmentsGraph(nx.Graph):
             xyz = self.nodes[node_or_xyz]["xyz"]
         else:
             xyz = node_or_xyz
-        
+
         # Coordinate conversion
         voxel = img_util.to_voxels(xyz, self.anisotropy)
         return voxel - shift

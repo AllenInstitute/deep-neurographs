@@ -387,14 +387,6 @@ class HeteroGraphDataset:
                     attrs.append(np.zeros(self.n_branch_features() + 1))
                 else:
                     attrs.append(x_nodes[v])
-
-        #print(edge_type, attrs[0].size())
-        try:
-            np.array(attrs)
-            #print(edge_type, v, attrs)
-        except:
-            print(edge_type, v, attrs)
-            stop
         arrs = torch.tensor(np.array(attrs), dtype=DTYPE)
         self.data[edge_type].edge_attr = arrs
 
