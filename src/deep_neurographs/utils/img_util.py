@@ -20,8 +20,6 @@ import zarr
 from deep_neurographs.utils import util
 
 
-### PERMUTE COORDINATE ORDER IS TURNED OFF
-
 class ImageReader(ABC):
     """
     Abstract class to create image readers classes.
@@ -112,7 +110,7 @@ class ImageReader(ABC):
             shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
             return self.read(bbox["min"], shape, from_center=False)
         except Exception:
-            return np.zeros(shape)
+            return np.ones(shape)
 
     def read_profile(self, spec):
         """
@@ -436,7 +434,7 @@ def init_bbox(origin, shape):
 
     Parameters
     ----------
-    origin : tuple[int]
+    origin : Tuple[int]
         Voxel coordinate of the origin of the bounding box, which is assumed
         to be top-front-left corner.
     shape : Tuple[int]
@@ -481,16 +479,18 @@ def get_minimal_bbox(voxels, buffer=0):
     return bbox
 
 
-def find_img_path(bucket_name, img_root, dataset_name):
+def find_img_path(bucket_name, root_dir, dataset_name):
     """
-    Find the path of a specific dataset in a GCS bucket.
+    Finds the path to an image in a GCS bucket for the dataset given by
+    "dataset_name".
 
     Parameters:
     ----------
     bucket_name : str
         Name of the GCS bucket where the images are stored.
-    img_root : str
-        Root directory path in the GCS bucket where the images are located.
+    root_dir : str
+        Path to the directory in the GCS bucket where the image is expected to
+        be located.
     dataset_name : str
         Name of the dataset to be searched for within the subdirectories.
 
@@ -500,7 +500,7 @@ def find_img_path(bucket_name, img_root, dataset_name):
         Path of the found dataset subdirectory within the specified GCS bucket.
 
     """
-    for subdir in util.list_gcs_subdirectories(bucket_name, img_root):
+    for subdir in util.list_gcs_subdirectories(bucket_name, root_dir):
         if dataset_name in subdir:
             return subdir + "whole-brain/fused.zarr/"
-    raise f"Dataset not found in {bucket_name} - {img_root}"
+    raise f"Dataset not found in {bucket_name} - {root_dir}"

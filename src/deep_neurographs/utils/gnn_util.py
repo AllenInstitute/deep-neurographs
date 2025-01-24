@@ -12,11 +12,9 @@ with them.
 from collections import defaultdict
 
 import networkx as nx
-import numpy as np
 import torch
 
-from deep_neurographs.utils import graph_util as gutil
-from deep_neurographs.utils import util
+from deep_neurographs.utils import graph_util as gutil, ml_util, util
 
 GNN_DEPTH = 2
 
@@ -43,6 +41,7 @@ def get_inputs(data, device="cpu", is_multimodal=False):
     Returns
     --------
     tuple:
+        Tuple containing the following:
         - x (dict): Node features dictionary.
         - edge_index (dict): Edge indices dictionary.
         - edge_attr (dict): Edge attributes dictionary.
@@ -52,9 +51,10 @@ def get_inputs(data, device="cpu", is_multimodal=False):
     edge_index = data.edge_index_dict
     edge_attr = data.edge_attr_dict
     if "cuda" in device and torch.cuda.is_available():
-        return toGPU(x), toGPU(edge_index), toGPU(edge_attr)
-    else:
-        return x, edge_index, edge_attr
+        x = ml_util.toGPU(x)
+        edge_index = ml_util.toGPU(edge_index)
+        edge_attr = ml_util.toGPU(edge_attr)
+    return x, edge_index, edge_attr
 
 
 # --- Batch Generation ---
