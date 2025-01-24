@@ -65,6 +65,41 @@ def save_model(path, model, model_type):
     else:
         joblib.dump(model, path)
 
+        
+def toGPU(tensor_dict):
+    """
+    Moves dictionary of tensors from CPU to GPU.
+
+    Parameters
+    ----------
+    tensor_dict : dict
+        Tensor to be moved to GPU.
+
+    Returns
+    -------
+    None
+
+    """
+    return {k: tensor.to("cuda") for k, tensor in tensor_dict.items()}
+
+
+def toCPU(tensor):
+    """
+    Moves tensor from GPU to CPU.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        Tensor to be moved to CPU.
+
+    Returns
+    -------
+    list
+        Tensor moved to CPU and converted into a list.
+
+    """
+    return tensor.detach().cpu().tolist()
+
 
 def toGPU(tensor_dict):
     """
