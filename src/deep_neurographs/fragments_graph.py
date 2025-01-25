@@ -30,7 +30,6 @@ information into the graph structure.
 """
 
 
-
 from copy import deepcopy
 from io import StringIO
 from numpy import concatenate
