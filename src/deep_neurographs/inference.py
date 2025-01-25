@@ -4,7 +4,7 @@ Created on Sat November 04 15:30:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Routines that execute the full GraphTrace inference pipeline.
+Code that executes the full GraphTrace inference pipeline.
 
     Inference Algorithm:
         1. Graph Construction
@@ -40,6 +40,7 @@ from torch.nn.functional import sigmoid
 from tqdm import tqdm
 
 from deep_neurographs import fragment_filtering
+from deep_neurographs.fragments_graph import FragmentsGraph
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator,
 )
@@ -220,14 +221,14 @@ class InferencePipeline:
         t0 = time()
 
         # Initialize Graph
-        graph_builder = GraphLoader(
+        self.graph = FragmentsGraph(
             anisotropy=self.graph_config.anisotropy,
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,
             prune_depth=self.graph_config.prune_depth,
             verbose=True,
         )
-        self.graph = graph_builder.run(fragments_pointer)
+        self.graph.load_fragments(fragments_pointer)
         self.filter_fragments()
 
         # Save valid labels and current graph
@@ -433,7 +434,7 @@ class InferencePipeline:
     def log_experiment(self):
         self.report("\nExperiment Overview")
         self.report("-------------------------------------------------------")
-        self.report(f"brain_id: {self.brain_id}")
+        self.report(f"Brain_ID: {self.brain_id}")
         self.report(f"Segmentation_ID: {self.segmentation_id}")
         self.report("\n")
 
@@ -478,7 +479,7 @@ class InferenceEngine:
         model_path,
         model_type,
         radius,
-        accept_threshold=0.7,
+        accept_threshold=0.6,
         anisotropy=[1.0, 1.0, 1.0],
         batch_size=2000,
         device=None,
@@ -502,7 +503,7 @@ class InferenceEngine:
             Search radius used to generate proposals.
         accept_threshold : float, optional
             Threshold for accepting proposals, where proposals with predicted
-            likelihood above this threshold are accepted. The default is 0.7.
+            likelihood above this threshold are accepted. The default is 0.6.
         anisotropy : List[float], optional
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. The default is [1.0, 1.0, 1.0].

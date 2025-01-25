@@ -4,13 +4,15 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
+
 Implementation of a custom subclass of Networkx.Graph called "FragmentsGraph".
-This graph instance is initialized by reading and processing SWC files (i.e.
-neuron fragments).
+After initializing an instance of this subclass, the graph is built by reading
+and processing SWC files (i.e. neuron fragments). It then stores the relevant
+information into the graph structure.
 
     Graph Construction Algorithm:
-        1. Load Neuron Fragments
-            Reads SWC files and stores the contents as a dictionary with the
+        1. Read Neuron Fragments
+            Reads SWC files and stores the contents in a dictionary with the
             keys: "id", "xyz", "radius", "pid", and "swc_id". Each SWC file is
             assumed to contain uniformly spaced points, each separated by 1
             voxel.
@@ -20,12 +22,13 @@ neuron fragments).
             file. The irreducible components of a graph are the following:
                 (1) Leafs: Nodes of degree 1
                 (2) Branchings: Nodes of degree 3+
-                (3) Paths between irreducible nodes
+                (3) Edges: Paths between irreducible nodes
 
         3. Ingest Irreducibles
             to do...
 
 """
+
 
 from copy import deepcopy
 from io import StringIO
@@ -38,29 +41,59 @@ import numpy as np
 import zipfile
 
 from deep_neurographs import generate_proposals
-from deep_neurographs.utils import geometry_util as geometry, img_util, util
-from deep_neurographs.machine_learning.groundtruth_generation import init_targets
+from deep_neurographs.utils import (
+    geometry_util as geometry,
+    graph_util as gutil,
+    img_util,
+    swc_util,
+    util,
+)
+from deep_neurographs.machine_learning import groundtruth_generation
 
 
 class FragmentsGraph(nx.Graph):
     """
-    A class of graphs whose nodes correspond to irreducible nodes from the
-    predicted swc files.
+    Custom subclass of NetworkX.Graph constructed from neuron fragments. The
+    graph's nodes are irreducible, meaning each node has either degree 1
+    (leaf) or degree 3+ (branching points). Each edge has an attribute that
+    stores a dense path of points connecting irreducible nodes. Additionally,
+    the graph has an attribute called "proposals", which is a set of potential
+    connections between pairs of neuron fragments.
 
     """
 
-    def __init__(self, anisotropy=[1.0, 1.0, 1.0], node_spacing=1):
+    def __init__(
+        self,
+        anisotropy=[1.0, 1.0, 1.0],
+        min_size=30.0,
+        node_spacing=1,
+        prune_depth=20.0,
+        smooth_bool=True,
+        verbose=False,
+    ):
         """
-        Initializes an instance of NeuroGraph.
+        Initializes an instance of FragmentsGraph.
 
         Parameters
         ----------
         anisotropy : ArrayLike, optional
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
+        min_size : float, optional
+            Minimum path length of swc files that are loaded into the
+            FragmentsGraph. The default is 30.0 (microns).
         node_spacing : int, optional
-            Physical spacing (in microns) between nodes in swcs. The default
-            is 1.
+            Sampling rate for nodes in FragmentsGraph. Every "node_spacing"
+            node is retained.
+        prune_depth : int, optional
+            Branches with length less than "prune_depth" microns are pruned.
+            The default is 20.0 microns.
+        smooth_bool : bool, optional
+            Indication of whether to smooth xyz coordinates from SWC files.
+            The default is True.
+        verbose : bool, optional
+            Indication of whether to display a progress bar while building
+            FragmentsGraph. The default is True.
 
         Returns
         -------
@@ -68,51 +101,55 @@ class FragmentsGraph(nx.Graph):
 
         """
         super(FragmentsGraph, self).__init__()
-        # General class attributes
+        # Loaders
+        self.graph_loader = gutil.GraphLoader(
+            anisotropy=anisotropy,
+            min_size=min_size,
+            node_spacing=node_spacing,
+            prune_depth=prune_depth,
+            smooth_bool=smooth_bool,
+            verbose=verbose,
+        )
+        self.reader = swc_util.Reader(anisotropy, min_size)
+
+        # Instance attributes - Graph
         self.anisotropy = anisotropy
         self.leaf_kdtree = None
         self.node_cnt = 0
         self.node_spacing = node_spacing
-        self.proposals = set()
-
-        self.merged_ids = set()
         self.soma_ids = dict()
         self.swc_ids = set()
         self.xyz_to_edge = dict()
 
-    def copy_graph(self, add_attrs=False):
-        graph = nx.Graph()
-        nodes = deepcopy(self.nodes(data=add_attrs))
-        graph.add_nodes_from(nodes)
-        if add_attrs:
-            for edge in self.edges:
-                i, j = tuple(edge)
-                graph.add_edge(i, j, **self.get_edge_data(i, j))
-        else:
-            graph.add_edges_from(deepcopy(self.edges))
-        return graph
+        # Instance attributes - Proposals
+        self.merged_ids = set()
+        self.proposals = set()
 
-    def get_leafs(self):
+    # --- Build Graph --
+    def load_fragments(self, fragments_pointer):
         """
-        Gets all leaf nodes in graph.
+        Loads fragments into "self" by reading SWC files stored on either the
+        cloud or local machine, then extracts the irreducible components from
+        from each SWC file.
 
         Parameters
         ----------
-        None
+        fragments_pointer : Any
+            Pointer to SWC files to be loaded, see "swc_util.Reader" for
+            documentation.
 
         Returns
         -------
-        list[int]
-            Leaf nodes in graph.
+        None
 
         """
-        return [i for i in self.nodes if self.is_leaf(i)]
+        swc_dicts = self.reader.load(fragments_pointer)
+        irreducibles_list = self.graph_loader.get_irreducibles(swc_dicts)
+        while len(irreducibles_list):
+            irreducibles = irreducibles_list.pop()
+            self.ingest_irreducibles(irreducibles)
 
-    # --- Build Graph --
-    def load(self, fragments_pointer):
-        pass
-
-    def add_component(self, irreducibles):
+    def ingest_irreducibles(self, irreducibles):
         """
         Adds a connected component to "self".
 
@@ -161,7 +198,7 @@ class FragmentsGraph(nx.Graph):
 
         Returns
         -------
-        node_ids : dict
+        dict
             Updated with corresponding node ids that were added in for loop.
 
         """
@@ -218,6 +255,8 @@ class FragmentsGraph(nx.Graph):
 
         Returns
         -------
+        None
+
         """
         nodes = deepcopy(self.nodes)
         for i in tqdm(nodes):
@@ -254,7 +293,7 @@ class FragmentsGraph(nx.Graph):
 
         Returns
         -------
-        new_node : int
+        int
             Node ID of node that was created.
 
         """
@@ -281,6 +320,34 @@ class FragmentsGraph(nx.Graph):
         self.__add_edge((i, node_id), attrs_1, swc_id)
         self.__add_edge((node_id, j), attrs_2, swc_id)
         return node_id
+
+    def copy_graph(self, add_attrs=False):
+        graph = nx.Graph()
+        nodes = deepcopy(self.nodes(data=add_attrs))
+        graph.add_nodes_from(nodes)
+        if add_attrs:
+            for edge in self.edges:
+                i, j = tuple(edge)
+                graph.add_edge(i, j, **self.get_edge_data(i, j))
+        else:
+            graph.add_edges_from(deepcopy(self.edges))
+        return graph
+
+    def get_leafs(self):
+        """
+        Gets all leaf nodes in graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        List[int]
+            Leaf nodes in graph.
+
+        """
+        return [i for i in self.nodes if self.is_leaf(i)]
 
     # --- Proposal Generation ---
     def generate_proposals(
@@ -325,7 +392,7 @@ class FragmentsGraph(nx.Graph):
         # Main
         self.reset_proposals()
         self.set_proposals_per_leaf(proposals_per_leaf)
-        n_trimmed = generate_proposals.run(
+        generate_proposals.run(
             self,
             search_radius,
             complex_bool=complex_bool,
@@ -336,10 +403,11 @@ class FragmentsGraph(nx.Graph):
 
         # Set groundtruth
         if groundtruth_graph:
-            self.gt_accepts = init_targets(self, groundtruth_graph)
+            self.gt_accepts = groundtruth_generation.run(
+                self, groundtruth_graph
+            )
         else:
             self.gt_accepts = set()
-        return n_trimmed
 
     def reset_proposals(self):
         """
@@ -404,7 +472,7 @@ class FragmentsGraph(nx.Graph):
 
         Parameters
         ----------
-        proposal : frozenset
+        proposal : Frozenset[int]
             Pair of node ids corresponding to a proposal.
 
         Returns
@@ -424,7 +492,7 @@ class FragmentsGraph(nx.Graph):
 
         Parameters
         ----------
-        proposal : frozenset
+        proposal : Frozenset[int]
             Pair of node ids corresponding to a proposal.
 
         Returns

@@ -71,48 +71,12 @@ class GraphLoader:
         None
 
         """
-        # Class attributes
         self.min_size = min_size
         self.node_spacing = node_spacing
         self.prune_depth = prune_depth
         self.smooth_bool = smooth_bool
         self.verbose = verbose
 
-        # SWC Reader
-        self.reader = swc_util.Reader(anisotropy, min_size)
-
-    def run(self, fragments_pointer):
-        """
-        Builds a FragmentsGraph by reading swc files stored either on the
-        cloud or local machine, then extracting the irreducible components
-        from each SWC file.
-
-        Parameters
-        ----------
-        fragments_pointer : dict, list, str
-            Pointer to SWC files used to build an instance of FragmentsGraph,
-            see "swc_util.Reader" for further documentation.
-
-        Returns
-        -------
-        FragmentsGraph
-            Graph generated from SWC files.
-
-        """
-        from deep_neurographs.fragments_graph import FragmentsGraph
-
-        # Load fragments and extract irreducibles
-        swc_dicts = self.reader.load(fragments_pointer)
-        irreducibles = self.get_irreducibles(swc_dicts)
-
-        # Build FragmentsGraph
-        fragments_graph = FragmentsGraph(node_spacing=self.node_spacing)
-        while len(irreducibles):
-            irreducible_set = irreducibles.pop()
-            fragments_graph.add_component(irreducible_set)
-        return fragments_graph
-
-    # --- Graph structure extraction ---
     def get_irreducibles(self, swc_dicts):
         """
         Processes a list of swc dictionaries in parallel and extracts the
