@@ -20,7 +20,7 @@ ALIGNED_THRESHOLD = 4.5
 MIN_INTERSECTION = 10
 
 
-def init_targets(pred_graph, target_graph):
+def run(pred_graph, target_graph):
     """
     Initializes ground truth for edge proposals.
 

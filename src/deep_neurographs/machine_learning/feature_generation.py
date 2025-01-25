@@ -68,12 +68,12 @@ class FeatureGenerator:
         if is_multimodal and not labels_path:
             raise("Must provide label mask to use multimodal model!")
 
-        # General instance attributes
+        # Instance attributes
         self.anisotropy = anisotropy
         self.multiscale = multiscale
         self.is_multimodal = is_multimodal
 
-        # Open images
+        # Initialize image readers
         self.img_reader = self.init_img_reader(img_path, "zarr")
         self.img_patch_shape = self.set_patch_shape(multiscale)
         if labels_path is not None:
@@ -84,7 +84,7 @@ class FeatureGenerator:
     @classmethod
     def set_patch_shape(cls, multiscale):
         """
-        Adjusts the chunk shape by downsampling each dimension by a specified
+        Adjusts the patch shape by downsampling each dimension by a specified
         factor.
 
         Parameters
@@ -94,7 +94,7 @@ class FeatureGenerator:
         Returns
         -------
         List[int]
-            Chunk shape with each dimension reduced by the multiscale.
+            Patch shape with each dimension reduced by the multiscale.
 
         """
         return [s // 2 ** multiscale for s in cls.patch_shape]
@@ -435,10 +435,10 @@ class FeatureGenerator:
                 )
 
             # Store results
-            chunks = dict()
+            img_patches = dict()
             for thread in as_completed(threads):
-                chunks.update(thread.result())
-        return chunks
+                img_patches.update(thread.result())
+        return img_patches
 
     def get_profile(self, xyz_path, profile_id):
         """
