@@ -110,7 +110,7 @@ class FragmentsGraph(nx.Graph):
             smooth_bool=smooth_bool,
             verbose=verbose,
         )
-        self.reader = swc_util.Reader(anisotropy, min_size)
+        self.swc_reader = swc_util.Reader(anisotropy, min_size)
 
         # Instance attributes - Graph
         self.anisotropy = anisotropy
@@ -143,7 +143,7 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
-        swc_dicts = self.reader.load(fragments_pointer)
+        swc_dicts = self.swc_reader.load(fragments_pointer)
         irreducibles_list = self.graph_loader.get_irreducibles(swc_dicts)
         while len(irreducibles_list):
             irreducibles = irreducibles_list.pop()
@@ -687,65 +687,32 @@ class FragmentsGraph(nx.Graph):
         i, j = tuple(proposal)
         return geometry.midpoint(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
-    def proposal_radii(self, proposal):
+    def proposal_attr(self, proposal, attr):
         """
-        Gets the radii of the nodes that comprise "proposal".
+        Gets the attributes of nodes in "proposal".
 
         Parameters
         ----------
-        proposal : frozenset
+        proposal : Frozenset[int]
             Pair of nodes that form a proposal.
+        attr : str
+            Name of attribute to be returned.
 
         Returns
         -------
         numpy.ndarray
-            radii of nodes that comprise "proposal".
+            Attributes of nodes in "proposal".
 
         """
         i, j = tuple(proposal)
-        return np.array([self.nodes[i]["radius"], self.nodes[j]["radius"]])
+        attrs = np.array([self.nodes[i][attr], self.nodes[j][attr]])
+        return attrs.astype(int) if attr == "swc_id" else attrs
 
     def proposal_avg_radii(self, proposal):
         i, j = tuple(proposal)
         radii_i = self.branches(i, key="radius")
         radii_j = self.branches(j, key="radius")
         return np.array([avg_radius(radii_i), avg_radius(radii_j)])
-
-    def proposal_xyz(self, proposal):
-        """
-        Gets the xyz coordinates of the nodes that comprise "proposal".
-
-        Parameters
-        ----------
-        proposal : frozenset
-            Pair of nodes that form a proposal.
-
-        Returns
-        -------
-        numpy.ndarray
-            xyz coordinates of nodes that comprise "proposal".
-
-        """
-        i, j = tuple(proposal)
-        return np.array([self.nodes[i]["xyz"], self.nodes[j]["xyz"]])
-
-    def proposal_labels(self, proposal):
-        """
-        Gets the xyz coordinates of the nodes that comprise "proposal".
-
-        Parameters
-        ----------
-        proposal : frozenset
-            Pair of nodes that form a proposal.
-
-        Returns
-        -------
-        numpy.ndarray
-            xyz coordinates of nodes that comprise "proposal".
-
-        """
-        i, j = tuple(proposal)
-        return [int(self.nodes[i]["swc_id"]), int(self.nodes[j]["swc_id"])]
 
     def proposal_directionals(self, proposal, depth):
         # Extract branches
@@ -757,7 +724,7 @@ class FragmentsGraph(nx.Graph):
         # Compute tangent vectors
         direction_i = geometry.get_directional(branches_i, origin, depth)
         direction_j = geometry.get_directional(branches_j, origin, depth)
-        direction = geometry.tangent(self.proposal_xyz(proposal))
+        direction = geometry.tangent(self.proposal_attr(proposal, "xyz"))
 
         # Compute features
         inner_product_1 = abs(np.dot(direction, direction_i))
@@ -873,12 +840,10 @@ class FragmentsGraph(nx.Graph):
             Indication of whether "node_or_swc" corresponds to a soma.
 
         """
-        assert type(node_or_swc) in [int, str]
-        if type(node_or_swc) is int:
-            swc_id = self.nodes[node_or_swc]["swc_id"]
-            return swc_id in self.soma_ids.keys()
-        else:
-            return node_or_swc in self.soma_ids.keys()
+        assert type(node_or_swc) in [int, str], "Type error!"
+        if isinstance(node_or_swc, int):
+            node_or_swc = self.nodes[node_or_swc]["swc_id"]
+        return node_or_swc in self.soma_ids.keys()
 
     def dist(self, i, j):
         """
@@ -887,9 +852,9 @@ class FragmentsGraph(nx.Graph):
         Parameters
         ----------
         i : int
-            Node in self.
+            Node ID.
         j : int
-            Nonde in self.
+            Nonde ID.
 
         Returns
         -------
@@ -955,7 +920,7 @@ class FragmentsGraph(nx.Graph):
             Neighbor of node "i" which is not "j".
 
         """
-        assert self.degree[i] == 2, "Node does not have degree 2."
+        assert self.degree[i] == 2, "deg(i) != 2."
         nbs = list(self.neighbors(i))
         nbs.remove(j)
         return nbs[0]

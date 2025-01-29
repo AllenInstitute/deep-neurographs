@@ -324,7 +324,7 @@ class FeatureGenerator:
                 (
                     fragments_graph.proposal_length(proposal) / radius,
                     fragments_graph.n_nearby_leafs(proposal, radius),
-                    fragments_graph.proposal_radii(proposal),
+                    fragments_graph.proposal_attr(proposal, "radius"),
                     fragments_graph.proposal_directionals(proposal, 16),
                     fragments_graph.proposal_directionals(proposal, 32),
                     fragments_graph.proposal_directionals(proposal, 64),
@@ -396,7 +396,7 @@ class FeatureGenerator:
             threads = list()
             for p in proposals:
                 n_points = self.get_n_profile_points()
-                xyz_1, xyz_2 = fragments_graph.proposal_xyz(p)
+                xyz_1, xyz_2 = fragments_graph.proposal_attr(p, "xyz")
                 xyz_path = geometry_util.make_line(xyz_1, xyz_2, n_points)
                 threads.append(executor.submit(self.get_profile, xyz_path, p))
 
@@ -414,7 +414,7 @@ class FeatureGenerator:
         ----------
         fragments_graph : FragmentsGraph
             Graph that "proposals" belong to.
-        proposals : list[frozenset]
+        proposals : List[Frozenset[int]]
             List of proposals for which features will be generated.
 
         Returns
@@ -429,7 +429,7 @@ class FeatureGenerator:
             threads = list()
             for p in proposals:
                 labels = fragments_graph.proposal_labels(p)
-                xyz_path = np.vstack(fragments_graph.proposal_xyz(p))
+                xyz_path = np.vstack(fragments_graph.proposal_attr(p, "xyz"))
                 threads.append(
                     executor.submit(self.get_patch, labels, xyz_path, p)
                 )
@@ -455,7 +455,7 @@ class FeatureGenerator:
         Returns
         -------
         dict
-            Dictionary that maps an id (e.g. node, edge, or proposal) to its
+            Dictionary that maps an ID (e.g. node, edge, or proposal) to its
             profile.
 
         """
