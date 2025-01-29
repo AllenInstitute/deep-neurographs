@@ -5,7 +5,7 @@ Created on Sat May 9 11:00:00 2024
 @email: anna.grim@alleninstitute.org
 
 
-Helper routines for processing images.
+Helper routines for reading and processing images.
 
 """
 
@@ -92,7 +92,7 @@ class ImageReader(ABC):
 
     def read_with_bbox(self, bbox):
         """
-        Reads an image patch by using a "bbox".
+        Reads the image patch defined by a given bounding box.
 
         Parameters
         ----------
@@ -119,7 +119,7 @@ class ImageReader(ABC):
         Parameters
         ----------
         spec : dict
-            Dictionary that stores the bounding box of patch to be read and the
+            Dictionary with the bounding box of the image patch to be read and
             voxel coordinates of the profile path.
 
         Returns
@@ -150,7 +150,7 @@ class ImageReader(ABC):
 
 class TensorStoreReader(ImageReader):
     """
-    Class that reads image with tensorstore.
+    Class that reads an image with TensorStore library.
 
     """
 
@@ -163,7 +163,7 @@ class TensorStoreReader(ImageReader):
         img_path : str
             Path to image.
         driver : str
-            Storage driver needed to read the image at "path".
+            Storage driver needed to read the image.
 
         Returns
         -------
@@ -175,7 +175,7 @@ class TensorStoreReader(ImageReader):
 
     def _load_image(self):
         """
-        Load the image using the TensorStore library.
+        Loads image using the TensorStore library.
 
         Parameters
         ----------
@@ -214,13 +214,13 @@ class TensorStoreReader(ImageReader):
 
 class ZarrReader(ImageReader):
     """
-    Class that reads image with zarr.
+    Class that reads image with Zarr library.
 
     """
 
     def __init__(self, img_path):
         """
-        Constructs a TensorStore image reader.
+        Constructs a Zarr image reader.
 
         Parameters
         ----------
@@ -236,7 +236,7 @@ class ZarrReader(ImageReader):
 
     def _load_image(self):
         """
-        Load the image using the zarr library.
+        Loads image using the Zarr library.
 
         Parameters
         ----------
@@ -341,7 +341,7 @@ def get_labels_mip(img, axis=0):
         MIP of "img".
 
     """
-    mip = np.max(img, axis=axis)
+    mip = get_mip(img, axis=axis)
     mip = label2rgb(mip)
     return (255 * mip).astype(np.uint8)
 
@@ -381,21 +381,21 @@ def to_physical(voxel, anisotropy, shift=[0, 0, 0]):
 
     Parameters
     ----------
-    coord : ArrayLike
-        Coordinate to be converted.
+    voxel : ArrayLike
+        Voxel coordinate to be converted.
     anisotropy : ArrayLike
         Image to physical coordinates scaling factors to account for the
         anisotropy of the microscope.
     shift : ArrayLike, optional
-        Shift to be applied to "coord". The default is [0, 0, 0].
+        Shift to be applied to "voxel". The default is [0, 0, 0].
 
     Returns
     -------
     Tuple[float]
-        Converted coordinates.
+        Physical coordinate.
 
     """
-    #voxel = voxel[::-1]
+    voxel = voxel[::-1]
     return tuple([voxel[i] * anisotropy[i] - shift[i] for i in range(3)])
 
 
@@ -406,7 +406,7 @@ def to_voxels(xyz, anisotropy, multiscale=0):
     Parameters
     ----------
     xyz : ArrayLike
-        Physical coordiante to be converted to a voxel coordinate.
+        Physical coordiante to be converted.
     anisotropy : ArrayLike
         Image to physical coordinates scaling factors to account for the
         anisotropy of the microscope.
@@ -422,38 +422,10 @@ def to_voxels(xyz, anisotropy, multiscale=0):
     """
     scaling_factor = 1.0 / 2 ** multiscale
     voxel = [scaling_factor * xyz[i] / anisotropy[i] for i in range(3)]
-    #return np.round(voxel[::-1]).astype(int)
-    return np.round(voxel).astype(int)
+    return np.round(voxel[::-1]).astype(int)
 
 
 # -- utils --
-def init_bbox(origin, shape):
-    """
-    Gets the min and max coordinates of a bounding box based on "origin" and
-    "shape".
-
-    Parameters
-    ----------
-    origin : Tuple[int]
-        Voxel coordinate of the origin of the bounding box, which is assumed
-        to be top-front-left corner.
-    shape : Tuple[int]
-        Shape of the bounding box.
-
-    Returns
-    -------
-    dict or None
-        Bounding box.
-
-    """
-    if origin and shape:
-        origin = np.array(origin)
-        shape = np.array(shape)
-        return {"min": origin, "max": origin + shape}
-    else:
-        return None
-
-
 def get_minimal_bbox(voxels, buffer=0):
     """
     Gets the min and max coordinates of a bounding box that contains "voxels".
