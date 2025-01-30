@@ -416,13 +416,13 @@ def to_voxels(xyz, anisotropy, multiscale=0):
 
     Returns
     -------
-    numpy.ndarray
+    Tuple[int]
         Voxel coordinate.
 
     """
     scaling_factor = 1.0 / 2 ** multiscale
-    voxel = [scaling_factor * xyz[i] / anisotropy[i] for i in range(3)]
-    return np.round(voxel[::-1]).astype(int)
+    voxel = [int(scaling_factor * xyz[i] / anisotropy[i]) for i in range(3)]
+    return tuple(voxel[::-1])
 
 
 # -- utils --

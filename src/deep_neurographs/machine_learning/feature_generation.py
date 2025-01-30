@@ -37,7 +37,7 @@ class FeatureGenerator:
         img_path,
         multiscale,
         anisotropy=[1.0, 1.0, 1.0],
-        labels_path=None,
+        segmentation_path=None,
         is_multimodal=False,
     ):
         """
@@ -52,7 +52,7 @@ class FeatureGenerator:
         anisotropy : ArrayLike, optional
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
-        labels_path : str, optional
+        segmentation_path : str, optional
             Path to the segmentation assumed to be stored on a GCS bucket. The
             default is None.
         is_multimodal : bool, optional
@@ -65,7 +65,7 @@ class FeatureGenerator:
 
         """
         # Sanity check
-        if is_multimodal and not labels_path:
+        if is_multimodal and not segmentation_path:
             raise("Must provide label mask to use multimodal model!")
 
         # Instance attributes
@@ -76,9 +76,9 @@ class FeatureGenerator:
         # Initialize image readers
         self.img_reader = self.init_img_reader(img_path, "zarr")
         self.img_patch_shape = self.set_patch_shape(multiscale)
-        if labels_path is not None:
+        if segmentation_path is not None:
             driver = "neuroglancer_precomputed"
-            self.labels_reader = self.init_img_reader(labels_path, driver)
+            self.labels_reader = self.init_img_reader(segmentation_path, driver)
             self.label_patch_shape = self.set_patch_shape(0)
 
     @classmethod

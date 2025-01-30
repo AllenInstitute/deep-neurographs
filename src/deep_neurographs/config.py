@@ -46,7 +46,7 @@ class GraphConfig:
         Branches in graph less than "prune_depth" microns are pruned. The
         default is 16.
     smooth_bool : bool, optional
-        Indication of whether to smooth branches in graph. The default is
+        Indication of whether to smooth branches in the graph. The default is
         True.
     trim_endpoints_bool : bool, optional
         Indication of whether to endpoints of branches with exactly one

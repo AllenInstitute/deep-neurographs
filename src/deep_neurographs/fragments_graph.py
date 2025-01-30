@@ -36,6 +36,7 @@ from numpy import concatenate
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
+import ast
 import networkx as nx
 import numpy as np
 import zipfile
@@ -67,7 +68,7 @@ class FragmentsGraph(nx.Graph):
         anisotropy=[1.0, 1.0, 1.0],
         min_size=30.0,
         node_spacing=1,
-        prune_depth=20.0,
+        prune_depth=16.0,
         smooth_bool=True,
         verbose=False,
     ):
@@ -117,8 +118,9 @@ class FragmentsGraph(nx.Graph):
         self.leaf_kdtree = None
         self.node_cnt = 0
         self.node_spacing = node_spacing
-        self.soma_ids = dict()
+        self.soma_ids = set()
         self.swc_ids = set()
+        self.verbose = verbose
         self.xyz_to_edge = dict()
 
         # Instance attributes - Proposals
@@ -180,6 +182,16 @@ class FragmentsGraph(nx.Graph):
                     attrs[key] = attrs[key][idxs]
                 self.__add_edge(edge, attrs, swc_id)
 
+    def load_somas(self, somas_path, segmentation_path):
+        driver = "neuroglancer_precomputed"
+        img_reader = img_util.init_img_reader(segmentation_path, driver)
+        for xyz_str in util.read_txt(somas_path):
+            # Get segment id
+            xyz = ast.literal_eval(xyz_str)
+            voxel = self.to_voxels(xyz)
+            swc_id = img_reader.read(voxel, (1, 1, 1))
+
+    # --- update graph structure ---
     def __add_nodes(self, irreducibles, node_type, node_ids):
         """
         Adds a set of "node_type" nodes from "irreducibles" to "self".
@@ -333,22 +345,6 @@ class FragmentsGraph(nx.Graph):
             graph.add_edges_from(deepcopy(self.edges))
         return graph
 
-    def get_leafs(self):
-        """
-        Gets all leaf nodes in graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        List[int]
-            Leaf nodes in graph.
-
-        """
-        return [i for i in self.nodes if self.is_leaf(i)]
-
     # --- Proposal Generation ---
     def generate_proposals(
         self,
@@ -356,7 +352,6 @@ class FragmentsGraph(nx.Graph):
         complex_bool=False,
         groundtruth_graph=None,
         long_range_bool=False,
-        progress_bar=True,
         proposals_per_leaf=3,
         trim_endpoints_bool=False,
     ):
@@ -375,9 +370,6 @@ class FragmentsGraph(nx.Graph):
         long_range_bool : bool, optional
             Indication of whether to generate long range proposals. The
             default is False.
-        progress_bar : bool, optional
-            Indication of whether to print out a progress bar while generating
-            proposals. The default is True.
         proposals_per_leaf : int, optional
             Maximum number of proposals generated for each leaf. The default
             is 3.
@@ -397,7 +389,6 @@ class FragmentsGraph(nx.Graph):
             search_radius,
             complex_bool=complex_bool,
             long_range_bool=long_range_bool,
-            progress_bar=progress_bar,
             trim_endpoints_bool=trim_endpoints_bool,
         )
 
@@ -825,6 +816,22 @@ class FragmentsGraph(nx.Graph):
         return len(self.query_kdtree(xyz, radius, "leaf")) - 1
 
     # --- util ---
+    def get_leafs(self):
+        """
+        Gets all leaf nodes in graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        List[int]
+            Leaf nodes in graph.
+
+        """
+        return [i for i in self.nodes if self.is_leaf(i)]
+
     def is_soma(self, node_or_swc):
         """
         Determines whether "node_or_swc" corresponds to a soma.
@@ -843,7 +850,7 @@ class FragmentsGraph(nx.Graph):
         assert type(node_or_swc) in [int, str], "Type error!"
         if isinstance(node_or_swc, int):
             node_or_swc = self.nodes[node_or_swc]["swc_id"]
-        return node_or_swc in self.soma_ids.keys()
+        return node_or_swc in self.soma_ids
 
     def dist(self, i, j):
         """
