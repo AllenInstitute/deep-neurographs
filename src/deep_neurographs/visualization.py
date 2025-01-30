@@ -218,7 +218,7 @@ def plot_proposals(graph, proposals, color=None, width=5):
     # Add traces
     traces = []
     for p in proposals:
-        xyz = graph.proposal_xyz(p)
+        xyz = graph.proposal_attr(p, "xyz")
         trace = go.Scatter3d(
             x=xyz[:, 0],
             y=xyz[:, 1],

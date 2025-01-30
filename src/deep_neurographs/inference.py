@@ -50,7 +50,6 @@ from deep_neurographs.utils import (
     ml_util,
     util
 )
-from deep_neurographs.utils.graph_util import GraphLoader
 
 
 class InferencePipeline:
@@ -71,9 +70,9 @@ class InferencePipeline:
         config,
         device="cpu",
         is_multimodal=False,
-        labels_path=None,
-        log_runtimes=True,
         save_to_s3_bool=False,
+        segmentation_path=None,
+        somas_path=None,
         s3_dict=None,
     ):
         """
@@ -99,13 +98,14 @@ class InferencePipeline:
             ...
         is_multimodal : bool, optional
             ...
-        labels_path : str, optional
-            Path to the segmentation assumed to be stored on a GCS bucket. The
+        segmentation_path : str, optional
+            Path to the segmentation stored in a GCS or S3 bucket. The
             default is None.
-        log_runtimes : bool, optional
-            Indication of whether to log runtimes. The default is True.
         save_to_s3_bool : bool, optional
             Indication of whether to save result to s3. The default is False.
+        somas_path : str, optional
+            Path to a txt file containing xyz coordinates of detected somas.
+            The default is None.
         s3_dict : dict, optional
             ...
 
@@ -114,13 +114,13 @@ class InferencePipeline:
         None
 
         """
-        # Class attributes
+        # Instance attributes
         self.accepted_proposals = list()
-        self.log_runtimes = log_runtimes
         self.model_path = model_path
         self.brain_id = brain_id
         self.segmentation_id = segmentation_id
         self.save_to_s3_bool = save_to_s3_bool
+        self.somas_path = somas_path
         self.s3_dict = s3_dict
 
         # Extract config settings
@@ -138,16 +138,17 @@ class InferencePipeline:
             batch_size=self.ml_config.batch_size,
             device=device,
             multiscale=self.ml_config.multiscale,
-            labels_path=labels_path,
+            segmentation_path=segmentation_path,
             is_multimodal=is_multimodal,
         )
 
         # Set output directory
         self.output_dir = output_dir
         util.mkdir(self.output_dir, delete=True)
-        if self.log_runtimes:
-            log_path = os.path.join(self.output_dir, "runtimes.txt")
-            self.log_handle = open(log_path, 'a')
+
+        # Initialize logger
+        log_path = os.path.join(self.output_dir, "runtimes.txt")
+        self.log_handle = open(log_path, 'a')
 
     # --- Core ---
     def run(self, fragments_pointer):
@@ -220,22 +221,27 @@ class InferencePipeline:
         self.report("Step 1: Build Fragments Graph")
         t0 = time()
 
-        # Initialize Graph
+        # Initialize graph
         self.graph = FragmentsGraph(
             anisotropy=self.graph_config.anisotropy,
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,
             prune_depth=self.graph_config.prune_depth,
+            smooth_bool=self.graph_config.smooth_bool,
             verbose=True,
         )
         self.graph.load_fragments(fragments_pointer)
+
+        # Postprocess graph
         self.filter_fragments()
+        if self.somas_path:
+            self.graph.load_somas(self.somas_path, self.segmentation_path)
 
         # Save valid labels and current graph
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
-        labels_path = os.path.join(self.output_dir, "valid_labels.txt")
+        valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
         n_saved = self.graph.to_zipped_swcs(swcs_path)
-        self.graph.save_labels(labels_path)
+        self.graph.save_labels(valid_labels_path)
         self.report(f"# SWCs Saved: {n_saved}")
 
         # Report results
@@ -427,9 +433,8 @@ class InferencePipeline:
     # --- Summaries ---
     def report(self, txt):
         print(txt)
-        if self.log_runtimes:
-            self.log_handle.write(txt)
-            self.log_handle.write("\n")
+        self.log_handle.write(txt)
+        self.log_handle.write("\n")
 
     def log_experiment(self):
         self.report("\nExperiment Overview")
@@ -484,7 +489,7 @@ class InferenceEngine:
         batch_size=2000,
         device=None,
         multiscale=1,
-        labels_path=None,
+        segmentation_path=None,
         is_multimodal=False
     ):
         """
@@ -512,7 +517,7 @@ class InferenceEngine:
         multiscale : int, optional
             Level in the image pyramid that voxel coordinates must index into.
             The default is 1.
-        labels_path : str or None, optional
+        segmentation_path : str or None, optional
             ...
         is_multimodal : bool, optional
             ...
@@ -534,7 +539,7 @@ class InferenceEngine:
             img_path,
             multiscale,
             anisotropy=anisotropy,
-            labels_path=labels_path,
+            segmentation_path=segmentation_path,
             is_multimodal=is_multimodal
         )
 

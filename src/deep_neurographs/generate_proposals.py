@@ -28,7 +28,6 @@ def run(
     radius,
     complex_bool=False,
     long_range_bool=True,
-    progress_bar=True,
     trim_endpoints_bool=True,
 ):
     """
@@ -47,9 +46,6 @@ def run(
         Indication of whether to generate simple proposals within distance of
         "LONG_RANGE_FACTOR" * radius of leaf from leaf without any proposals.
         The default is False.
-    progress_bar : bool, optional
-        Indication of whether to print out a progress bar while generating
-        proposals. The default is True.
     trim_endpoints_bool : bool, optional
         Indication of whether to endpoints of branches with exactly one
         proposal. The default is True.
@@ -63,7 +59,7 @@ def run(
     connections = dict()
     kdtree = init_kdtree(fragments_graph, complex_bool)
     radius *= RADIUS_SCALING_FACTOR if trim_endpoints_bool else 1.0
-    if progress_bar:
+    if fragments_graph.verbose:
         iterable = tqdm(fragments_graph.get_leafs(), desc="Proposals")
     else:
         iterable = fragments_graph.get_leafs()
