@@ -78,7 +78,7 @@ class ImageReader(ABC):
 
         Returns
         -------
-        ArrayLike
+        numpy.ndarray
             Image patch.
 
         """
@@ -208,6 +208,26 @@ class TensorStoreReader(ImageReader):
             self.img = self.img[ts.d[0].transpose[1]]
 
     def read(self, voxel, shape, from_center=True):
+        """
+        Reads a patch from an image given a voxel coordinate and patch shape.
+
+        Parameters
+        ----------
+        voxel : Tuple[int]
+            Voxel coordinate that is either the center or top-left-front
+            corner of the image patch to be read.
+        shape : Tuple[int]
+            Shape of the image patch to be read.
+        from_center : bool, optional
+            Indication of whether "voxel" is the center or top-left-front
+            corner of the image patch to be read. The default is True.
+
+        Returns
+        -------
+        numpy.ndarray
+            Image patch.
+
+        """
         img_patch = super().read(voxel, shape, from_center)
         return img_patch.read().result()
 
