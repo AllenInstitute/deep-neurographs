@@ -258,20 +258,20 @@ def list_gcs_subdirectories(bucket_name, prefix):
     return subdirs
 
 
-# -- io utils --
+# --- io utils ---
 def read_json(path):
     """
-    Reads json file stored at "path".
+    Reads JSON file located at the given path.
 
     Parameters
     ----------
     path : str
-        Path where json file is stored.
+        Path to JSON file to be read.
 
     Returns
     -------
     dict
-        Contents of json file.
+        Contents of JSON file.
 
     """
     with open(path, "r") as f:
@@ -280,12 +280,12 @@ def read_json(path):
 
 def read_txt(path):
     """
-    Reads txt file stored at "path".
+    Reads txt file located at the given path.
 
     Parameters
     ----------
     path : str
-        Path where txt file is stored.
+        Path to txt file to be read.
 
     Returns
     -------
@@ -297,38 +297,21 @@ def read_txt(path):
         return f.read().splitlines()
 
 
-def read_metadata(path):
-    """
-    Parses metadata file to extract the "chunk_origin" and "chunk_shape".
-
-    Parameters
-    ----------
-    path : str
-        Path to metadata file to be read.
-
-    Returns
-    -------
-    list, list
-        Chunk origin and chunk shape specified by metadata.
-
-    """
-    metadata = read_json(path)
-    return metadata["chunk_origin"], metadata["chunk_shape"]
-
-
 def read_zip(zip_file, path):
     """
-    Reads the content of an swc file from a zip file.
+    Reads txt file located in a ZIP archive.
 
     Parameters
     ----------
     zip_file : ZipFile
-        Zip containing text file to be read.
+        ZIP archive containing txt file to be read.
+    path : str
+        Path to txt file within ZIP archive to be read.
 
     Returns
     -------
     str
-        Contents of a txt file.
+        Contents of txt file.
 
     """
     with zip_file.open(path) as f:
@@ -342,9 +325,9 @@ def write_json(path, contents):
     Parameters
     ----------
     path : str
-        Path that .txt file is written to.
+        Path that txt file is written to.
     contents : dict
-        Contents to be written to json file.
+        Contents to be written to JSON file.
 
     Returns
     -------
@@ -420,51 +403,6 @@ def get_avg_std(data, weights=None):
     avg = np.average(data, weights=weights)
     var = np.average((data - avg) ** 2, weights=weights)
     return avg, math.sqrt(var)
-
-
-def is_contained(bbox, voxel):
-    """
-    Checks whether "voxel" is contained within "bbox".
-
-    Parameters
-    ----------
-    bbox : dict
-        Dictionary with the keys "min" and "max" which specify a bounding box
-        in an image.
-    voxel : ArrayLike
-        Voxel coordinate to be checked.
-
-    Returns
-    -------
-    bool
-        Inidcation of whether "voxel" is contained in "bbox".
-
-    """
-    above = any(voxel >= bbox["max"])
-    below = any(voxel < bbox["min"])
-    return False if above or below else True
-
-
-def is_list_contained(bbox, voxels):
-    """
-    Checks whether every element in "xyz_list" is contained in "bbox".
-
-    Parameters
-    ----------
-    bbox : dict
-        Dictionary with the keys "min" and "max" which specify a bounding box
-        in an image.
-    voxels
-        List of xyz coordinates to be checked.
-
-    Returns
-    -------
-    bool
-        Indication of whether every element in "voxels" is contained in
-        "bbox".
-
-    """
-    return all([is_contained(bbox, voxel) for voxel in voxels])
 
 
 def sample_once(my_container):

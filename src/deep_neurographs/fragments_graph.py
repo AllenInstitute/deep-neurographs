@@ -101,7 +101,9 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
+        # Call parent class
         super(FragmentsGraph, self).__init__()
+
         # Loaders
         self.graph_loader = gutil.GraphLoader(
             anisotropy=anisotropy,
@@ -190,7 +192,7 @@ class FragmentsGraph(nx.Graph):
         for xyz_str in util.read_txt(somas_path):
             # Get segment id
             xyz = ast.literal_eval(xyz_str)
-            voxel = img_util.to_voxels(xyz, (0.748, 0.748, 1.0))
+            voxel = img_util.to_voxels(xyz, self.anisotropy)
             swc_id = str(img_reader.img[voxel].read().result())
 
             # Check for collision

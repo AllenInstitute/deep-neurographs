@@ -445,32 +445,7 @@ def to_voxels(xyz, anisotropy, multiscale=0):
     return tuple(voxel[::-1])
 
 
-# -- utils --
-def get_minimal_bbox(voxels, buffer=0):
-    """
-    Gets the min and max coordinates of a bounding box that contains "voxels".
-
-    Parameters
-    ----------
-    voxels : numpy.ndarray
-        Array containing voxel coordinates.
-    buffer : int, optional
-        Constant value added/subtracted from the max/min coordinates of the
-        bounding box. The default is 0.
-
-    Returns
-    -------
-    dict
-        Bounding box.
-
-    """
-    bbox = {
-        "min": np.floor(np.min(voxels, axis=0) - buffer).astype(int),
-        "max": np.ceil(np.max(voxels, axis=0) + buffer).astype(int),
-    }
-    return bbox
-
-
+# --- miscellaneous ---
 def find_img_path(bucket_name, root_dir, dataset_name):
     """
     Finds the path to an image in a GCS bucket for the dataset given by
@@ -496,3 +471,76 @@ def find_img_path(bucket_name, root_dir, dataset_name):
         if dataset_name in subdir:
             return subdir + "whole-brain/fused.zarr/"
     raise f"Dataset not found in {bucket_name} - {root_dir}"
+
+
+def get_minimal_bbox(voxels, buffer=0):
+    """
+    Gets the min and max coordinates of a bounding box that contains "voxels".
+
+    Parameters
+    ----------
+    voxels : numpy.ndarray
+        Array containing voxel coordinates.
+    buffer : int, optional
+        Constant value added/subtracted from the max/min coordinates of the
+        bounding box. The default is 0.
+
+    Returns
+    -------
+    dict
+        Bounding box.
+
+    """
+    bbox = {
+        "min": np.floor(np.min(voxels, axis=0) - buffer).astype(int),
+        "max": np.ceil(np.max(voxels, axis=0) + buffer).astype(int),
+    }
+    return bbox
+
+
+def is_contained(bbox, voxel):
+    """
+    Checks whether a given voxel is contained within the image bounding box
+    specified by "bbox".
+
+    Parameters
+    ----------
+    bbox : dict
+        Dictionary with the keys "min" and "max" which specify a bounding box
+        in an image.
+    voxel : Tuple[int]
+        Voxel coordinate to be checked.
+
+    Returns
+    -------
+    bool
+        Inidcation of whether "voxel" is contained within the given image
+        bounding box.
+
+    """
+    above = any([v >= bbox_max for v, bbox_max in zip(voxel, bbox["max"])])
+    below = any([v < bbox_min for v, bbox_min in zip(voxel, bbox["min"])])
+    return False if above or below else True
+
+
+def is_list_contained(bbox, voxels):
+    """
+    Checks whether a list of voxels is contained within a given image bounding
+    box.
+
+    Parameters
+    ----------
+    bbox : dict
+        Dictionary with the keys "min" and "max" which specify a bounding box
+        in an image.
+    voxels : List[Tuple[int]]
+        List of voxel coordinates to be checked.
+
+    Returns
+    -------
+    bool
+        Indication of whether every element in "voxels" is contained in
+        "bbox".
+
+    """
+    return all([is_contained(bbox, voxel) for voxel in voxels])
