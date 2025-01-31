@@ -622,7 +622,7 @@ def set_radius(graph, i):
 
 
 # --- Miscellaneous ---
-def to_graph(swc_dict, swc_id=None, set_attrs=False):
+def to_graph(swc_dict, set_attrs=False):
     """
     Converts an dictionary containing swc attributes to a graph.
 
@@ -631,8 +631,6 @@ def to_graph(swc_dict, swc_id=None, set_attrs=False):
     swc_dict : dict
         Dictionaries whose keys and values are the attribute name and values
         from an swc file.
-    swc_id : str, optional
-        Identifier that dictionary was generated from. The default is None.
     set_attrs : bool, optional
         Indication of whether to set attributes. The default is False.
 
@@ -642,7 +640,7 @@ def to_graph(swc_dict, swc_id=None, set_attrs=False):
         Graph generated from "swc_dict".
 
     """
-    graph = nx.Graph(graph_id=swc_id)
+    graph = nx.Graph(graph_id=swc_dict["swc_id"])
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
     if set_attrs:
         xyz = swc_dict["xyz"]
