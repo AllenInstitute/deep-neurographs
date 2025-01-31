@@ -120,6 +120,7 @@ class InferencePipeline:
         self.brain_id = brain_id
         self.segmentation_id = segmentation_id
         self.save_to_s3_bool = save_to_s3_bool
+        self.segmentation_path = segmentation_path
         self.somas_path = somas_path
         self.s3_dict = s3_dict
 

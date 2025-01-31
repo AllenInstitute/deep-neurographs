@@ -301,6 +301,7 @@ class Reader:
             "radius": np.zeros((len(content)), dtype=np.float32),
             "pid": np.zeros((len(content)), dtype=np.int32),
             "xyz": np.zeros((len(content), 3), dtype=np.float32),
+            "is_soma": False,
         }
         for i, line in enumerate(content):
             parts = line.split()
@@ -308,6 +309,8 @@ class Reader:
             swc_dict["radius"][i] = float(parts[-2])
             swc_dict["pid"][i] = parts[-1]
             swc_dict["xyz"][i] = self.read_xyz(parts[2:5], offset)
+            if int(parts[1]) == 1:
+                swc_dict["is_soma"] = True
 
         # Check whether radius is in nanometers
         if swc_dict["radius"][0] > 100:
