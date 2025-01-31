@@ -170,6 +170,7 @@ class GraphLoader:
                 "branching": set_node_attrs(graph, branchings),
                 "edge": set_edge_attrs(graph, edges),
                 "swc_id": swc_dict["swc_id"],
+                "is_soma": swc_dict["is_soma"],
             }
             return irreducibles
         else:

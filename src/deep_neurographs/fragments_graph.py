@@ -182,6 +182,10 @@ class FragmentsGraph(nx.Graph):
                     attrs[key] = attrs[key][idxs]
                 self.__add_edge(edge, attrs, swc_id)
 
+            # Check for soma
+            if irreducibles["is_soma"]:
+                self.soma_ids.add(swc_id)
+
     def load_somas(self, somas_path, segmentation_path):
         driver = "neuroglancer_precomputed"
         img_reader = img_util.TensorStoreReader(segmentation_path, driver)
