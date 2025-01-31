@@ -157,7 +157,7 @@ def get_candidates(
                     graph.nodes[leaf]["swc_id"]
                 )
 
-    # Process the results
+    # Process results
     if max_proposals < 0 and len(candidates) == 1:
         return candidates if graph.is_leaf(candidates[0]) else []
     else:
