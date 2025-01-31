@@ -17,13 +17,15 @@ readme = "README.md"
 dynamic = ["version"]
 
 dependencies = [
+    'aiobotocore==2.13.3',
     'boto3',
+    'botocore==1.34.162',
     'fastremap',
     'google-cloud-storage',
     'more_itertools',
     'networkx',
     'plotly',
-    's3fs',
+    's3fs==2024.12.0',
     'scikit-image',
     'scikit-learn',
     'scipy',
