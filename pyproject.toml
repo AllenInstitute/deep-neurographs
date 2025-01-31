@@ -23,6 +23,7 @@ dependencies = [
     'more_itertools',
     'networkx',
     'plotly',
+    's3fs',
     'scikit-image',
     'scikit-learn',
     'scipy',
