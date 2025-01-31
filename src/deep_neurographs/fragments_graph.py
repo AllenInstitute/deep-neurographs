@@ -177,9 +177,6 @@ class FragmentsGraph(nx.Graph):
             # Edges
             for (i, j), attrs in irreducibles["edge"].items():
                 edge = (ids[i], ids[j])
-                idxs = util.spaced_idxs(len(attrs["radius"]), self.node_spacing)
-                for key in ["radius", "xyz"]:
-                    attrs[key] = attrs[key][idxs]
                 self.__add_edge(edge, attrs, swc_id)
 
             # Check for soma

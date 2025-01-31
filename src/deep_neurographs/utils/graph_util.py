@@ -55,7 +55,7 @@ class GraphLoader:
             FragmentsGraph. The default is 30.0 (microns).
         node_spacing : int, optional
             Sampling rate for nodes in FragmentsGraph. Every "node_spacing"
-            node is retained.
+            node is retained. The default is 1.
         prune_depth : int, optional
             Branches with length less than "prune_depth" microns are pruned.
             The default is 20.0 microns.
@@ -168,7 +168,7 @@ class GraphLoader:
             irreducibles = {
                 "leaf": set_node_attrs(graph, leafs),
                 "branching": set_node_attrs(graph, branchings),
-                "edge": set_edge_attrs(graph, edges),
+                "edge": set_edge_attrs(graph, edges, self.node_spacing),
                 "swc_id": swc_dict["swc_id"],
                 "is_soma": swc_dict["is_soma"],
             }
@@ -271,11 +271,11 @@ def init_edge_attrs(graph, i):
 
     Parameters
     ----------
-    swc_dict : dict
-        Contents of an swc file.
+    graph : networkx.Graph
+        Graph containing node i.
     i : int
         Node that is the start of a path between irreducible nodes. The
-        attributes of this node are used to initialize the edge dictionary.
+        attributes of this node are used to initialize the dictionary.
 
     Returns
     -------
@@ -297,8 +297,8 @@ def upd_edge_attrs(graph, attrs, i, j):
 
     Parameters
     ----------
-    swc_dict : dict
-        Contents of an SWC file.
+    graph : networkx.Graph
+        Graph containing nodes i and j.
     attrs : dict
         Edge attribute dictionary to be updated.
     i : int
@@ -316,12 +316,38 @@ def upd_edge_attrs(graph, attrs, i, j):
     attrs["xyz"].append(graph.nodes[i]["xyz"])
 
 
-def set_edge_attrs(graph, attrs):
-    for e, attrs_e in attrs.items():
+def set_edge_attrs(graph, attrs, node_spacing):
+    """
+    Sets the edge attributes of a given graph by updating node coordinates and
+    resamples points in irreducible path.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph that attributes dictionary was built from.
+    attrs : dict
+        Dictionary where the keys are irreducible edge IDs and values are the
+        corresponding attribute dictionaries.
+    node_spacing : int, optional
+        Sampling rate for nodes in FragmentsGraph. Every "node_spacing" node
+        is retained. The default is 1.
+
+    Returns
+    -------
+    dict
+        Updated edge attribute dictionary.
+
+    """
+    for e in attrs:
+        # Update endpoints
         i, j = tuple(e)
-        attrs_e["xyz"][0] = graph.nodes[i]["xyz"]
-        attrs_e["xyz"][-1] = graph.nodes[j]["xyz"]
-        attrs[e] = attrs_e
+        attrs[e]["xyz"][0] = graph.nodes[i]["xyz"]
+        attrs[e]["xyz"][-1] = graph.nodes[j]["xyz"]
+
+        # Resample points
+        idxs = util.spaced_idxs(len(attrs[e]["xyz"]), node_spacing)
+        attrs[e]["radius"] = attrs[e]["radius"][idxs]
+        attrs[e]["xyz"] = attrs[e]["xyz"][idxs]
     return attrs
 
 
