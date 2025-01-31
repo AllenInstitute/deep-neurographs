@@ -212,8 +212,7 @@ class FragmentsGraph(nx.Graph):
                 i = util.sample_once(nodes)
                 if self.nodes[i]["swc_id"] in swc_ids:
                     self.to_zipped_swc(zip_writer, nodes, None)
-        print("swc_ids w/ merge mistake...")
-        print(swc_ids)
+        print("# Merged Fragments:", len(swc_ids))
 
     # --- update graph structure ---
     def __add_nodes(self, irreducibles, node_type, node_ids):

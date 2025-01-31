@@ -150,14 +150,8 @@ def get_candidates(
         if i is not None:
             if graph.is_valid_proposal(leaf, i, complex_bool):
                 candidates.append(i)
-            else:
-                print(
-                    "proposal blocked",
-                    graph.nodes[i]["swc_id"],
-                    graph.nodes[leaf]["swc_id"]
-                )
 
-    # Process the results
+    # Process results
     if max_proposals < 0 and len(candidates) == 1:
         return candidates if graph.is_leaf(candidates[0]) else []
     else:
