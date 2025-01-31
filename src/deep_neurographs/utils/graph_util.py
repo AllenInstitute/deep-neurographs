@@ -211,9 +211,6 @@ class GraphLoader:
 
                     # Check whether to stop
                     if length > self.prune_depth:
-                        if n_passes == 1:
-                            k = min(3, len(branch))
-                            graph.remove_nodes_from(branch[0:k])
                         break
 
 

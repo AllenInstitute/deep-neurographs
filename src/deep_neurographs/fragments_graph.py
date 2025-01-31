@@ -88,7 +88,7 @@ class FragmentsGraph(nx.Graph):
             node is retained.
         prune_depth : int, optional
             Branches with length less than "prune_depth" microns are pruned.
-            The default is 20.0 microns.
+            The default is 16.0 microns.
         smooth_bool : bool, optional
             Indication of whether to smooth xyz coordinates from SWC files.
             The default is True.
@@ -184,12 +184,36 @@ class FragmentsGraph(nx.Graph):
 
     def load_somas(self, somas_path, segmentation_path):
         driver = "neuroglancer_precomputed"
-        img_reader = img_util.init_img_reader(segmentation_path, driver)
+        img_reader = img_util.TensorStoreReader(segmentation_path, driver)
+        merge_mistakes = set()
         for xyz_str in util.read_txt(somas_path):
             # Get segment id
             xyz = ast.literal_eval(xyz_str)
-            voxel = self.to_voxels(xyz)
-            swc_id = img_reader.read(voxel, (1, 1, 1))
+            voxel = img_util.to_voxels(xyz, (0.748, 0.748, 1.0))
+            swc_id = str(img_reader.img[voxel].read().result())
+
+            # Check for collision
+            if swc_id in self.soma_ids:
+                merge_mistakes.add(swc_id)
+            else:
+                self.soma_ids.add(swc_id)
+        self.break_fragments(merge_mistakes)
+
+    def break_fragments(self, swc_ids):
+        """
+        to do...
+            --> break fragment at all branching points
+            --> update swc_ids of nodes in broken fragment
+
+        """
+        zip_path = "/home/jupyter/workspace/detected_merges.zip"
+        with zipfile.ZipFile(zip_path, "w") as zip_writer:
+            for nodes in nx.connected_components(self):
+                i = util.sample_once(nodes)
+                if self.nodes[i]["swc_id"] in swc_ids:
+                    self.to_zipped_swc(zip_writer, nodes, None)
+        print("swc_ids w/ merge mistake...")
+        print(swc_ids)
 
     # --- update graph structure ---
     def __add_nodes(self, irreducibles, node_type, node_ids):
@@ -315,12 +339,11 @@ class FragmentsGraph(nx.Graph):
 
         # Create node
         node_id = self.node_cnt + 1
-        swc_id = attrs["swc_id"]
         self.add_node(
             node_id,
             proposals=set(),
             radius=attrs["radius"][idx],
-            swc_id=swc_id,
+            swc_id=attrs["swc_id"],
             xyz=tuple(attrs["xyz"][idx]),
         )
         self.node_cnt += 1
@@ -329,8 +352,8 @@ class FragmentsGraph(nx.Graph):
         n = len(attrs["xyz"])
         attrs_1 = {k: v[np.arange(idx + 1)] for k, v in attrs.items()}
         attrs_2 = {k: v[np.arange(idx, n)] for k, v in attrs.items()}
-        self.__add_edge((i, node_id), attrs_1, swc_id)
-        self.__add_edge((node_id, j), attrs_2, swc_id)
+        self.__add_edge((i, node_id), attrs_1, attrs["swc_id"])
+        self.__add_edge((node_id, j), attrs_2, attrs["swc_id"])
         return node_id
 
     def copy_graph(self, add_attrs=False):
@@ -938,17 +961,9 @@ class FragmentsGraph(nx.Graph):
         else:
             return np.flip(self.edges[edge][key], axis=0)
 
-    def to_voxels(self, node_or_xyz, shift=np.array([0, 0, 0])):
-        # Get xyz coordinate
-        shift = self.origin if shift else np.zeros((3))
-        if type(node_or_xyz) is int:
-            xyz = self.nodes[node_or_xyz]["xyz"]
-        else:
-            xyz = node_or_xyz
-
-        # Coordinate conversion
-        voxel = img_util.to_voxels(xyz, self.anisotropy)
-        return voxel - shift
+    def to_voxels(self, node_or_xyz):
+        # delete
+        return None
 
     def is_leaf(self, i):
         """
@@ -1053,7 +1068,6 @@ class FragmentsGraph(nx.Graph):
         for k in util.spaced_idxs(len(branch_xyz), 5):
             x, y, z = tuple(branch_xyz[k])
             r = 5 if branch_radius[k] == 5.3141592 else 2
-
             node_id = n_entries + 1
             parent = n_entries if k > 1 else parent
             text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")

@@ -150,6 +150,12 @@ def get_candidates(
         if i is not None:
             if graph.is_valid_proposal(leaf, i, complex_bool):
                 candidates.append(i)
+            else:
+                print(
+                    "proposal blocked",
+                    graph.nodes[i]["swc_id"],
+                    graph.nodes[leaf]["swc_id"]
+                )
 
     # Process the results
     if max_proposals < 0 and len(candidates) == 1:
@@ -160,7 +166,7 @@ def get_candidates(
 
 def search_kdtree(fragments_graph, leaf, kdtree, radius, max_proposals):
     """
-    Generates proposals emanating from node "leaf" by finding candidate xyz
+    Generates proposals extending from node "leaf" by finding candidate xyz
     points on distinct connected components nearby.
 
     Parameters
@@ -394,7 +400,7 @@ def trim_endpoint(branch_1, branch_2):
 
 def trim_to_idx(fragments_graph, i, idx):
     """
-    Trims the branch emanating from "i".
+    Trims the end of a branch specified by the leaf node "i".
 
     Parameters
     ----------
@@ -403,7 +409,7 @@ def trim_to_idx(fragments_graph, i, idx):
     i : int
         Leaf node.
     idx : int
-        Index used to truncate the branch emanating from "i".
+        Branch is trimmed to the index "idx".
 
     Returns
     -------
