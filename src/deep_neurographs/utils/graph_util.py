@@ -109,6 +109,7 @@ class GraphLoader:
                 processes[i] = executor.submit(
                     self.extract_irreducibles, swc_dict)
                 i += 1
+            print("assigned processes in get_irreducibles()")
 
             # Store results
             irreducibles = list()
@@ -139,7 +140,7 @@ class GraphLoader:
         """
         graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
         self.prune_branches(graph)
-        if compute_path_length(graph) > self.min_size:
+        if compute_path_length(graph, self.min_size) > self.min_size:
             # Irreducible nodes
             leafs, branchings = get_irreducible_nodes(graph)
 
@@ -398,7 +399,7 @@ def smooth_branch(graph, attrs, i, j):
     graph.nodes[j]["xyz"] = attrs["xyz"][-1]
 
 
-def compute_path_length(graph):
+def compute_path_length(graph, max_length=np.inf):
     """
     Computes the path length of the given graph.
 
@@ -417,6 +418,8 @@ def compute_path_length(graph):
     path_length = 0
     for i, j in nx.dfs_edges(graph):
         path_length += compute_dist(graph, i, j)
+        if path_length > max_length:
+              break
     return path_length
 
 
