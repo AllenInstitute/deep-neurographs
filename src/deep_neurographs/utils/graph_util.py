@@ -103,9 +103,10 @@ class GraphLoader:
         with ProcessPoolExecutor() as executor:
             # Assign Processes
             i = 0
+            print("start assigning processes")
             processes = [None] * len(swc_dicts)
-            while swc_dicts:
-                swc_dict = swc_dicts.pop()
+            for swc_dict in tqdm(swc_dicts):
+                #swc_dict = swc_dicts.pop()
                 processes[i] = executor.submit(
                     self.extract_irreducibles, swc_dict)
                 i += 1
@@ -138,8 +139,10 @@ class GraphLoader:
             subgraph.
 
         """
+        print("line 142")
         graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
         self.prune_branches(graph)
+        print("line 145")
         if compute_path_length(graph, self.min_size) > self.min_size:
             # Irreducible nodes
             leafs, branchings = get_irreducible_nodes(graph)
