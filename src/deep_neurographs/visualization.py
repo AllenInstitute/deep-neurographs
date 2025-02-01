@@ -4,15 +4,16 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Subroutines for visualizing neurographs.
+Code for visualizing FragmentsGraph.
 
 """
+
+from plotly.subplots import make_subplots
 
 import networkx as nx
 import numpy as np
 import plotly.colors as plc
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 
 def visualize_connected_components(
@@ -31,33 +32,33 @@ def visualize_connected_components(
         Indication of whether to return data object that is used to generate
         plot. The default is False.
     title : str
-        Title of plot. The default is "".
+        Title of plot. The default is an empty string.
 
     Returns
     -------
     None or list[graph_objects]
 
     """
-    # Make plot
-    data = []
+    # Initializations
     colors = plc.qualitative.Bold
     connected_components = nx.connected_components(graph)
-    cnt = 0
+
+    # Generate plot data
+    data = []
     while True:
         try:
             component = next(connected_components)
             subgraph = graph.subgraph(component)
-            color = colors[cnt % len(colors)]
+            color = colors[len(data) % len(colors)]
             data.extend(
                 plot_edges(
                     graph, subgraph.edges, color=color, width=width
                 )
             )
-            cnt += 1
         except StopIteration:
             break
 
-    # Output
+    # Finish
     if return_data:
         return data
     else:
@@ -189,7 +190,7 @@ def visualize_subset(
 
     # Add target graph (if applicable)
     if groundtruth_graph:
-        cc = visualize_connected_components(groundtruth_graph, return_data=True)
+        cc = connected_components(groundtruth_graph, return_data=True)
         data.extend(cc)
     plot(data, title)
 
