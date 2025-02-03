@@ -39,7 +39,7 @@ class GraphConfig:
         Minimum path length (in microns) of swc files which are stored as
         connected components in the FragmentsGraph. The default is 30.
     node_spacing : int, optional
-        Spacing (in microns) between nodes. The default is 1.
+        Spacing (in microns) between nodes. The default is 2.
     proposals_per_leaf : int
         Maximum number of proposals generated for each leaf. The default is 3.
     prune_depth : int, optional
@@ -59,7 +59,7 @@ class GraphConfig:
     img_bbox: dict = None
     long_range_bool: bool = True
     min_size: float = 30.0
-    node_spacing: int = 1
+    node_spacing: int = 2
     proposals_per_leaf: int = 2
     prune_depth: float = 16.0
     remove_doubles_bool: bool = False
