@@ -499,7 +499,6 @@ def count_fragments(fragments_pointer, min_size=0):
     print("# Connected Components:", nx.number_connected_components(graph))
     print("# Nodes:", graph.number_of_nodes())
     print("# Edges:", graph.number_of_edges())
-    del graph
 
 
 def time_writer(t, unit="seconds"):
@@ -642,6 +641,6 @@ def spaced_idxs(arr_length, k):
 
     """
     idxs = np.arange(0, arr_length + k, k)[:-1]
-    if arr_length % 1 == 0:
+    if idxs[-1] != arr_length - 1:
         idxs = np.append(idxs, arr_length - 1)
     return idxs

@@ -108,7 +108,8 @@ class GraphLoader:
             for swc_dict in tqdm(swc_dicts):
                 #swc_dict = swc_dicts.pop()
                 processes[i] = executor.submit(
-                    self.extract_irreducibles, swc_dict)
+                    self.extract_irreducibles, swc_dict
+                )
                 i += 1
             print("assigned processes in get_irreducibles()")
 
@@ -118,8 +119,8 @@ class GraphLoader:
                 result = process.result()
                 if result is not None:
                     irreducibles.append(result)
-                if self.verbose:
-                    pbar.update(1)
+                #if self.verbose:
+                pbar.update(1)
         return irreducibles
 
     def extract_irreducibles(self, swc_dict):
