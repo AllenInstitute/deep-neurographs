@@ -640,6 +640,7 @@ def spaced_idxs(arr_length, k):
         "container" is guaranteed to be included in the output.
 
     """
+    print(arr_length, k)
     idxs = np.arange(0, arr_length + k, k)[:-1]
     if idxs[-1] != arr_length - 1:
         idxs = np.append(idxs, arr_length - 1)
