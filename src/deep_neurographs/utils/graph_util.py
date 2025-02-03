@@ -333,9 +333,9 @@ def set_edge_attrs(graph, attrs, node_spacing):
     attrs : dict
         Dictionary where the keys are irreducible edge IDs and values are the
         corresponding attribute dictionaries.
-    node_spacing : int, optional
-        Sampling rate for nodes in FragmentsGraph. Every "node_spacing" node
-        is retained. The default is 1.
+    node_spacing : int
+        Sampling rate for nodes in FragmentsGraph. Every "node_spacing"-th node
+        is retained.
 
     Returns
     -------
