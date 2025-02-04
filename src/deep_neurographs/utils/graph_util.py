@@ -99,11 +99,6 @@ class GraphLoader:
         if self.verbose:
             pbar = tqdm(total=len(swc_dicts), desc="Extract Graphs")
 
-        # random test
-        print("test extract_irreducibles started")
-        self.extract_irreducibles(swc_dicts[0])
-        print("test extract_irreducibles finished")
-
         # Main
         with ProcessPoolExecutor() as executor:
             # Assign Processes
@@ -113,7 +108,6 @@ class GraphLoader:
                     self.extract_irreducibles, swc_dict
                 )
             del swc_dicts
-            print("assigned processes")
 
             # Store results
             irreducibles = list()
