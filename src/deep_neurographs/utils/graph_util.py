@@ -108,6 +108,7 @@ class GraphLoader:
                     self.extract_irreducibles, swc_dict
                 )
             del swc_dicts
+            print("processes assigned")
 
             # Store results
             irreducibles = list()
