@@ -209,7 +209,7 @@ class FragmentsGraph(nx.Graph):
             --> update swc_ids of nodes in broken fragment
 
         """
-        zip_path = "/home/jupyter/workspace/detected_merges.zip"
+        zip_path = "./detected_merges.zip"
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
             for nodes in nx.connected_components(self):
                 i = util.sample_once(nodes)
