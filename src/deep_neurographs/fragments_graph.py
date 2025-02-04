@@ -189,7 +189,7 @@ class FragmentsGraph(nx.Graph):
         driver = "neuroglancer_precomputed"
         img_reader = img_util.TensorStoreReader(segmentation_path, driver)
         merge_mistakes = set()
-        for xyz_str in util.read_txt(somas_path):
+        for xyz_str in tqdm(util.read_txt(somas_path), desc="Load Somas"):
             # Get segment id
             xyz = ast.literal_eval(xyz_str)
             voxel = img_util.to_voxels(xyz, self.anisotropy)
