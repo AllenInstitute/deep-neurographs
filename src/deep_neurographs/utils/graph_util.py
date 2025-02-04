@@ -107,14 +107,12 @@ class GraphLoader:
         # Main
         with ProcessPoolExecutor() as executor:
             # Assign Processes
-            i = 0
             processes = [None] * len(swc_dicts)
-            while len(swc_dicts) > 0:
-                swc_dict = swc_dicts.pop()
+            for i, swc_dict in enumerate(swc_dicts):
                 processes[i] = executor.submit(
                     self.extract_irreducibles, swc_dict
                 )
-                i += 1
+            del swc_dicts
             print("assigned processes")
 
             # Store results
