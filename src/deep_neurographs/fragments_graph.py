@@ -24,11 +24,10 @@ information into the graph structure.
                 (2) Branchings: Nodes of degree 3+
                 (3) Edges: Paths between irreducible nodes
 
-        3. Ingest Irreducibles
+        3. Add Irreducibles
             to do...
 
 """
-
 
 from copy import deepcopy
 from io import StringIO
@@ -36,7 +35,6 @@ from numpy import concatenate
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
-import ast
 import networkx as nx
 import numpy as np
 import zipfile
@@ -45,7 +43,6 @@ from deep_neurographs import generate_proposals
 from deep_neurographs.utils import (
     geometry_util as geometry,
     graph_util as gutil,
-    img_util,
     swc_util,
     util,
 )
@@ -65,11 +62,13 @@ class FragmentsGraph(nx.Graph):
 
     def __init__(
         self,
-        anisotropy=[1.0, 1.0, 1.0],
+        anisotropy=(1.0, 1.0, 1.0),
         min_size=30.0,
         node_spacing=1,
         prune_depth=16.0,
+        segmentation_path=None,
         smooth_bool=True,
+        somas_path=None,
         verbose=False,
     ):
         """
@@ -77,21 +76,26 @@ class FragmentsGraph(nx.Graph):
 
         Parameters
         ----------
-        anisotropy : ArrayLike, optional
+        anisotropy : Tuple[int], optional
             Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
+            anisotropy of the microscope. The default is (1.0, 1.0, 1.0).
         min_size : float, optional
             Minimum path length of swc files that are loaded into the
-            FragmentsGraph. The default is 30.0 (microns).
+            FragmentsGraph. The default is 30.0 microns.
         node_spacing : int, optional
             Sampling rate for nodes in FragmentsGraph. Every "node_spacing"
             node is retained.
         prune_depth : int, optional
-            Branches with length less than "prune_depth" microns are pruned.
+            Branches with length less than "prune_depth" microns are removed.
             The default is 16.0 microns.
+        segmentation_path : str, optional
+            Path to segmentation stored in GCS bucket. The default is None.
         smooth_bool : bool, optional
             Indication of whether to smooth xyz coordinates from SWC files.
             The default is True.
+        somas_path : str, optional
+            Path to a txt file containing xyz coordinates of detected somas.
+            The default is None.
         verbose : bool, optional
             Indication of whether to display a progress bar while building
             FragmentsGraph. The default is True.
@@ -110,7 +114,9 @@ class FragmentsGraph(nx.Graph):
             min_size=min_size,
             node_spacing=node_spacing,
             prune_depth=prune_depth,
+            segmentation_path=segmentation_path,
             smooth_bool=smooth_bool,
+            somas_path=somas_path,
             verbose=verbose,
         )
         self.swc_reader = swc_util.Reader(anisotropy, min_size)
@@ -151,18 +157,18 @@ class FragmentsGraph(nx.Graph):
         irreducibles_list = self.graph_loader.get_irreducibles(swc_dicts)
         while len(irreducibles_list):
             irreducibles = irreducibles_list.pop()
-            self.ingest_irreducibles(irreducibles)
+            self.add_irreducibles(irreducibles)
 
-    def ingest_irreducibles(self, irreducibles):
+    def add_irreducibles(self, irreducibles):
         """
-        Adds a connected component to "self".
+        Adds the irreducibles from a connected component to "self".
 
         Parameters
         ----------
         irreducibles : dict
-            Dictionary containing the irreducibles of some connected component
-            being added to "self". This dictionary must contain the keys:
-            'leaf', 'branching', 'edge', and 'swc_id'.
+            Dictionary containing the irreducibles of a connected component to
+            be added to "self". This dictionary must contain the keys: "leaf",
+            "branching", "edge", "swc_id", and "is_soma".
 
         Returns
         -------
@@ -172,7 +178,6 @@ class FragmentsGraph(nx.Graph):
         swc_id = irreducibles["swc_id"]
         if swc_id not in self.swc_ids:
             # Nodes
-            self.swc_ids.add(swc_id)
             ids = self.__add_nodes(irreducibles, "leaf", dict())
             ids = self.__add_nodes(irreducibles, "branching", ids)
 
@@ -181,41 +186,47 @@ class FragmentsGraph(nx.Graph):
                 edge = (ids[i], ids[j])
                 self.__add_edge(edge, attrs, swc_id)
 
-            # Check for soma
+            # SWC ID
+            self.swc_ids.add(swc_id)
             if irreducibles["is_soma"]:
                 self.soma_ids.add(swc_id)
 
-    def load_somas(self, somas_path, segmentation_path):
-        driver = "neuroglancer_precomputed"
-        img_reader = img_util.TensorStoreReader(segmentation_path, driver)
-        merge_mistakes = set()
-        for xyz_str in util.read_txt(somas_path):
-            # Get segment id
-            xyz = ast.literal_eval(xyz_str)
-            voxel = img_util.to_voxels(xyz, self.anisotropy)
-            swc_id = str(img_reader.img[voxel].read().result())
+    # --- search graph ---
+    def find_closest_edge(self, nodes, query_xyz):
+        best_dist = np.inf
+        best_edge = None
+        for e in self.subgraph(nodes).edges:
+            for xyz in self.edges[e]["xyz"]:
+                dist = geometry.dist(query_xyz, xyz)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_edge = e
+        return best_edge
 
-            # Check for collision
-            if swc_id in self.soma_ids:
-                merge_mistakes.add(swc_id)
-            else:
-                self.soma_ids.add(swc_id)
-        self.break_fragments(merge_mistakes)
+    def find_fragments_by_ids(self, swc_ids):
+        fragments = dict()
+        for nodes in nx.connected_components(self):
+            i = util.sample_once(nodes)
+            if self.nodes[i]["swc_id"] in swc_ids:
+                swc_id = self.nodes[i]["swc_id"]
+                fragments[swc_id] = nodes
+        return fragments
 
-    def break_fragments(self, swc_ids):
+    def get_leafs(self):
         """
-        to do...
-            --> break fragment at all branching points
-            --> update swc_ids of nodes in broken fragment
+        Gets all leaf nodes in graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        List[int]
+            Leaf nodes in graph.
 
         """
-        zip_path = "/home/jupyter/workspace/detected_merges.zip"
-        with zipfile.ZipFile(zip_path, "w") as zip_writer:
-            for nodes in nx.connected_components(self):
-                i = util.sample_once(nodes)
-                if self.nodes[i]["swc_id"] in swc_ids:
-                    self.to_zipped_swc(zip_writer, nodes, None)
-        print("# Merged Fragments:", len(swc_ids))
+        return [i for i in self.nodes if self.is_leaf(i)]
 
     # --- update graph structure ---
     def __add_nodes(self, irreducibles, node_type, node_ids):
@@ -841,22 +852,6 @@ class FragmentsGraph(nx.Graph):
         return len(self.query_kdtree(xyz, radius, "leaf")) - 1
 
     # --- util ---
-    def get_leafs(self):
-        """
-        Gets all leaf nodes in graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        List[int]
-            Leaf nodes in graph.
-
-        """
-        return [i for i in self.nodes if self.is_leaf(i)]
-
     def is_soma(self, node_or_swc):
         """
         Determines whether "node_or_swc" corresponds to a soma.
@@ -897,14 +892,17 @@ class FragmentsGraph(nx.Graph):
         return geometry.dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
     def branches(self, i, ignore_reducibles=True, key="xyz"):
+        """
+        rename edge_attr_from_node
+        """
         branches = list()
         for j in self.neighbors(i):
-            branch = self.oriented_edge((i, j), i, key=key)
+            branch = self.oriented_edge_attr((i, j), i, key=key)
             if ignore_reducibles:
                 root = i
                 while self.degree[j] == 2:
                     k = self.get_other_nb(j, root)
-                    branch_jk = self.oriented_edge((j, k), j, key=key)
+                    branch_jk = self.oriented_edge_attr((j, k), j, key=key)
                     if key == "xyz":
                         branch = np.vstack([branch, branch_jk])
                     else:
@@ -957,15 +955,11 @@ class FragmentsGraph(nx.Graph):
         nbs.remove(j)
         return nbs[0]
 
-    def oriented_edge(self, edge, i, key="xyz"):
+    def oriented_edge_attr(self, edge, i, key="xyz"):
         if (self.edges[edge][key][0] == self.nodes[i][key]).all():
             return self.edges[edge][key]
         else:
             return np.flip(self.edges[edge][key], axis=0)
-
-    def to_voxels(self, node_or_xyz):
-        # delete
-        return None
 
     def is_leaf(self, i):
         """
@@ -1029,7 +1023,7 @@ class FragmentsGraph(nx.Graph):
                     cnt += 1
             return cnt
 
-    def to_zipped_swc(self, zip_writer, nodes, color):
+    def to_zipped_swc(self, zip_writer, nodes, color, prefix=""):
         with StringIO() as text_buffer:
             # Preamble
             n_entries = 0
@@ -1056,7 +1050,9 @@ class FragmentsGraph(nx.Graph):
                     text_buffer, n_entries, i, j, parent, color
                 )
                 node_to_idx[j] = n_entries
-            zip_writer.writestr(f"{swc_id}.swc", text_buffer.getvalue())
+            zip_writer.writestr(
+                prefix + f"{swc_id}.swc", text_buffer.getvalue()
+            )
 
     def branch_to_zip(self, text_buffer, n_entries, i, j, parent, color):
         # Orient branch
@@ -1067,7 +1063,7 @@ class FragmentsGraph(nx.Graph):
             branch_radius = np.flip(branch_radius, axis=0)
 
         # Make entries
-        for k in util.spaced_idxs(len(branch_xyz), 5):
+        for k in util.spaced_idxs(len(branch_xyz), 3):
             x, y, z = tuple(branch_xyz[k])
             r = 5 if branch_radius[k] == 5.3141592 else 2
             node_id = n_entries + 1
@@ -1089,9 +1085,3 @@ def avg_radius(radii_list):
         end = max(min(16, len(radii) - 1), 1)
         avg += np.mean(radii[0:end]) / len(radii_list)
     return avg
-
-
-def directional_origin(branch_1, branch_2):
-    origin_1 = np.mean(branch_1, axis=0)
-    origin_2 = np.mean(branch_2, axis=0)
-    return np.mean(np.vstack(origin_1, origin_2), axis=0)

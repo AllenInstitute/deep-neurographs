@@ -190,8 +190,11 @@ def visualize_subset(
 
     # Add target graph (if applicable)
     if groundtruth_graph:
-        cc = connected_components(groundtruth_graph, return_data=True)
-        data.extend(cc)
+        data.extend(
+            visualize_connected_components(
+                groundtruth_graph, return_data=True
+            )
+        )
     plot(data, title)
 
 

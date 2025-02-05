@@ -112,6 +112,25 @@ class ImageReader(ABC):
         except Exception:
             return np.ones(shape)
 
+    def read_voxel(self, voxel, thread_id=None):
+        """
+        Reads the intensity value at a given voxel.
+
+        Parameters
+        ----------
+        voxel : Tuple[int]
+            Voxel to be read.
+        thread_id : Any
+            Identifier associated with output. The default is Any.
+
+        Returns
+        -------
+        int
+            Intensity value at voxel.
+
+        """
+        return thread_id, self.img[voxel]
+
     def read_profile(self, spec):
         """
         Reads an intensity profile from an image (i.e. image profile).
@@ -129,7 +148,7 @@ class ImageReader(ABC):
 
         """
         img_patch = normalize(self.read_with_bbox(spec["bbox"]))
-        return [img_patch[voxel] for voxel in map(tuple, spec["profile_path"])]
+        return [img_patch[v] for v in map(tuple, spec["profile_path"])]
 
     def shape(self):
         """
@@ -230,6 +249,25 @@ class TensorStoreReader(ImageReader):
         """
         img_patch = super().read(voxel, shape, from_center)
         return img_patch.read().result()
+
+    def read_voxel(self, voxel, thread_id):
+        """
+        Reads the intensity value at a given voxel.
+
+        Parameters
+        ----------
+        voxel : Tuple[int]
+            Voxel to be read.
+        thread_id : Any
+            Identifier associated with output. The default is Any.
+
+        Returns
+        -------
+        int
+            Intensity value at voxel.
+
+        """
+        return thread_id, int(self.img[voxel].read().result())
 
 
 class ZarrReader(ImageReader):
