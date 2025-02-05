@@ -632,43 +632,6 @@ def find_closest_node(graph, xyz):
     return best_node
 
 
-def find_shortest_path(graph, source, target):
-    """
-    Finds the shortest path between two edges in a graph.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-    source : int
-        Edge from which to start the shortest path search.
-    target : int
-        Edge to which the shortest path should end.
-
-    Returns
-    -------
-    List[int]
-        Nodes representing the shortest path from the source node to the
-        target node. Note: this path includes all nodes in source and target
-        edges.
-
-    """
-    # Find shortest path
-    path = nx.shortest_path(graph, source=source[0], target=target[0])
-    print(path, source, target)
-
-    # Check if both nodes in source are in path
-    if path[1] != source[1]:
-        path.insert(0, source[1])
-
-    # Check if both nodes in target are in path
-    if len(path) == 2:
-        path.insert(-1, target[1])
-    elif path[-2] != target[1]:
-        path.insert(-1, target[1])
-    return path
-
-
 def get_component(graph, root):
     """
     Gets the connected component corresponding to "root" from "graph".
