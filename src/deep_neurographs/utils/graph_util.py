@@ -103,7 +103,7 @@ class GraphLoader:
         with ProcessPoolExecutor() as executor:
             # Assign Processes
             processes = [None] * len(swc_dicts)
-            for i, swc_dict in enumerate(swc_dicts):
+            for i, swc_dict in tqdm(enumerate(swc_dicts), desc="assign process"):
                 processes[i] = executor.submit(
                     self.extract_irreducibles, swc_dict
                 )
