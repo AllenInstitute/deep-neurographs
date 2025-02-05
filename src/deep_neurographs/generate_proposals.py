@@ -336,8 +336,8 @@ def run_trimming(fragments_graph, proposals, radius):
 def trim_endpoints(fragments_graph, proposal, radius):
     # Initializations
     i, j = tuple(proposal)
-    branch_i = fragments_graph.branch(i)
-    branch_j = fragments_graph.branch(j)
+    branch_i = fragments_graph.branches(i)[0]
+    branch_j = fragments_graph.branches(j)[0]
 
     # Check both orderings
     idx_i, idx_j = trim_endpoints_ordered(branch_i, branch_j)
@@ -411,8 +411,8 @@ def trim_to_idx(fragments_graph, i, idx):
 
     """
     # Update node
-    branch_xyz = fragments_graph.branch(i, key="xyz")
-    branch_radii = fragments_graph.branch(i, key="radius")
+    branch_xyz = fragments_graph.branches(i, key="xyz")[0]
+    branch_radii = fragments_graph.branches(i, key="radius")[0]
     fragments_graph.nodes[i]["xyz"] = branch_xyz[idx]
     fragments_graph.nodes[i]["radius"] = branch_radii[idx]
 
