@@ -166,14 +166,13 @@ class GraphLoader:
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         with ProcessPoolExecutor() as executor:
             # Assign Processes
-            i = 0
             processes = [None] * len(swc_dicts)
-            while swc_dicts:
-                swc_dict = swc_dicts.pop()
+            for i, swc_dict in tqdm(enumerate(swc_dicts), desc="assign process"):
                 processes[i] = executor.submit(
                     self.extract_irreducibles, swc_dict
                 )
-                i += 1
+                swc_dict[i] = None
+            print("processes assigned")
 
             # Store results
             irreducibles = list()

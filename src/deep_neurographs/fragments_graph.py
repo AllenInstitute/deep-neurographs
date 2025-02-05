@@ -192,17 +192,6 @@ class FragmentsGraph(nx.Graph):
                 self.soma_ids.add(swc_id)
 
     # --- search graph ---
-    def find_closest_edge(self, nodes, query_xyz):
-        best_dist = np.inf
-        best_edge = None
-        for e in self.subgraph(nodes).edges:
-            for xyz in self.edges[e]["xyz"]:
-                dist = geometry.dist(query_xyz, xyz)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_edge = e
-        return best_edge
-
     def find_fragments_by_ids(self, swc_ids):
         fragments = dict()
         for nodes in nx.connected_components(self):
