@@ -99,8 +99,7 @@ class InferencePipeline:
         is_multimodal : bool, optional
             ...
         segmentation_path : str, optional
-            Path to the segmentation stored in a GCS or S3 bucket. The
-            default is None.
+            Path to segmentation stored in GCS bucket. The default is None.
         save_to_s3_bool : bool, optional
             Indication of whether to save result to s3. The default is False.
         somas_path : str, optional
@@ -228,15 +227,13 @@ class InferencePipeline:
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,
             prune_depth=self.graph_config.prune_depth,
+            segmentation_path=self.segmentation_path,
             smooth_bool=self.graph_config.smooth_bool,
+            somas_path=self.somas_path,
             verbose=True,
         )
         self.graph.load_fragments(fragments_pointer)
-
-        # Postprocess graph
         self.filter_fragments()
-        if self.somas_path:
-            self.graph.load_somas(self.somas_path, self.segmentation_path)
 
         # Save valid labels and current graph
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
@@ -248,7 +245,7 @@ class InferencePipeline:
         # Report results
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nInitial")
-        self.report(f"Module Runtime: {round(t, 4)} {unit}")
+        self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def filter_fragments(self):
         # Curvy fragments

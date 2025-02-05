@@ -196,12 +196,15 @@ class Reader:
         # Initializations
         bucket = storage.Client().bucket(gcs_dict["bucket_name"])
         zip_paths = util.list_gcs_filenames(bucket, gcs_dict["path"], ".zip")
+        pbar = tqdm(
+            total=len(zip_paths), desc="Download SWCs", dynamic_ncols=True
+        )
 
         # Main
         with ProcessPoolExecutor() as executor:
             # Assign processes
             processes = list()
-            for path in tqdm(zip_paths, desc="Download SWCs"):
+            for path in zip_paths:
                 zip_content = bucket.blob(path).download_as_bytes()
                 processes.append(
                     executor.submit(self.load_from_cloud_zip, zip_content)
@@ -211,6 +214,7 @@ class Reader:
             swc_dicts = list()
             for process in as_completed(processes):
                 swc_dicts.extend(process.result())
+                pbar.update(1)
         return swc_dicts
 
     def load_from_cloud_zip(self, zip_content):
@@ -643,11 +647,9 @@ def to_graph(swc_dict, set_attrs=False):
     graph = nx.Graph(graph_id=swc_dict["swc_id"])
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
     if set_attrs:
-        xyz = swc_dict["xyz"]
-        if type(swc_dict["xyz"]) is np.ndarray:
-            xyz = util.numpy_to_hashable(swc_dict["xyz"])
-        graph = __add_attributes(swc_dict, graph)
+        xyz = util.numpy_to_hashable(swc_dict["xyz"])
         xyz_to_node = dict(zip(xyz, swc_dict["id"]))
+        __add_attributes(swc_dict, graph)
         return graph, xyz_to_node
     return graph
 
@@ -672,8 +674,7 @@ def __add_attributes(swc_dict, graph):
 
     Returns:
     -------
-    networkx.Graph
-        The modified graph with added node attributes for each node.
+    None
 
     """
     attrs = dict()
@@ -683,4 +684,3 @@ def __add_attributes(swc_dict, graph):
             "radius": swc_dict["radius"][idx],
         }
     nx.set_node_attributes(graph, attrs)
-    return graph

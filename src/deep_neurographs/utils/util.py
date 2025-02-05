@@ -70,7 +70,7 @@ def rmdir(path):
 
 def listdir(path, extension=None):
     """
-    Lists all files in the directory at "path". If an extension "ext" is
+    Lists all files in the directory at "path". If an extension is
     provided, then only files containing "extension" are returned.
 
     Parameters
@@ -82,8 +82,8 @@ def listdir(path, extension=None):
 
     Returns
     -------
-    list
-        Files in directory at "path" with extension "extension" if provided.
+    List[str]
+        Filenames in directory with extension "extension" if provided.
         Otherwise, list of all files in directory.
 
     """
