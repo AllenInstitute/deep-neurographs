@@ -238,7 +238,7 @@ class FragmentsGraph(nx.Graph):
         attrs : dict
             Dictionary of attributes of "edge" obtained from an swc file.
         swc_id : str
-            swc id corresponding to edge.
+            SWC ID corresponding to edge.
 
         Returns
         -------
@@ -270,6 +270,7 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
+        # NOT USED AND OUTDATED
         nodes = deepcopy(self.nodes)
         for i in tqdm(nodes):
             nbs = list(self.neighbors(i))
@@ -277,8 +278,8 @@ class FragmentsGraph(nx.Graph):
                 # Concatenate attributes
                 len_1 = self.edges[i, nbs[0]]["length"]
                 len_2 = self.edges[i, nbs[1]]["length"]
-                xyz = self.branches(i, key="xyz", ignore_reducibles=False)
-                radius = self.branches(i, key="radius", ignore_reducibles=False)
+                xyz = self.branches(i, key="xyz")
+                radius = self.branches(i, key="radius")
                 attrs = {
                     "length": len_1 + len_2,
                     "radius": concatenate([np.flip(radius[0]), radius[1]]),
@@ -440,9 +441,9 @@ class FragmentsGraph(nx.Graph):
         Parameters
         ----------
         i : int
-            Node id.
+            Node ID.
         j : int
-            Node id
+            Node ID
 
         Returns
         -------
@@ -507,9 +508,9 @@ class FragmentsGraph(nx.Graph):
         Parmeters
         ---------
         leaf : int
-            Leaf node id.
+            Leaf node ID.
         i : int
-            node id.
+            NOde ID.
         complex_bool : bool
             Indication of whether complex proposals are should be generated.
 
@@ -705,15 +706,15 @@ class FragmentsGraph(nx.Graph):
         return np.array([avg_radius(radii_i), avg_radius(radii_j)])
 
     def proposal_directionals(self, proposal, depth):
-        # Extract branches
+        # Extract points along branches
         i, j = tuple(proposal)
-        branches_i = [geometry.truncate_path(b, depth) for b in self.branches(i)]
-        branches_j = [geometry.truncate_path(b, depth) for b in self.branches(j)]
+        xyz_list_i = [geometry.truncate_path(b, depth) for b in self.branches(i)]
+        xyz_list_j = [geometry.truncate_path(b, depth) for b in self.branches(j)]
         origin = self.proposal_midpoint(proposal)
 
         # Compute tangent vectors
-        direction_i = geometry.get_directional(branches_i, origin, depth)
-        direction_j = geometry.get_directional(branches_j, origin, depth)
+        direction_i = geometry.get_directional(xyz_list_i, origin, depth)
+        direction_j = geometry.get_directional(xyz_list_j, origin, depth)
         direction = geometry.tangent(self.proposal_attr(proposal, "xyz"))
 
         # Compute features
@@ -776,7 +777,7 @@ class FragmentsGraph(nx.Graph):
         swc_id : str
             Segment id.
         r : int
-            Node.
+            Node ID
 
         Returns
         -------
@@ -916,46 +917,25 @@ class FragmentsGraph(nx.Graph):
             path_length += self.edges[i, j]["length"]
         return path_length
 
-    def branches(self, i, ignore_reducibles=True, key="xyz"):
+    def branches(self, i, key="xyz"):
         """
-        rename edge_attr_from_node
+        rename connected_edge_attr
         """
-        branches = list()
+        attrs = list()
         for j in self.neighbors(i):
-            branch = self.oriented_edge_attr((i, j), i, key=key)
-            if ignore_reducibles:
-                root = i
-                while self.degree[j] == 2:
-                    k = self.get_other_nb(j, root)
-                    branch_jk = self.oriented_edge_attr((j, k), j, key=key)
-                    if key == "xyz":
-                        branch = np.vstack([branch, branch_jk])
-                    else:
-                        branch = np.concatenate((branch, branch_jk))
-                    root = j
-                    j = k
-            branches.append(branch)
-        return branches
-
-    def branch(self, leaf, key="xyz"):
-        """
-        Gets the xyz coordinates or radii contained in the edge emanating from
-        "leaf".
-
-        Parameters
-        ----------
-        leaf : int
-            Leaf node.
-
-        Returns
-        -------
-        numpy.ndarray
-            xyz coordinates or radii contained in the edge emanating from
-            "leaf".
-
-        """
-        assert self.is_leaf(leaf)
-        return self.branches(leaf, key=key)[0]
+            attr_ij = self.oriented_edge_attr((i, j), i, key=key)
+            root = i
+            while self.degree[j] == 2:
+                k = self.get_other_nb(j, root)
+                attr_jk = self.oriented_edge_attr((j, k), j, key=key)
+                if key == "xyz":
+                    attr_ij = np.vstack([attr_ij, attr_jk])
+                else:
+                    attr_ij = np.concatenate((attr_ij, attr_jk))
+                root = j
+                j = k
+            attrs.append(attr_ij)
+        return attrs
 
     def get_other_nb(self, i, j):
         """
@@ -981,6 +961,7 @@ class FragmentsGraph(nx.Graph):
         return nbs[0]
 
     def oriented_edge_attr(self, edge, i, key="xyz"):
+        assert i in edge
         if (self.edges[edge][key][0] == self.nodes[i][key]).all():
             return self.edges[edge][key]
         else:
@@ -1066,7 +1047,7 @@ class FragmentsGraph(nx.Graph):
             branch_radius = np.flip(branch_radius, axis=0)
 
         # Make entries
-        for k in util.spaced_idxs(len(branch_xyz), 2):
+        for k in util.spaced_idxs(len(branch_xyz), 1):
             x, y, z = tuple(branch_xyz[k])
             r = 5 if branch_radius[k] == 5.3141592 else 2
             node_id = n_entries + 1
