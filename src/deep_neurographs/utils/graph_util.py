@@ -97,6 +97,22 @@ class GraphLoader:
             self.load_somas(segmentation_path, somas_path)
 
     def load_somas(self, segmentation_path, somas_path):
+        """
+        Loads soma locations from a specified file and detects merges in a
+        segmentation.
+
+        Parameters
+        ----------
+        segmentation_path : str
+            Path to segmentation stored in GCS bucket. The default is None.
+        somas_path : str
+            Path to a txt file containing xyz coordinates of detected somas.
+
+        Returns
+        -------
+        None
+
+        """
         # Process soma locations
         driver = "neuroglancer_precomputed"
         reader = img_util.TensorStoreReader(segmentation_path, driver)
@@ -120,6 +136,22 @@ class GraphLoader:
         print("# Merges Detected:", len(self.merges_dict))
 
     def remove_merges(self, swc_dicts):
+        """
+        Breaks fragments in "swc_dicts" that contain a merge mistake.
+
+        Parameters
+        ----------
+        swc_dicts : List[dict]
+            List of dictionaries such that each contains the contents of an
+            SWC file.
+
+        Returns
+        -------
+        List[dict]
+            Updated list of "swc_dicts", where fragments with merges have been
+            broken down into smaller fragments.
+
+        """
         # Break fragments
         updates = list()
         n_breaks = 0
@@ -167,12 +199,11 @@ class GraphLoader:
         with ProcessPoolExecutor() as executor:
             # Assign Processes
             processes = [None] * len(swc_dicts)
-            for i, swc_dict in tqdm(enumerate(swc_dicts), desc="assign process"):
+            for i, swc_dict in enumerate(swc_dicts):
                 processes[i] = executor.submit(
                     self.extract_irreducibles, swc_dict
                 )
                 swc_dict[i] = None
-            print("processes assigned")
 
             # Store results
             irreducibles = list()
@@ -317,7 +348,24 @@ def break_fragment(swc_dict, somas_xyz):
     return swc_dict_list
 
 
-def remove_nodes(graph, nodes, max_radius=7):
+def remove_nodes(graph, nodes, max_dist=6.0):
+    """
+    Removes nodes from graph within a given radius from a set of root nodes.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+    nodes : List[int]
+        Root nodes.
+    max_dist : float, optional
+        Maximum distance within which nodes are removed. The default is 6.0.
+
+    Returns
+    -------
+    None
+
+    """
     remove = set()
     for root in nodes:
         queue = [(root, 0)]
@@ -330,7 +378,7 @@ def remove_nodes(graph, nodes, max_radius=7):
             # Update queue
             for j in graph.neighbors(i):
                 dist_j = dist_i + dist(graph, i, j)
-                if j not in visited and dist_j <= max_radius:
+                if j not in visited and dist_j <= max_dist:
                     queue.append((j, dist_j))
         remove = remove.union(visited)
     graph.remove_nodes_from(nodes)
@@ -558,6 +606,22 @@ def dist(graph, i, j):
 
 
 def find_closest_node(graph, xyz):
+    """
+    Finds the node in the graph that is closest to the given coordinates.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be search.
+    xyz : Tuple[float]
+        Coordinate to which the closest node in the graph will be found.
+
+    Returns
+    -------
+    int
+        Node in the graph that is closest to the given "xyz" coordinate.
+
+    """
     best_dist = np.inf
     best_node = None
     for i in graph.nodes:

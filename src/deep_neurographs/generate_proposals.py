@@ -186,7 +186,7 @@ def search_kdtree(fragments_graph, leaf, kdtree, radius, max_proposals):
     candidates = dict()
     leaf_xyz = fragments_graph.nodes[leaf]["xyz"]
     for xyz in geometry.query_ball(kdtree, leaf_xyz, radius):
-        swc_id = fragments_graph.xyz_to_swc(xyz)
+        swc_id = fragments_graph.xyz_to_id(xyz)
         if swc_id != fragments_graph.nodes[leaf]["swc_id"]:
             d = geometry.dist(leaf_xyz, xyz)
             if swc_id not in candidates.keys():
