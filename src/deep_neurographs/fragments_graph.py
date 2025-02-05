@@ -1047,7 +1047,7 @@ class FragmentsGraph(nx.Graph):
             branch_radius = np.flip(branch_radius, axis=0)
 
         # Make entries
-        for k in util.spaced_idxs(len(branch_xyz), 1):
+        for k in util.spaced_idxs(len(branch_xyz), 2):
             x, y, z = tuple(branch_xyz[k])
             r = 5 if branch_radius[k] == 5.3141592 else 2
             node_id = n_entries + 1
