@@ -579,7 +579,7 @@ class InferenceEngine:
             proposals = sort_proposals(fragments_graph, proposals)
 
         # Main
-        flagged = get_large_proposal_components(fragments_graph, 4)
+        flagged = set()  # too slow - get_large_proposal_components(fragments_graph, 4)
         with tqdm(total=len(proposals), desc="Inference") as pbar:
             accepts = list()
             while len(proposals) > 0:
@@ -593,7 +593,7 @@ class InferenceEngine:
                     fragments_graph.merge_proposal(p)
                     accepts.append(p)
                 pbar.update(len(batch["proposals"]))
-            fragments_graph.absorb_reducibles()  # - extremely slow
+            #fragments_graph.absorb_reducibles()  # - extremely slow
         return fragments_graph, accepts
 
     def get_batch(self, fragments_graph, proposals, flagged_proposals):
