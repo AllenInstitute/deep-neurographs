@@ -107,7 +107,7 @@ class GraphLoader:
                 processes[i] = executor.submit(
                     self.extract_irreducibles, swc_dict
                 )
-            del swc_dicts
+                swc_dict[i] = None
             print("processes assigned")
 
             # Store results
