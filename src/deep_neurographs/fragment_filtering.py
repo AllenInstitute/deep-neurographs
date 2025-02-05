@@ -129,7 +129,7 @@ def compute_projections(fragments_graph, kdtree, edge):
         best_id = None
         best_dist = np.inf
         for hit_xyz in geometry_util.query_ball(kdtree, xyz, QUERY_DIST):
-            hit_id = fragments_graph.xyz_to_swc(hit_xyz)
+            hit_id = fragments_graph.xyz_to_id(hit_xyz)
             if hit_id is not None and hit_id != query_id:
                 if geometry_util.dist(hit_xyz, xyz) < best_dist:
                     best_dist = geometry_util.dist(hit_xyz, xyz)

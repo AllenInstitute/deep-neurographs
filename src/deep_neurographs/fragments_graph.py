@@ -191,32 +191,6 @@ class FragmentsGraph(nx.Graph):
             if irreducibles["is_soma"]:
                 self.soma_ids.add(swc_id)
 
-    # --- search graph ---
-    def find_fragments_by_ids(self, swc_ids):
-        fragments = dict()
-        for nodes in nx.connected_components(self):
-            i = util.sample_once(nodes)
-            if self.nodes[i]["swc_id"] in swc_ids:
-                swc_id = self.nodes[i]["swc_id"]
-                fragments[swc_id] = nodes
-        return fragments
-
-    def get_leafs(self):
-        """
-        Gets all leaf nodes in graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        List[int]
-            Leaf nodes in graph.
-
-        """
-        return [i for i in self.nodes if self.is_leaf(i)]
-
     # --- update graph structure ---
     def __add_nodes(self, irreducibles, node_type, node_ids):
         """
@@ -840,7 +814,68 @@ class FragmentsGraph(nx.Graph):
         xyz = self.proposal_midpoint(proposal)
         return len(self.query_kdtree(xyz, radius, "leaf")) - 1
 
-    # --- util ---
+    # --- miscellaneous ---
+    def dist(self, i, j):
+        """
+        Computes the Euclidean distance between nodes "i" and "j".
+
+        Parameters
+        ----------
+        i : int
+            Node ID.
+        j : int
+            Nonde ID.
+
+        Returns
+        -------
+        float
+            Euclidean distance between nodes "i" and "j".
+
+        """
+        return geometry.dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
+
+    def find_fragments_by_ids(self, swc_ids):
+        fragments = dict()
+        for nodes in nx.connected_components(self):
+            i = util.sample_once(nodes)
+            if self.nodes[i]["swc_id"] in swc_ids:
+                swc_id = self.nodes[i]["swc_id"]
+                fragments[swc_id] = nodes
+        return fragments
+
+    def get_leafs(self):
+        """
+        Gets all leaf nodes in graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        List[int]
+            Leaf nodes in graph.
+
+        """
+        return [i for i in self.nodes if self.is_leaf(i)]
+
+    def is_leaf(self, i):
+        """
+        Checks if node "i" is a leaf.
+
+        Parameters
+        ----------
+        i : int
+            Node to be checked.
+
+        Returns
+        -------
+        bool
+            Indication of whether node "i" is a leaf
+
+        """
+        return True if self.degree[i] == 1 else False
+
     def is_soma(self, node_or_swc):
         """
         Determines whether "node_or_swc" corresponds to a soma.
@@ -861,24 +896,25 @@ class FragmentsGraph(nx.Graph):
             node_or_swc = self.nodes[node_or_swc]["swc_id"]
         return node_or_swc in self.soma_ids
 
-    def dist(self, i, j):
+    def path_length(self, root):
         """
-        Computes the Euclidean distance between nodes "i" and "j".
+        Computes the path length of the connected component containing "root".
 
         Parameters
         ----------
-        i : int
-            Node ID.
-        j : int
-            Nonde ID.
+        root : int
+            Node in connected component to be search.
 
         Returns
         -------
         float
-            Euclidean distance between nodes "i" and "j".
+            Path length of connected component containing "root".
 
         """
-        return geometry.dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
+        path_length = 0
+        for i, j in nx.dfs_edges(self, source=root):
+            path_length += self.edges[i, j]["length"]
+        return path_length
 
     def branches(self, i, ignore_reducibles=True, key="xyz"):
         """
@@ -950,22 +986,6 @@ class FragmentsGraph(nx.Graph):
         else:
             return np.flip(self.edges[edge][key], axis=0)
 
-    def is_leaf(self, i):
-        """
-        Checks whether node "i" is a leaf.
-
-        Parameters
-        ----------
-        i : int
-            Node to be checked.
-
-        Returns
-        -------
-        Indication of whether node "i" is a leaf
-
-        """
-        return True if self.degree[i] == 1 else False
-
     def leaf_neighbor(self, i):
         """
         Gets the unique neighbor of the leaf node "i".
@@ -984,7 +1004,7 @@ class FragmentsGraph(nx.Graph):
         assert self.is_leaf(i)
         return list(self.neighbors(i))[0]
 
-    def xyz_to_swc(self, xyz, return_node=False):
+    def xyz_to_id(self, xyz, return_node=False):
         if tuple(xyz) in self.xyz_to_edge.keys():
             edge = self.xyz_to_edge[tuple(xyz)]
             i, j = tuple(edge)
@@ -995,19 +1015,13 @@ class FragmentsGraph(nx.Graph):
         else:
             return None
 
-    def component_path_length(self, root):
-        path_length = 0
-        for i, j in nx.dfs_edges(self, source=root):
-            path_length += self.edges[i, j]["length"]
-        return path_length
-
     # --- write graph to swcs ---
     def to_zipped_swcs(self, zip_path, color=None, min_size=0):
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
             cnt = 0
             for nodes in nx.connected_components(self):
                 root = util.sample_once(nodes)
-                if self.component_path_length(root) > min_size:
+                if self.path_length(root) > min_size:
                     self.to_zipped_swc(zip_writer, nodes, color)
                     cnt += 1
             return cnt
@@ -1052,7 +1066,7 @@ class FragmentsGraph(nx.Graph):
             branch_radius = np.flip(branch_radius, axis=0)
 
         # Make entries
-        for k in util.spaced_idxs(len(branch_xyz), 3):
+        for k in util.spaced_idxs(len(branch_xyz), 2):
             x, y, z = tuple(branch_xyz[k])
             r = 5 if branch_radius[k] == 5.3141592 else 2
             node_id = n_entries + 1
