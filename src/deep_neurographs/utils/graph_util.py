@@ -237,9 +237,9 @@ class GraphLoader:
             graph = swc_dict["graph"]
         else:
             graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
+            self.prune_branches(graph)
 
         # Main
-        self.prune_branches(graph)
         if path_length(graph, self.min_size) > self.min_size:
             # Irreducible nodes
             leafs, branchings = get_irreducible_nodes(graph)
@@ -319,6 +319,7 @@ class GraphLoader:
 # --- Break Merged Fragments ---
 def break_fragment(swc_dict, somas_xyz):
     graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
+    self.prune_branches(graph)
     if len(somas_xyz) <= 10:
         # Break connecting path
         nodes = set()
@@ -383,14 +384,14 @@ def remove_nodes(graph, roots, max_dist=5.0):
             # Visit node
             i, dist_i = queue.pop()
             visited.add(i)
-            if graph.degree(i) > 2 and i not in visited_roots:
-                visited_roots.add(i)
 
             # Update queue
             for j in graph.neighbors(i):
                 dist_j = dist_i + dist(graph, i, j)
                 if j not in visited and dist_j <= max_dist:
                     queue.append((j, dist_j))
+                elif j not in visited and graph.degree(j) > 2:
+                    queue.append((j, dist_i))
         nodes = nodes.union(visited)
     graph.remove_nodes_from(nodes)
 
