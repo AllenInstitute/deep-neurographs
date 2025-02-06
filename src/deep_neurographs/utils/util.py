@@ -346,8 +346,8 @@ def write_txt(path, contents):
     ----------
     path : str
         Path that txt file is written to.
-    contents : dict
-        Contents to be written to txt file.
+    contents : str
+        String to be written to txt file.
 
     Returns
     -------
