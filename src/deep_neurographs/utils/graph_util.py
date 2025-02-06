@@ -321,6 +321,7 @@ def break_fragment(swc_dict, somas_xyz, prune_depth):
             }
             swc_dict_list.append(swc_dict_i)
     else:
+        print(f"Fragment intersects w/ {len(somas_xyz)}")
         swc_dict_list = [swc_dict]
     return swc_dict_list
 
