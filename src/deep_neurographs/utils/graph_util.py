@@ -331,6 +331,7 @@ def break_fragment(swc_dict, somas_xyz):
         for i, node in enumerate(path):
             if graph.degree(node) > 2:
                 nodes.add(node)
+        
 
         # Update graph
         remove_nodes(graph, nodes)
@@ -348,7 +349,7 @@ def break_fragment(swc_dict, somas_xyz):
     return swc_dict_list
 
 
-def remove_nodes(graph, nodes, max_dist=6.0):
+def remove_nodes(graph, roots, max_dist=4.0):
     """
     Removes nodes from graph within a given radius from a set of root nodes.
 
@@ -356,18 +357,18 @@ def remove_nodes(graph, nodes, max_dist=6.0):
     ----------
     graph : networkx.Graph
         Graph to be searched.
-    nodes : List[int]
+    roots : List[int]
         Root nodes.
     max_dist : float, optional
-        Maximum distance within which nodes are removed. The default is 6.0.
+        Maximum distance within which nodes are removed. The default is 4.0.
 
     Returns
     -------
     None
 
     """
-    remove = set()
-    for root in nodes:
+    nodes = set()
+    for root in roots:
         queue = [(root, 0)]
         visited = set()
         while len(queue) > 0:
@@ -380,7 +381,7 @@ def remove_nodes(graph, nodes, max_dist=6.0):
                 dist_j = dist_i + dist(graph, i, j)
                 if j not in visited and dist_j <= max_dist:
                     queue.append((j, dist_j))
-        remove = remove.union(visited)
+        nodes = nodes.union(visited)
     graph.remove_nodes_from(nodes)
 
 
