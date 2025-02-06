@@ -998,7 +998,12 @@ class FragmentsGraph(nx.Graph):
 
     # --- write graph to swcs ---
     def to_zipped_swcs(
-        self, zip_path, color=None, min_size=0, preserve_radius=False
+        self,
+        zip_path,
+        color=None,
+        min_size=0,
+        preserve_radius=False,
+        sampling_rate=1,
     ):
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
             cnt = 0
@@ -1010,7 +1015,13 @@ class FragmentsGraph(nx.Graph):
             return cnt
 
     def to_zipped_swc(
-        self, zip_writer, nodes, color=None, prefix="", preserve_radius=False
+        self,
+        zip_writer,
+        nodes,
+        color=None,
+        prefix="",
+        preserve_radius=False,
+        sampling_rate=1,
     ):
         with StringIO() as text_buffer:
             # Preamble
@@ -1057,11 +1068,12 @@ class FragmentsGraph(nx.Graph):
         j,
         parent,
         color,
-        preserve_radius=False
+        preserve_radius=False,
+        sampling_rate=1,
     ):
         branch_xyz = self.oriented_edge_attr((i, j), i, "xyz")
         branch_radius = self.oriented_edge_attr((i, j), i, "radius")
-        for k in util.spaced_idxs(len(branch_xyz), 2):
+        for k in util.spaced_idxs(len(branch_xyz), sampling_rate):
             # Check whether to skip
             if k == 0:
                 continue
