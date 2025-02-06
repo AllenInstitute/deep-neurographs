@@ -155,7 +155,7 @@ class GraphLoader:
         # Break fragments
         updates = list()
         n_breaks = 0
-        for i, swc_dict in enumerate(swc_dicts):
+        for i, swc_dict in tqdm(enumerate(swc_dicts)):
             if swc_dict["swc_id"] in self.merges_dict:
                 somas_xyz = self.merges_dict[swc_dict["swc_id"]]
                 swc_dict_list = break_fragment(swc_dict, somas_xyz)
@@ -319,25 +319,19 @@ class GraphLoader:
 # --- Break Merged Fragments ---
 def break_fragment(swc_dict, somas_xyz):
     graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
-    if len(somas_xyz) == 2:
-        # Find points on fragment
-        xyz_1, xyz_2 = tuple(somas_xyz)
-        node_1 = find_closest_node(graph, xyz_1)
-        node_2 = find_closest_node(graph, xyz_2)
-
-        # Find nodes to remove
+    if len(somas_xyz) <= 10:
+        # Break connecting path
         nodes = set()
-        path = nx.shortest_path(graph, source=node_1, target=node_2)
-        for i, node in enumerate(path):
+        path, soma_nodes = find_somas_path(graph, somas_xyz)
+        for node in path:
             if graph.degree(node) > 2:
                 nodes.add(node)
-        
-
-        # Update graph
         remove_nodes(graph, nodes)
+
+        # Update swc_dict
         swc_dict_list = list()
         for i, nodes in enumerate(map(set, nx.connected_components(graph))):
-            is_soma = True if node_1 in nodes or node_2 in nodes else False
+            is_soma = True if nodes.intersection(soma_nodes) else False
             swc_dict_i = {
                 "graph": graph.subgraph(nodes).copy(),
                 "is_soma": is_soma,
@@ -345,11 +339,23 @@ def break_fragment(swc_dict, somas_xyz):
             }
             swc_dict_list.append(swc_dict_i)
     else:
+        print(f"Fragment intersects w/ {len(somas_xyz)}")
         swc_dict_list = [swc_dict]
     return swc_dict_list
 
 
-def remove_nodes(graph, roots, max_dist=4.0):
+def find_somas_path(graph, somas_xyz):
+    path = set()
+    soma_nodes = [find_closest_node(graph, xyz) for xyz in somas_xyz]
+    for i in range(1, len(soma_nodes)):
+        subpath = nx.shortest_path(
+            graph, source=soma_nodes[0], target=soma_nodes[i]
+        )
+        path = path.union(set(subpath))
+    return path, soma_nodes
+
+
+def remove_nodes(graph, roots, max_dist=5.0):
     """
     Removes nodes from graph within a given radius from a set of root nodes.
 
@@ -360,7 +366,7 @@ def remove_nodes(graph, roots, max_dist=4.0):
     roots : List[int]
         Root nodes.
     max_dist : float, optional
-        Maximum distance within which nodes are removed. The default is 4.0.
+        Maximum distance within which nodes are removed. The default is 5.0.
 
     Returns
     -------
@@ -368,13 +374,17 @@ def remove_nodes(graph, roots, max_dist=4.0):
 
     """
     nodes = set()
-    for root in roots:
+    visited_roots = set()
+    while len(roots) > 0:
+        root = roots.pop()
         queue = [(root, 0)]
         visited = set()
         while len(queue) > 0:
             # Visit node
             i, dist_i = queue.pop()
             visited.add(i)
+            if graph.degree(i) > 2 and i not in visited_roots:
+                visited_roots.add(i)
 
             # Update queue
             for j in graph.neighbors(i):
