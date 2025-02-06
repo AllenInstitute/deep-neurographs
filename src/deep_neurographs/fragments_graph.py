@@ -161,7 +161,7 @@ class FragmentsGraph(nx.Graph):
 
     def add_irreducibles(self, irreducibles):
         """
-        Adds the irreducibles from a connected component to "self".
+        Adds the irreducibles from a single connected component to "self".
 
         Parameters
         ----------
@@ -194,7 +194,7 @@ class FragmentsGraph(nx.Graph):
     # --- update graph structure ---
     def __add_nodes(self, irreducibles, node_type, node_ids):
         """
-        Adds a set of "node_type" nodes from "irreducibles" to "self".
+        Adds a set of nodes from "irreducibles" to "self".
 
         Parameters
         ----------
@@ -202,7 +202,7 @@ class FragmentsGraph(nx.Graph):
             Dictionary containing the irreducibles of some connected component
             being added to "self".
         node_type : str
-            Type of node being added to "self". This value must be either
+            Type of node being added to "self". Note: value must be either
             'leaf' or 'branching'.
         node_ids : dict
             Dictionary containing conversion from a node id in "irreducibles"
@@ -233,7 +233,7 @@ class FragmentsGraph(nx.Graph):
 
         Parameters
         ----------
-        edge : tuple
+        edge : Tuple[int]
             Edge to be added.
         attrs : dict
             Dictionary of attributes of "edge" obtained from an swc file.
@@ -974,7 +974,7 @@ class FragmentsGraph(nx.Graph):
         Parameters
         ----------
         i : int
-            Leaf  node.
+            Leaf node.
 
         Returns
         -------
@@ -997,7 +997,9 @@ class FragmentsGraph(nx.Graph):
             return None
 
     # --- write graph to swcs ---
-    def to_zipped_swcs(self, zip_path, color=None, min_size=0):
+    def to_zipped_swcs(
+        self, zip_path, color=None, min_size=0, preserve_radius=False
+    ):
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
             cnt = 0
             for nodes in nx.connected_components(self):
@@ -1007,7 +1009,9 @@ class FragmentsGraph(nx.Graph):
                     cnt += 1
             return cnt
 
-    def to_zipped_swc(self, zip_writer, nodes, color, prefix=""):
+    def to_zipped_swc(
+        self, zip_writer, nodes, color=None, prefix="", preserve_radius=False
+    ):
         with StringIO() as text_buffer:
             # Preamble
             n_entries = 0
@@ -1020,38 +1024,48 @@ class FragmentsGraph(nx.Graph):
             for i, j in nx.dfs_edges(self.subgraph(nodes)):
                 # Root entry
                 if n_entries == 0:
-                    swc_id = self.nodes[i]["swc_id"]
+                    r = get_write_radius(i, preserve_radius)
                     x, y, z = tuple(self.nodes[i]["xyz"])
-                    r = 5 if self.nodes[i]["radius"] == 5.3141592 else 2
-
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
                     n_entries += 1
 
-                # Entry
+                # Remaining entries
                 parent = node_to_idx[i]
                 text_buffer, n_entries = self.branch_to_zip(
                     text_buffer, n_entries, i, j, parent, color
                 )
                 node_to_idx[j] = n_entries
+
+            # Write SWC file
+            filename = self.nodes[i]["swc_id"]
             zip_writer.writestr(
-                prefix + f"{swc_id}.swc", text_buffer.getvalue()
+                prefix + f"{filename}.swc", text_buffer.getvalue()
             )
 
-    def branch_to_zip(self, text_buffer, n_entries, i, j, parent, color):
-        # Orient branch
-        branch_xyz = self.edges[i, j]["xyz"]
-        branch_radius = self.edges[i, j]["radius"]
-        if (branch_xyz[0] != self.nodes[i]["xyz"]).any():
-            branch_xyz = np.flip(branch_xyz, axis=0)
-            branch_radius = np.flip(branch_radius, axis=0)
-
-        # Make entries
+    def branch_to_zip(
+        self,
+        text_buffer,
+        n_entries,
+        i,
+        j,
+        parent,
+        color,
+        preserve_radius=False
+    ):
+        branch_xyz = self.oriented_edge_attr((i, j), i, "xyz")
+        branch_radius = self.oriented_edge_attr((i, j), i, "radius")
         for k in util.spaced_idxs(len(branch_xyz), 2):
-            x, y, z = tuple(branch_xyz[k])
-            r = 5 if branch_radius[k] == 5.3141592 else 2
+            # Get attributes
             node_id = n_entries + 1
             parent = n_entries if k > 1 else parent
+            x, y, z = tuple(branch_xyz[k])
+            if preserve_radius
+                r = branch_radius[k]
+            else:
+                r = 5 if branch_radius[k] == 5.3141592 else 2
+
+            # Write entryß
             text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
             n_entries += 1
         return text_buffer, n_entries
