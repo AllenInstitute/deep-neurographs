@@ -238,7 +238,7 @@ class InferencePipeline:
         # Save valid labels and current graph
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
         valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        n_saved = self.graph.to_zipped_swcs(swcs_path)
+        n_saved = self.graph.to_zipped_swcs(swcs_path, sampling_rate=2)
         self.graph.save_labels(valid_labels_path)
         self.report(f"# SWCs Saved: {n_saved}")
 
@@ -344,14 +344,14 @@ class InferencePipeline:
         suffix = f"-{round_id}" if round_id else ""
         filename = f"corrected-processed-swcs{suffix}.zip"
         path = os.path.join(self.output_dir, filename)
-        self.graph.to_zipped_swcs(path)
+        self.graph.to_zipped_swcs(path, sampling_rate=2)
         self.save_connections(round_id=round_id)
         self.write_metadata()
 
         # Save result on s3 (if applicable)
         filename = f"corrected-processed-swcs-s3.zip"
         path = os.path.join(self.output_dir, filename)
-        self.graph.to_zipped_swcs(path, min_size=50)
+        self.graph.to_zipped_swcs(path, min_size=50, sampling_rate=2)
         if self.save_to_s3_bool:
             self.save_to_s3()
 
