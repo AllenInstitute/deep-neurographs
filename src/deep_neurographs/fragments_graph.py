@@ -1024,8 +1024,14 @@ class FragmentsGraph(nx.Graph):
             for i, j in nx.dfs_edges(self.subgraph(nodes)):
                 # Root entry
                 if n_entries == 0:
-                    r = get_write_radius(i, preserve_radius)
+                    # Get attributes
                     x, y, z = tuple(self.nodes[i]["xyz"])
+                    if preserve_radius:
+                        r = self.nodes[i]["radius"]
+                    else:
+                        r = 5 if self.nodes[i]["radius"] == 5.3141592 else 2
+
+                    # Write entry
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
                     n_entries += 1
@@ -1056,16 +1062,20 @@ class FragmentsGraph(nx.Graph):
         branch_xyz = self.oriented_edge_attr((i, j), i, "xyz")
         branch_radius = self.oriented_edge_attr((i, j), i, "radius")
         for k in util.spaced_idxs(len(branch_xyz), 2):
+            # Check whether to skip
+            if k == 0:
+                continue
+
             # Get attributes
             node_id = n_entries + 1
             parent = n_entries if k > 1 else parent
             x, y, z = tuple(branch_xyz[k])
-            if preserve_radius
+            if preserve_radius:
                 r = branch_radius[k]
             else:
                 r = 5 if branch_radius[k] == 5.3141592 else 2
 
-            # Write entryß
+            # Write entry
             text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
             n_entries += 1
         return text_buffer, n_entries
