@@ -153,14 +153,13 @@ class GraphLoader:
 
         """
         # Break fragments
+        depth = self.prune_depth
         updates = list()
-        n_breaks = 0
         for i, swc_dict in tqdm(enumerate(swc_dicts)):
             if swc_dict["swc_id"] in self.merges_dict:
                 somas_xyz = self.merges_dict[swc_dict["swc_id"]]
-                swc_dict_list = break_fragment(swc_dict, somas_xyz)
+                swc_dict_list = break_fragment(swc_dict, somas_xyz, depth)
                 updates.append((i, swc_dict_list))
-                n_breaks += len(swc_dict) - 1
 
         # Update swc_dicts
         updates.reverse()
@@ -169,7 +168,7 @@ class GraphLoader:
             swc_dicts.extend(swc_dict_list)
         return swc_dicts
 
-    def get_irreducibles(self, swc_dicts):
+    def extract_irreducibles(self, swc_dicts):
         """
         Processes a list of swc dictionaries in parallel and extracts the
         components of the irreducible subgraph from each. Note: this routine
@@ -201,7 +200,7 @@ class GraphLoader:
             processes = [None] * len(swc_dicts)
             for i, swc_dict in enumerate(swc_dicts):
                 processes[i] = executor.submit(
-                    self.extract_irreducibles, swc_dict
+                    self.extract_irreducibles_from_graph, swc_dict
                 )
                 swc_dict[i] = None
 
@@ -215,7 +214,7 @@ class GraphLoader:
                     pbar.update(1)
         return irreducibles
 
-    def extract_irreducibles(self, swc_dict):
+    def extract_irreducibles_from_graph(self, swc_dict):
         """
         Gets the components of the irreducible subgraph from a given SWC
         dictionary.
@@ -237,7 +236,7 @@ class GraphLoader:
             graph = swc_dict["graph"]
         else:
             graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
-            self.prune_branches(graph)
+            prune_branches(graph, self.prune_depth)
 
         # Main
         if path_length(graph, self.min_size) > self.min_size:
@@ -277,49 +276,31 @@ class GraphLoader:
         else:
             return None
 
-    def prune_branches(self, graph):
-        """
-        Prunes branches with length less than "self.prune_depth" microns.
-
-        Parameters
-        ----------
-        graph : networkx.Graph
-            Graph to be searched.
-
-        Returns
-        -------
-        networkx.Graph
-            Graph with short branches pruned.
-
-        """
-        deleted_nodes = list()
-        n_passes = 0
-        while len(deleted_nodes) > 0 or n_passes < 2:
-            # Visit leafs
-            n_passes += 1
-            deleted_nodes = list()
-            for leaf in get_leafs(graph):
-                branch = [leaf]
-                length = 0
-                for (i, j) in nx.dfs_edges(graph, source=leaf):
-                    # Visit edge
-                    length += dist(graph, i, j)
-                    if graph.degree(j) == 2:
-                        branch.append(j)
-                    elif graph.degree(j) > 2:
-                        deleted_nodes.extend(branch)
-                        graph.remove_nodes_from(branch)
-                        break
-
-                    # Check whether to stop
-                    if length > self.prune_depth:
-                        break
-
 
 # --- Break Merged Fragments ---
-def break_fragment(swc_dict, somas_xyz):
+def break_fragment(swc_dict, somas_xyz, prune_depth):
+    """
+    Breaks a fragment that intersects with multiple somas so that nodes
+    closest to soma locations are disconnected.
+
+    Parameters
+    ----------
+    swc_dict : dict
+        Contents of an SWC file.
+    somas_xyz : List[Tuple[float]]
+        Physical coordinates representing soma locations.
+    prune_depth : float
+        Branches with length less than "prune_depth" microns are pruned.
+
+    Returns
+    -------
+    List[dicts]
+        Updated SWC data dictionaries, where each dictionary represents a
+        subgraph that was disconnected.
+
+    """
     graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
-    self.prune_branches(graph)
+    prune_branches(graph, prune_depth)
     if len(somas_xyz) <= 10:
         # Break connecting path
         nodes = set()
@@ -340,12 +321,31 @@ def break_fragment(swc_dict, somas_xyz):
             }
             swc_dict_list.append(swc_dict_i)
     else:
-        print(f"Fragment intersects w/ {len(somas_xyz)}")
         swc_dict_list = [swc_dict]
     return swc_dict_list
 
 
 def find_somas_path(graph, somas_xyz):
+    """
+    Finds the shortest paths between a list of nodes such that each is closest
+    to an xyz coordinate in "somas_xyz".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+    somas_xyz : List[Tuple[float]]
+        List of xyz coordinates that represent soma locations.
+
+    Returns
+    -------
+    Tuple
+        A tuple containing the following:
+            - path (Set[int]): Nodes along the shortest paths between somas.
+            - soma_nodes (List[int]): Nodes that are closest to the given soma
+            locations.
+
+    """
     path = set()
     soma_nodes = [find_closest_node(graph, xyz) for xyz in somas_xyz]
     for i in range(1, len(soma_nodes)):
@@ -375,7 +375,6 @@ def remove_nodes(graph, roots, max_dist=5.0):
 
     """
     nodes = set()
-    visited_roots = set()
     while len(roots) > 0:
         root = roots.pop()
         queue = [(root, 0)]
@@ -453,7 +452,7 @@ def init_edge_attrs(graph, i):
     Parameters
     ----------
     graph : networkx.Graph
-        Graph containing node i.
+        Graph containing node "i".
     i : int
         Node that is the start of a path between irreducible nodes. The
         attributes of this node are used to initialize the dictionary.
@@ -479,14 +478,14 @@ def upd_edge_attrs(graph, attrs, i, j):
     Parameters
     ----------
     graph : networkx.Graph
-        Graph containing nodes i and j.
+        Graph containing nodes "i" and "j".
     attrs : dict
         Edge attribute dictionary to be updated.
     i : int
         Node in the path between irreducible nodes whose attributes will be
         added to the "attrs" dictionary.
     j : int
-        ...
+        Neighbor of node "i" which is also along this path.
 
     Returns
     -------
@@ -747,6 +746,47 @@ def path_length(graph, max_length=np.inf):
         if path_length > max_length:
             break
     return path_length
+
+
+def prune_branches(graph, depth):
+    """
+    Prunes branches with length less than "depth" microns.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+    depth : float
+        Length of branches that are pruned.
+
+    Returns
+    -------
+    networkx.Graph
+        Graph with short branches pruned.
+
+    """
+    deleted_nodes = list()
+    n_passes = 0
+    while len(deleted_nodes) > 0 or n_passes < 2:
+        # Visit leafs
+        n_passes += 1
+        deleted_nodes = list()
+        for leaf in get_leafs(graph):
+            branch = [leaf]
+            length = 0
+            for (i, j) in nx.dfs_edges(graph, source=leaf):
+                # Visit edge
+                length += dist(graph, i, j)
+                if graph.degree(j) == 2:
+                    branch.append(j)
+                elif graph.degree(j) > 2:
+                    deleted_nodes.extend(branch)
+                    graph.remove_nodes_from(branch)
+                    break
+
+                # Check whether to stop
+                if length > depth:
+                    break
 
 
 def sample_node(graph):
