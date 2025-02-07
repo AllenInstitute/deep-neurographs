@@ -135,39 +135,6 @@ class GraphLoader:
         self.merges_dict = {k: v for k, v in id_to_xyz.items() if len(v) > 1}
         print("# Merges Detected:", len(self.merges_dict))
 
-    def remove_merges(self, swc_dicts):
-        """
-        Breaks fragments in "swc_dicts" that contain a merge mistake.
-
-        Parameters
-        ----------
-        swc_dicts : List[dict]
-            List of dictionaries such that each contains the contents of an
-            SWC file.
-
-        Returns
-        -------
-        List[dict]
-            Updated list of "swc_dicts", where fragments with merges have been
-            broken down into smaller fragments.
-
-        """
-        # Break fragments
-        depth = self.prune_depth
-        updates = list()
-        for i, swc_dict in tqdm(enumerate(swc_dicts)):
-            if swc_dict["swc_id"] in self.merges_dict:
-                somas_xyz = self.merges_dict[swc_dict["swc_id"]]
-                swc_dict_list = break_fragment(swc_dict, somas_xyz, depth)
-                updates.append((i, swc_dict_list))
-
-        # Update swc_dicts
-        updates.reverse()
-        for i, swc_dict_list in updates:
-            swc_dicts.pop(i)
-            swc_dicts.extend(swc_dict_list)
-        return swc_dicts
-
     def extract_irreducibles(self, swc_dicts):
         """
         Processes a list of swc dictionaries in parallel and extracts the
@@ -275,6 +242,40 @@ class GraphLoader:
             return irreducibles
         else:
             return None
+
+    def remove_merges(self, swc_dicts):
+        """
+        Breaks fragments in "swc_dicts" that contain a merge mistake.
+
+        Parameters
+        ----------
+        swc_dicts : List[dict]
+            List of dictionaries such that each contains the contents of an
+            SWC file.
+
+        Returns
+        -------
+        List[dict]
+            Updated list of "swc_dicts", where fragments with merges have been
+            broken down into smaller fragments.
+
+        """
+        # Break fragments
+        depth = self.prune_depth
+        updates = list()
+        for i, swc_dict in tqdm(enumerate(swc_dicts)):
+            if swc_dict["swc_id"] in self.merges_dict:
+                somas_xyz = self.merges_dict[swc_dict["swc_id"]]
+                swc_dict_list = break_fragment(swc_dict, somas_xyz, depth)
+                updates.append((i, swc_dict_list))
+
+        # Update swc_dicts
+        updates.reverse()
+        swc_dicts = list()  # temp
+        for i, swc_dict_list in updates:
+            swc_dicts.pop(i)
+            swc_dicts.extend(swc_dict_list)
+        return swc_dicts
 
 
 # --- Break Merged Fragments ---

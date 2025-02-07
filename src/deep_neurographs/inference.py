@@ -241,6 +241,7 @@ class InferencePipeline:
         n_saved = self.graph.to_zipped_swcs(swcs_path, sampling_rate=2)
         self.graph.save_labels(valid_labels_path)
         self.report(f"# SWCs Saved: {n_saved}")
+        stop
 
         # Report results
         t, unit = util.time_writer(time() - t0)
