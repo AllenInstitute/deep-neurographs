@@ -301,7 +301,7 @@ class Reader:
     def parse(self, content):
         """
         Parses an SWC file to extract the content which is stored in a dict.
-        Note that node_ids from swc are reindex from 0 to n-1 where n is the
+        Note that node_ids from SWC are reindex from 0 to n-1 where n is the
         number of nodes in the SWC file.
 
         Parameters
