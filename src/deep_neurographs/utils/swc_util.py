@@ -65,8 +65,13 @@ class Reader:
         Parameters
         ----------
         swc_pointer : dict, list, str
-            Object that points to swcs to be read, see class documentation for
-            details.
+            Object that points to swcs to be read, which must be one of:
+                - swc_dir (str): Path to directory containing SWC files.
+                - swc_path (str): Path to single SWC file.
+                - swc_path_list (List[str]): List of paths to SWC files.
+                - swc_zip (str): Path to a ZIP archive containing SWC files.
+                - gcs_dict (dict): Dictionary that contains the keys
+                  "bucket_name" and "path" to read from a GCS bucket.
 
         Returns
         -------
@@ -107,7 +112,7 @@ class Reader:
             and values from an swc file.
 
         """
-        with ProcessPoolExecutor(max_workers=1) as executor:
+        with ProcessPoolExecutor() as executor:
             # Assign processes
             processes = list()
             for path in swc_paths:

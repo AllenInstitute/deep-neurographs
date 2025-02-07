@@ -238,9 +238,10 @@ class InferencePipeline:
         # Save valid labels and current graph
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
         valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        n_saved = self.graph.to_zipped_swcs(swcs_path, sampling_rate=2)
+        n_saved = self.graph.to_zipped_swcs(swcs_path, sampling_rate=1)
         self.graph.save_labels(valid_labels_path)
         self.report(f"# SWCs Saved: {n_saved}")
+        stop
 
         # Report results
         t, unit = util.time_writer(time() - t0)
