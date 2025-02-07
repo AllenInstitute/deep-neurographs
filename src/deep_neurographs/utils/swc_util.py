@@ -40,7 +40,6 @@ import os
 from deep_neurographs.utils import util
 
 
-# --- Read ---
 class Reader:
     """
     Class that reads SWC files stored in a (1) local directory, (2) local ZIP
@@ -297,7 +296,7 @@ class Reader:
                         swc_dicts.append(result)
         return swc_dicts
 
-    # --- Process swc content ---
+    # --- Process content ---
     def parse(self, content):
         """
         Parses an SWC file to extract the content which is stored in a dict.
