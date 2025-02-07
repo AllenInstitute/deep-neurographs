@@ -1029,7 +1029,7 @@ class FragmentsGraph(nx.Graph):
             node_to_idx = dict()
             if color:
                 text_buffer.write("# COLOR " + color)
-            text_buffer.write("# id, type, z, y, x, r, pid")
+            text_buffer.write("# id, type, x, y, z, r, pid")
 
             # Write entries
             for i, j in nx.dfs_edges(self.subgraph(nodes)):

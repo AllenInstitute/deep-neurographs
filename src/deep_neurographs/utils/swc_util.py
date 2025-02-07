@@ -6,23 +6,36 @@ Created on Wed June 5 16:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 
-Routines for working with swc files.
+Routines for working with SWC files.
+
+An SWC file is a text-based file format used to represent the directed
+graphical structure of a neuron. It contains a series of nodes such that each
+has the following attributes:
+    "id" : node ID
+    "type": node type (e.g. soma)
+    "x": x coordinate
+    "y": y coordinate
+    "z": z coordinate
+    "pid": node ID of parent
+
+Note: Each uncommented line in an SWC file corresponds to a node and contains
+      these attributes in the same order.
 
 """
 
-import os
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
     as_completed,
 )
+from google.cloud import storage
 from io import BytesIO
+from tqdm import tqdm
 from zipfile import ZipFile
 
 import networkx as nx
 import numpy as np
-from google.cloud import storage
-from tqdm import tqdm
+import os
 
 from deep_neurographs.utils import util
 
@@ -30,15 +43,14 @@ from deep_neurographs.utils import util
 # --- Read ---
 class Reader:
     """
-    Class that reads swc files that are stored as (1) local directory of swcs,
-    (2) gcs directory of zips containing swcs, (3) local zip containing swcs,
-    (4) list of local paths to swcs, or (5) single path to a local swc.
+    Class that reads SWC files stored in a (1) local directory, (2) local ZIP
+    archive, or (3) GCS directory of ZIP archives.
 
     """
 
     def __init__(self, anisotropy=[1.0, 1.0, 1.0], min_size=0):
         """
-        Initializes a Reader object that loads swc files.
+        Initializes a Reader object that loads SWC files.
 
         Parameters
         ----------
@@ -46,9 +58,8 @@ class Reader:
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
         min_size : int, optional
-            Threshold on the number of nodes in swc file. Only swc files with
-            more than "min_size" nodes are stored in "xyz_coords". The default
-            is 0.
+            Threshold on the number nodes in SWC files that are parsed and
+            returned.
 
         Returns
         -------
@@ -60,12 +71,13 @@ class Reader:
 
     def load(self, swc_pointer):
         """
-        Load data based on the type and format of the provided "swc_pointer".
+        Loads data from SWC files located at the path specified by
+        "swc_pointer".
 
         Parameters
         ----------
         swc_pointer : dict, list, str
-            Object that points to swcs to be read, which must be one of:
+            Object that points to SWC files to be read, must be one of:
                 - swc_dir (str): Path to directory containing SWC files.
                 - swc_path (str): Path to single SWC file.
                 - swc_path_list (List[str]): List of paths to SWC files.
@@ -76,8 +88,15 @@ class Reader:
         Returns
         -------
         List[dict]
-            List of dictionaries whose keys and values are the attribute name
-            and values from an swc file.
+            List of dictionaries whose keys and values are the attribute names
+            and values from the SWC files. Each dictionary contains the
+            following items:
+                - "id": unique identifier of each node in an SWC file.
+                - "pid": parent ID of each node.
+                - "swc_id": name of swc file.
+                - "is_soma": indication of there is a soma node.
+                - "radius": radius value corresponding to each node.
+                - "xyz": coordinates corresponding to each node.
 
         """
         if type(swc_pointer) is dict:
@@ -97,19 +116,18 @@ class Reader:
     # --- Load subroutines ---
     def load_from_local_paths(self, swc_paths):
         """
-        Reads swc files from local machine, then returns either the xyz
-        coordinates or graphs.
+        Reads a list of SWC files stored on the local machine.
 
         Paramters
         ---------
-        swc_paths : list
-            List of paths to swc files stored on the local machine.
+        swc_paths : List[str]
+            Paths to SWC files stored on the local machine.
 
         Returns
         -------
         List[dict]
-            List of dictionaries whose keys and values are the attribute name
-            and values from an swc file.
+            List of dictionaries whose keys and values are the attribute
+            names and values from an SWC file.
 
         """
         with ProcessPoolExecutor() as executor:
@@ -130,19 +148,18 @@ class Reader:
 
     def load_from_local_path(self, path):
         """
-        Reads a single swc file from local machine, then returns either the
-        xyz coordinates or graphs.
+        Reads a single SWC file stored on the local machine.
 
         Paramters
         ---------
         path : str
-            Path to swc file stored on the local machine.
+            Path to SWC file stored on the local machine.
 
         Returns
         -------
-        List[dict]
-            List of dictionaries whose keys and values are the attribute name
-            and values from an swc file.
+        dict
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
 
         """
         content = util.read_txt(path)
@@ -155,47 +172,69 @@ class Reader:
 
     def load_from_local_zip(self, zip_path):
         """
-        Reads swc files from zip on the local machine, then returns either the
-        xyz coordinates or graph. Note this routine is hard coded for computing
-        projected run length.
+        Reads SWC files from ZIP archive stored on the local machine.
 
         Paramters
         ---------
-        swc_paths : Container
-            If swc files are on local machine, list of paths to swc files where
-            each file corresponds to a neuron in the prediction. If swc files
-            are on cloud, then dict with keys "bucket_name" and "path".
+        str : str
+            Path to a ZIP archive the local machine.
 
         Returns
         -------
-        dict
-            Dictionary that maps an swc_id to the the xyz coordinates read from
-            that swc file.
+        List[dict]
+            List of dictionaries whose keys and values are the attribute
+            names and values from an SWC file.
 
         """
         with ZipFile(zip_path, "r") as zip_file:
             swc_dicts = list()
             swc_files = [f for f in zip_file.namelist() if f.endswith(".swc")]
-            for f in tqdm(swc_files, desc="Loading Fragments"):
+            for f in tqdm(swc_files, desc="Read SWCs"):
                 result = self.load_from_zipped_file(zip_file, f)
                 if result:
                     swc_dicts.append(result)
         return swc_dicts
 
-    def load_from_gcs(self, gcs_dict):
+    def load_from_zipped_file(self, zip_file, path):
         """
-        Reads swc files from zips on a GCS bucket.
+        Reads SWC file stored in a ZIP archive.
 
         Parameters
         ----------
-        gcs_dict : dict
-            Dictionary where keys are "bucket_name" and "path".
+        zip_file : ZipFile
+            ZIP archive containing SWC file to be read.
+        path : str
+            Path to SWC file to be read.
 
         Returns
         -------
         dict
-            Dictionary that maps an swc_id to the the xyz coordinates read from
-            that swc file.
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
+
+        """
+        content = util.read_zip(zip_file, path).splitlines()
+        if len(content) > self.min_size - 10:
+            result = self.parse(content)
+            result["swc_id"] = util.get_swc_id(path)
+            return result
+        else:
+            return False
+
+    def load_from_gcs(self, gcs_dict):
+        """
+        Reads SWC files from ZIP archives stored in a GCS bucket.
+
+        Parameters
+        ----------
+        gcs_dict : dict
+            Dictionary with the keys "bucket_name" and "path".
+
+        Returns
+        -------
+        List[dict]
+            List of dictionaries whose keys and values are the attribute
+            names and values from an SWC file.
 
         """
         # Initializations
@@ -224,19 +263,20 @@ class Reader:
 
     def load_from_cloud_zip(self, zip_content):
         """
-        Reads swc files from a zip that has been downloaded from a cloud
+        Reads SWC files stored in a ZIP archive downloaded from a cloud
         bucket.
 
         Parameters
         ----------
         zip_content : ...
-            content of a zip file.
+            Content of a ZIP archive.
 
         Returns
         -------
-        dict
-            Dictionary that maps an swc_id to the the xyz coordinates read from
-            that swc file.
+        List[dict]
+            List of dictionaries whose keys and values are the attribute
+            names and values from an SWC file.
+
 
         """
         with ZipFile(BytesIO(zip_content)) as zip_file:
@@ -258,52 +298,26 @@ class Reader:
                         swc_dicts.append(result)
         return swc_dicts
 
-    def load_from_zipped_file(self, zip_file, path):
-        """
-        Reads swc file stored at "path" which points to a file in a zip.
-
-        Parameters
-        ----------
-        zip_file : ZipFile
-            Zip containing swc file to be read.
-        path : str
-            Path to swc file to be read.
-
-        Returns
-        -------
-        dict
-            Dictionary that maps an swc_id to the the xyz coordinates or graph
-            read from that swc file.
-
-        """
-        content = util.read_zip(zip_file, path).splitlines()
-        if len(content) > self.min_size - 10:
-            result = self.parse(content)
-            result["swc_id"] = util.get_swc_id(path)
-            return result
-        else:
-            return False
-
     # --- Process swc content ---
     def parse(self, content):
         """
-        Parses an swc file to extract the content which is stored in a dict.
+        Parses an SWC file to extract the content which is stored in a dict.
         Note that node_ids from swc are refactored to index from 0 to n-1
-        where n is the number of entries in the swc file.
+        where n is the number of nodes in the SWC file.
 
         Parameters
         ----------
         content : List[str]
-            List of entries from an swc file.
+            List of strings such that each is a line from an SWC file.
 
         Returns
         -------
         dict
-            Dictionaries whose keys and values are the attribute name
-            and values from an swc file.
+            Dictionaries whose keys and values are the attribute names
+            and values from an SWC file.
 
         """
-        # Parse swc content
+        # Initializations
         content, offset = self.process_content(content)
         swc_dict = {
             "id": np.zeros((len(content)), dtype=np.int32),
@@ -312,6 +326,8 @@ class Reader:
             "xyz": np.zeros((len(content), 3), dtype=np.float32),
             "is_soma": False,
         }
+
+        # Parse content
         for i, line in enumerate(content):
             parts = line.split()
             swc_dict["id"][i] = parts[0]
@@ -321,21 +337,21 @@ class Reader:
             if int(parts[1]) == 1:
                 swc_dict["is_soma"] = True
 
-        # Check whether radius is in nanometers
+        # Convert radius from nanometers to microns
         if swc_dict["radius"][0] > 100:
             swc_dict["radius"] /= 1000
         return swc_dict
 
     def process_content(self, content):
         """
-        Processes lines of text from a content source, extracting an offset
+        Processes lines of text from an SWC file, extracting an offset
         value and returning the remaining content starting from the line
         immediately after the last commented line.
 
         Parameters
         ----------
         content : List[str]
-            List of strings where each string represents a line of text.
+            List of strings such that each is a line from an SWC file.
 
         Returns
         -------
@@ -343,7 +359,7 @@ class Reader:
             A list of strings representing the lines of text starting from the
             line immediately after the last commented line.
         List[float]
-            Offset of swc file.
+            Offset of SWC file.
 
         """
         offset = [0.0, 0.0, 0.0]
@@ -355,19 +371,20 @@ class Reader:
 
     def read_xyz(self, xyz_str, offset=[0.0, 0.0, 0.0]):
         """
-        Reads the coordinates from a string and transforms it (if applicable).
+        Reads a 3D coordinate from a string and transforms it (if applicable).
 
         Parameters
         ----------
         xyz_str : str
-            Coordinate stored in a str.
-        offset : list[int], optional
-            Offset of coordinates in swc file. The default is [0.0, 0.0, 0.0].
+            Coordinate stored as a str.
+        offset : List[float], optional
+            Offset used to shift coordinates if provided in the SWC file. The
+            default is [0.0, 0.0, 0.0].
 
         Returns
         -------
         numpy.ndarray
-            xyz coordinates of an entry from an swc file.
+            Coordinate of a node from an SWC file.
 
         """
         xyz = np.zeros((3))
@@ -379,8 +396,8 @@ class Reader:
 # --- Write ---
 def write(path, content, color=None):
     """
-    Write content to a specified file in a format based on the type o
-    f content.
+    Writes content to a specified file in a format based on the type of
+    content.
 
     Parameters
     ----------
@@ -408,7 +425,7 @@ def write(path, content, color=None):
 
 def write_list(path, entry_list, color=None):
     """
-    Writes a list of swc entries to a file at path.
+    Writes a list of SWC entries to a file at path.
 
     Parameters
     ----------
