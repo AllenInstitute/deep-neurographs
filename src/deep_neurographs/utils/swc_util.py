@@ -11,12 +11,12 @@ Routines for working with SWC files.
 An SWC file is a text-based file format used to represent the directed
 graphical structure of a neuron. It contains a series of nodes such that each
 has the following attributes:
-    "id" : node ID
-    "type": node type (e.g. soma)
-    "x": x coordinate
-    "y": y coordinate
-    "z": z coordinate
-    "pid": node ID of parent
+    "id" (int): node ID
+    "type" (int): node type (e.g. soma, axon, dendrite)
+    "x" (float): x coordinate
+    "y" (float): y coordinate
+    "z" (float): z coordinate
+    "pid" (int): node ID of parent
 
 Note: Each uncommented line in an SWC file corresponds to a node and contains
       these attributes in the same order.
@@ -93,10 +93,10 @@ class Reader:
             following items:
                 - "id": unique identifier of each node in an SWC file.
                 - "pid": parent ID of each node.
-                - "swc_id": name of swc file.
+                - "swc_id": name of swc file, minus the ".swc".
                 - "is_soma": indication of there is a soma node.
                 - "radius": radius value corresponding to each node.
-                - "xyz": coordinates corresponding to each node.
+                - "xyz": coordinate corresponding to each node.
 
         """
         if type(swc_pointer) is dict:
@@ -172,12 +172,12 @@ class Reader:
 
     def load_from_local_zip(self, zip_path):
         """
-        Reads SWC files from ZIP archive stored on the local machine.
+        Reads SWC files from a ZIP archive stored on the local machine.
 
         Paramters
         ---------
         str : str
-            Path to a ZIP archive the local machine.
+            Path to a ZIP archive on the local machine.
 
         Returns
         -------
@@ -228,7 +228,8 @@ class Reader:
         Parameters
         ----------
         gcs_dict : dict
-            Dictionary with the keys "bucket_name" and "path".
+            Dictionary with the keys "bucket_name" and "path" that specify
+            where the ZIP archives are located in a GCS bucket.
 
         Returns
         -------
@@ -240,9 +241,7 @@ class Reader:
         # Initializations
         bucket = storage.Client().bucket(gcs_dict["bucket_name"])
         zip_paths = util.list_gcs_filenames(bucket, gcs_dict["path"], ".zip")
-        pbar = tqdm(
-            total=len(zip_paths), desc="Download SWCs", dynamic_ncols=True
-        )
+        pbar = tqdm(total=len(zip_paths), desc="Download SWCs")
 
         # Main
         with ProcessPoolExecutor() as executor:
@@ -268,7 +267,7 @@ class Reader:
 
         Parameters
         ----------
-        zip_content : ...
+        zip_content : bytes
             Content of a ZIP archive.
 
         Returns
@@ -302,8 +301,8 @@ class Reader:
     def parse(self, content):
         """
         Parses an SWC file to extract the content which is stored in a dict.
-        Note that node_ids from swc are refactored to index from 0 to n-1
-        where n is the number of nodes in the SWC file.
+        Note that node_ids from SWC are reindex from 0 to n-1 where n is the
+        number of nodes in the SWC file.
 
         Parameters
         ----------
@@ -359,7 +358,7 @@ class Reader:
             A list of strings representing the lines of text starting from the
             line immediately after the last commented line.
         List[float]
-            Offset of SWC file.
+            Offset used to shift coordinates.
 
         """
         offset = [0.0, 0.0, 0.0]
@@ -402,9 +401,9 @@ def write(path, content, color=None):
     Parameters
     ----------
     path : str
-        File path where the content will be written.
+        Path where the content will be written.
     content : list, dict, nx.Graph
-        The content to be written.
+        Content to be written.
     color : str, optional
         Color of swc to be written. The default is None.
 
