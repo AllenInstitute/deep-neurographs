@@ -66,6 +66,7 @@ class FragmentsGraph(nx.Graph):
         min_size=30.0,
         node_spacing=1,
         prune_depth=16.0,
+        remove_high_risk_merges=False,
         segmentation_path=None,
         smooth_bool=True,
         somas_path=None,
@@ -88,6 +89,9 @@ class FragmentsGraph(nx.Graph):
         prune_depth : int, optional
             Branches with length less than "prune_depth" microns are removed.
             The default is 16.0 microns.
+        remove_high_risk_merges : bool, optional
+            Indication of whether to remove high risk merge sites (i.e. close
+            branching points). The default is False.
         segmentation_path : str, optional
             Path to segmentation stored in GCS bucket. The default is None.
         smooth_bool : bool, optional
@@ -114,6 +118,7 @@ class FragmentsGraph(nx.Graph):
             min_size=min_size,
             node_spacing=node_spacing,
             prune_depth=prune_depth,
+            remove_high_risk_merges=remove_high_risk_merges,
             segmentation_path=segmentation_path,
             smooth_bool=smooth_bool,
             somas_path=somas_path,
@@ -155,7 +160,7 @@ class FragmentsGraph(nx.Graph):
         """
         swc_dicts = self.swc_reader.load(fragments_pointer)
         irreducibles_list = self.graph_loader.extract_irreducibles(swc_dicts)
-        while len(irreducibles_list):
+        while len(irreducibles_list) > 0:
             irreducibles = irreducibles_list.pop()
             self.add_irreducibles(irreducibles)
 
@@ -175,21 +180,20 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
+        # Nodes
+        ids = self.__add_nodes(irreducibles, "leaf", dict())
+        ids = self.__add_nodes(irreducibles, "branching", ids)
+
+        # Edges
         swc_id = irreducibles["swc_id"]
-        if swc_id not in self.swc_ids:
-            # Nodes
-            ids = self.__add_nodes(irreducibles, "leaf", dict())
-            ids = self.__add_nodes(irreducibles, "branching", ids)
+        for (i, j), attrs in irreducibles["edge"].items():
+            edge = (ids[i], ids[j])
+            self.__add_edge(edge, attrs, swc_id)
 
-            # Edges
-            for (i, j), attrs in irreducibles["edge"].items():
-                edge = (ids[i], ids[j])
-                self.__add_edge(edge, attrs, swc_id)
-
-            # SWC ID
-            self.swc_ids.add(swc_id)
-            if irreducibles["is_soma"]:
-                self.soma_ids.add(swc_id)
+        # SWC ID
+        self.swc_ids.add(swc_id)
+        if irreducibles["is_soma"]:
+            self.soma_ids.add(swc_id)
 
     # --- update graph structure ---
     def __add_nodes(self, irreducibles, node_type, node_ids):
@@ -1010,7 +1014,13 @@ class FragmentsGraph(nx.Graph):
             for nodes in nx.connected_components(self):
                 root = util.sample_once(nodes)
                 if self.path_length(root) > min_size:
-                    self.to_zipped_swc(zip_writer, nodes, color)
+                    self.to_zipped_swc(
+                        zip_writer,
+                        nodes,
+                        color=color,
+                        preserve_radius=preserve_radius,
+                        sampling_rate=sampling_rate
+                    )
                     cnt += 1
             return cnt
 
@@ -1050,7 +1060,14 @@ class FragmentsGraph(nx.Graph):
                 # Remaining entries
                 parent = node_to_idx[i]
                 text_buffer, n_entries = self.branch_to_zip(
-                    text_buffer, n_entries, i, j, parent, color
+                    text_buffer,
+                    n_entries,
+                    i,
+                    j,
+                    parent,
+                    color,
+                    preserve_radius=preserve_radius,
+                    sampling_rate=sampling_rate
                 )
                 node_to_idx[j] = n_entries
 

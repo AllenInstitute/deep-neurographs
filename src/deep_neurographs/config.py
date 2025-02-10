@@ -10,7 +10,7 @@ aspects of a system involving graphs, proposals, and machine learning (ML).
 
 """
 from dataclasses import dataclass, field
-from typing import List
+from typing import Tuple
 
 
 @dataclass
@@ -21,10 +21,10 @@ class GraphConfig:
 
     Attributes
     ----------
-    anisotropy : list[float], optional
+    anisotropy : Tuple[float], optional
         Scaling factors applied to xyz coordinates to account for anisotropy
         of microscope. Note this instance of "anisotropy" is only used while
-        reading fragments (i.e. swcs). The default is [1.0, 1.0, 1.0].
+        reading SWC files. The default is (1.0, 1.0, 1.0).
     complex_bool : bool
         Indication of whether to generate complex proposals, meaning proposals
         between leaf and non-leaf nodes. The default is False.
@@ -45,6 +45,9 @@ class GraphConfig:
     prune_depth : int, optional
         Branches in graph less than "prune_depth" microns are pruned. The
         default is 16.
+    remove_high_risk_merges : bool, optional
+        Indication of whether to remove high risk merge sites (i.e. close
+        branching points). The default is False.
     smooth_bool : bool, optional
         Indication of whether to smooth branches in the graph. The default is
         True.
@@ -54,7 +57,7 @@ class GraphConfig:
 
     """
 
-    anisotropy: List[float] = field(default_factory=list)
+    anisotropy: Tuple[float] = field(default_factory=tuple)
     complex_bool: bool = False
     img_bbox: dict = None
     long_range_bool: bool = True
@@ -75,10 +78,10 @@ class MLConfig:
 
     Attributes
     ----------
-    anisotropy : list[float], optional
+    anisotropy : Tuple[float], optional
         Scaling factors applied to xyz coordinates to account for anisotropy
-        of microscope. Note this instance of "anisotropy" is only used while
-        generating features. The default is [1.0, 1.0, 1.0].
+        of microscope. Note this instance of "anisotropy" is only used to read
+        image while generating features. The default is (1.0, 1.0, 1.0).
     batch_size : int
         The number of samples processed in one batch during training or
         inference. Default is 1000.
@@ -93,9 +96,9 @@ class MLConfig:
         Type of machine learning model to use. Default is "GraphNeuralNet".
 
     """
-    anisotropy: List[float] = field(default_factory=list)
+    anisotropy: Tuple[float] = field(default_factory=tuple)
     batch_size: int = 2000
-    high_threshold: float = 0.9
+    high_threshold: float = 0.7
     lr: float = 1e-3
     model_type: str = "GraphNeuralNet"
     multiscale: int = 1
