@@ -153,7 +153,8 @@ def list_paths(directory, extension=None):
 def set_path(dir_name, filename, extension):
     """
     Sets the path for a file in a directory. If a file with the same name
-    exists, then this routine finds a suffix to append to the filename.
+    already exists, then this routine finds a suffix to append to the
+    filename.
 
     Parameters
     ----------
@@ -178,6 +179,37 @@ def set_path(dir_name, filename, extension):
         path = os.path.join(dir_name, f"{filename}.{cnt}.{extension}")
         cnt += 1
     return path
+
+
+def set_zip_path(zip_writer, filename, extension):
+    """
+    Sets the path for a file within a ZIP archive. If a file with the same
+    name already exists, then this routine finds a suffix to append to the filename.
+
+    Parameters
+    ----------
+    zip_writer : ZipFile
+        ...
+    filename : str
+        Name of file that path will contain.
+    extension : str
+        Extension of file.
+
+    Returns
+    -------
+    str
+        Path to file in "dirname" with the name "filename" and possibly some
+        suffix.
+
+    """
+    cnt = 0
+    existing_files = zip_writer.namelist()
+    extension = extension.replace(".", "")
+    f = f"{filename}.{extension}"
+    while f in existing_files:
+        f = f"{filename}.{cnt}.{extension}"
+        cnt += 1
+    return f
 
 
 # -- gcs utils --
