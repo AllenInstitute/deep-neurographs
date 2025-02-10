@@ -70,7 +70,6 @@ class InferencePipeline:
         config,
         device="cpu",
         is_multimodal=False,
-        save_to_s3_bool=False,
         segmentation_path=None,
         somas_path=None,
         s3_dict=None,
@@ -100,8 +99,6 @@ class InferencePipeline:
             ...
         segmentation_path : str, optional
             Path to segmentation stored in GCS bucket. The default is None.
-        save_to_s3_bool : bool, optional
-            Indication of whether to save result to s3. The default is False.
         somas_path : str, optional
             Path to a txt file containing xyz coordinates of detected somas.
             The default is None.
@@ -118,7 +115,6 @@ class InferencePipeline:
         self.model_path = model_path
         self.brain_id = brain_id
         self.segmentation_id = segmentation_id
-        self.save_to_s3_bool = save_to_s3_bool
         self.segmentation_path = segmentation_path
         self.somas_path = somas_path
         self.s3_dict = s3_dict
@@ -227,6 +223,7 @@ class InferencePipeline:
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,
             prune_depth=self.graph_config.prune_depth,
+            remove_high_risk_merges=self.graph_config.remove_high_risk_merges,
             segmentation_path=self.segmentation_path,
             smooth_bool=self.graph_config.smooth_bool,
             somas_path=self.somas_path,
@@ -241,7 +238,6 @@ class InferencePipeline:
         n_saved = self.graph.to_zipped_swcs(swcs_path, sampling_rate=2)
         self.graph.save_labels(valid_labels_path)
         self.report(f"# SWCs Saved: {n_saved}")
-        stop
 
         # Report results
         t, unit = util.time_writer(time() - t0)
@@ -353,7 +349,7 @@ class InferencePipeline:
         filename = f"corrected-processed-swcs-s3.zip"
         path = os.path.join(self.output_dir, filename)
         self.graph.to_zipped_swcs(path, min_size=50, sampling_rate=2)
-        if self.save_to_s3_bool:
+        if self.s3_dict is not None:
             self.save_to_s3()
 
     def save_to_s3(self):

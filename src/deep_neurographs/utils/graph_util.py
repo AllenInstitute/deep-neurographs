@@ -22,6 +22,7 @@ from concurrent.futures import (
     ThreadPoolExecutor,
 )
 from random import sample
+from scipy.spatial import KDTree
 from tqdm import tqdm
 
 import ast
@@ -44,6 +45,7 @@ class GraphLoader:
         min_size=30.0,
         node_spacing=1,
         prune_depth=20.0,
+        remove_high_risk_merges=False,
         segmentation_path=None,
         smooth_bool=True,
         somas_path=None,
@@ -67,6 +69,9 @@ class GraphLoader:
         prune_depth : int, optional
             Branches with length less than "prune_depth" microns are pruned.
             The default is 20.0 microns.
+        remove_high_risk_merges : bool, optional
+            Indication of whether to remove high risk merge sites (i.e. close
+            branching points). The default is False.
         segmentation_path : str, optional
             Path to segmentation stored in GCS bucket. The default is None.
         smooth_bool : bool, optional
@@ -91,6 +96,12 @@ class GraphLoader:
         self.prune_depth = prune_depth
         self.smooth_bool = smooth_bool
         self.verbose = verbose
+
+        # Set irreducibles extracter
+        if remove_high_risk_merges:
+            self.extracter = self.break_and_extract
+        else:
+            self.extracter = self.extract
 
         # Load somas
         if segmentation_path and somas_path:
@@ -126,10 +137,13 @@ class GraphLoader:
 
             # Store results
             id_to_xyz = defaultdict(list)
+            xyz_list = list()
             for thread in as_completed(threads):
                 xyz, seg_id = thread.result()
                 if seg_id != 0:
                     id_to_xyz[str(seg_id)].append(xyz)
+                    xyz_list.append(xyz)
+        self.soma_kdtree = KDTree(xyz_list)
 
         # Detect merges - ids that intersect with 2+ somas
         self.merges_dict = {k: v for k, v in id_to_xyz.items() if len(v) > 1}
@@ -155,35 +169,37 @@ class GraphLoader:
             irreducible subgraph extracted from each SWC dictionary.
 
         """
-        # Remove detected merges (if applicable)
-        if len(self.merges_dict) > 0:
-            swc_dicts = self.remove_merges(swc_dicts)
-
-        # Extract irreducibles
         desc = "Extract Graphs"
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
+        swc_dicts = self.remove_merges(swc_dicts)
         with ProcessPoolExecutor() as executor:
             # Assign Processes
+            i = 0
             processes = [None] * len(swc_dicts)
-            for i, swc_dict in enumerate(swc_dicts):
-                processes[i] = executor.submit(
-                    self.extract_irreducibles_from_graph, swc_dict
-                )
-                swc_dict[i] = None
+            while swc_dicts:
+                swc_dict = swc_dicts.pop()
+
+                # temp
+                if swc_dict["swc_id"] == "552034905":
+                    continue
+
+                processes[i] = executor.submit(self.extracter, swc_dict)
+                i += 1
 
             # Store results
             irreducibles = list()
             for process in as_completed(processes):
+                pbar.update(1) if self.verbose else None
                 result = process.result()
-                if result is not None:
-                    irreducibles.append(result)
-                if self.verbose:
-                    pbar.update(1)
+                if isinstance(result, list):
+                    irreducibles.extend(result)
+                elif isinstance(result, dict):
+                    irreducibles.append(result)                    
         return irreducibles
 
-    def extract_irreducibles_from_graph(self, swc_dict):
+    def extract(self, swc_dict):
         """
-        Gets the components of the irreducible subgraph from a given SWC
+        Extracts the components of the irreducible subgraph from a given SWC
         dictionary.
 
         Parameters
@@ -198,46 +214,50 @@ class GraphLoader:
             subgraph.
 
         """
-        # Initializations
-        if "graph" in swc_dict:
-            graph = swc_dict["graph"]
-        else:
-            graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
-            prune_branches(graph, self.prune_depth)
+        return self.extract_from_graph(self.to_graph(swc_dict))
 
-        # Main
-        if path_length(graph, self.min_size) > self.min_size:
-            # Irreducible nodes
+    def break_and_extract(self, swc_dict):
+        graph = self.to_graph(swc_dict)
+        irreducibles = list()
+        if self.satifies_path_length_condition(graph):
+            self.remove_high_risk_merges(graph)
+            for nodes in nx.connected_components(graph):
+                result = self.extract_from_graph(graph.subgraph(nodes))
+                if result is not None:
+                    irreducibles.append(result)
+        return irreducibles
+
+    def extract_from_graph(self, graph):
+        """
+        Extracts the components of the irreducible subgraph from a graph that
+        consists of a single connected component.
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be searched.
+
+        Returns
+        -------
+        dict
+            Dictionary that each contains the components of an irreducible
+            subgraph.
+
+        """
+        if self.satifies_path_length_condition(graph):
+            # Irreducibles
             leafs, branchings = get_irreducible_nodes(graph)
-
-            # Irreducible nodes
-            edges = dict()
-            root = None
-            for (i, j) in nx.dfs_edges(graph, source=util.sample_once(leafs)):
-                # Check for start of irreducible edge
-                if root is None:
-                    root = i
-                    attrs = init_edge_attrs(graph, root)
-
-                # Check for end of irreducible edge
-                upd_edge_attrs(graph, attrs, i, j)
-                if j in leafs or j in branchings:
-                    # Smooth (if applicable)
-                    attrs = to_numpy(attrs)
-                    if self.smooth_bool:
-                        smooth_branch(graph, attrs, root, j)
-
-                    # Finish
-                    edges[(root, j)] = attrs
-                    root = None
+            edges = get_irreducible_edges(
+                graph, leafs, branchings, self.smooth_bool
+            )
 
             # Output
             irreducibles = {
                 "leaf": set_node_attrs(graph, leafs),
                 "branching": set_node_attrs(graph, branchings),
                 "edge": set_edge_attrs(graph, edges, self.node_spacing),
-                "swc_id": swc_dict["swc_id"],
-                "is_soma": swc_dict["is_soma"],
+                "swc_id": graph.graph["swc_id"],
+                "is_soma": graph.graph["is_soma"],
             }
             return irreducibles
         else:
@@ -260,22 +280,39 @@ class GraphLoader:
             broken down into smaller fragments.
 
         """
-        # Break fragments
-        depth = self.prune_depth
-        updates = list()
-        for i, swc_dict in tqdm(enumerate(swc_dicts)):
-            if swc_dict["swc_id"] in self.merges_dict:
-                somas_xyz = self.merges_dict[swc_dict["swc_id"]]
-                swc_dict_list = break_fragment(swc_dict, somas_xyz, depth)
-                updates.append((i, swc_dict_list))
+        if len(self.merges_dict) > 0:
+            # Break fragments
+            depth = self.prune_depth
+            updates = list()
+            for i, swc_dict in tqdm(enumerate(swc_dicts)):
+                if swc_dict["swc_id"] in self.merges_dict:
+                    somas_xyz = self.merges_dict[swc_dict["swc_id"]]
+                    swc_dict_list = break_fragment(swc_dict, somas_xyz, depth)
+                    updates.append((i, swc_dict_list))
 
-        # Update swc_dicts
-        updates.reverse()
-        swc_dicts = list()  # temp
-        for i, swc_dict_list in updates:
-            swc_dicts.pop(i)
-            swc_dicts.extend(swc_dict_list)
+            # Update swc_dicts
+            updates.reverse()
+            for i, swc_dict_list in updates:
+                swc_dicts.pop(i)
+                swc_dicts.extend(swc_dict_list)
         return swc_dicts
+
+    # --- Helpers ---
+    def satifies_path_length_condition(self, graph):
+        return path_length(graph, self.min_size) > self.min_size
+
+    def to_graph(self, swc_dict):
+        # Get graph
+        if "graph" in swc_dict:
+            graph = swc_dict["graph"]
+        else:
+            graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
+            prune_branches(graph, self.prune_depth)
+
+        # Add graph-level attributes
+        graph.graph["is_soma"] = swc_dict["is_soma"]
+        graph.graph["swc_id"] = swc_dict["swc_id"]
+        return graph
 
 
 # --- Break Merged Fragments ---
@@ -296,7 +333,7 @@ def break_fragment(swc_dict, somas_xyz, prune_depth):
     Returns
     -------
     List[dicts]
-        Updated SWC data dictionaries, where each dictionary represents a
+        Updated SWC dictionaries, where each dictionary represents a
         subgraph that was disconnected.
 
     """
@@ -358,6 +395,36 @@ def find_somas_path(graph, somas_xyz):
     return path, soma_nodes
 
 
+def remove_high_risk_merges(self, graph, max_dist=5.0):
+    nodes = set()
+    _, branchings = get_irreducible_nodes(graph)
+    while len(branchings) > 0:
+        # Initializations
+        hit_branching = False
+        root = branchings.pop()
+        queue = [(root, 0)]
+        visited = set()
+
+        # BFS
+        while len(queue) > 0:
+            # Visit node
+            i, dist_i = queue.pop()
+            visited.add(i)
+            if graph.degree(i) > 2:
+                hit_branching = True
+
+            # Update queue
+            for j in graph.neighbors(i):
+                dist_j = dist_i + dist(graph, i, j)
+                if j not in visited and dist_j <= max_dist:
+                    queue.append((j, dist_j))
+
+        # Determine whether to remove visited nodes
+        if hit_branching:
+            nodes = nodes.union(visited)
+    graph.remove_nodes_from(nodes)
+
+
 def remove_nodes(graph, roots, max_dist=5.0):
     """
     Removes nodes from graph within a given radius from a set of root nodes.
@@ -397,7 +464,7 @@ def remove_nodes(graph, roots, max_dist=5.0):
     graph.remove_nodes_from(nodes)
 
 
-# --- Irreducibles Extraction ---
+# --- Irreducible Node Extraction ---
 def get_irreducible_nodes(graph):
     """
     Gets irreducible nodes (i.e. leafs and branchings) of a graph.
@@ -429,6 +496,8 @@ def set_node_attrs(graph, nodes):
 
     Parameters
     ----------
+    graph : networkx.Graph
+        Graph that contains "nodes".
     nodes : List[int]
         Nodes whose attributes are to be extracted from the graph.
 
@@ -445,6 +514,30 @@ def set_node_attrs(graph, nodes):
             "radius": graph.nodes[i]["radius"], "xyz": graph.nodes[i]["xyz"]
         }
     return attrs
+
+
+# --- Irreducible Edge Extraction ---
+def get_irreducible_edges(graph, leafs, branchings, smooth_bool):
+    edges = dict()
+    root = None
+    for (i, j) in nx.dfs_edges(graph, source=util.sample_once(leafs)):
+        # Check for start of irreducible edge
+        if root is None:
+            root = i
+            attrs = init_edge_attrs(graph, root)
+
+        # Check for end of irreducible edge
+        upd_edge_attrs(graph, attrs, i, j)
+        if j in leafs or j in branchings:
+            # Smooth (if applicable)
+            attrs = to_numpy(attrs)
+            if smooth_bool:
+                smooth_branch(graph, attrs, root, j)
+
+            # Finish
+            edges[(root, j)] = attrs
+            root = None
+    return edges
 
 
 def init_edge_attrs(graph, i):
@@ -532,26 +625,6 @@ def set_edge_attrs(graph, attrs, node_spacing):
         idxs = util.spaced_idxs(len(attrs[e]["xyz"]), node_spacing)
         attrs[e]["radius"] = attrs[e]["radius"][idxs]
         attrs[e]["xyz"] = attrs[e]["xyz"][idxs]
-    return attrs
-
-
-def to_numpy(attrs):
-    """
-    Converts edge attributes from a list to NumPy array.
-
-    Parameters
-    ----------
-    attrs : dict
-        Edge attribute dictionary.
-
-    Returns
-    -------
-    dict
-        Updated edge attribute dictionary.
-
-    """
-    attrs["xyz"] = np.array(attrs["xyz"], dtype=np.float32)
-    attrs["radius"] = np.array(attrs["radius"], dtype=np.float16)
     return attrs
 
 
@@ -803,7 +876,7 @@ def sample_node(graph):
     Returns
     -------
     int
-        Node.
+        Node ID.
 
     """
     nodes = list(graph.nodes)
@@ -834,3 +907,23 @@ def smooth_branch(graph, attrs, i, j):
     attrs["xyz"] = geometry_util.smooth_branch(attrs["xyz"], s=2)
     graph.nodes[i]["xyz"] = attrs["xyz"][0]
     graph.nodes[j]["xyz"] = attrs["xyz"][-1]
+
+
+def to_numpy(attrs):
+    """
+    Converts edge attributes from a list to NumPy array.
+
+    Parameters
+    ----------
+    attrs : dict
+        Edge attribute dictionary.
+
+    Returns
+    -------
+    dict
+        Updated edge attribute dictionary.
+
+    """
+    attrs["xyz"] = np.array(attrs["xyz"], dtype=np.float32)
+    attrs["radius"] = np.array(attrs["radius"], dtype=np.float16)
+    return attrs
