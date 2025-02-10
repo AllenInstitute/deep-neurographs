@@ -95,6 +95,7 @@ class GraphLoader:
         self.node_spacing = node_spacing
         self.prune_depth = prune_depth
         self.smooth_bool = smooth_bool
+        self.soma_kdtree = None
         self.verbose = verbose
 
         # Set irreducibles extracter
@@ -170,19 +171,14 @@ class GraphLoader:
 
         """
         desc = "Extract Graphs"
+        swc_dicts = self.remove_merge_between_somas(swc_dicts)
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
-        swc_dicts = self.remove_merges(swc_dicts)
         with ProcessPoolExecutor() as executor:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
             while swc_dicts:
                 swc_dict = swc_dicts.pop()
-
-                # temp
-                if swc_dict["swc_id"] == "552034905":
-                    continue
-
                 processes[i] = executor.submit(self.extracter, swc_dict)
                 i += 1
 
@@ -263,7 +259,7 @@ class GraphLoader:
         else:
             return None
 
-    def remove_merges(self, swc_dicts):
+    def remove_merge_between_somas(self, swc_dicts):
         """
         Breaks fragments in "swc_dicts" that contain a merge mistake.
 
@@ -284,7 +280,7 @@ class GraphLoader:
             # Break fragments
             depth = self.prune_depth
             updates = list()
-            for i, swc_dict in tqdm(enumerate(swc_dicts)):
+            for i, swc_dict in enumerate(swc_dicts):
                 if swc_dict["swc_id"] in self.merges_dict:
                     somas_xyz = self.merges_dict[swc_dict["swc_id"]]
                     swc_dict_list = break_fragment(swc_dict, somas_xyz, depth)
@@ -297,7 +293,43 @@ class GraphLoader:
                 swc_dicts.extend(swc_dict_list)
         return swc_dicts
 
+    def remove_high_risk_merges(self, graph, max_dist=7.0):
+        # TO DO: update node ids and preserve soma identity
+        nodes = set()
+        _, branchings = get_irreducible_nodes(graph)
+        while len(branchings) > 0:
+            # Determine whether to visit
+            root = branchings.pop()
+            root_xyz = graph.nodes[root]["xyz"]
+            if self.dist_from_soma(root_xyz) < 300:
+                continue
+
+            # BFS
+            hit_branching = False
+            queue = [(root, 0)]
+            visited = set()
+            while len(queue) > 0:
+                # Visit node
+                i, dist_i = queue.pop()
+                if graph.degree(i) > 2 and i != root:
+                    hit_branching = True
+                visited.add(i)
+
+                # Update queue
+                for j in graph.neighbors(i):
+                    dist_j = dist_i + dist(graph, i, j)
+                    if j not in visited and dist_j <= max_dist:
+                        queue.append((j, dist_j))
+
+            # Determine whether to remove visited nodes
+            if hit_branching or graph.degree(root) > 3:
+                nodes = nodes.union(visited)
+        graph.remove_nodes_from(nodes)
+
     # --- Helpers ---
+    def dist_from_soma(self, xyz):
+        return self.soma_kdtree.query(xyz)[0] if self.soma_kdtree else np.inf
+
     def satifies_path_length_condition(self, graph):
         return path_length(graph, self.min_size) > self.min_size
 
@@ -339,14 +371,14 @@ def break_fragment(swc_dict, somas_xyz, prune_depth):
     """
     graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
     prune_branches(graph, prune_depth)
-    if len(somas_xyz) <= 10:
+    if len(somas_xyz) <= 3:  # 1  --- temp
         # Break connecting path
         nodes = set()
         path, soma_nodes = find_somas_path(graph, somas_xyz)
         for node in path:
             if graph.degree(node) > 2:
                 nodes.add(node)
-        remove_nodes(graph, nodes)
+        #remove_nodes(graph, nodes)  --- temp
 
         # Update swc_dict
         swc_dict_list = list()
@@ -359,8 +391,7 @@ def break_fragment(swc_dict, somas_xyz, prune_depth):
             }
             swc_dict_list.append(swc_dict_i)
     else:
-        print(f"Fragment intersects w/ {len(somas_xyz)}")
-        swc_dict_list = [swc_dict]
+        swc_dict_list = list() #[swc_dict] --- temp
     return swc_dict_list
 
 
@@ -393,36 +424,6 @@ def find_somas_path(graph, somas_xyz):
         )
         path = path.union(set(subpath))
     return path, soma_nodes
-
-
-def remove_high_risk_merges(self, graph, max_dist=5.0):
-    nodes = set()
-    _, branchings = get_irreducible_nodes(graph)
-    while len(branchings) > 0:
-        # Initializations
-        hit_branching = False
-        root = branchings.pop()
-        queue = [(root, 0)]
-        visited = set()
-
-        # BFS
-        while len(queue) > 0:
-            # Visit node
-            i, dist_i = queue.pop()
-            visited.add(i)
-            if graph.degree(i) > 2:
-                hit_branching = True
-
-            # Update queue
-            for j in graph.neighbors(i):
-                dist_j = dist_i + dist(graph, i, j)
-                if j not in visited and dist_j <= max_dist:
-                    queue.append((j, dist_j))
-
-        # Determine whether to remove visited nodes
-        if hit_branching:
-            nodes = nodes.union(visited)
-    graph.remove_nodes_from(nodes)
 
 
 def remove_nodes(graph, roots, max_dist=5.0):

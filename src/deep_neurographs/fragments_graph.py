@@ -1072,10 +1072,9 @@ class FragmentsGraph(nx.Graph):
                 node_to_idx[j] = n_entries
 
             # Write SWC file
-            filename = self.nodes[i]["swc_id"]
-            zip_writer.writestr(
-                prefix + f"{filename}.swc", text_buffer.getvalue()
-            )
+            filename = prefix + self.nodes[i]["swc_id"]
+            filename = util.set_zip_path(zip_writer, filename, ".swc")
+            zip_writer.writestr(filename, text_buffer.getvalue())
 
     def branch_to_zip(
         self,
