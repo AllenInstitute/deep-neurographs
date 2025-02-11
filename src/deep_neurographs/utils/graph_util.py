@@ -476,7 +476,7 @@ class GraphLoader:
             prune_branches(graph, self.prune_depth)
 
         # Add graph-level attributes
-        graph.graph["soma_nodes"] = set()
+        graph.graph["soma_nodes"] = swc_dict["soma_nodes"]
         graph.graph["swc_id"] = swc_dict["swc_id"]
         return graph
 

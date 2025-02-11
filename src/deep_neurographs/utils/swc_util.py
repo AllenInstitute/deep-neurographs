@@ -93,9 +93,9 @@ class Reader:
                 - "id": unique identifier of each node in an SWC file.
                 - "pid": parent ID of each node.
                 - "swc_id": name of swc file, minus the ".swc".
-                - "is_soma": indication of there is a soma node.
                 - "radius": radius value corresponding to each node.
                 - "xyz": coordinate corresponding to each node.
+                - "soma_nodes": nodes with soma type.
 
         """
         if type(swc_pointer) is dict:
@@ -322,7 +322,7 @@ class Reader:
             "radius": np.zeros((len(content)), dtype=np.float32),
             "pid": np.zeros((len(content)), dtype=np.int32),
             "xyz": np.zeros((len(content), 3), dtype=np.float32),
-            "is_soma": False,
+            "soma_nodes": set(),
         }
 
         # Parse content
@@ -333,7 +333,7 @@ class Reader:
             swc_dict["pid"][i] = parts[-1]
             swc_dict["xyz"][i] = self.read_xyz(parts[2:5], offset)
             if int(parts[1]) == 1:
-                swc_dict["is_soma"] = True
+                swc_dict["soma_nodes"].add(parts[0])
 
         # Convert radius from nanometers to microns
         if swc_dict["radius"][0] > 100:
