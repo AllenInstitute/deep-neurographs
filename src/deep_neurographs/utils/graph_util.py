@@ -481,7 +481,6 @@ class GraphLoader:
         return graph
 
 
-# --- Break Merges ---
 def find_somas_path(graph, somas_xyz):
     """
     Finds the shortest paths between a list of nodes such that each is closest
