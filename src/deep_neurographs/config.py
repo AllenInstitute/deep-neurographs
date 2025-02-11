@@ -45,6 +45,8 @@ class GraphConfig:
     prune_depth : int, optional
         Branches in graph less than "prune_depth" microns are pruned. The
         default is 16.
+    remove_doubles : bool, optional
+        ...
     remove_high_risk_merges : bool, optional
         Indication of whether to remove high risk merge sites (i.e. close
         branching points). The default is False.
@@ -63,9 +65,10 @@ class GraphConfig:
     long_range_bool: bool = True
     min_size: float = 30.0
     node_spacing: int = 2
-    proposals_per_leaf: int = 2
+    proposals_per_leaf: int = 3
     prune_depth: float = 16.0
-    remove_doubles_bool: bool = False
+    remove_doubles: bool = False
+    remove_high_risk_merges: bool = False
     search_radius: float = 20.0
     smooth_bool: bool = True
     trim_endpoints_bool: bool = True

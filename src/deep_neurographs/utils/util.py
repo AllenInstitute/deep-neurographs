@@ -579,7 +579,8 @@ def get_swc_id(path):
 
     """
     filename = path.split("/")[-1]
-    return filename.split(".")[0]
+    name, ext = os.path.splitext(filename)
+    return name
 
 
 def numpy_to_hashable(arr):

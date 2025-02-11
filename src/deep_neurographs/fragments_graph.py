@@ -39,7 +39,7 @@ import networkx as nx
 import numpy as np
 import zipfile
 
-from deep_neurographs import generate_proposals
+from deep_neurographs import proposal_generation
 from deep_neurographs.utils import (
     geometry_util as geometry,
     graph_util as gutil,
@@ -388,7 +388,7 @@ class FragmentsGraph(nx.Graph):
         # Main
         self.reset_proposals()
         self.set_proposals_per_leaf(proposals_per_leaf)
-        generate_proposals.run(
+        proposal_generation.run(
             self,
             search_radius,
             complex_bool=complex_bool,
@@ -1104,10 +1104,6 @@ class FragmentsGraph(nx.Graph):
         branch_xyz = self.oriented_edge_attr((i, j), i, "xyz")
         branch_radius = self.oriented_edge_attr((i, j), i, "radius")
         for k in util.spaced_idxs(len(branch_xyz), sampling_rate):
-            # Check whether to skip
-            if k == 0:
-                continue
-
             # Get attributes
             node_id = n_entries + 1
             parent = n_entries if k > 1 else parent

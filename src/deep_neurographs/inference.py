@@ -249,7 +249,7 @@ class InferencePipeline:
         n_curvy = fragment_filtering.remove_curvy(self.graph, 200)
 
         # Double fragments
-        if self.graph_config.remove_doubles_bool:
+        if self.graph_config.remove_doubles:
             n_doubles = fragment_filtering.remove_doubles(
                 self.graph, 200, self.graph_config.node_spacing
             )
@@ -420,7 +420,7 @@ class InferencePipeline:
             "search_radius": f"{self.graph_config.search_radius}um",
             "accept_threshold": self.ml_config.threshold,
             "node_spacing": self.graph_config.node_spacing,
-            "remove_doubles": self.graph_config.remove_doubles_bool,
+            "remove_doubles": self.graph_config.remove_doubles,
         }
         path = os.path.join(self.output_dir, "metadata.json")
         util.write_json(path, metadata)
