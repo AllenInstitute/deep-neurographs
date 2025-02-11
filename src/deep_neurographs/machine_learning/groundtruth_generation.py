@@ -138,7 +138,7 @@ def is_component_aligned(target_graph, pred_graph, nodes, kdtree):
     for edge in pred_graph.subgraph(nodes).edges:
         for xyz in pred_graph.edges[edge]["xyz"]:
             hat_xyz = geometry_util.kdtree_query(kdtree, xyz)
-            hat_swc_id = target_graph.xyz_to_swc(hat_xyz)
+            hat_swc_id = target_graph.xyz_to_id(hat_xyz)
             d = geometry_util.dist(hat_xyz, xyz)
             dists[hat_swc_id].append(d)
 
@@ -205,7 +205,7 @@ def proj_branch(target_graph, pred_graph, kdtree, target_id, i):
     for branch in pred_graph.branches(i):
         for xyz in branch:
             hat_xyz = geometry_util.kdtree_query(kdtree, xyz)
-            swc_id = target_graph.xyz_to_swc(hat_xyz)
+            swc_id = target_graph.xyz_to_id(hat_xyz)
             if swc_id == target_id:
                 hat_edge = target_graph.xyz_to_edge[hat_xyz]
                 hits[hat_edge].append(hat_xyz)

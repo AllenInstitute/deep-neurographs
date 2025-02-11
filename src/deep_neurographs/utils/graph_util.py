@@ -174,7 +174,7 @@ class GraphLoader:
         desc = "Extract Graphs"
         swc_dicts = self.remove_soma_merges(swc_dicts)
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=1) as executor:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
@@ -247,7 +247,9 @@ class GraphLoader:
                 result = self.extract_from_graph(subgraph)
                 if result is not None:
                     irreducibles.append(result)
-        return irreducibles
+            return irreducibles
+        else:
+            return None
 
     def extract_from_graph(self, graph):
         """
@@ -266,7 +268,7 @@ class GraphLoader:
             subgraph.
 
         """
-        if self.satifies_path_length_condition(graph):
+        if self.satifies_path_length_condition(graph):            
             # Irreducibles
             leafs, branchings = get_irreducible_nodes(graph)
             edges = get_irreducible_edges(
@@ -312,6 +314,7 @@ class GraphLoader:
                     updates.append((i, swc_dict_list))
 
             # Update swc_dicts
+            swc_dicts = list()
             updates.reverse()
             for i, swc_dict_list in updates:
                 swc_dicts.pop(i)
@@ -472,12 +475,11 @@ class GraphLoader:
         if "graph" in swc_dict:
             graph = swc_dict["graph"]
         else:
-            graph, _ = swc_util.to_graph(swc_dict, set_attrs=True)
+            graph = swc_util.to_graph(swc_dict, set_attrs=True)
             prune_branches(graph, self.prune_depth)
 
         # Add graph-level attributes
         graph.graph["soma_nodes"] = swc_dict["soma_nodes"]
-        graph.graph["swc_id"] = swc_dict["swc_id"]
         return graph
 
 
@@ -795,7 +797,12 @@ def dist(graph, i, j):
         Euclidean distance between nodes i and j.
 
     """
-    return geometry_util.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
+    try:
+        return geometry_util.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
+    except:
+        print(i, graph.nodes[i], graph.graph["swc_id"])
+        print(j, graph.nodes[j], graph.graph["swc_id"])
+        stop
 
 
 def find_closest_node(graph, xyz):

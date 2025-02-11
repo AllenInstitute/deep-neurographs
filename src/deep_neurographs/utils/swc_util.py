@@ -664,13 +664,12 @@ def to_graph(swc_dict, set_attrs=False):
         Graph generated from "swc_dict".
 
     """
-    graph = nx.Graph(graph_id=swc_dict["swc_id"])
+    graph = nx.Graph(swc_id=swc_dict["swc_id"])
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
     if set_attrs:
         xyz = util.numpy_to_hashable(swc_dict["xyz"])
         xyz_to_node = dict(zip(xyz, swc_dict["id"]))
         __add_attributes(swc_dict, graph)
-        return graph, xyz_to_node
     return graph
 
 
