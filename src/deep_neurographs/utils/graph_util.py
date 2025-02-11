@@ -797,12 +797,7 @@ def dist(graph, i, j):
         Euclidean distance between nodes i and j.
 
     """
-    try:
-        return geometry_util.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
-    except:
-        print(i, graph.nodes[i], graph.graph["swc_id"])
-        print(j, graph.nodes[j], graph.graph["swc_id"])
-        stop
+    return geometry_util.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
 
 
 def find_closest_node(graph, xyz):
