@@ -648,7 +648,7 @@ def set_radius(graph, i):
 # --- Miscellaneous ---
 def to_graph(swc_dict, set_attrs=False):
     """
-    Converts an dictionary containing swc attributes to a graph.
+    Converts a dictionary containing swc attributes to a graph.
 
     Parameters
     ----------
