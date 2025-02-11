@@ -666,6 +666,20 @@ class FragmentsGraph(nx.Graph):
         return len(self.proposals)
 
     def is_simple(self, proposal):
+        """
+        Determines whether both nodes in a proposal are leafs.
+
+        Parameters
+        ----------
+        proposal : Frozenset[int]
+            Pair of nodes that form a proposal.
+
+        Returns
+        -------
+        bool
+            Indication of whether both nodes in a proposal are leafs.
+
+        """
         i, j = tuple(proposal)
         return True if self.is_leaf(i) and self.is_leaf(j) else False
 
