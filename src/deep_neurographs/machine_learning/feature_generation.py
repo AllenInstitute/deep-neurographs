@@ -8,8 +8,8 @@ Generates features for training a machine learning model and performing
 inference.
 
 Conventions:
-    (1) "xyz" refers to a physical coordinate such as those from an swc file
-    (2) "voxel" refers to an voxel coordinate in a whole-brain image.
+    (1) "xyz" refers to a physical coordinate such as those from an SWC file
+    (2) "voxel" refers to a voxel coordinate in a whole-brain image.
 
 """
 
@@ -125,7 +125,7 @@ class FeatureGenerator:
         img_path : str
             Path to where the image is located.
         driver : str, optional
-            Storage driver needed to read image. The default is "zarr".
+            Storage driver needed to read image. The default is None.
 
         Returns
         -------
@@ -138,18 +138,18 @@ class FeatureGenerator:
         else:
             return TensorStoreReader(img_path, driver)
 
-    def run(self, neurograph, proposals_dict, radius):
+    def run(self, graph, proposals_dict, radius):
         """
         Generates feature vectors for nodes, edges, and proposals in a graph.
 
         Parameters
         ----------
-        neurograph : FragmentsGraph
+        graph : FragmentsGraph
             Graph that "proposals" belong to.
         proposals_dict : dict
             Dictionary that contains the items (1) "proposals" which are the
-            proposals from "neurograph" that features will be generated and
-            (2) "graph" which is the computation graph used by the GNN.
+            proposals from "fragments_graph" that features will be generated
+            and (2) "graph" which is the computation graph used by the GNN.
         radius : float
             Search radius used to generate proposals.
 
@@ -163,28 +163,28 @@ class FeatureGenerator:
         # Initializations
         computation_graph = proposals_dict["graph"]
         proposals = proposals_dict["proposals"]
-        if neurograph.leaf_kdtree is None:
-            neurograph.init_kdtree(node_type="leaf")
+        if graph.leaf_kdtree is None:
+            graph.init_kdtree(node_type="leaf")
 
         # Main
         features = {
-            "nodes": self.run_on_nodes(neurograph, computation_graph),
-            "branches": self.run_on_branches(neurograph, computation_graph),
-            "proposals": self.run_on_proposals(neurograph, proposals, radius)
+            "nodes": self.run_on_nodes(graph, computation_graph),
+            "branches": self.run_on_branches(graph, computation_graph),
+            "proposals": self.run_on_proposals(graph, proposals, radius)
         }
 
         # Generate image patches (if applicable)
         if self.is_multimodal:
-            features["patches"] = self.proposal_patches(neurograph, proposals)
+            features["patches"] = self.proposal_patches(graph, proposals)
         return features
 
-    def run_on_nodes(self, neurograph, computation_graph):
+    def run_on_nodes(self, graph, computation_graph):
         """
         Generates feature vectors for every node in "computation_graph".
 
         Parameters
         ----------
-        neurograph : FragmentsGraph
+        graph : FragmentsGraph
             FragmentsGraph generated from a predicted segmentation.
         computation_graph : networkx.Graph
             Graph used by GNN to classify proposals.
@@ -195,7 +195,7 @@ class FeatureGenerator:
             Dictionary that maps a node id to a feature vector.
 
         """
-        return self.node_skeletal(neurograph, computation_graph)
+        return self.node_skeletal(graph, computation_graph)
 
     def run_on_branches(self, neurograph, computation_graph):
         """
@@ -406,13 +406,13 @@ class FeatureGenerator:
                 profiles.update(thread.result())
         return profiles
 
-    def proposal_patches(self, fragments_graph, proposals):
+    def proposal_patches(self, graph, proposals):
         """
         Generates an image intensity profile along the proposal.
 
         Parameters
         ----------
-        fragments_graph : FragmentsGraph
+        graph : FragmentsGraph
             Graph that "proposals" belong to.
         proposals : List[Frozenset[int]]
             List of proposals for which features will be generated.
@@ -428,8 +428,8 @@ class FeatureGenerator:
             # Assign threads
             threads = list()
             for p in proposals:
-                labels = fragments_graph.proposal_labels(p)
-                xyz_path = np.vstack(fragments_graph.proposal_attr(p, "xyz"))
+                labels = graph.proposal_labels(p)
+                xyz_path = np.vstack(graph.proposal_attr(p, "xyz"))
                 threads.append(
                     executor.submit(self.get_patch, labels, xyz_path, p)
                 )
@@ -534,16 +534,16 @@ class FeatureGenerator:
 
 
 # --- Profile utils ---
-def get_leaf_path(fragments_graph, i):
+def get_leaf_path(graph, i):
     """
     Gets path that profile will be computed over for the leaf node "i".
 
     Parameters
     ----------
-    fragments_graph : FragmentsGraph
+    graph : FragmentsGraph
         Graph that node belongs to.
     i : int
-        Leaf node in "fragments_graph".
+        Leaf node in "graph".
 
     Returns
     -------
@@ -551,19 +551,19 @@ def get_leaf_path(fragments_graph, i):
         Voxel coordinates that profile is generated from.
 
     """
-    j = fragments_graph.leaf_neighbor(i)
-    xyz_path = fragments_graph.oriented_edge((i, j), i)
+    j = graph.leaf_neighbor(i)
+    xyz_path = graph.oriented_edge((i, j), i)
     return geometry_util.truncate_path(xyz_path)
 
 
-def get_branching_path(fragments_graph, i):
+def get_branching_path(graph, i):
     """
     Gets path that profile will be computed over for the branching node "i".
 
     Parameters
     ----------
-    fragments_graph : FragmentsGraph
-        Graph generated from a predicted segmentation.
+    graph : FragmentsGraph
+        Graph containing node "i".
     i : int
         Branching node in "fragments_graph".
 
@@ -573,9 +573,9 @@ def get_branching_path(fragments_graph, i):
         Voxel coordinates that profile is generated from.
 
     """
-    j1, j2 = tuple(fragments_graph.neighbors(i))
-    voxels_1 = geometry_util.truncate_path(fragments_graph.oriented_edge((i, j1), i))
-    voxles_2 = geometry_util.truncate_path(fragments_graph.oriented_edge((i, j2), i))
+    j1, j2 = tuple(graph.neighbors(i))
+    voxels_1 = geometry_util.truncate_path(graph.oriented_edge((i, j1), i))
+    voxles_2 = geometry_util.truncate_path(graph.oriented_edge((i, j2), i))
     return np.vstack([np.flip(voxels_1, axis=0), voxles_2])
 
 
@@ -627,7 +627,7 @@ def init_idx_mapping(idx_to_id):
     return idx_mapping
 
 
-# --- Utils ---
+# --- Helpers ---
 def get_node_dict(is_multimodal=False):
     """
     Returns the number of features for different node types.
