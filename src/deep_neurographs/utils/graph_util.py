@@ -182,10 +182,10 @@ class GraphLoader:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
-            while len(swc_dicts) > 0:
+            while i < len(swc_dicts):
                 pbar1.update(1) if self.verbose else None
-                swc_dict = swc_dicts.pop()
-                processes[i] = executor.submit(self.extracter, swc_dict)
+                processes[i] = executor.submit(self.extracter, swc_dicts[i])
+                swc_dicts[i] = None
                 i += 1
             print("processes assigned")
 
