@@ -696,7 +696,7 @@ class FragmentsGraph(nx.Graph):
         i, j = tuple(proposal)
         return geometry.midpoint(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
-    def proposal_attr(self, proposal, attr):
+    def proposal_attr(self, proposal, key):
         """
         Gets the attributes of nodes in "proposal".
 
@@ -704,7 +704,7 @@ class FragmentsGraph(nx.Graph):
         ----------
         proposal : Frozenset[int]
             Pair of nodes that form a proposal.
-        attr : str
+        key : str
             Name of attribute to be returned.
 
         Returns
@@ -714,13 +714,13 @@ class FragmentsGraph(nx.Graph):
 
         """
         i, j = tuple(proposal)
-        if attr == "swc_id":
-            attrs = [
-                reformat(self.nodes[i][attr]), reformat(self.nodes[j][attr])
+        if key == "swc_id":
+            attr = [
+                reformat(self.nodes[i][key]), reformat(self.nodes[j][key])
             ]
         else:
-            attrs = np.array([self.nodes[i][attr], self.nodes[j][attr]])
-        return attrs
+            attr = np.array([self.nodes[i][key], self.nodes[j][key]])
+        return attr
 
     def proposal_avg_radii(self, proposal):
         i, j = tuple(proposal)
@@ -731,8 +731,8 @@ class FragmentsGraph(nx.Graph):
     def proposal_directionals(self, proposal, depth):
         # Extract points along branches
         i, j = tuple(proposal)
-        xyz_list_i = [geometry.truncate_path(b, depth) for b in self.branches(i)]
-        xyz_list_j = [geometry.truncate_path(b, depth) for b in self.branches(j)]
+        xyz_list_i = self.truncated_edge_attr_xyz(i, depth)
+        xyz_list_j = self.truncated_edge_attr_xyz(j, depth)
         origin = self.proposal_midpoint(proposal)
 
         # Compute tangent vectors
@@ -741,15 +741,19 @@ class FragmentsGraph(nx.Graph):
         direction = geometry.tangent(self.proposal_attr(proposal, "xyz"))
 
         # Compute features
-        inner_product_1 = abs(np.dot(direction, direction_i))
-        inner_product_2 = abs(np.dot(direction, direction_j))
+        dot_i = abs(np.dot(direction, direction_i))
+        dot_j = abs(np.dot(direction, direction_j))
         if self.is_simple(proposal):
-            inner_product_3 = np.dot(direction_i, direction_j)
+            dot_ij = np.dot(direction_i, direction_j)
         else:
-            inner_product_3 = np.dot(direction_i, direction_j)
+            dot_ij = np.dot(direction_i, direction_j)
             if not self.is_simple(proposal):
-                inner_product_3 = max(inner_product_3, -inner_product_3)
-        return np.array([inner_product_1, inner_product_2, inner_product_3])
+                dot_ij = max(dot_ij, -dot_ij)
+        return np.array([dot_i, dot_j, dot_ij])
+
+    def truncated_edge_attr_xyz(self, i, depth):
+        xyz_path_list = self.branches(i, "xyz")
+        return [geometry.truncate_path(path, depth) for path in xyz_path_list]
 
     def merge_proposal(self, proposal):
         i, j = tuple(proposal)
