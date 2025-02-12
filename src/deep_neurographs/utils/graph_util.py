@@ -314,7 +314,6 @@ class GraphLoader:
                     updates.append((i, swc_dict_list))
 
             # Update swc_dicts
-            swc_dicts = list()
             updates.reverse()
             for i, swc_dict_list in updates:
                 swc_dicts.pop(i)
