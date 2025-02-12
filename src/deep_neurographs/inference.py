@@ -245,16 +245,12 @@ class InferencePipeline:
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def filter_fragments(self):
-        # Curvy fragments
-        n_curvy = fragment_filtering.remove_curvy(self.graph, 200)
-
-        # Double fragments
+        self.graph = fragment_filtering.remove_curvy(self.graph, 200)
         if self.graph_config.remove_doubles:
-            n_doubles = fragment_filtering.remove_doubles(
+            self.graph = fragment_filtering.remove_doubles(
                 self.graph, 200, self.graph_config.node_spacing
             )
-            self.report(f"# Double Fragments Deleted: {n_doubles}")
-        self.report(f"# Curvy Fragments Deleted: {n_curvy}")
+            #self.report(f"# Double Fragments Deleted: {n_doubles}")
 
     def generate_proposals(self, radius=None):
         """

@@ -21,15 +21,15 @@ QUERY_DIST = 15
 
 
 # --- Curvy Removal ---
-def remove_curvy(fragments_graph, max_length, ratio=0.5):
+def remove_curvy(graph, max_length, ratio=0.5):
     """
-    Removes connected components with 2 nodes from "fragments_graph" that are
-    "curvy" fragments, based on a specified ratio of endpoint distance to edge
-    length and a maximum length threshold.
+    Removes connected components with 2 nodes from "graph" that are "curvy",
+    based on a specified ratio of endpoint distance to edge length and a
+    maximum length threshold.
 
     Parameters
     ----------
-    fragments_graph : FragmentsGraph
+    graph : FragmentsGraph
         Graph generated from fragments of a predicted segmentation.
     max_length : float
         The maximum allowable length (in microns) for an edge to be considered
@@ -46,30 +46,30 @@ def remove_curvy(fragments_graph, max_length, ratio=0.5):
 
     """
     deleted_ids = set()
-    for nodes in get_line_components(fragments_graph):
+    for nodes in get_line_components(graph):
         i, j = tuple(nodes)
-        length = fragments_graph.edges[i, j]["length"]
-        endpoint_dist = fragments_graph.dist(i, j)
+        length = graph.edges[i, j]["length"]
+        endpoint_dist = graph.dist(i, j)
         if endpoint_dist / length < ratio and length < max_length:
-            deleted_ids.add(fragments_graph.edges[i, j]["swc_id"])
-            delete_fragment(fragments_graph, i, j)
-    return util.reformat_number(len(deleted_ids))
+            deleted_ids.add(graph.edges[i, j]["swc_id"])
+            graph = delete_fragment(graph, i, j)
+    return graph
 
 
 # --- Doubles Removal ---
-def remove_doubles(fragments_graph, max_length, node_spacing):
+def remove_doubles(graph, max_length, node_spacing):
     """
-    Removes connected components from "fragments_graph" that are likely to be
-    a double -- caused by ghosting in the image.
+    Removes connected components from "graph" that are likely to be a double,
+    which is caused by ghosting in the image.
 
     Parameters
     ----------
-    fragments_graph : FragmentsGraph
+    graph : FragmentsGraph
         Graph to be searched for doubles.
     max_length : int
         Maximum size of connected components to be searched.
     node_spacing : int
-        Expected distance (in microns) between nodes in "fragments_graph".
+        Expected distance (in microns) between nodes in "graph".
 
     Returns
     -------
@@ -78,27 +78,27 @@ def remove_doubles(fragments_graph, max_length, node_spacing):
 
     """
     # Initializations
-    components = get_line_components(fragments_graph)
+    components = get_line_components(graph)
     deleted_ids = set()
-    kdtree = fragments_graph.get_kdtree()
+    kdtree = graph.get_kdtree()
 
     # Main
     desc = "Filter Doubled Fragments"
     for idx in tqdm(np.argsort([len(c) for c in components]), desc=desc):
         i, j = tuple(components[idx])
-        swc_id = fragments_graph.nodes[i]["swc_id"]
+        swc_id = graph.nodes[i]["swc_id"]
         if swc_id not in deleted_ids:
-            if fragments_graph.edges[i, j]["length"] < max_length:
+            if graph.edges[i, j]["length"] < max_length:
                 # Check doubles criteria
-                n_points = len(fragments_graph.edges[i, j]["xyz"])
-                hits = compute_projections(fragments_graph, kdtree, (i, j))
+                n_points = len(graph.edges[i, j]["xyz"])
+                hits = compute_projections(graph, kdtree, (i, j))
                 if check_doubles_criteria(hits, n_points):
-                    delete_fragment(fragments_graph, i, j)
+                    graph = delete_fragment(graph, i, j)
                     deleted_ids.add(swc_id)
-    return util.reformat_number(len(deleted_ids))
+    return graph
 
 
-def compute_projections(fragments_graph, kdtree, edge):
+def compute_projections(graph, kdtree, edge):
     """
     Given a fragment defined by "edge", this routine iterates of every xyz in
     the fragment and projects it onto the closest fragment. For each detected
@@ -107,11 +107,11 @@ def compute_projections(fragments_graph, kdtree, edge):
 
     Parameters
     ----------
-    fragments_graph : graph
+    graph : FragmentsGraph
         Graph that contains "edge".
     kdtree : KDTree
         KD-Tree that contains all xyz coordinates of every fragment in
-        "fragments_graph".
+        "graph".
     edge : tuple
         Pair of leaf nodes that define a fragment.
 
@@ -123,13 +123,13 @@ def compute_projections(fragments_graph, kdtree, edge):
 
     """
     hits = defaultdict(list)
-    query_id = fragments_graph.edges[edge]["swc_id"]
-    for i, xyz in enumerate(fragments_graph.edges[edge]["xyz"]):
+    query_id = graph.edges[edge]["swc_id"]
+    for i, xyz in enumerate(graph.edges[edge]["xyz"]):
         # Compute projections
         best_id = None
         best_dist = np.inf
         for hit_xyz in geometry_util.query_ball(kdtree, xyz, QUERY_DIST):
-            hit_id = fragments_graph.xyz_to_id(hit_xyz)
+            hit_id = graph.xyz_to_id(hit_xyz)
             if hit_id is not None and hit_id != query_id:
                 if geometry_util.dist(hit_xyz, xyz) < best_dist:
                     best_dist = geometry_util.dist(hit_xyz, xyz)
@@ -171,14 +171,14 @@ def check_doubles_criteria(hits, n_points):
     return False
 
 
-def delete_fragment(fragments_graph, i, j):
+def delete_fragment(graph, i, j):
     """
-    Deletes nodes "i" and "j" from "fragments_graph", where these nodes form a
-    connected component.
+    Deletes nodes "i" and "j" from "graph", where these nodes form a connected
+    component.
 
     Parameters
     ----------
-    fragments_graph : FragmentsGraph
+    graph : FragmentsGraph
         Graph that contains nodes to be removed.
     i : int
         Node to be removed.
@@ -187,42 +187,50 @@ def delete_fragment(fragments_graph, i, j):
 
     Returns
     -------
-    fragments_graph
+    FragmentsGraph
         Graph with nodes removed.
 
     """
-    fragments_graph = remove_xyz_entries(fragments_graph, i, j)
-    fragments_graph.swc_ids.remove(fragments_graph.nodes[i]["swc_id"])
-    fragments_graph.remove_nodes_from([i, j])
+    graph = remove_xyz_entries(graph, i, j)
+    graph.swc_ids.remove(graph.nodes[i]["swc_id"])
+    graph.remove_nodes_from([i, j])
+    return graph
 
 
-def remove_xyz_entries(fragments_graph, i, j):
+def remove_xyz_entries(graph, i, j):
     """
-    Removes dictionary entries from "fragments_graph.xyz_to_edge"
-    corresponding to the edge {i, j}.
+    Removes dictionary entries from "graph.xyz_to_edge" corresponding to the
+    edge (i, j).
 
     Parameters
     ----------
-    fragments_graph : graph
-        Graph to be updated.
+    graph : FragmentsGraph
+        Graph containing an edge between nodes i and j.
     i : int
-        Node in graph.
+        Node ID.
     j : int
-        Node in graph.
+        Node ID.
 
     Returns
     -------
-    graph
-        Updated graph.
+    FragmentsGraph
+        Graph with updated "graph.xyz_to_edge" attribute.
 
     """
-    for xyz in fragments_graph.edges[i, j]["xyz"]:
+    # Subroutine
+    def remove_entry(xyz):
         try:
-            del fragments_graph.xyz_to_edge[tuple(xyz)]
+            del graph.xyz_to_edge[tuple(xyz)]
         except KeyError:
             pass
-    return fragments_graph
+        return graph
 
+    # Main
+    graph = remove_entry(graph.nodes[i]["xyz"])
+    graph = remove_entry(graph.nodes[j]["xyz"])
+    for xyz in graph.edges[i, j]["xyz"]:
+        graph = remove_entry(xyz)
+    return graph
 
 def upd_hits(hits, key, value):
     """

@@ -29,7 +29,7 @@ class FeatureGenerator:
 
     """
     # Class attributes
-    patch_shape = [256, 256, 256]
+    patch_shape = [128, 128, 128]
     n_profile_points = 16
 
     def __init__(
@@ -74,12 +74,14 @@ class FeatureGenerator:
         self.is_multimodal = is_multimodal
 
         # Initialize image readers
-        self.img_reader = self.init_img_reader(img_path, "zarr")
         self.img_patch_shape = self.set_patch_shape(multiscale)
+        self.img_reader = self.init_img_reader(img_path, "zarr")
         if segmentation_path is not None:
             driver = "neuroglancer_precomputed"
-            self.labels_reader = self.init_img_reader(segmentation_path, driver)
             self.label_patch_shape = self.set_patch_shape(0)
+            self.labels_reader = self.init_img_reader(
+                segmentation_path, driver
+            )
 
     @classmethod
     def set_patch_shape(cls, multiscale):
@@ -428,10 +430,12 @@ class FeatureGenerator:
             # Assign threads
             threads = list()
             for p in proposals:
-                labels = graph.proposal_labels(p)
-                xyz_path = np.vstack(graph.proposal_attr(p, "xyz"))
+                segment_ids = graph.proposal_attr(p, "swc_id")
+                proposal_xyz = graph.proposal_attr(p, "xyz")
                 threads.append(
-                    executor.submit(self.get_patch, labels, xyz_path, p)
+                    executor.submit(
+                        self.get_patch, p, proposal_xyz, segment_ids
+                    )
                 )
 
             # Store results
@@ -493,29 +497,27 @@ class FeatureGenerator:
         }
         return bbox
 
-    def get_patch(self, labels, xyz_path, proposal):
-        # Initializations
-        center = np.mean(xyz_path, axis=0)
-        voxels = [self.to_voxels(xyz) for xyz in xyz_path]
+    def get_patch(self, proposal, proposal_xyz, segment_ids):
+        # Image patch
+        center_xyz = np.mean(proposal_xyz, axis=0)
+        center = self.to_voxels(center_xyz)
+        img_patch = self.img_reader.read(center, self.img_patch_shape)
+        img_patch = img_util.normalize(img_patch)
 
-        # Read patches
-        img_patch = self.read_img_patch(center)
-        label_patch = self.read_label_patch(voxels, labels)
+        # Labels patch
+        center = img_util.to_voxels(center_xyz, self.anisotropy)
+        proposal_voxels = self.get_local_coordinates(center, proposal_xyz)
+        label_patch = self.labels_reader.read(center, self.label_patch_shape)
+        label_patch = self.relabel(label_patch, proposal_voxels, segment_ids)
         return {proposal: np.stack([img_patch, label_patch], axis=0)}
 
-    def read_img_patch(self, xyz):
-        img_patch = img_util.read_tensorstore(
-            self.img, self.voxels(xyz), self.img_patch_shape
-        )
-        return img_util.normalize(img_patch)
+    def get_local_coordinates(self, center_voxel, xyz_pts):
+        shape = self.label_patch_shape
+        offset = np.array([c - s // 2 for c, s in zip(center_voxel, shape)])
+        voxels = [img_util.to_voxels(xyz, self.anisotropy) for xyz in xyz_pts]
+        return geometry_util.shift_path(voxels, offset)
 
-    def read_label_patch(self, voxels, labels):
-        bbox = self.get_bbox(voxels, is_img=False)
-        label_patch = img_util.read_tensorstore_with_bbox(self.labels, bbox)
-        voxels = geometry_util.shift_path(voxels, bbox["min"])
-        return self.relabel(label_patch, voxels, labels)
-
-    def relabel(self, label_patch, voxels, labels):
+    def relabel(self, label_patch, voxels, segment_ids):
         # Initializations
         n_points = self.get_n_profile_points()
         label_patch = zoom(label_patch, 1.0 / 2 ** self.multiscale, order=0)
@@ -524,10 +526,10 @@ class FeatureGenerator:
 
         # Main
         relabel_patch = np.zeros(label_patch.shape)
-        relabel_patch[label_patch == labels[0]] = 1
-        relabel_patch[label_patch == labels[1]] = 2
+        relabel_patch[label_patch == segment_ids[0]] = 1
+        relabel_patch[label_patch == segment_ids[1]] = 1
         line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
-        return geometry_util.fill_path(relabel_patch, line, val=-1)
+        return geometry_util.fill_path(relabel_patch, line, val=2)
 
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)

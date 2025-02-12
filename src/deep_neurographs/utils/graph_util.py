@@ -174,7 +174,7 @@ class GraphLoader:
         desc = "Extract Graphs"
         swc_dicts = self.remove_soma_merges(swc_dicts)
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
-        with ProcessPoolExecutor(max_workers=1) as executor:
+        with ProcessPoolExecutor() as executor:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)

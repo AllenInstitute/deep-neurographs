@@ -167,8 +167,8 @@ def truncate_path(xyz_path, depth):
     for i in range(1, len(xyz_path)):
         length += dist(xyz_path[i - 1], xyz_path[i])
         if length > depth:
-            return xyz_path[0:i]
-    return xyz_path
+            return np.array(xyz_path[0:i])
+    return np.array(xyz_path)
 
 
 def shift_path(xyz_path, offset):
@@ -177,10 +177,10 @@ def shift_path(xyz_path, offset):
 
     Parameters
     ----------
-    voxels : numpy.ndarray
+    voxels : ArrayLike
         Voxel coordinates to be shifted.
-    offset : dict
-        Coordinates of a bounding box that contains "voxels".
+    offset : ArrayLike
+        ...
 
     Returns
     -------
@@ -188,7 +188,8 @@ def shift_path(xyz_path, offset):
         Voxels shifted by min coordinate in "bbox".
 
     """
-    return [xyz - offset for xyz in xyz_path]
+    offset = np.array(offset)
+    return [tuple(xyz - offset) for xyz in map(np.array, xyz_path)]
 
 
 def fill_path(img, path, val=-1):
