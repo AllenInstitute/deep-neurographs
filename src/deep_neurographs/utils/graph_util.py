@@ -171,14 +171,19 @@ class GraphLoader:
             irreducible subgraph extracted from each SWC dictionary.
 
         """
-        desc = "Extract Graphs"
         swc_dicts = self.remove_soma_merges(swc_dicts)
-        pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
+
+        desc = "Assign Processes"
+        pbar1 = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
+
+        desc = "Extract Graphs"
+        pbar2 = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         with ProcessPoolExecutor() as executor:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
             while len(swc_dicts) > 0:
+                pbar1.update(1) if self.verbose else None
                 swc_dict = swc_dicts.pop()
                 processes[i] = executor.submit(self.extracter, swc_dict)
                 i += 1
@@ -187,7 +192,7 @@ class GraphLoader:
             # Store results
             irreducibles = list()
             for process in as_completed(processes):
-                pbar.update(1) if self.verbose else None
+                pbar2.update(1) if self.verbose else None
                 result = process.result()
                 if isinstance(result, list):
                     irreducibles.extend(result)
