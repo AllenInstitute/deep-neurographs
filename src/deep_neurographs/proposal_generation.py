@@ -251,7 +251,13 @@ def get_connecting_node(fragments_graph, leaf, xyz, radius, complex_bool):
         Node id that proposal will connect to.
 
     """
-    edge = fragments_graph.xyz_to_edge[xyz]
+    # Get edge
+    try:
+        edge = fragments_graph.xyz_to_edge[xyz]
+    except:
+        return None
+
+    # Find connecting node
     node = get_closer_endpoint(fragments_graph, edge, xyz)
     if fragments_graph.dist(leaf, node) < radius:
         return node
