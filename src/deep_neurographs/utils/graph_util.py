@@ -178,10 +178,11 @@ class GraphLoader:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
-            while swc_dicts:
+            while len(swc_dicts) > 0:
                 swc_dict = swc_dicts.pop()
                 processes[i] = executor.submit(self.extracter, swc_dict)
                 i += 1
+            print("processes assigned")
 
             # Store results
             irreducibles = list()
