@@ -191,7 +191,7 @@ class GraphLoader:
                 if isinstance(result, list):
                     irreducibles.extend(result)
                 elif isinstance(result, dict):
-                    irreducibles.append(result)                    
+                    irreducibles.append(result)
         return irreducibles
 
     def extract(self, swc_dict):
@@ -268,7 +268,7 @@ class GraphLoader:
             subgraph.
 
         """
-        if self.satifies_path_length_condition(graph):            
+        if self.satifies_path_length_condition(graph):
             # Irreducibles
             leafs, branchings = get_irreducible_nodes(graph)
             edges = get_irreducible_edges(
@@ -402,9 +402,10 @@ class GraphLoader:
             remove_nodes(graph, nodes)
 
             # Update swc_dict
+            iterator = map(set, nx.connected_components(graph))
             soma_nodes = graph.graph["soma_nodes"]
             swc_dict_list = list()
-            for i, nodes in enumerate(map(set, nx.connected_components(graph))):
+            for i, nodes in enumerate(iterator):
                 # Extract attributes
                 swc_dict_i = {
                     "graph": graph.subgraph(nodes).copy(),
@@ -419,7 +420,7 @@ class GraphLoader:
     # --- Helpers ---
     def dist_from_soma(self, xyz):
         """
-        Compute the distance between a given physical coordinate and the nearest
+        Computes the distance between the given xyz coordinate and nearest
         soma location.
 
         Parameters
@@ -462,8 +463,8 @@ class GraphLoader:
         Parameters
         ----------
         swc_dict : dict
-            Dictionaries whose keys and values are the attribute name and values
-            from an swc file.
+            Dictionaries whose keys and values are the attribute name and
+            values from an SWC file.
 
         Returns
         -------
@@ -797,12 +798,7 @@ def dist(graph, i, j):
         Euclidean distance between nodes i and j.
 
     """
-    try:
-        return geometry_util.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
-    except:
-        print(i, graph.nodes[i], graph.graph["swc_id"])
-        print(j, graph.nodes[j], graph.graph["swc_id"])
-        stop
+    return geometry_util.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
 
 
 def find_closest_node(graph, xyz):

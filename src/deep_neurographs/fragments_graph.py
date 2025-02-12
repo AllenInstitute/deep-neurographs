@@ -714,8 +714,13 @@ class FragmentsGraph(nx.Graph):
 
         """
         i, j = tuple(proposal)
-        attrs = np.array([self.nodes[i][attr], self.nodes[j][attr]])
-        return attrs.astype(int) if attr == "swc_id" else attrs
+        if attr == "swc_id":
+            attrs = [
+                reformat(self.nodes[i][attr]), reformat(self.nodes[j][attr])
+            ]
+        else:
+            attrs = np.array([self.nodes[i][attr], self.nodes[j][attr]])
+        return attrs
 
     def proposal_avg_radii(self, proposal):
         i, j = tuple(proposal)
@@ -1124,10 +1129,14 @@ class FragmentsGraph(nx.Graph):
                 f.write(f"{swc_id}\n")
 
 
-# -- util --
+# -- Helpers --
 def avg_radius(radii_list):
     avg = 0
     for radii in radii_list:
         end = max(min(16, len(radii) - 1), 1)
         avg += np.mean(radii[0:end]) / len(radii_list)
     return avg
+
+
+def reformat(segment_id):
+    return int(segment_id.split(".")[0])
