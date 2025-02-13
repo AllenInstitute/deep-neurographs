@@ -180,6 +180,7 @@ class GraphLoader:
             while len(swc_dicts) > 0:
                 swc_dict = swc_dicts.pop()
                 processes[i] = executor.submit(self.extracter, swc_dict)
+                i += 1
             print("processes assigned") if self.verbose else None
 
             # Store results
