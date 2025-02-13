@@ -185,7 +185,7 @@ class GraphLoader:
             # Store results
             irreducibles = list()
             desc = "Extract Graphs"
-            pbar2 = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
+            pbar2 = tqdm(total=len(processes), desc=desc) if self.verbose else None
             for process in as_completed(processes):
                 pbar2.update(1) if self.verbose else None
                 result = process.result()
