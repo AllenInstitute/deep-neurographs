@@ -172,6 +172,7 @@ class GraphLoader:
 
         """
         swc_dicts = self.remove_soma_merges(swc_dicts)
+        pbar = tqdm(total=len(processes), desc=desc) if self.verbose else None
         with ProcessPoolExecutor() as executor:
             # Assign Processes
             i = 0
@@ -186,9 +187,9 @@ class GraphLoader:
             # Store results
             irreducibles = list()
             desc = "Extract Graphs"
-            pbar2 = tqdm(total=len(processes), desc=desc) if self.verbose else None
+            
             for process in as_completed(processes):
-                pbar2.update(1) if self.verbose else None
+                pbar.update(1) if self.verbose else None
                 result = process.result()
                 if isinstance(result, list):
                     irreducibles.extend(result)
@@ -312,7 +313,7 @@ class GraphLoader:
             for i, swc_dict in enumerate(swc_dicts):
                 if swc_dict["swc_id"] in self.merges_dict:
                     somas_xyz = self.merges_dict[swc_dict["swc_id"]]
-                    swc_dict_list = self.break_fragment(swc_dict, somas_xyz)
+                    swc_dict_list = self.break_soma_merge(swc_dict, somas_xyz)
                     updates.append((i, swc_dict_list))
 
             # Update swc_dicts
@@ -373,7 +374,7 @@ class GraphLoader:
                 nodes = nodes.union(visited)
         graph.remove_nodes_from(nodes)
 
-    def break_fragment(self, swc_dict, somas_xyz):
+    def break_soma_merge(self, swc_dict, somas_xyz):
         """
         Breaks a fragment that intersects with multiple somas so that nodes
         closest to soma locations are disconnected.
@@ -415,7 +416,7 @@ class GraphLoader:
                 }
                 swc_dict_list.append(swc_dict_i)
         else:
-            swc_dict_list = [swc_dict]
+            swc_dict_list = [swc_dict if len(somas_xyz) < 20 else None]
         return swc_dict_list
 
     # --- Helpers ---
