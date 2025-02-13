@@ -178,10 +178,11 @@ class GraphLoader:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
-            while swc_dicts:
+            while len(swc_dicts) > 0:
                 swc_dict = swc_dicts.pop()
                 processes[i] = executor.submit(self.extracter, swc_dict)
                 i += 1
+            print("processes assigned") if self.verbose else None
 
             # Store results
             irreducibles = list()
@@ -310,11 +311,10 @@ class GraphLoader:
             for i, swc_dict in enumerate(swc_dicts):
                 if swc_dict["swc_id"] in self.merges_dict:
                     somas_xyz = self.merges_dict[swc_dict["swc_id"]]
-                    swc_dict_list = self.break_fragment(swc_dict, somas_xyz)
+                    swc_dict_list = self.break_soma_merge(swc_dict, somas_xyz)
                     updates.append((i, swc_dict_list))
 
             # Update swc_dicts
-            swc_dicts = list()
             updates.reverse()
             for i, swc_dict_list in updates:
                 swc_dicts.pop(i)
@@ -372,7 +372,7 @@ class GraphLoader:
                 nodes = nodes.union(visited)
         graph.remove_nodes_from(nodes)
 
-    def break_fragment(self, swc_dict, somas_xyz):
+    def break_soma_merge(self, swc_dict, somas_xyz):
         """
         Breaks a fragment that intersects with multiple somas so that nodes
         closest to soma locations are disconnected.
@@ -414,7 +414,7 @@ class GraphLoader:
                 }
                 swc_dict_list.append(swc_dict_i)
         else:
-            swc_dict_list = [swc_dict]
+            swc_dict_list = [swc_dict if len(somas_xyz) < 20 else None]
         return swc_dict_list
 
     # --- Helpers ---

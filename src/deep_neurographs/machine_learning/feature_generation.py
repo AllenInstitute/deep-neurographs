@@ -11,13 +11,23 @@ Conventions:
     (1) "xyz" refers to a physical coordinate such as those from an SWC file
     (2) "voxel" refers to a voxel coordinate in a whole-brain image.
 
+Note: We assume that a segmentation mask corresponds to multiscale 0. Thus,
+      the instance attribute "self.multiscale" corresponds to the multiscale
+      of the input image.
+
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.ndimage import zoom
 
 import numpy as np
+import torchvision.transforms as transforms
 
+from deep_neurographs.machine_learning.augmentation import (
+    RandomContrast3D,
+    GeometricTransforms,
+    RandomNoise3D,
+)
 from deep_neurographs.utils import geometry_util, img_util, util
 from deep_neurographs.utils.img_util import TensorStoreReader, ZarrReader
 
@@ -37,8 +47,9 @@ class FeatureGenerator:
         img_path,
         multiscale,
         anisotropy=[1.0, 1.0, 1.0],
-        segmentation_path=None,
         is_multimodal=False,
+        segmentation_path=None,
+        transform=False,
     ):
         """
         Initializes object that generates features for a graph.
@@ -52,12 +63,15 @@ class FeatureGenerator:
         anisotropy : ArrayLike, optional
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
-        segmentation_path : str, optional
-            Path to the segmentation assumed to be stored on a GCS bucket. The
-            default is None.
         is_multimodal : bool, optional
             Indication of whether to generate multimodal features (i.e. image
             and label patch for each proposal). The default is False.
+        segmentation_path : str, optional
+            Path to the segmentation assumed to be stored on a GCS bucket. The
+            default is None.
+        transform : bool, optional
+            Indication of whether to apply data augmentation. The default is
+            False.
 
         Returns
         -------
@@ -72,8 +86,9 @@ class FeatureGenerator:
         self.anisotropy = anisotropy
         self.multiscale = multiscale
         self.is_multimodal = is_multimodal
+        self.transform = transform
 
-        # Initialize image readers
+        # Image readers
         self.img_patch_shape = self.set_patch_shape(multiscale)
         self.img_reader = self.init_img_reader(img_path, "zarr")
         if segmentation_path is not None:
@@ -82,6 +97,22 @@ class FeatureGenerator:
             self.labels_reader = self.init_img_reader(
                 segmentation_path, driver
             )
+
+        # Data augmentation (if applicable)
+        if transform:
+            self.transform = True
+            self.geometric_transform = GeometricTransforms()
+            self.noise_transform = transforms.Compose(
+                [
+                    RandomContrast3D(),
+                    RandomNoise3D(),
+                    lambda x: torch.tensor(x, dtype=torch.float32).unsqueeze(
+                        0
+                    ),
+                ]
+            )
+        else:
+            self.transform = False
 
     @classmethod
     def set_patch_shape(cls, multiscale):
@@ -337,44 +368,6 @@ class FeatureGenerator:
         return proposal_skeletal_features
 
     # --- Image features ---
-    def node_profiles(self, fragments_graph, computation_graph):
-        """
-        Generates image profiles for nodes in "computation_graph".
-
-        Parameters
-        ----------
-        fragments_graph : FragmentsGraph
-            Graph generated from a predicted segmentation.
-        computation_graph : networkx.Graph
-            Graph used by GNN to classify proposals.
-
-        Returns
-        -------
-        dict
-            Dictionary that maps a node id to an image profile.
-
-        """
-        with ThreadPoolExecutor() as executor:
-            # Assign threads
-            threads = computation_graph.number_of_nodes() * [None]
-            for idx, i in enumerate(computation_graph.nodes):
-                # Get profile path
-                if fragments_graph.is_leaf(i):
-                    xyz_path = self.get_leaf_path(fragments_graph, i)
-                else:
-                    xyz_path = self.get_branching_path(fragments_graph, i)
-
-                # Assign
-                threads[idx] = executor.submit(
-                    img_util.get_profile, self.img, self.get_spec(xyz_path), i
-                )
-
-            # Store results
-            node_profile_features = dict()
-            for thread in as_completed(threads):
-                node_profile_features.update(thread.result())
-        return node_profile_features
-
     def proposal_profiles(self, fragments_graph, proposals):
         """
         Generates an image intensity profile along proposals.
@@ -519,7 +512,7 @@ class FeatureGenerator:
 
     def relabel(self, label_patch, voxels, segment_ids):
         # Initializations
-        n_points = self.get_n_profile_points()
+        n_points = int(geometry_util.dist(voxels[0], voxels[-1]))
         label_patch = zoom(label_patch, 1.0 / 2 ** self.multiscale, order=0)
         for i, voxel in enumerate(voxels):
             voxels[i] = [v // 2 ** self.multiscale for v in voxel]

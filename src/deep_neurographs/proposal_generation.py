@@ -251,7 +251,7 @@ def get_connecting_node(fragments_graph, leaf, xyz, radius, complex_bool):
         Node id that proposal will connect to.
 
     """
-    # Get edge
+    # Check if edge exists
     try:
         edge = fragments_graph.xyz_to_edge[xyz]
     except:
