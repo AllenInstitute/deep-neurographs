@@ -188,6 +188,7 @@ class GraphLoader:
 
             # Store results
             irreducibles = list()
+            pbar = tqdm(total=len(processes), desc=desc) if self.verbose else None
             for process in as_completed(processes):
                 pbar.update(1) if self.verbose else None
                 result = process.result()
@@ -418,6 +419,7 @@ class GraphLoader:
                 swc_dict_list.append(swc_dict_i)
         else:
             swc_dict_list = [swc_dict] if len(somas_xyz) < 20 else None
+            print("# merges:", len(somas_xyz))
         return swc_dict_list
 
     # --- Helpers ---
