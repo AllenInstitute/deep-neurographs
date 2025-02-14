@@ -417,7 +417,7 @@ class FeatureGenerator:
                 proposal_xyz = graph.proposal_attr(p, "xyz")
                 threads.append(
                     executor.submit(
-                        self.get_img_patches, p, proposal_xyz, segment_ids
+                        self.get_patches, p, proposal_xyz, segment_ids
                     )
                 )
 
@@ -480,7 +480,7 @@ class FeatureGenerator:
         }
         return bbox
 
-    def get_img_patches(self, proposal, proposal_xyz, segment_ids):
+    def get_patches(self, proposal, proposal_xyz, segment_ids):
         # Image patch
         center_xyz = np.mean(proposal_xyz, axis=0)
         center = self.to_voxels(center_xyz)
@@ -497,6 +497,7 @@ class FeatureGenerator:
         img_patch, label_patch = self.apply_img_augmentation(
             img_patch, label_patch
         )
+        print(img_patch.shape, label_patch.shape)
         return {proposal: np.stack([img_patch, label_patch], axis=0)}
 
     def get_local_coordinates(self, center_voxel, xyz_pts):
