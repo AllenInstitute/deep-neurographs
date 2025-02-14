@@ -21,7 +21,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.ndimage import zoom
 
 import numpy as np
-import torchvision.transforms as transforms
 
 from deep_neurographs.machine_learning.augmentation import (
        GeometricTransforms, IntensityTransforms
@@ -494,10 +493,10 @@ class FeatureGenerator:
         label_patch = self.relabel(label_patch, proposal_voxels, segment_ids)
 
         # Apply augmentation
-        img_patch, label_patch = self.apply_img_augmentation(
-            img_patch, label_patch
-        )
-        print(img_patch.shape, label_patch.shape)
+        if self.transform:
+            img_patch, label_patch = self.apply_img_augmentation(
+                img_patch, label_patch
+            )
         return {proposal: np.stack([img_patch, label_patch], axis=0)}
 
     def get_local_coordinates(self, center_voxel, xyz_pts):

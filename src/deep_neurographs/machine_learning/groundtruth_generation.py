@@ -50,7 +50,6 @@ def run(pred_graph, target_graph):
         if not nx.has_path(graph, i, j):
             graph.add_edge(i, j)
             gt_accepts.add(proposals[idx])
-    
     return gt_accepts
 
 

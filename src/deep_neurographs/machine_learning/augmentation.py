@@ -12,7 +12,6 @@ from scipy.ndimage import rotate, zoom
 
 import numpy as np
 import random
-import torch
 import torchvision.transforms as transforms
 
 
@@ -40,7 +39,6 @@ class GeometricTransforms:
         self.transforms = [
             RandomFlip3D(),
             RandomRotation3D(),
-            RandomScale3D()
         ]
 
     def __call__(self, img_patch, label_patch):
@@ -64,6 +62,7 @@ class GeometricTransforms:
         for transform in self.transforms:
             img_patch, label_patch = transform(img_patch, label_patch)
         return img_patch, label_patch
+
 
 class RandomFlip3D:
     """
