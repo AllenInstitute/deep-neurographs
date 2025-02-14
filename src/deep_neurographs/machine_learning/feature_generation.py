@@ -24,9 +24,7 @@ import numpy as np
 import torchvision.transforms as transforms
 
 from deep_neurographs.machine_learning.augmentation import (
-    RandomContrast3D,
-    GeometricTransforms,
-    RandomNoise3D,
+       GeometricTransforms, IntensityTransforms
 )
 from deep_neurographs.utils import geometry_util, img_util, util
 from deep_neurographs.utils.img_util import TensorStoreReader, ZarrReader
@@ -101,16 +99,8 @@ class FeatureGenerator:
         # Data augmentation (if applicable)
         if transform:
             self.transform = True
-            self.geometric_transform = GeometricTransforms()
-            self.noise_transform = transforms.Compose(
-                [
-                    RandomContrast3D(),
-                    RandomNoise3D(),
-                    lambda x: torch.tensor(x, dtype=torch.float32).unsqueeze(
-                        0
-                    ),
-                ]
-            )
+            self.geometric_transforms = GeometricTransforms()
+            self.intensity_transforms = IntensityTransforms()
         else:
             self.transform = False
 
@@ -427,7 +417,7 @@ class FeatureGenerator:
                 proposal_xyz = graph.proposal_attr(p, "xyz")
                 threads.append(
                     executor.submit(
-                        self.get_patch, p, proposal_xyz, segment_ids
+                        self.get_img_patches, p, proposal_xyz, segment_ids
                     )
                 )
 
@@ -490,7 +480,7 @@ class FeatureGenerator:
         }
         return bbox
 
-    def get_patch(self, proposal, proposal_xyz, segment_ids):
+    def get_img_patches(self, proposal, proposal_xyz, segment_ids):
         # Image patch
         center_xyz = np.mean(proposal_xyz, axis=0)
         center = self.to_voxels(center_xyz)
@@ -523,6 +513,13 @@ class FeatureGenerator:
         relabel_patch[label_patch == segment_ids[1]] = 1
         line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
         return geometry_util.fill_path(relabel_patch, line, val=2)
+
+    def apply_img_augmentation(self, img_patch, label_patch):
+        img_patch, label_patch = self.geometric_transforms(
+            img_patch, label_patch
+        )
+        img_patch = self.intensity_transforms(img_patch)
+        return img_patch, label_patch
 
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)

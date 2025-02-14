@@ -172,7 +172,7 @@ class GraphLoader:
 
         """
         swc_dicts = self.remove_soma_merges(swc_dicts)
-        desc = "Assign Processes"
+        desc = "Extract Graphs"
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         with ProcessPoolExecutor() as executor:
             # Assign Processes
@@ -188,8 +188,6 @@ class GraphLoader:
 
             # Store results
             irreducibles = list()
-            desc = "Extract Graphs"
-            pbar = tqdm(total=len(processes), desc=desc) if self.verbose else None
             for process in as_completed(processes):
                 pbar.update(1) if self.verbose else None
                 result = process.result()
@@ -322,7 +320,8 @@ class GraphLoader:
             updates.reverse()
             for i, swc_dict_list in updates:
                 swc_dicts.pop(i)
-                swc_dicts.extend(swc_dict_list)
+                if isinstance(swc_dict_list, list):
+                    swc_dicts.extend(swc_dict_list)
         return swc_dicts
 
     def remove_high_risk_merges(self, graph, max_dist=7.0):
@@ -418,7 +417,7 @@ class GraphLoader:
                 }
                 swc_dict_list.append(swc_dict_i)
         else:
-            swc_dict_list = [swc_dict] if len(somas_xyz) < 20 else list()
+            swc_dict_list = [swc_dict] if len(somas_xyz) < 20 else None
         return swc_dict_list
 
     # --- Helpers ---
