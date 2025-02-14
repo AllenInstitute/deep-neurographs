@@ -40,8 +40,9 @@ def run(pred_graph, target_graph):
     # Initializations
     proposals = get_valid_proposals(target_graph, pred_graph)
     lengths = [pred_graph.proposal_length(p) for p in proposals]
+    return proposals
 
-    # Add best simple edges
+    # Add best simple edges -- prevents loops at branching points
     gt_accepts = set()
     graph = pred_graph.copy_graph()
     for idx in np.argsort(lengths):
@@ -49,6 +50,7 @@ def run(pred_graph, target_graph):
         if not nx.has_path(graph, i, j):
             graph.add_edge(i, j)
             gt_accepts.add(proposals[idx])
+    
     return gt_accepts
 
 
