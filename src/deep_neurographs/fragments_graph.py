@@ -65,7 +65,7 @@ class FragmentsGraph(nx.Graph):
         anisotropy=(1.0, 1.0, 1.0),
         min_size=30.0,
         node_spacing=1,
-        prune_depth=16.0,
+        prune_depth=20.0,
         remove_high_risk_merges=False,
         segmentation_path=None,
         smooth_bool=True,

@@ -41,15 +41,11 @@ from tqdm import tqdm
 
 from deep_neurographs import fragment_filtering
 from deep_neurographs.fragments_graph import FragmentsGraph
+from deep_neurographs.machine_learning import heterograph_datasets
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator,
 )
-from deep_neurographs.utils import (
-    gnn_util,
-    graph_util as gutil,
-    ml_util,
-    util
-)
+from deep_neurographs.utils import gnn_util, ml_util, util
 
 
 class InferencePipeline:
@@ -127,7 +123,6 @@ class InferencePipeline:
         self.inference_engine = InferenceEngine(
             img_path,
             self.model_path,
-            self.ml_config.model_type,
             self.graph_config.search_radius,
             accept_threshold=self.ml_config.threshold,
             anisotropy=self.ml_config.anisotropy,
@@ -250,7 +245,6 @@ class InferencePipeline:
             self.graph = fragment_filtering.remove_doubles(
                 self.graph, 200, self.graph_config.node_spacing
             )
-            #self.report(f"# Double Fragments Deleted: {n_doubles}")
 
     def generate_proposals(self, radius=None):
         """
@@ -408,7 +402,6 @@ class InferencePipeline:
             "brain_id": self.brain_id,
             "segmentation_id": self.segmentation_id,
             "min_fragment_size": f"{self.graph_config.min_size}um",
-            "model_type": self.ml_config.model_type,
             "model_name": os.path.basename(self.model_path),
             "complex_proposals": self.graph_config.complex_bool,
             "long_range_bool": self.graph_config.long_range_bool,
@@ -473,7 +466,6 @@ class InferenceEngine:
         self,
         img_path,
         model_path,
-        model_type,
         radius,
         accept_threshold=0.6,
         anisotropy=[1.0, 1.0, 1.0],
@@ -493,8 +485,6 @@ class InferenceEngine:
             Path to image.
         model_path : str
             Path to machine learning model weights.
-        model_type : str
-            Type of machine learning model used to perform inference.
         radius : float
             Search radius used to generate proposals.
         accept_threshold : float, optional
@@ -521,7 +511,6 @@ class InferenceEngine:
         # Set class attributes
         self.batch_size = batch_size
         self.device = "cpu" if device is None else device
-        self.is_gnn = True if "Graph" in model_type else False
         self.radius = radius
         self.threshold = accept_threshold
 
@@ -536,7 +525,7 @@ class InferenceEngine:
 
         # Model
         self.model = ml_util.load_model(model_path)
-        if self.is_gnn and "cuda" in device:
+        if "cuda" in device:
             self.model = self.model.to(self.device)
 
     def run(self, fragments_graph, proposals):
@@ -561,15 +550,8 @@ class InferenceEngine:
             Accepted proposals.
 
         """
-        # Initializations
-        assert not gutil.cycle_exists(fragments_graph), "Graph has cycle!"
-        if self.is_gnn:
-            proposals = set(proposals)
-        else:
-            proposals = sort_proposals(fragments_graph, proposals)
-
-        # Main
-        flagged = set()  # too slow - get_large_proposal_components(fragments_graph, 4)
+        flagged = set()  # get_large_proposal_components(fragments_graph, 4)
+        proposals = set(proposals)
         with tqdm(total=len(proposals), desc="Inference") as pbar:
             accepts = list()
             while len(proposals) > 0:
@@ -586,13 +568,13 @@ class InferenceEngine:
             #fragments_graph.absorb_reducibles()  # - extremely slow
         return fragments_graph, accepts
 
-    def get_batch(self, fragments_graph, proposals, flagged_proposals):
+    def get_batch(self, graph, proposals, flagged_proposals):
         """
         Generates a batch of proposals.
 
         Parameters
         ----------
-        fragments_graph : FragmentsGraph
+        graph : FragmentsGraph
             Graph that proposals were generated from.
         proposals : List[frozenset]
             Proposals for which batch is to be generated from.
@@ -607,23 +589,19 @@ class InferenceEngine:
             computation graph if the model type is a gnn.
 
         """
-        if self.is_gnn:
-            return gnn_util.get_batch(
-                fragments_graph, proposals, self.batch_size, flagged_proposals
-            )
-        else:
-            batch = {"proposals": proposals[0:self.batch_size], "graph": None}
-            del proposals[0:self.batch_size]
-            return batch
+        batch = gnn_util.get_batch(
+            graph, proposals, self.batch_size, flagged_proposals
+        )
+        return batch
 
-    def get_batch_dataset(self, fragments_graph, batch):
+    def get_batch_dataset(self, graph, batch):
         """
         Generates features and initializes dataset that can be input to a
         machine learning model.
 
         Parameters
         ----------
-        fragments_graph : FragmentsGraph
+        graph : FragmentsGraph
             Graph that inference will be performed on.
         batch : list
             Proposals to be classified.
@@ -633,17 +611,8 @@ class InferenceEngine:
         ...
 
         """
-        features = self.feature_generator.run(
-            fragments_graph, batch, self.radius
-        )
-        computation_graph = batch["graph"] if type(batch) is dict else None
-        dataset = ml_util.init_dataset(
-            fragments_graph,
-            features,
-            self.is_gnn,
-            computation_graph=computation_graph,
-        )
-        return dataset
+        features = self.feature_generator.run(graph, batch, self.radius)
+        return heterograph_datasets.init(graph, features,  batch["graph"])
 
     def predict(self, dataset):
         """
@@ -662,13 +631,7 @@ class InferenceEngine:
             probability).
 
         """
-        # Get predictions
-        if self.is_gnn:
-            preds = predict_with_gnn(self.model, dataset.data, self.device)
-        else:
-            preds = np.array(self.model.predict_proba(dataset.data.x)[:, 1])
-
-        # Reformat prediction
+        preds = predict_with_gnn(self.model, dataset.data, self.device)
         idxs = dataset.idxs_proposals["idx_to_id"]
         return {idxs[i]: p for i, p in enumerate(preds)}
 

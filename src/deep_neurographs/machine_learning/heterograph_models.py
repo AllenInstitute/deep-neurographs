@@ -8,14 +8,14 @@ Graph neural network architectures that learn to classify edge proposals.
 
 """
 
-import re
-
-import torch
-import torch.nn.init as init
 from torch import nn
 from torch.nn import Dropout, LeakyReLU
 from torch_geometric.nn import GATv2Conv as GATConv
 from torch_geometric.nn import HeteroConv, Linear
+
+import re
+import torch
+import torch.nn.init as init
 
 from deep_neurographs.machine_learning.models import ConvNet
 
@@ -38,7 +38,7 @@ class HGAT(torch.nn.Module):
         edge_dict,
         device=None,
         hidden_dim=96,
-        dropout=0.3,
+        dropout=0.25,
         heads_1=2,
         heads_2=2,
     ):
@@ -171,71 +171,160 @@ class HGAT(torch.nn.Module):
         return x_dict
 
 
-class MultiModalHGAT(HGAT):
+class MultiModalHGAT(torch.nn.Module):
     """
     Heterogeneous graph attention network that uses multimodal features which
     includes an image patch of the proposal and a vector of geometric and
     graphical features.
 
     """
+    # Class attributes
+    relation_types = [
+        ("proposal", "edge", "proposal"),
+        ("branch", "edge", "proposal"),
+        ("branch", "edge", "branch"),
+    ]
 
     def __init__(
         self,
         node_dict,
         edge_dict,
-        device=None,
         hidden_dim=64,
-        dropout=0.3,
+        dropout=0.25,
         heads_1=2,
         heads_2=2,
     ):
         # Call super constructor
-        super().__init__(
-            node_dict,
-            edge_dict,
-            device,
-            hidden_dim * 2,
-            dropout,
-            heads_1,
-            heads_2,
-        )
+        super().__init__()
 
-        # Patch Embedding
-        self.input_patches = ConvNet((48, 48, 48), hidden_dim)
+        # Instance attributes
+        self.dropout = Dropout(dropout)
+        self.leaky_relu = LeakyReLU()
 
-        # Node Embedding
-        proposal_dim = node_dict["proposal"]
-        branch_dim = node_dict["branch"]
-        self.input_nodes = nn.ModuleDict({
-            "proposal": nn.Linear(proposal_dim, hidden_dim, device=device),
-            "branch": nn.Linear(branch_dim, hidden_dim * 2, device=device),
-        })
+        # Initial Embeddings
+        self.node_embedding = self._init_node_embedding(node_dict, hidden_dim)
+        self.edge_embedding = self._init_edge_embedding(edge_dict, hidden_dim)
+        self.patch_embedding = self._init_patch_embedding(hidden_dim)
 
-        # Edge Embedding
-        self.input_edges = dict()
-        for key, d in edge_dict.items():
-            self.input_edges[key] = nn.Linear(
-                d, hidden_dim * 2, device=device
-            )
+        # Message Passing Layer Dimensions
+        hidden_dim_1 = 2 * hidden_dim
+        hidden_dim_2 = hidden_dim_1 * heads_2
+        output_dim = hidden_dim_1 * heads_1 * heads_2
+
+        # Message passing layers
+        self.gat1 = self.init_gat_layer(hidden_dim_1, hidden_dim_1, heads_1)
+        self.gat2 = self.init_gat_layer(hidden_dim_2, hidden_dim_1, heads_2)
+        self.output = Linear(output_dim, 1)
 
         # Initialize weights
         self.init_weights()
 
+    # --- Class methods ---
+    @classmethod
+    def get_relation_types(cls):
+        return cls.relation_types
+
+    # --- Constructor Helpers ---
+    def _init_node_embedding(self, node_dict, output_dim):
+        """
+        Builds the initial node embedding layer which is a linear layer.
+
+        """
+        # UPDATE TO AN MLP
+        input_dim_p = node_dict["proposal"]
+        input_dim_b = node_dict["branch"]
+        node_embedding = nn.ModuleDict({
+            "proposal": nn.Linear(input_dim_p, output_dim),
+            "branch": nn.Linear(input_dim_b, 2 * output_dim),
+        })
+        return node_embedding
+
+    def _init_edge_embedding(self, edge_dict, output_dim):
+        """
+        Builds the edge embedding layer which is a linear layer.
+
+        """
+        # UPDATE TO AN MLP
+        edge_embedding = {}
+        output_dim *= 2
+        for key, input_dim in edge_dict.items():
+            edge_embedding[key] = nn.Linear(input_dim, output_dim)
+        return edge_embedding
+
+    def _init_patch_embedding(self, output_dim):
+        """
+        Builds the image patch embedding layer which is a convolutional neural
+        network.
+
+        """
+        input_dim = (64, 64, 64)  # hard coded
+        return ConvNet(input_dim, output_dim)
+
+    def _init_mlp(self, input_dim, output_dim):
+        pass
+
+    def init_gat_layer(self, hidden_dim, edge_dim, heads):
+        gat_dict = dict()
+        for rtype in self.get_relation_types():
+            is_same = True if rtype[0] == rtype[2] else False
+            init_gat = self.init_gat_same if is_same else self.init_gat_mixed
+            gat_dict[rtype] = init_gat(hidden_dim, edge_dim, heads)
+        return HeteroConv(gat_dict, aggr="sum")
+
+    def init_gat_same(self, hidden_dim, edge_dim, heads):
+        gat_layer = GATConv(
+            -1,
+            hidden_dim,
+            edge_dim=edge_dim,
+            heads=heads,
+        )
+        return gat_layer
+
+    def init_gat_mixed(self, hidden_dim, edge_dim, heads):
+        gat_layer = GATConv(
+            (hidden_dim, hidden_dim),
+            hidden_dim,
+            add_self_loops=False,
+            edge_dim=edge_dim,
+            heads=heads,
+        )
+        return gat_layer
+
+    def init_weights(self):
+        """
+        Initializes linear layers.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        for layer in [self.node_embedding, self.output]:
+            for param in layer.parameters():
+                if len(param.shape) > 1:
+                    init.kaiming_normal_(param)
+                else:
+                    init.zeros_(param)
+
+    # --- Main ---
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
         # Input - Patches
-        x_patch = self.input_patches(x_dict["patch"])
+        x_patch = self.patch_embedding(x_dict["patch"])
         del x_dict["patch"]
 
         # Input - Nodes
-        for key, f in self.input_nodes.items():
+        for key, f in self.node_embedding.items():
             x_dict[key] = f(x_dict[key])
-        x_dict = self.activation(x_dict)
+        x_dict = self.activation(x_dict)  # update w/ mlp
 
         # Input - Edges
-        for key, f in self.input_edges.items():
-            key = tuple(key)
+        for key, f in self.edge_embedding.items():
             edge_attr_dict[key] = f(edge_attr_dict[key])
-        edge_attr_dict = self.activation(edge_attr_dict)
+        edge_attr_dict = self.activation(edge_attr_dict)  # update w/ mlp
 
         # Concatenate multimodal embeddings
         x_dict["proposal"] = torch.cat((x_dict["proposal"], x_patch), dim=1)
@@ -250,6 +339,26 @@ class MultiModalHGAT(HGAT):
 
         # Output
         x_dict = self.output(x_dict["proposal"])
+        return x_dict
+
+    def activation(self, x_dict):
+        """
+        Applies nonlinear activation
+
+        Parameters
+        ----------
+        x_dict : dict
+            Dictionary that maps node/edge types to feature matrices.
+
+        Returns
+        -------
+        dict
+            Feature matrices with activation applied.
+
+        """
+        # CHECK THAT DROPOUT IS TURNED OFF DURING INFERENCE
+        x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
+        x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
         return x_dict
 
 

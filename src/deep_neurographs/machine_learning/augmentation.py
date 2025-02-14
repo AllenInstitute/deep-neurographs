@@ -12,7 +12,6 @@ from scipy.ndimage import rotate, zoom
 
 import numpy as np
 import random
-import torch
 import torchvision.transforms as transforms
 
 
@@ -40,7 +39,6 @@ class GeometricTransforms:
         self.transforms = [
             RandomFlip3D(),
             RandomRotation3D(),
-            RandomScale3D()
         ]
 
     def __call__(self, img_patch, label_patch):
@@ -64,6 +62,7 @@ class GeometricTransforms:
         for transform in self.transforms:
             img_patch, label_patch = transform(img_patch, label_patch)
         return img_patch, label_patch
+
 
 class RandomFlip3D:
     """
@@ -217,26 +216,7 @@ class RandomScale3D:
         # Rescale images
         img_patch = zoom(img_patch, zoom_factors, order=3)
         label_patch = zoom(label_patch, zoom_factors, order=3)
-
-        # Ensure that shape is preserved
-        img_patch = crop_or_pad(img_patch, new_shape)
-        label_patch = crop_or_pad(label_patch, new_shape)
         return img_patch, label_patch
-
-
-def crop_or_pad(arr, target_shape):
-    """
-    Crop or pad the input array to match the target shape.
-    """
-    current_shape = arr.shape
-    pad_width = [(0, max(0, target - current)) for target, current in zip(target_shape, current_shape)]
-    crop_slices = [slice(0, min(current, target)) for current, target in zip(current_shape, target_shape)]
-    
-    # First, pad the array
-    arr_padded = np.pad(arr, pad_width, mode='constant', constant_values=0)
-
-    # Then, crop the array if necessary (in case it's larger than the target shape)
-    return arr_padded[tuple(crop_slices)]
 
 
 # --- Intensity Transforms ---

@@ -15,7 +15,7 @@ from tqdm import tqdm
 import networkx as nx
 import numpy as np
 
-from deep_neurographs.utils import geometry_util, util
+from deep_neurographs.utils import geometry_util
 
 QUERY_DIST = 15
 
@@ -231,6 +231,7 @@ def remove_xyz_entries(graph, i, j):
     for xyz in graph.edges[i, j]["xyz"]:
         graph = remove_entry(xyz)
     return graph
+
 
 def upd_hits(hits, key, value):
     """

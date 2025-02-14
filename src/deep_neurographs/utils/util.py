@@ -184,7 +184,8 @@ def set_path(dir_name, filename, extension):
 def set_zip_path(zip_writer, filename, extension):
     """
     Sets the path for a file within a ZIP archive. If a file with the same
-    name already exists, then this routine finds a suffix to append to the filename.
+    name already exists, then this routine finds a suffix to append to the
+    filename.
 
     Parameters
     ----------
