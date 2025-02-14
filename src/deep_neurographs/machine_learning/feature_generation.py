@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.ndimage import zoom
 
 import numpy as np
+import torchvision.transforms as transforms
 
 from deep_neurographs.machine_learning.augmentation import (
        GeometricTransforms, IntensityTransforms
@@ -83,6 +84,7 @@ class FeatureGenerator:
         self.anisotropy = anisotropy
         self.multiscale = multiscale
         self.is_multimodal = is_multimodal
+        self.transform = transform
 
         # Image readers
         self.img_patch_shape = self.set_patch_shape(multiscale)
