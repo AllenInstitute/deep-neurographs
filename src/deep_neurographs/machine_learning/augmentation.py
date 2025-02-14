@@ -61,7 +61,6 @@ class GeometricTransforms:
             Transformed 3D image and segmentation patch.
 
         """
-        # Apply transforms
         for transform in self.transforms:
             img_patch, label_patch = transform(img_patch, label_patch)
         return img_patch, label_patch

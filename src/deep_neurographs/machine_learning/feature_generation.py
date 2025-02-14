@@ -492,6 +492,11 @@ class FeatureGenerator:
         proposal_voxels = self.get_local_coordinates(center, proposal_xyz)
         label_patch = self.labels_reader.read(center, self.label_patch_shape)
         label_patch = self.relabel(label_patch, proposal_voxels, segment_ids)
+
+        # Apply augmentation
+        img_patch, label_patch = self.apply_img_augmentation(
+            img_patch, label_patch
+        )
         return {proposal: np.stack([img_patch, label_patch], axis=0)}
 
     def get_local_coordinates(self, center_voxel, xyz_pts):
