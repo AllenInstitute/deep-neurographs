@@ -313,7 +313,7 @@ class InferencePipeline:
         self.report(f"% Accepted: {round(len(accepts) / n_proposals, 4)}")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
 
-    def save_results(self, round_id=None):
+    def save_results(self):
         """
         Saves the processed results from running the inference pipeline,
         namely the corrected SWC files and a list of the merged SWC ids.
@@ -328,17 +328,12 @@ class InferencePipeline:
 
         """
         # Save result on local machine
-        suffix = f"-{round_id}" if round_id else ""
-        filename = f"corrected-processed-swcs{suffix}.zip"
-        path = os.path.join(self.output_dir, filename)
-        #self.graph.to_zipped_swcs(path, sampling_rate=1)
-        self.save_connections(round_id=round_id)
+        zip_path = os.path.join(self.output_dir, "corrected-swcs-s3.zip")
+        self.graph.to_zipped_swcs(zip_path, min_size=50, sampling_rate=1)
+        self.save_connections()
         self.write_metadata()
 
         # Save result on s3 (if applicable)
-        filename = f"corrected-processed-swcs-s3.zip"
-        path = os.path.join(self.output_dir, filename)
-        self.graph.to_zipped_swcs(path, min_size=50, sampling_rate=1)
         if self.s3_dict is not None:
             self.save_to_s3()
 
