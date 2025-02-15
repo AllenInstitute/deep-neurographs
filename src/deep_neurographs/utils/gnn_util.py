@@ -20,7 +20,7 @@ GNN_DEPTH = 2
 
 
 # --- Tensor Operations ---
-def get_inputs(data, device="cpu", is_multimodal=False):
+def get_inputs(data, device="cpu"):
     """
     Extracts input data for a graph-based model and optionally moves it to a
     GPU.
@@ -35,8 +35,6 @@ def get_inputs(data, device="cpu", is_multimodal=False):
     device : str, optional
         Target device for the data, 'cuda' for GPU and 'cpu' for CPU. The
         default is "cpu".
-    is_multimodal : bool, optional
-            Flag for handling multimodal data. The default is False.
 
     Returns
     --------
@@ -47,14 +45,8 @@ def get_inputs(data, device="cpu", is_multimodal=False):
         - edge_attr (dict): Edge attributes dictionary.
 
     """
-    x = data.x_dict
-    edge_index = data.edge_index_dict
-    edge_attr = data.edge_attr_dict
-    if "cuda" in device and torch.cuda.is_available():
-        x = ml_util.toGPU(x)
-        edge_index = ml_util.toGPU(edge_index)
-        edge_attr = ml_util.toGPU(edge_attr)
-    return x, edge_index, edge_attr
+    data.to(device)
+    return data.x_dict, data.edge_index_dict, data.edge_attr_dict
 
 
 # --- Batch Generation ---

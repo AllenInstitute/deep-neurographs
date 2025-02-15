@@ -49,7 +49,6 @@ class HGAT(torch.nn.Module):
         super().__init__()
         # Nonlinear activation
         self.dropout = dropout
-        self.dropout_layer = Dropout(dropout)
         self.leaky_relu = nn.LeakyReLU()
 
         # Initial Embedding
@@ -144,7 +143,6 @@ class HGAT(torch.nn.Module):
 
         """
         x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
-        x_dict = {key: self.dropout_layer(x) for key, x in x_dict.items()}
         return x_dict
 
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
