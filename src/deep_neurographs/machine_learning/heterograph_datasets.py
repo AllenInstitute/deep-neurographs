@@ -283,7 +283,7 @@ class HeteroGraphDataset:
         edge_type = ("proposal", "edge", "proposal")
         return self.data[edge_type]["x"].size(1)
 
-    # -- Set Edges --
+    # --- Set Edges ---
     def proposal_to_proposal(self):
         """
         Generates edge indices between nodes corresponding to proposals.
@@ -422,7 +422,7 @@ class HeteroGraphMultiModalDataset(HeteroGraphDataset):
         y_proposals,
         idxs,
     ):
-        # Call super constructor
+        # Call parent class
         super().__init__(
             computation_graph,
             proposals,

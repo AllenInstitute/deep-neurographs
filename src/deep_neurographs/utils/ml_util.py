@@ -11,7 +11,6 @@ models.
 
 from random import sample
 
-import joblib
 import numpy as np
 import torch
 
@@ -33,11 +32,8 @@ def load_model(path):
     ...
 
     """
-    if ".joblib" in path:
-        model = joblib.load(path)
-    else:
-        model = torch.load(path)
-        model.eval()
+    model = torch.load(path, weights_only=False)
+    model.eval()
     return model
 
 

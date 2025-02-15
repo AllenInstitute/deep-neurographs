@@ -36,7 +36,7 @@ class FeatureGenerator:
 
     """
     # Class attributes
-    patch_shape = [128, 128, 128]
+    patch_shape = (100, 100, 100)
     n_profile_points = 16
 
     def __init__(
@@ -57,9 +57,9 @@ class FeatureGenerator:
             Path to the raw image assumed to be stored in a GCS bucket.
         multiscale : int
             Level in the image pyramid that voxel coordinates must index into.
-        anisotropy : ArrayLike, optional
+        anisotropy : Tuple[float], optional
             Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
+            anisotropy of the microscope. The default is (1.0, 1.0, 1.0).
         is_multimodal : bool, optional
             Indication of whether to generate multimodal features (i.e. image
             and label patch for each proposal). The default is False.

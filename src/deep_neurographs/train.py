@@ -25,6 +25,7 @@ from sklearn.metrics import (
 from torch.nn import BCEWithLogitsLoss
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 import numpy as np
 import os
@@ -279,6 +280,7 @@ class TrainEngine:
         self,
         model,
         criterion,
+        device="cuda",
         lr=1e-4,
         n_epochs=1000,
     ):
@@ -301,9 +303,12 @@ class TrainEngine:
         None.
 
         """
+        # Instance attributes
+
+
         # Training
-        self.model = model  # .to("cuda:0")
         self.criterion = criterion
+        self.device = device
         self.n_epochs = n_epochs
         self.optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         self.init_scheduler()
@@ -316,7 +321,7 @@ class TrainEngine:
             gamma=0.5,
         )
 
-    def run(self, train_dataset_list, validation_dataset_list):
+    def run(self, model, train_dataset_list, validation_dataset_list):
         """
         Trains a graph neural network in the case where "datasets" is a
         dictionary of datasets such that each corresponds to a distinct graph.
@@ -331,16 +336,24 @@ class TrainEngine:
             Graph neural network that has been fit onto "datasets".
 
         """
+        # Initializations
         best_score = -np.inf
         best_ckpt = None
+        model.to(self.device)
+
+        # Main
+        n_upds = 0
         for epoch in range(self.n_epochs):
             # Train
             print("epoch", epoch)
             y, hat_y = [], []
-            self.model.train()
-            for dataset in train_dataset_list:
+            model.train()
+            for dataset in tqdm(train_dataset_list):
                 # Forward pass
-                hat_y_i, y_i = self.predict(dataset.data)
+                n_upds += 1
+                print("# Proposals:", len(dataset.data["proposal"].y))
+                dataset.data.to("cuda")
+                hat_y_i, y_i = self.predict(model, dataset.data)
                 loss = self.criterion(hat_y_i, y_i)
                 self.writer.add_scalar("loss", loss, epoch)
 
@@ -357,11 +370,11 @@ class TrainEngine:
             self.scheduler.step()
 
             # Validate
-            if epoch % 10 == 0:
+            if n_upds % 20 == 0:
                 y, hat_y = [], []
-                self.model.eval()
+                model.eval()
                 for dataset in validation_dataset_list:
-                    hat_y_i, y_i = self.predict(dataset.data)
+                    hat_y_i, y_i = self.predict(model, dataset.data)
                     y.extend(ml_util.toCPU(y_i))
                     hat_y.extend(ml_util.toCPU(hat_y_i))
                 test_score = self.compute_metrics(y, hat_y, "val", epoch)
@@ -370,10 +383,11 @@ class TrainEngine:
                 if test_score > best_score:
                     best_score = test_score
                     best_ckpt = deepcopy(self.model.state_dict())
+                    print("New Best F1:", best_score)
         self.model.load_state_dict(best_ckpt)
         return self.model
 
-    def predict(self, data):
+    def predict(self, model, data):
         """
         Runs "data" through "self.model" to generate a prediction.
 
@@ -390,8 +404,8 @@ class TrainEngine:
             Prediction.
 
         """
-        x, edge_index, edge_attr = gnn_util.get_inputs(data)
-        hat_y = self.model(x, edge_index, edge_attr)
+        x, edge_index, edge_attr = gnn_util.get_inputs(data, self.device)
+        hat_y = model(x, edge_index, edge_attr)
         y = data["proposal"]["y"]
         return truncate(hat_y, y), y
 
