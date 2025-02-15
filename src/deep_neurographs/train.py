@@ -387,7 +387,6 @@ class TrainEngine:
             Prediction.
 
         """
-        data.to("cuda")
         x, edge_index, edge_attr = gnn_util.get_inputs(data, self.device)
         hat_y = model(x, edge_index, edge_attr)
         y = data["proposal"]["y"]
