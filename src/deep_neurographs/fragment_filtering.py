@@ -192,7 +192,7 @@ def delete_fragment(graph, i, j):
 
     """
     graph = remove_xyz_entries(graph, i, j)
-    graph.swc_ids.remove(graph.nodes[i]["swc_id"])
+    graph.swc_ids.discard(graph.nodes[i]["swc_id"])
     graph.remove_nodes_from([i, j])
     return graph
 
