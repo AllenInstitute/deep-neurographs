@@ -547,7 +547,7 @@ class FragmentsGraph(nx.Graph):
         """
         return list(self.proposals)
 
-    def proposal_connected_component(self, proposal):
+    def extract_proposal_component(self, proposal):
         """
         Extracts the connected component that "proposal" belongs to in the
         proposal induced subgraph.

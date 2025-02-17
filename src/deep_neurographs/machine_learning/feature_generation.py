@@ -43,7 +43,7 @@ class FeatureGenerator:
         self,
         img_path,
         multiscale,
-        anisotropy=[1.0, 1.0, 1.0],
+        anisotropy=(1.0, 1.0, 1.0),
         is_multimodal=False,
         segmentation_path=None,
         transform=False,
@@ -77,7 +77,7 @@ class FeatureGenerator:
         """
         # Sanity check
         if is_multimodal and not segmentation_path:
-            raise("Must provide label mask to use multimodal model!")
+            raise ValueError("Must provide segmentation_path for multimodal!")
 
         # Instance attributes
         self.anisotropy = anisotropy

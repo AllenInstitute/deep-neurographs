@@ -21,19 +21,19 @@ from deep_neurographs.machine_learning.feature_generation import (
     get_matrix,
     get_patches_matrix,
 )
-from deep_neurographs.utils import gnn_util, ml_util
+from deep_neurographs.utils import ml_util
 
 DTYPE = torch.float32
 
 
 # Wrapper
-def init(neurograph, features, computation_graph):
+def init(graph, features, computation_graph):
     """
     Initializes a dataset that can be used to train a graph neural network.
 
     Parameters
     ----------
-    neurograph : NeuroGraph
+    graph : FragmentsGraph
         Graph that dataset is built from.
     features : dict
         Dictionary that contains different types of feature vectors for nodes,
@@ -48,8 +48,8 @@ def init(neurograph, features, computation_graph):
 
     """
     # Check for groundtruth
-    if neurograph.gt_accepts is not None:
-        gt_accepts = neurograph.gt_accepts
+    if graph.gt_accepts is not None:
+        gt_accepts = graph.gt_accepts
     else:
         gt_accepts = set()
 
@@ -82,7 +82,6 @@ def init(neurograph, features, computation_graph):
         y_proposals,
         idxs,
     )
-
     return heterograph_dataset
 
 
@@ -300,7 +299,7 @@ class HeteroGraphDataset:
 
         """
         edge_index = []
-        line_graph = gnn_util.init_line_graph(self.proposals)
+        line_graph = ml_util.line_graph(self.proposals)
         for e1, e2 in line_graph.edges:
             v1 = self.idxs_proposals["id_to_idx"][frozenset(e1)]
             v2 = self.idxs_proposals["id_to_idx"][frozenset(e2)]
