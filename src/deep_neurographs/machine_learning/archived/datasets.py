@@ -8,9 +8,9 @@ Custom datasets for training deep learning models.
 
 """
 
-import numpy as np
-import torchio as tio
 from torch.utils.data import Dataset as TorchDataset
+
+import numpy as np
 
 from deep_neurographs.machine_learning import feature_generation
 
@@ -183,7 +183,7 @@ class MultiModalDataset(Dataset):
         self.x_imgs = x["imgs"].astype(np.float32)
         self.x_features = x["features"].astype(np.float32)
         self.y = reformat(y)
-        self.transform = AugmentImages() if transform else None
+        self.transform = None
 
     def __len__(self):
         """
@@ -222,55 +222,6 @@ class MultiModalDataset(Dataset):
             x_img = self.x_imgs[idx]
         inputs = [self.feature_inputs[idx], x_img]
         return {"inputs": inputs, "targets": self.targets[idx]}
-
-
-# Augmentation
-class AugmentImages:
-    """
-    Applies augmentation to an image chunk.
-
-    """
-
-    def __init__(self):
-        """
-        Constructs an AugmentImages object.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        self.transform = tio.Compose(
-            [
-                tio.RandomBlur(std=(0, 0.4)),
-                tio.RandomNoise(std=(0, 0.0125)),
-                tio.RandomFlip(axes=(0, 1, 2)),
-                tio.RandomAffine(
-                    degrees=20, scales=(0.8, 1), image_interpolation="nearest"
-                ),
-            ]
-        )
-
-    def run(self, arr):
-        """
-        Runs an image through the data augmentation pipeline.
-
-        Parameters
-        ----------
-        arr : torch.array
-            Array that contains an image chunk.
-
-        Returns
-        -------
-        torch.array
-            Transformed array after being run through augmentation pipeline.
-
-        """
-        return self.transform(arr)
 
 
 # -- utils --

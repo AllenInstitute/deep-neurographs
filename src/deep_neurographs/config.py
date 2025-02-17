@@ -101,12 +101,14 @@ class MLConfig:
     """
     anisotropy: Tuple[float] = field(default_factory=tuple)
     batch_size: int = 2000
+    device: str = "cpu"
     high_threshold: float = 0.7
+    is_multimodal: bool = False
     lr: float = 1e-3
-    model_type: str = "GraphNeuralNet"
     multiscale: int = 1
     n_epochs: int = 1000
     threshold: float = 0.6
+    transform: bool = False
     validation_split: float = 0.15
     weight_decay: float = 1e-3
 

@@ -88,7 +88,7 @@ class FeedForwardNet(nn.Module):
 class ConvNet(nn.Module):
     """
     Convolutional neural network that classifies edge proposals given an image
-    chunk. Note that each image chunk is assumed to have dimensions 64x64x64.
+    patch.
 
     """
 

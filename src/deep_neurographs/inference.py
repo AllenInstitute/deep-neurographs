@@ -45,7 +45,7 @@ from deep_neurographs.machine_learning import heterograph_datasets
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator,
 )
-from deep_neurographs.utils import gnn_util, ml_util, util
+from deep_neurographs.utils import ml_util, util
 
 
 class InferencePipeline:
@@ -230,9 +230,9 @@ class InferencePipeline:
         # Save valid labels and current graph
         swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
         valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        #n_saved = self.graph.to_zipped_swcs(swcs_path, sampling_rate=2)
+        n_saved = self.graph.to_zipped_swcs(swcs_path, sampling_rate=4)
         self.graph.save_labels(valid_labels_path)
-        #self.report(f"# SWCs Saved: {n_saved}")
+        self.report(f"# SWCs Saved: {n_saved}")
 
         # Report results
         t, unit = util.time_writer(time() - t0)
@@ -329,7 +329,7 @@ class InferencePipeline:
         """
         # Save result on local machine
         zip_path = os.path.join(self.output_dir, "corrected-swcs-s3.zip")
-        self.graph.to_zipped_swcs(zip_path, min_size=50, sampling_rate=1)
+        self.graph.to_zipped_swcs(zip_path, min_size=50, sampling_rate=2)
         self.save_connections()
         self.write_metadata()
 
@@ -584,7 +584,7 @@ class InferenceEngine:
             computation graph if the model type is a gnn.
 
         """
-        batch = gnn_util.get_batch(
+        batch = ml_util.get_batch(
             graph, proposals, self.batch_size, flagged_proposals
         )
         return batch
@@ -626,13 +626,13 @@ class InferenceEngine:
             probability).
 
         """
-        preds = predict_with_gnn(self.model, dataset.data, self.device)
+        preds = predict(self.model, dataset.data, self.device)
         idxs = dataset.idxs_proposals["idx_to_id"]
         return {idxs[i]: p for i, p in enumerate(preds)}
 
 
 # --- Accepting Proposals ---
-def predict_with_gnn(model, data, device=None):
+def predict(model, data, device=None):
     """
     Generates predictions using a Graph Neural Network (GNN) on the given
     dataset.
@@ -659,7 +659,7 @@ def predict_with_gnn(model, data, device=None):
 
     """
     with torch.no_grad():
-        x, edge_index, edge_attr = gnn_util.get_inputs(data, device)
+        x, edge_index, edge_attr = ml_util.get_inputs(data, device)
         preds = sigmoid(model(x, edge_index, edge_attr))
     return ml_util.toCPU(preds[0:len(data["proposal"]["y"]), 0])
 
