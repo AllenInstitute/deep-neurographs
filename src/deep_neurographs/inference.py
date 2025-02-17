@@ -351,9 +351,7 @@ class InferencePipeline:
         """
         bucket_name = self.s3_dict["bucket_name"]
         for name in os.listdir(self.output_dir):
-            path = os.path.join(self.output_dir, name)
-            print(path)
-            if os.path.isdir(path):
+            if os.path.isdir(os.path.join(self.output_dir, name)):
                 dir_path = os.path.join(self.output_dir, name)
                 prefix = os.path.join(self.s3_dict["prefix"], name)
                 util.dir_to_s3(dir_path, bucket_name, prefix)
