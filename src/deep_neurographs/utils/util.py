@@ -9,19 +9,20 @@ Miscellaneous helper routines.
 
 """
 
-import json
-import math
-import os
-import shutil
+from concurrent.futures import ThreadPoolExecutor
+from google.cloud import storage
 from io import BytesIO
 from random import sample
 from zipfile import ZipFile
 
 import boto3
+import json
+import math
 import networkx as nx
 import numpy as np
+import os
 import psutil
-from google.cloud import storage
+import shutil
 
 from deep_neurographs.utils import graph_util as gutil
 
@@ -392,18 +393,43 @@ def write_txt(path, contents):
     f.close()
 
 
-def write_to_s3(local_path, bucket_name, prefix):
+def dir_to_s3(dir_path, bucket_name, prefix):
     """
-    Writes a single file on local machine to an s3 bucket.
+    Writes a directory on the local machine to an S3 bucket.
+
+    Parameters
+    ----------
+    dir_path : str
+        Path to directory to be written to S3.
+    bucket_name : str
+        Name of S3 bucket.
+    prefix : str
+        Path within S3 bucket.
+
+    Returns
+    -------
+    None
+
+    """
+    with ThreadPoolExecutor() as executor:
+        for name in os.listdir(dir_path):
+            local_path = os.path.join(dir_path, name)
+            s3_path = os.path.join(prefix, name)
+            executor.submit(file_to_s3, local_path, bucket_name, s3_path)
+
+
+def file_to_s3(local_path, bucket_name, prefix):
+    """
+    Writes a single file on the local machine to an S3 bucket.
 
     Parameters
     ----------
     local_path : str
-        Path to file to be written to s3.
+        Path to file to be written to S3.
     bucket_name : str
-        Name of s3 bucket.
+        Name of S3 bucket.
     prefix : str
-        Path within s3 bucket.
+        Path within S3 bucket.
 
     Returns
     -------

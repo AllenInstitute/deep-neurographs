@@ -20,8 +20,7 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
-from torch.nn import BCEWithLogitsLoss
-from torch.nn.functional import sigmoid
+from torch import nn
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 
@@ -291,7 +290,7 @@ class Trainer:
 
         """
         # Instance attributes
-        self.criterion = BCEWithLogitsLoss()
+        self.criterion = nn.BCEWithLogitsLoss()
         self.device = device
         self.n_epochs = n_epochs
         self.writer = SummaryWriter()
