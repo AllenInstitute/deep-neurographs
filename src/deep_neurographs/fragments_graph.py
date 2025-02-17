@@ -29,6 +29,7 @@ information into the graph structure.
 
 """
 
+from concurrent.futures import as_completed, ThreadPoolExecutor
 from copy import deepcopy
 from io import StringIO
 from numpy import concatenate
@@ -37,6 +38,7 @@ from tqdm import tqdm
 
 import networkx as nx
 import numpy as np
+import os
 import zipfile
 
 from deep_neurographs import proposal_generation
@@ -1024,6 +1026,61 @@ class FragmentsGraph(nx.Graph):
             return None
 
     # --- write graph to swcs ---
+    def to_zipped_swcs_parallelized(
+        self,
+        swc_dir,
+        min_size=0,
+        sampling_rate=2,
+    ):
+        # Initializations
+        n_connected_components = nx.number_connected_components(self)
+        batch_size = n_connected_components / 1000
+        util.mkdir(swc_dir)
+
+        # Main
+        cnt = 0
+        batch = list()
+        threads = list()
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            for nodes in nx.connected_components(self):
+                batch.append(nodes)
+                if len(batch) > batch_size:
+                    # Zip batch
+                    zip_path = os.path.join(swc_dir, f"{cnt}.zip")
+                    threads.append(
+                        executor.submit(
+                            self.batch_to_zipped_swcs,
+                            batch,
+                            zip_path,
+                            min_size,
+                            sampling_rate
+                        )
+                    )
+
+                    # Reset batch
+                    batch = list()
+                    cnt += 1
+
+            # Watch progress
+            pbar = tqdm(total=len(threads), desc="Write SWCs")
+            for _ in as_completed(threads):
+                pbar.update(1)
+
+    def batch_to_zipped_swcs(
+        self, nodes_list, zip_path, min_size=0, sampling_rate=1
+    ):
+        with zipfile.ZipFile(zip_path, "w") as zip_writer:
+            cnt = 0
+            for nodes in nodes_list:
+                root = util.sample_once(nodes)
+                if self.path_length(root) > min_size:
+                    self.nodes_to_zipped_swc(
+                        zip_writer, nodes, sampling_rate=sampling_rate
+                    )
+                    cnt += 1
+            return cnt
+
     def to_zipped_swcs(
         self,
         zip_path,
@@ -1037,7 +1094,7 @@ class FragmentsGraph(nx.Graph):
             for nodes in nx.connected_components(self):
                 root = util.sample_once(nodes)
                 if self.path_length(root) > min_size:
-                    self.to_zipped_swc(
+                    self.nodes_to_zipped_swc(
                         zip_writer,
                         nodes,
                         color=color,
@@ -1047,7 +1104,7 @@ class FragmentsGraph(nx.Graph):
                     cnt += 1
             return cnt
 
-    def to_zipped_swc(
+    def nodes_to_zipped_swc(
         self,
         zip_writer,
         nodes,

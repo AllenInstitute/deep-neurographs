@@ -187,7 +187,7 @@ class InferencePipeline:
             self.generate_proposals(radius)
             self.classify_proposals()
             self.report_graph(prefix="Current")
-        self.save_results(round_id=round_id)
+        self.save_results()
 
         # Finish
         t, unit = util.time_writer(time() - t0)
@@ -228,11 +228,10 @@ class InferencePipeline:
         self.filter_fragments()
 
         # Save valid labels and current graph
-        swcs_path = os.path.join(self.output_dir, "processed-swcs.zip")
+        swc_dir = os.path.join(self.output_dir, "swcs")
         valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        n_saved = self.graph.to_zipped_swcs(swcs_path, sampling_rate=4)
+        self.graph.to_zipped_swcs_parallelized(swc_dir, sampling_rate=4)
         self.graph.save_labels(valid_labels_path)
-        self.report(f"# SWCs Saved: {n_saved}")
 
         # Report results
         t, unit = util.time_writer(time() - t0)
@@ -328,8 +327,8 @@ class InferencePipeline:
 
         """
         # Save result on local machine
-        zip_path = os.path.join(self.output_dir, "corrected-swcs-s3.zip")
-        self.graph.to_zipped_swcs(zip_path, min_size=50, sampling_rate=2)
+        swc_dir = os.path.join(self.output_dir, "corrected-swcs")
+        self.graph.to_zipped_swcs_parallelized(swc_dir, min_size=50)
         self.save_connections()
         self.write_metadata()
 
@@ -351,11 +350,17 @@ class InferencePipeline:
 
         """
         bucket_name = self.s3_dict["bucket_name"]
-        for filename in os.listdir(self.output_dir):
-            if "processed-swcs.zip" not in filename:
-                local_path = os.path.join(self.output_dir, filename)
-                s3_path = os.path.join(self.s3_dict["prefix"], filename)
-                util.write_to_s3(local_path, bucket_name, s3_path)
+        for name in os.listdir(self.output_dir):
+            path = os.path.join(self.output_dir, name)
+            print(path)
+            if os.path.isdir(path):
+                dir_path = os.path.join(self.output_dir, name)
+                prefix = os.path.join(self.s3_dict["prefix"], name)
+                util.dir_to_s3(dir_path, bucket_name, prefix)
+            else:
+                local_path = os.path.join(self.output_dir, name)
+                s3_path = os.path.join(self.s3_dict["prefix"], name)
+                util.file_to_s3(local_path, bucket_name, s3_path)
         print("Results written to S3 prefix -->", self.s3_dict["prefix"])
 
     # --- io ---
