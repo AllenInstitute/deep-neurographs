@@ -66,7 +66,7 @@ class GraphConfig:
     min_size: float = 30.0
     node_spacing: int = 2
     proposals_per_leaf: int = 3
-    prune_depth: float = 16.0
+    prune_depth: float = 24.0
     remove_doubles: bool = False
     remove_high_risk_merges: bool = False
     search_radius: float = 20.0
