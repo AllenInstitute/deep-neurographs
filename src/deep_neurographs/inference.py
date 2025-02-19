@@ -237,6 +237,7 @@ class InferencePipeline:
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nInitial")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
+        stop
 
     def filter_fragments(self):
         self.graph = fragment_filtering.remove_curvy(self.graph, 200)
@@ -395,19 +396,21 @@ class InferencePipeline:
         None
 
         """
+        use_somas = 
         metadata = {
             "date": datetime.today().strftime("%Y-%m-%d"),
             "brain_id": self.brain_id,
             "segmentation_id": self.segmentation_id,
             "min_fragment_size": f"{self.graph_config.min_size}um",
-            "model_name": os.path.basename(self.model_path),
+            "node_spacing": self.graph_config.node_spacing,
+            "remove_doubles": self.graph_config.remove_doubles,
+            "use_somas": self.segmentation_path and self.somas_path
             "complex_proposals": self.graph_config.complex_bool,
             "long_range_bool": self.graph_config.long_range_bool,
             "proposals_per_leaf": self.graph_config.proposals_per_leaf,
             "search_radius": f"{self.graph_config.search_radius}um",
+            "model_name": os.path.basename(self.model_path),
             "accept_threshold": self.ml_config.threshold,
-            "node_spacing": self.graph_config.node_spacing,
-            "remove_doubles": self.graph_config.remove_doubles,
         }
         path = os.path.join(self.output_dir, "metadata.json")
         util.write_json(path, metadata)
