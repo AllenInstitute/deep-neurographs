@@ -395,7 +395,6 @@ class InferencePipeline:
         None
 
         """
-        use_somas = 
         metadata = {
             "date": datetime.today().strftime("%Y-%m-%d"),
             "brain_id": self.brain_id,
@@ -403,7 +402,7 @@ class InferencePipeline:
             "min_fragment_size": f"{self.graph_config.min_size}um",
             "node_spacing": self.graph_config.node_spacing,
             "remove_doubles": self.graph_config.remove_doubles,
-            "use_somas": self.segmentation_path and self.somas_path
+            "use_somas": self.segmentation_path and self.somas_path,
             "complex_proposals": self.graph_config.complex_bool,
             "long_range_bool": self.graph_config.long_range_bool,
             "proposals_per_leaf": self.graph_config.proposals_per_leaf,
