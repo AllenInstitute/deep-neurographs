@@ -237,7 +237,6 @@ class InferencePipeline:
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nInitial")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
-        stop
 
     def filter_fragments(self):
         self.graph = fragment_filtering.remove_curvy(self.graph, 200)
