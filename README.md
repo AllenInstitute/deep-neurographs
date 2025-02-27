@@ -7,7 +7,7 @@
 ![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen?logo=codecov)
 ![Python](https://img.shields.io/badge/python->=3.7-blue?logo=python)
 
-GraphTrace is a Python library that automatically correct splits in fragmented neuron segmentations from whole-brain images.
+GraphTrace is a Python library that automatically corrects splits in fragmented neuron segmentations from whole-brain images.
 
 <p>
   <img src="imgs/result.png" width="900" alt="">
