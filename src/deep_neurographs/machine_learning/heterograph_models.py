@@ -15,8 +15,6 @@ import re
 import torch
 import torch.nn.init as init
 
-from deep_neurographs.machine_learning.models import ConvNet
-
 
 class HGAT(torch.nn.Module):
     """
@@ -187,7 +185,7 @@ class MultiModalHGAT(torch.nn.Module):
         dropout=0.2,
         heads_1=2,
         heads_2=2,
-        hidden_dim=128,
+        hidden_dim=256,
         patch_shape=(64, 64, 64),
     ):
         # Call parent class
@@ -341,7 +339,125 @@ class MultiModalHGAT(torch.nn.Module):
         return self.output(x_dict["proposal"])
 
 
-# --- Utils ---
+class ConvNet(nn.Module):
+    """
+    Convolutional neural network that classifies edge proposals given an image
+    patch.
+
+    """
+
+    def __init__(self, patch_shape, output_dim):
+        """
+        Constructs a ConvNet object.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        # Call parent class
+        nn.Module.__init__(self)
+
+        # Architecture
+        self.conv1 = self._init_conv_layer(2, 32)
+        self.conv2 = self._init_conv_layer(32, 64)
+        self.conv3 = self._init_conv_layer(64, 128)
+        self.output = nn.Sequential(
+            nn.Linear(85184, 2 * output_dim),
+            nn.LeakyReLU(),
+            nn.Dropout(0.2),            
+            nn.Linear(2 * output_dim, output_dim),
+        )
+
+        # Initialize weights
+        self.apply(self.init_weights)
+
+    def _init_conv_layer(self, in_channels, out_channels):
+        """
+        Initializes a convolutional layer.
+
+        Parameters
+        ----------
+        in_channels : int
+            Number of channels that are input to this convolutional layer.
+        out_channels : int
+            Number of channels that are output from this convolutional layer.
+
+        Returns
+        -------
+        torch.nn.Sequential
+            Sequence of operations that define this layer.
+
+        """
+        conv_layer = nn.Sequential(
+            nn.Conv3d(
+                in_channels,
+                out_channels,
+                kernel_size=3,
+                stride=1,
+                padding=0,
+            ),
+            nn.BatchNorm3d(out_channels),
+            nn.LeakyReLU(),
+            nn.Dropout(p=0.2),
+            nn.MaxPool3d(kernel_size=2, stride=2),
+        )
+        return conv_layer
+
+
+    @staticmethod
+    def init_weights(m):
+        """
+        Initializes the weights and biases of a given PyTorch layer.
+
+        Parameters
+        ----------
+        m : nn.Module
+            PyTorch layer or module.
+
+        Returns
+        -------
+        None
+
+        """
+        if isinstance(m, nn.Conv3d):
+            init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+            if m.bias is not None:
+                init.constant_(m.bias, 0)
+        elif isinstance(m, nn.Linear):
+            init.xavier_normal_(m.weight)
+            if m.bias is not None:
+                init.constant_(m.bias, 0)
+        elif isinstance(m, nn.BatchNorm3d):
+            init.constant_(m.weight, 1)
+            init.constant_(m.bias, 0)
+
+    def forward(self, x):
+        """
+        Passes an input vector "x" through this neural network.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input vector of features.
+
+        Returns
+        -------
+        torch.Tensor
+            Output of neural network.
+
+        """
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.output(vectorize(x))
+        return x
+
+
+# --- Helpers ---
 def init_gat_same(hidden_dim, edge_dim, heads):
     gat = nn_geometric.GATv2Conv(
         -1, hidden_dim, edge_dim=edge_dim, heads=heads
@@ -395,3 +511,21 @@ def reformat_edge_key(key):
 
 def rm_non_alphanumeric(s):
     return re.sub(r'\W+', '', s)
+
+
+def vectorize(tensor):
+    """
+    Transforms a tensor into a vector.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        Tensor to be transformed.
+
+    Returns
+    -------
+    torch.Tensor
+        Vectorized input tensor.
+
+    """
+    return tensor.view(tensor.size(0), -1)
