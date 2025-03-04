@@ -29,7 +29,7 @@ import random
 import torch
 
 from deep_neurographs.fragments_graph import FragmentsGraph
-from deep_neurographs.machine_learning import heterograph_datasets
+from deep_neurographs.machine_learning import datasets
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator
 )
@@ -237,9 +237,7 @@ class FragmentsGraphDataset:
                 # Add dataset
                 features = self.extract_features(key, batch)
                 batches.append(
-                    heterograph_datasets.init(
-                        self.graphs[key], features,  batch["graph"]
-                    )
+                    datasets.init(self.graphs[key], features,  batch["graph"])
                 )
         return batches
 
