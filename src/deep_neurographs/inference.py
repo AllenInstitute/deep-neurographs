@@ -41,7 +41,7 @@ from tqdm import tqdm
 
 from deep_neurographs import fragment_filtering
 from deep_neurographs.fragments_graph import FragmentsGraph
-from deep_neurographs.machine_learning import heterograph_datasets
+from deep_neurographs.machine_learning import datasets
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator,
 )
@@ -612,7 +612,7 @@ class InferenceEngine:
 
         """
         features = self.feature_generator.run(graph, batch, self.radius)
-        return heterograph_datasets.init(graph, features,  batch["graph"])
+        return datasets.init(graph, features,  batch["graph"])
 
     def predict(self, dataset):
         """

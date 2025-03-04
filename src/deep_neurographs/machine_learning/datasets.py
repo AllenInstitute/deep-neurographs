@@ -48,12 +48,9 @@ def init(graph, features, computation_graph):
 
     """
     # Check for groundtruth
-    if graph.gt_accepts is not None:
-        gt_accepts = graph.gt_accepts
-    else:
-        gt_accepts = set()
+    gt_accepts = graph.gt_accepts if graph.gt_accepts is not None else set()
 
-    # Extract features
+    # Extract features -- rewrite as build_feature_matrix
     idxs, x_dict = dict(), dict()
     x_dict["branches"], _, idxs["branches"] = get_matrix(features["branches"])
     x_dict["proposals"], y_proposals, idxs["proposals"] = get_matrix(
@@ -71,11 +68,11 @@ def init(graph, features, computation_graph):
     # Initialize dataset
     proposals = list(features["proposals"].keys())
     if is_multimodel:
-        heterograph_dataset_class = HeteroGraphMultiModalDataset
+        Dataset = HeteroGraphMultiModalDataset
     else:
-        heterograph_dataset_class = HeteroGraphDataset
+        Dataset = HeteroGraphDataset
 
-    heterograph_dataset = heterograph_dataset_class(
+    dataset = Dataset(
         computation_graph,
         proposals,
         x_dict,
