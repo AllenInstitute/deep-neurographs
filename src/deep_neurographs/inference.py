@@ -359,6 +359,7 @@ class InferencePipeline:
                 local_path = os.path.join(self.output_dir, name)
                 s3_path = os.path.join(self.s3_dict["prefix"], name)
                 util.file_to_s3(local_path, bucket_name, s3_path)
+        prefix = bucket_name + "/" + self.s3_dict["prefix"] + "/corrected-swcs/"
         print("Results written to S3 prefix -->", self.s3_dict["prefix"])
 
     # --- io ---

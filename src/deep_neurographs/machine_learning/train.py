@@ -273,14 +273,12 @@ class Trainer:
 
     """
 
-    def __init__(self, device="cuda", lr=1e-4, n_epochs=1000):
+    def __init__(self, device="cuda", n_epochs=1000):
         """
         Constructs a GraphTrainer object.
 
         Parameters
         ----------
-        lr : float, optional
-            Learning rate. The default is 1e-4.
         n_epochs : int
             Number of epochs. The default is 1000.
 
@@ -295,7 +293,7 @@ class Trainer:
         self.n_epochs = n_epochs
         self.writer = SummaryWriter()
 
-    def run(self, model, graph_dataset, batch_size):
+    def run(self, model, graph_dataset, batch_size, lr):
         """
         Trains a graph neural network in the case where "datasets" is a
         dictionary of datasets such that each corresponds to a distinct graph.
@@ -311,8 +309,9 @@ class Trainer:
 
         """
         # Initializations
-        self.optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
-        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=25)
+        model.to(self.device)
+        self.optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=50)
 
         # Main
         best_f1 = 0

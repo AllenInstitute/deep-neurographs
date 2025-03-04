@@ -121,7 +121,7 @@ def get_inputs(data, device="cpu"):
         A data object with the following attributes:
             - x_dict: Dictionary of node features for different node types.
             - edge_index_dict: Dictionary of edge indices for edge types.
-             - edge_attr_dict: Dictionary of edge attributes for edge types.
+            - edge_attr_dict: Dictionary of edge attributes for edge types.
     device : str, optional
         Target device for the data, 'cuda' for GPU and 'cpu' for CPU. The
         default is "cpu".
@@ -130,9 +130,9 @@ def get_inputs(data, device="cpu"):
     --------
     tuple:
         Tuple containing the following:
-        - x (dict): Node features dictionary.
-        - edge_index (dict): Edge indices dictionary.
-        - edge_attr (dict): Edge attributes dictionary.
+            - x (dict): Node features dictionary.
+            - edge_index (dict): Edge indices dictionary.
+            - edge_attr (dict): Edge attributes dictionary.
 
     """
     data.to(device)
