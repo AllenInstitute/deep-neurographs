@@ -405,8 +405,6 @@ class Trainer:
                 print(scores + "  --  New Best!")
                 best_f1 = val_f1
                 self.save_model(model, best_f1)
-            else:
-                print(scores)
 
     def predict(self, model, data):
         """
