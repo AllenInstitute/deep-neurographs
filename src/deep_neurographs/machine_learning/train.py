@@ -355,6 +355,8 @@ class Trainer:
         model.to(self.device)
         self.optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=25)
+
+        # Validation data
         validation_batches, example_cnt = graph_dataset.extract_validation(
             self.batch_size, self.validation_percent
         )

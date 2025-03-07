@@ -112,8 +112,8 @@ class HeteroGraphDataset:
         y_proposals : numpy.ndarray
             Ground truth of proposals.
         idx_to_id : dict
-            Dictionary that maps an edge id in "graph" to its
-            index in either x_branches or x_proposals.
+            Dictionary that maps an edge id in "graph" to its index
+            in either x_branches or x_proposals.
 
         Returns
         -------
