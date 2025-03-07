@@ -25,6 +25,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 
 import numpy as np
+import os
 import random
 import torch
 
@@ -33,7 +34,7 @@ from deep_neurographs.machine_learning import datasets
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator
 )
-from deep_neurographs.utils import ml_util
+from deep_neurographs.utils import ml_util, util
 
 
 class FragmentsGraphDataset:
@@ -235,14 +236,37 @@ class FragmentsGraphDataset:
                 proposals -= batch["proposals"]
 
                 # Add dataset
+                accepts = self.graphs[key].gt_accepts
                 features = self.extract_features(key, batch)
-                batches.append(
-                    datasets.init(self.graphs[key], features,  batch["graph"])
-                )
+                dataset = datasets.init(features, batch["graph"], accepts)
+                batches.append((key, dataset))
         return batches
 
-    def generate_validation(self, validation_percent):
-        pass
+    def extract_validation(self, batch_size, validation_percent):
+        # Initializations
+        n_proposals = self.n_proposals() * validation_percent
+        batches = self.generate_batches(batch_size)
+        validation_batches = list()
+        keys = set()
+
+        # Populate validation set
+        cnt = 0
+        while cnt < n_proposals:
+            key, dataset = batches.pop()
+            validation_batches.append((key, dataset))
+            cnt += dataset.n_proposals()
+            keys.add(key)
+
+        # Add batches from same graphs
+        while len(batches) > 0:
+            key, dataset = batches.pop()
+            if key in keys:
+                validation_batches.append((key, dataset))
+
+        # Delete graphs in validation set
+        for key in keys:
+            del self.graphs[key]
+        return validation_batches, cnt
 
     # --- Helpers ---
     def extract_features(self, key, batch):
@@ -271,7 +295,15 @@ class Trainer:
 
     """
 
-    def __init__(self, device="cuda", n_epochs=1000):
+    def __init__(
+        self,
+        output_dir,
+        batch_size=64,
+        device="cuda",
+        lr=1e-4,
+        n_epochs=1000,
+        validation_percent=0.15
+    ):
         """
         Constructs a GraphTrainer object.
 
@@ -279,19 +311,31 @@ class Trainer:
         ----------
         n_epochs : int
             Number of epochs. The default is 1000.
+        ...
 
         Returns
         -------
         None.
 
         """
+        # Initializations
+        exp_name = "session-" + datetime.today().strftime("%Y%m%d_%H%M")
+        log_dir = os.path.join(output_dir, "tensorboards", exp_name)
+        model_dir = os.path.join(output_dir, "saved-models", exp_name)
+        util.mkdir(output_dir)
+        util.mkdir(model_dir)
+
         # Instance attributes
+        self.batch_size = batch_size
         self.criterion = nn.BCEWithLogitsLoss()
         self.device = device
+        self.lr = lr
         self.n_epochs = n_epochs
-        self.writer = SummaryWriter()
+        self.model_dir = model_dir
+        self.validation_percent = validation_percent
+        self.writer = SummaryWriter(log_dir=log_dir)
 
-    def run(self, model, graph_dataset, batch_size, lr):
+    def run(self, model, graph_dataset):
         """
         Trains a graph neural network in the case where "datasets" is a
         dictionary of datasets such that each corresponds to a distinct graph.
@@ -303,13 +347,20 @@ class Trainer:
         Returns
         -------
         torch.nn.Module
-            Graph neural network that has been fit onto "datasets".
+            Graph neural network that has been fit onto the given graph
+            dataset.
 
         """
         # Initializations
         model.to(self.device)
-        self.optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
-        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=50)
+        self.optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
+        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=25)
+        validation_batches, example_cnt = graph_dataset.extract_validation(
+            self.batch_size, self.validation_percent
+        )
+        self.save_validation_keys(validation_batches)
+        print("# Train Examples:", graph_dataset.n_proposals())
+        print("# Validation Examples:", example_cnt)
 
         # Main
         best_f1 = 0
@@ -318,11 +369,11 @@ class Trainer:
             # Train
             y, hat_y = [], []
             model.train()
-            for dataset in graph_dataset.generate_batches(batch_size):
+            for _, dataset in graph_dataset.generate_batches(self.batch_size):
                 # Forward pass
                 hat_y_i, y_i = self.predict(model, dataset.data)
                 loss = self.criterion(hat_y_i, y_i)
-                self.writer.add_scalar("loss", loss, epoch)
+                self.writer.add_scalar("loss", loss, n_upds)
 
                 # Backward pass
                 self.optimizer.zero_grad()
@@ -334,25 +385,26 @@ class Trainer:
                 y.extend(ml_util.toCPU(y_i))
                 hat_y.extend(ml_util.toCPU(hat_y_i))
 
-            self.compute_metrics(y, hat_y, "train", epoch)
+            train_f1 = self.compute_metrics(y, hat_y, "train", epoch)
             self.scheduler.step()
 
             # Validate
-            if n_upds % 1 == 0:
-                continue
-                model.eval()
-                y, hat_y = [], []
-                for dataset in validation_datasets:
-                    hat_y_i, y_i = self.predict(model, dataset.data)
-                    y.extend(ml_util.toCPU(y_i))
-                    hat_y.extend(ml_util.toCPU(hat_y_i))
-                f1 = self.compute_metrics(y, hat_y, "val", epoch)
+            model.eval()
+            y, hat_y = [], []
+            for _, dataset in validation_batches:
+                hat_y_i, y_i = self.predict(model, dataset.data)
+                y.extend(ml_util.toCPU(y_i))
+                hat_y.extend(ml_util.toCPU(hat_y_i))
 
-                # Check for best
-                print(f1)
-                if f1 > best_f1:
-                    best_f1 = f1
-                    print("New Best F1:", best_f1)
+            # Check for new best model
+            val_f1 = self.compute_metrics(y, hat_y, "val", epoch)
+            scores = f"Epoch {epoch}:  train_f1={train_f1}  val_f1={val_f1}"
+            if val_f1 > best_f1:
+                print(scores + "  --  New Best!")
+                best_f1 = val_f1
+                self.save_model(model, best_f1)
+            else:
+                print(scores)
 
     def predict(self, model, data):
         """
@@ -414,14 +466,21 @@ class Trainer:
         self.writer.add_scalar(prefix + "_precision:", precision, epoch)
         self.writer.add_scalar(prefix + "_recall:", recall, epoch)
         self.writer.add_scalar(prefix + "_f1:", f1, epoch)
-        return f1
+        return round(f1, 4)
+
+    def save_model(self, model, score):
+        date = datetime.today().strftime("%Y%m%d")
+        filename = f"GraphNeuralNet-{date}-{round(score, 4)}.pth"
+        path = os.path.join(self.model_dir, filename)
+        torch.save(model.state_dict(), path)
+
+    def save_validation_keys(self, validation_batches):
+        keys = set([key for key, _ in validation_batches])
+        path = os.path.join(self.model_dir, "validation-examples.txt")
+        util.write_list(path, keys)
 
 
-# -- util --
-def split_train_validation():
-    pass
-
-
+# -- Helpers --
 def truncate(hat_y, y):
     """
     Truncates "hat_y" so that this tensor has the same shape as "y". Note this

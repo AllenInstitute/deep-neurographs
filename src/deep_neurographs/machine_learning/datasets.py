@@ -27,19 +27,19 @@ DTYPE = torch.float32
 
 
 # Wrapper
-def init(graph, features, computation_graph):
+def init(features, graph, gt_accepts=set()):
     """
     Initializes a dataset that can be used to train a graph neural network.
 
     Parameters
     ----------
-    graph : FragmentsGraph
-        Graph that dataset is built from.
     features : dict
         Dictionary that contains different types of feature vectors for nodes,
         edges, and proposals.
-    computation_graph : networkx.Graph
+    graph : networkx.Graph
         Graph used by gnn to classify proposals.
+    gt_accepts : Set[Frozenset[int]]
+        Ground truth set of proposals are accepts.
 
     Returns
     -------
@@ -47,9 +47,6 @@ def init(graph, features, computation_graph):
         Custom dataset.
 
     """
-    # Check for groundtruth
-    gt_accepts = graph.gt_accepts if graph.gt_accepts is not None else set()
-
     # Extract features -- rewrite as build_feature_matrix
     idxs, x_dict = dict(), dict()
     x_dict["branches"], _, idxs["branches"] = get_matrix(features["branches"])
@@ -73,13 +70,13 @@ def init(graph, features, computation_graph):
         Dataset = HeteroGraphDataset
 
     dataset = Dataset(
-        computation_graph,
+        graph,
         proposals,
         x_dict,
         y_proposals,
         idxs,
     )
-    return heterograph_dataset
+    return dataset
 
 
 # Datasets
@@ -91,7 +88,7 @@ class HeteroGraphDataset:
 
     def __init__(
         self,
-        computation_graph,
+        graph,
         proposals,
         x_dict,
         y_proposals,
@@ -102,20 +99,20 @@ class HeteroGraphDataset:
 
         Parameters
         ----------
-        computation_graph : networkx.Graph
+        graph : networkx.Graph
             Graph used by gnn to classify proposals.
         proposals : list
             List of proposals to be classified.
         x_nodes : numpy.ndarray
-            Feature matrix generated from nodes in "computation_graph".
+            Feature matrix generated from nodes in "graph".
         x_branches : numpy.ndarray
-            Feature matrix generated from branches in "computation_graph".
+            Feature matrix generated from branches in "graph".
         x_proposals : numpy.ndarray
-            Feature matrix generated from "proposals" in "computation_graph".
+            Feature matrix generated from "proposals" in "graph".
         y_proposals : numpy.ndarray
             Ground truth of proposals.
         idx_to_id : dict
-            Dictionary that maps an edge id in "computation_graph" to its
+            Dictionary that maps an edge id in "graph" to its
             index in either x_branches or x_proposals.
 
         Returns
@@ -126,7 +123,7 @@ class HeteroGraphDataset:
         # Conversion idxs
         self.idxs_branches = idxs["branches"]
         self.idxs_proposals = idxs["proposals"]
-        self.computation_graph = computation_graph
+        self.graph = graph
         self.proposals = proposals
 
         # Types
@@ -279,6 +276,22 @@ class HeteroGraphDataset:
         edge_type = ("proposal", "edge", "proposal")
         return self.data[edge_type]["x"].size(1)
 
+    def n_proposals(self):
+        """
+        Counts the number of proposals in the dataset.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Number of proposals across all graphs in self.
+
+        """
+        return len(self.proposals)
+
     # --- Set Edges ---
     def proposal_to_proposal(self):
         """
@@ -320,7 +333,7 @@ class HeteroGraphDataset:
 
         """
         edge_index = []
-        for e1, e2 in nx.line_graph(self.computation_graph).edges:
+        for e1, e2 in nx.line_graph(self.graph).edges:
             e1_edge_bool = frozenset(e1) not in self.proposals
             e2_edge_bool = frozenset(e2) not in self.proposals
             if e1_edge_bool and e2_edge_bool:
@@ -349,11 +362,11 @@ class HeteroGraphDataset:
         for p in self.proposals:
             i, j = tuple(p)
             v1 = self.idxs_proposals["id_to_idx"][frozenset(p)]
-            for k in self.computation_graph.neighbors(i):
+            for k in self.graph.neighbors(i):
                 if frozenset((i, k)) not in self.proposals:
                     v2 = self.idxs_branches["id_to_idx"][frozenset((i, k))]
                     edge_index.extend([[v2, v1]])
-            for k in self.computation_graph.neighbors(j):
+            for k in self.graph.neighbors(j):
                 if frozenset((j, k)) not in self.proposals:
                     v2 = self.idxs_branches["id_to_idx"][frozenset((j, k))]
                     edge_index.extend([[v2, v1]])
@@ -412,7 +425,7 @@ class HeteroGraphDataset:
 class HeteroGraphMultiModalDataset(HeteroGraphDataset):
     def __init__(
         self,
-        computation_graph,
+        graph,
         proposals,
         x_dict,
         y_proposals,
@@ -420,7 +433,7 @@ class HeteroGraphMultiModalDataset(HeteroGraphDataset):
     ):
         # Call parent class
         super().__init__(
-            computation_graph,
+            graph,
             proposals,
             x_dict,
             y_proposals,
