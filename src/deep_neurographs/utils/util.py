@@ -393,6 +393,27 @@ def write_txt(path, contents):
     f.close()
 
 
+def write_list(path, my_list):
+    """
+    Writes each item in a list to a text file, with each item on a new line.
+
+    Parameters
+    ----------
+    path : str
+        Path where text file is to be written.
+    my_list
+        The list of items to write to the file.
+
+    Returns
+    -------
+    None
+
+    """
+    with open(path, "w") as file:
+        for item in my_list:
+            file.write(f"{item}\n")
+
+
 def dir_to_s3(dir_path, bucket_name, prefix):
     """
     Writes a directory on the local machine to an S3 bucket.

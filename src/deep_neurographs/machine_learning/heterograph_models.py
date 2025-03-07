@@ -34,7 +34,7 @@ class HGAT(torch.nn.Module):
         edge_dict,
         device=None,
         hidden_dim=96,
-        dropout=0.25,
+        dropout=0.2,
         heads_1=2,
         heads_2=2,
     ):
@@ -54,7 +54,9 @@ class HGAT(torch.nn.Module):
 
         self.input_edges = nn.ModuleDict()
         for key, d in edge_dict.items():
-            self.input_edges[str(key)] = nn.Linear(d, hidden_dim, device=device)
+            self.input_edges[str(key)] = nn.Linear(
+                d, hidden_dim, device=device
+            )
 
         # Layer dimensions
         hidden_dim_1 = hidden_dim
@@ -367,9 +369,9 @@ class ConvNet(nn.Module):
         self.conv2 = self._init_conv_layer(32, 64)
         self.conv3 = self._init_conv_layer(64, 128)
         self.output = nn.Sequential(
-            nn.Linear(85184, 2 * output_dim),
+            nn.Linear(46656, 2 * output_dim),
             nn.LeakyReLU(),
-            nn.Dropout(0.2),            
+            nn.Dropout(0.2),
             nn.Linear(2 * output_dim, output_dim),
         )
 
@@ -397,7 +399,7 @@ class ConvNet(nn.Module):
             nn.Conv3d(
                 in_channels,
                 out_channels,
-                kernel_size=3,
+                kernel_size=5,
                 stride=1,
                 padding=0,
             ),
@@ -407,7 +409,6 @@ class ConvNet(nn.Module):
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
         return conv_layer
-
 
     @staticmethod
     def init_weights(m):
