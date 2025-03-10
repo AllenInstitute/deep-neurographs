@@ -63,7 +63,6 @@ class GraphDataset:
         self.feature_generators = dict()
         self.graphs = dict()
         self.is_train_data = is_train_data
-        self.validation_keys = set()
 
         # Configs
         self.graph_config = config.graph_config
@@ -77,9 +76,9 @@ class GraphDataset:
                 img_path,
                 self.ml_config.multiscale,
                 anisotropy=self.ml_config.anisotropy,
-                is_multimodal=self.is_train_data,
+                is_multimodal=self.ml_config.is_multimodal,
                 segmentation_path=segmentation_path,
-                transform=self.ml_config.transform,
+                transform=self.is_train_data,
             )
 
     def __len__(self):
@@ -223,7 +222,7 @@ class GraphDataset:
         Generates a list of batches for training a graph neural network. Each
         batch is a tuple that contains the following:
             - key (str): Unique identifier of a graph in self.graphs.
-            - computation_graph (networkx.Graph): GNN computation graph.
+            - graph (networkx.Graph): GNN computation graph.
             - proposals (List[frozenset[int]]): List of proposals in graph.
 
         Parameters
@@ -278,6 +277,10 @@ class GraphDataset:
         return features
 
 
+class GraphDataloader:
+    pass
+
+
 class Trainer:
     """
     Custom class that trains graph neural networks.
@@ -320,7 +323,7 @@ class Trainer:
         self.model_dir = model_dir
         self.writer = SummaryWriter(log_dir=log_dir)
 
-    def run(self, model, train_dataset):
+    def run(self, model, train_dataset, validation_dataset):
         """
         Trains a graph neural network in the case where "datasets" is a
         dictionary of datasets such that each corresponds to a distinct graph.
@@ -339,11 +342,11 @@ class Trainer:
         # Initializations
         model.to(self.device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
-        scheduler = CosineAnnealingLR(optimizer, T_max=25)
+        scheduler = CosineAnnealingLR(optimizer, T_max=40)
 
         print("\nTraining...")
         print("# Train Examples:", train_dataset.n_proposals())
-        print("# Validation Examples:", example_cnt)
+        print("# Validation Examples:", validation_dataset.n_proposals())
 
         # Main
         best_f1 = 0
@@ -355,7 +358,7 @@ class Trainer:
                 # Forward pass
                 hat_y_i, y_i = self.predict(model, dataset.data)
                 loss = self.criterion(hat_y_i, y_i)
-                self.writer.add_scalar("loss", loss, n_upds)
+                self.writer.add_scalar("loss", loss, epoch)
 
                 # Backward pass
                 optimizer.zero_grad()

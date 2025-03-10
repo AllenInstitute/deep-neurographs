@@ -825,15 +825,7 @@ class FragmentsGraph(nx.Graph):
         xyz = self.proposal_midpoint(proposal)
         return len(self.query_kdtree(xyz, radius, "leaf")) - 1
 
-    # --- miscellaneous ---
-    def edge_length(self, edge):
-        length = 0
-        for i in range(1, len(self.edges[edge]["xyz"])):
-            length += geometry.dist(
-                self.edges[edge]["xyz"][i], self.edges[edge]["xyz"][i - 1]
-            )
-        return length
-
+    # --- Helpers ---
     def dist(self, i, j):
         """
         Computes the Euclidean distance between nodes "i" and "j".
@@ -843,7 +835,7 @@ class FragmentsGraph(nx.Graph):
         i : int
             Node ID.
         j : int
-            Nonde ID.
+            Node ID.
 
         Returns
         -------
@@ -853,14 +845,13 @@ class FragmentsGraph(nx.Graph):
         """
         return geometry.dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
-    def find_fragments_by_ids(self, swc_ids):
-        fragments = dict()
-        for nodes in nx.connected_components(self):
-            i = util.sample_once(nodes)
-            if self.nodes[i]["swc_id"] in swc_ids:
-                swc_id = self.nodes[i]["swc_id"]
-                fragments[swc_id] = nodes
-        return fragments
+    def edge_length(self, edge):
+        length = 0
+        for i in range(1, len(self.edges[edge]["xyz"])):
+            length += geometry.dist(
+                self.edges[edge]["xyz"][i], self.edges[edge]["xyz"][i - 1]
+            )
+        return length
 
     def get_leafs(self):
         """
@@ -927,7 +918,7 @@ class FragmentsGraph(nx.Graph):
             attr_ij = self.oriented_edge_attr((i, j), i, key=key)
             root = i
             while self.degree[j] == 2:
-                k = self.get_other_nb(j, root)
+                k = [k for k in self.neighbors(j) if k != root][0]
                 attr_jk = self.oriented_edge_attr((j, k), j, key=key)
                 if key == "xyz":
                     attr_ij = np.vstack([attr_ij, attr_jk])
@@ -938,53 +929,12 @@ class FragmentsGraph(nx.Graph):
             attrs.append(attr_ij)
         return attrs
 
-    def get_other_nb(self, i, j):
-        """
-        Gets the other neighbor of node "i" which is not "j" such that "j" is
-        a neighbor of node "i".
-
-        Parameters
-        ----------
-        i : int
-            Node with degree 2.
-        j : int
-            Neighbor of node "i"
-
-        Returns
-        -------
-        int
-            Neighbor of node "i" which is not "j".
-
-        """
-        assert self.degree[i] == 2, "deg(i) != 2."
-        nbs = list(self.neighbors(i))
-        nbs.remove(j)
-        return nbs[0]
-
     def oriented_edge_attr(self, edge, i, key="xyz"):
         assert i in edge
         if (self.edges[edge][key][0] == self.nodes[i][key]).all():
             return self.edges[edge][key]
         else:
             return np.flip(self.edges[edge][key], axis=0)
-
-    def leaf_neighbor(self, i):
-        """
-        Gets the unique neighbor of the leaf node "i".
-
-        Parameters
-        ----------
-        i : int
-            Leaf node.
-
-        Returns
-        -------
-        int
-             Unique neighbor of the leaf node "i".
-
-        """
-        assert self.degree[i] == 1
-        return list(self.neighbors(i))[0]
 
     def xyz_to_id(self, xyz, return_node=False):
         if tuple(xyz) in self.xyz_to_edge.keys():
