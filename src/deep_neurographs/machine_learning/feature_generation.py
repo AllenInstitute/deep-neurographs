@@ -22,9 +22,6 @@ from scipy.ndimage import zoom
 
 import numpy as np
 
-from deep_neurographs.machine_learning.augmentation import (
-       GeometricTransforms, IntensityTransforms
-)
 from deep_neurographs.utils import geometry_util, img_util, util
 from deep_neurographs.utils.img_util import TensorStoreReader, ZarrReader
 
@@ -46,7 +43,6 @@ class FeatureGenerator:
         anisotropy=(1.0, 1.0, 1.0),
         is_multimodal=False,
         segmentation_path=None,
-        transform=False,
     ):
         """
         Initializes object that generates features for a graph.
@@ -66,9 +62,6 @@ class FeatureGenerator:
         segmentation_path : str, optional
             Path to the segmentation assumed to be stored on a GCS bucket. The
             default is None.
-        transform : bool, optional
-            Indication of whether to apply data augmentation. The default is
-            False.
 
         Returns
         -------
@@ -83,7 +76,6 @@ class FeatureGenerator:
         self.anisotropy = anisotropy
         self.multiscale = multiscale
         self.is_multimodal = is_multimodal
-        self.transform = transform
 
         # Image readers
         self.img_patch_shape = self.set_patch_shape(multiscale)
@@ -94,14 +86,6 @@ class FeatureGenerator:
             self.labels_reader = self.init_img_reader(
                 segmentation_path, driver
             )
-
-        # Data augmentation (if applicable)
-        if transform:
-            self.transform = True
-            self.geometric_transforms = GeometricTransforms()
-            self.intensity_transforms = IntensityTransforms()
-        else:
-            self.transform = False
 
     @classmethod
     def set_patch_shape(cls, multiscale):
@@ -491,12 +475,6 @@ class FeatureGenerator:
         proposal_voxels = self.get_local_coordinates(center, proposal_xyz)
         label_patch = self.labels_reader.read(center, self.label_patch_shape)
         label_patch = self.relabel(label_patch, proposal_voxels, segment_ids)
-
-        # Apply augmentation
-        if self.transform:
-            img_patch, label_patch = self.apply_img_augmentation(
-                img_patch, label_patch
-            )
         return {proposal: np.stack([img_patch, label_patch], axis=0)}
 
     def get_local_coordinates(self, center_voxel, xyz_pts):
@@ -519,12 +497,7 @@ class FeatureGenerator:
         line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
         return geometry_util.fill_path(relabel_patch, line, val=3)
 
-    def apply_img_augmentation(self, img_patch, label_patch):
-        img_patch, label_patch = self.geometric_transforms(
-            img_patch, label_patch
-        )
-        img_patch = self.intensity_transforms(img_patch)
-        return img_patch, label_patch
+
 
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)

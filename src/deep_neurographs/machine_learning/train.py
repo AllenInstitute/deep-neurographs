@@ -13,6 +13,7 @@ To do: explain how the train pipeline is organized. how is the data organized?
 """
 
 from collections import defaultdict
+from copy import deepcopy
 from datetime import datetime
 from sklearn.metrics import (
     accuracy_score,
@@ -31,6 +32,9 @@ import torch
 
 from deep_neurographs.fragments_graph import FragmentsGraph
 from deep_neurographs.machine_learning import datasets
+from deep_neurographs.machine_learning.augmentation import (
+       GeometricTransforms, IntensityTransforms
+)
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator
 )
@@ -57,16 +61,23 @@ class GraphDataset:
 
     """
 
-    def __init__(self, config, is_train_data=True):
+    def __init__(self, config, transform=False):
         # Instance Attributes
         self.features = dict()
         self.feature_generators = dict()
         self.graphs = dict()
-        self.is_train_data = is_train_data
 
         # Configs
         self.graph_config = config.graph_config
         self.ml_config = config.ml_config
+
+        # Data augmentation (if applicable)
+        if transform:
+            self.transform = True
+            self.geometric_transforms = GeometricTransforms()
+            self.intensity_transforms = IntensityTransforms()
+        else:
+            self.transform = False
 
     def init_feature_generator(self, key, img_path, segmentation_path):
         brain_id, segmentation_id, _ = key
@@ -76,14 +87,14 @@ class GraphDataset:
                 img_path,
                 self.ml_config.multiscale,
                 anisotropy=self.ml_config.anisotropy,
-                is_multimodal=self.is_train_data,
+                is_multimodal=self.ml_config.is_multimodal,
                 segmentation_path=segmentation_path,
-                transform=self.is_train_data,
             )
 
+    # --- Data Properties ---
     def __len__(self):
         """
-        Counts the number of graphs in self.
+        Counts the number of graphs.
 
         Parameters
         ----------
@@ -92,14 +103,14 @@ class GraphDataset:
         Returns
         -------
         int
-            Number of graphs in self.
+            Number of graphs.
 
         """
         return len(self.graphs)
 
     def n_proposals(self):
         """
-        Counts the number of proposals across all graphs in self.
+        Counts the number of proposals.
 
         Parameters
         ----------
@@ -108,7 +119,7 @@ class GraphDataset:
         Returns
         -------
         int
-            Number of proposals across all graphs in self.
+            Number of proposals.
 
         """
         return np.sum([graph.n_proposals() for graph in self.graphs.values()])
@@ -125,7 +136,7 @@ class GraphDataset:
         Returns
         -------
         int
-            Number of accepted proposals in the ground truth across all graphs.
+            Number of accepted proposals in the ground truth.
 
         """
         cnts = [len(graph.gt_accepts) for graph in self.graphs.values()]
@@ -216,7 +227,8 @@ class GraphDataset:
             self.graph_config.search_radius
         )
         return features
-        
+
+    # --- Batch Generation ---
     def generate_batches(self, batch_size):
         """
         Generates a list of batches for training a graph neural network. Each
@@ -233,7 +245,7 @@ class GraphDataset:
         Returns
         -------
         List[tuple]
-            List of batches for training a graph neural network.
+            Batches for training a graph neural network.
 
         """
         # Initializations
@@ -252,12 +264,11 @@ class GraphDataset:
 
                 # Add dataset
                 accepts = self.graphs[key].gt_accepts
-                features = self.extract_features(key, batch)
+                features = self.get_features(key, batch)
                 dataset = datasets.init(features, batch["graph"], accepts)
                 yield (key, dataset)
 
-    # --- Helpers ---
-    def extract_features(self, key, batch):
+    def get_features(self, key, batch):
         # Node features
         features = defaultdict(lambda: defaultdict(dict))
         for i in batch["graph"].nodes:
@@ -273,8 +284,31 @@ class GraphDataset:
         # Image patches
         if self.ml_config.is_multimodal:
             for p in batch["proposals"]:
-                features["patches"][p] = self.features[key]["patches"][p]
+                patches = deepcopy(self.features[key]["patches"][p])
+                if self.transform:
+                    features["patches"][p] = self.apply_transforms(patches)
+                else:
+                    features["patches"][p] = patches
         return features
+
+    def apply_transforms(self, patches):
+        patches[0,...], patches[1,...] = self.geometric_transforms(
+            patches[0,...], patches[1,...]
+        )
+        patches[0,...] = self.intensity_transforms(patches[0,...])
+        return patches
+
+
+class GraphDataLoader:
+
+    def __init__(self, graph_dataset, batch_size=32, shuffle=True):
+        # Instance attributes
+        self.batch_size = batch_size
+        self.graph_dataset = graph_dataset
+        self.shuffle = shuffle
+
+    def __iter__(self):
+        pass
 
 
 class GraphDataloader:
@@ -342,7 +376,7 @@ class Trainer:
         # Initializations
         model.to(self.device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
-        scheduler = CosineAnnealingLR(optimizer, T_max=40)
+        scheduler = CosineAnnealingLR(optimizer, T_max=50)
 
         print("\nTraining...")
         print("# Train Examples:", train_dataset.n_proposals())

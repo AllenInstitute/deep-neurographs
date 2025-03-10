@@ -54,9 +54,9 @@ def run(pred_graph, target_graph):
 
 def get_valid_proposals(target_graph, pred_graph):
     # Initializations
-    kdtree = target_graph.get_kdtree()
+    target_kdtree = target_graph.get_kdtree()
     aligned_fragment_ids, node_to_target = find_aligned_fragments(
-        target_graph, pred_graph, kdtree
+        target_graph, pred_graph, target_kdtree
     )
 
     # Check whether aligned to same or connected target edges
@@ -68,8 +68,7 @@ def get_valid_proposals(target_graph, pred_graph):
         if is_aligned_i and is_aligned_j:
             if node_to_target[i] == node_to_target[j]:
                 # Check whether proposal is valid
-                target_id = node_to_target[i]
-                if is_valid(target_graph, pred_graph, kdtree, p):
+                if is_valid(target_graph, pred_graph, target_kdtree, p):
                     valid_proposals.append(p)
     return valid_proposals
 
