@@ -402,7 +402,7 @@ class Trainer:
                 # Forward pass
                 hat_y_i, y_i = self.predict(model, dataset.data)
                 loss = self.criterion(hat_y_i, y_i)
-                self.writer.add_scalar("loss", loss, epoch)
+                self.writer.add_scalar("loss", loss, n_upds)
 
                 # Backward pass
                 self.optimizer.zero_grad()
