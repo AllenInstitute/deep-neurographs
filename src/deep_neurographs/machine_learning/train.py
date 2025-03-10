@@ -76,7 +76,7 @@ class GraphDataset:
                 img_path,
                 self.ml_config.multiscale,
                 anisotropy=self.ml_config.anisotropy,
-                is_multimodal=self.ml_config.is_multimodal,
+                is_multimodal=self.is_train_data,
                 segmentation_path=segmentation_path,
                 transform=self.is_train_data,
             )
