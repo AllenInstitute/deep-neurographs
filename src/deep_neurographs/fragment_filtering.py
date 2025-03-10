@@ -48,7 +48,7 @@ def remove_curvy(graph, max_length, ratio=0.5):
     deleted_ids = set()
     for nodes in get_line_components(graph):
         i, j = tuple(nodes)
-        length = graph.edges[i, j]["length"]
+        length = graph.edge_length((i, j))
         endpoint_dist = graph.dist(i, j)
         if endpoint_dist / length < ratio and length < max_length:
             deleted_ids.add(graph.edges[i, j]["swc_id"])
@@ -88,7 +88,7 @@ def remove_doubles(graph, max_length, node_spacing):
         i, j = tuple(components[idx])
         swc_id = graph.nodes[i]["swc_id"]
         if swc_id not in deleted_ids:
-            if graph.edges[i, j]["length"] < max_length:
+            if graph.edge_length((i, j)) < max_length:
                 # Check doubles criteria
                 n_points = len(graph.edges[i, j]["xyz"])
                 hits = compute_projections(graph, kdtree, (i, j))

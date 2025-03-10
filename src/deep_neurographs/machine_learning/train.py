@@ -37,7 +37,7 @@ from deep_neurographs.machine_learning.feature_generation import (
 from deep_neurographs.utils import ml_util, util
 
 
-class FragmentsGraphDataset:
+class GraphDataset:
     """
     Custom dataset for storing a list of graphs to be used to train a graph
     neural network. Graph are stored in the "self.graphs" attribute, which is
@@ -57,11 +57,12 @@ class FragmentsGraphDataset:
 
     """
 
-    def __init__(self, config):
+    def __init__(self, config, is_train_data=True):
         # Instance Attributes
         self.features = dict()
         self.feature_generators = dict()
         self.graphs = dict()
+        self.is_train_data = is_train_data
         self.validation_keys = set()
 
         # Configs
@@ -76,7 +77,7 @@ class FragmentsGraphDataset:
                 img_path,
                 self.ml_config.multiscale,
                 anisotropy=self.ml_config.anisotropy,
-                is_multimodal=self.ml_config.is_multimodal,
+                is_multimodal=self.is_train_data,
                 segmentation_path=segmentation_path,
                 transform=self.ml_config.transform,
             )
@@ -168,7 +169,7 @@ class FragmentsGraphDataset:
 
         # Generate features
         self.features[key] = self.generate_features(
-            key, img_path, img_path, segmentation_path
+            key, img_path, segmentation_path
         )
 
     def load_graph(self, swc_pointer):
@@ -200,7 +201,7 @@ class FragmentsGraphDataset:
         graph.load_fragments(swc_pointer)
         return graph
 
-    def generate_features(self, key, graph, img_path, segmentation_path):
+    def generate_features(self, key, img_path, segmentation_path):
         # Initializations
         self.init_feature_generator(key, img_path, segmentation_path)
         proposals_dict = {
@@ -216,7 +217,7 @@ class FragmentsGraphDataset:
             self.graph_config.search_radius
         )
         return features
-
+        
     def generate_batches(self, batch_size):
         """
         Generates a list of batches for training a graph neural network. Each
@@ -256,47 +257,6 @@ class FragmentsGraphDataset:
                 dataset = datasets.init(features, batch["graph"], accepts)
                 yield (key, dataset)
 
-    def extract_validation(self, batch_size, validation_percent):
-        # Initializations
-        n_proposals = self.n_proposals() * validation_percent
-        batches = self.generate_batches(batch_size)
-        validation_batches = list()
-        keys = set()
-
-        keys = set([
-            ('706301', '202405_106997260_633_mean100_dynamic', 'block_001'),
-            ('653158', '20230801_lower_mean_stddev', 'block_014'),
-            ('653158', '20230801_lower_mean_stddev', 'block_019'),
-            ('715347', '202502_73227862_855_mean80.mask.136168199.no_omitted_20k.ffn.mt_0.1', 'block_163989767'),
-            ('653158', '20230801_lower_mean_stddev', 'block_004'),
-            ('653158', '20230801_lower_mean_stddev', 'block_000'),
-            ('653158', '20230801_lower_mean_stddev', 'block_017'),
-            ('653158', '20230801_lower_mean_stddev', 'block_015'),
-        ])
-
-        # Populate validation set
-        cnt = 0
-        while batches and cnt < n_proposals:
-            key, dataset = batches.pop()
-            if key in keys:
-                validation_batches.append((key, dataset))
-                cnt += dataset.n_proposals()
-                keys.add(key)
-
-        # Add batches from same graphs
-        while len(batches) > 0:
-            key, dataset = batches.pop()
-            if key in keys:
-                validation_batches.append((key, dataset))
-
-        # Delete graphs in validation set
-        for key in keys:
-            try:
-                del self.graphs[key]
-            except:
-                pass
-        return validation_batches, cnt
-
     # --- Helpers ---
     def extract_features(self, key, batch):
         # Node features
@@ -331,7 +291,6 @@ class Trainer:
         device="cuda",
         lr=1e-4,
         n_epochs=1000,
-        validation_percent=0.15
     ):
         """
         Constructs a GraphTrainer object.
@@ -359,10 +318,9 @@ class Trainer:
         self.lr = lr
         self.n_epochs = n_epochs
         self.model_dir = model_dir
-        self.validation_percent = validation_percent
         self.writer = SummaryWriter(log_dir=log_dir)
 
-    def run(self, model, graph_dataset):
+    def run(self, model, train_dataset):
         """
         Trains a graph neural network in the case where "datasets" is a
         dictionary of datasets such that each corresponds to a distinct graph.
@@ -380,16 +338,11 @@ class Trainer:
         """
         # Initializations
         model.to(self.device)
-        self.optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
-        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=25)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
+        scheduler = CosineAnnealingLR(optimizer, T_max=25)
 
-        # Validation data
-        validation_batches, example_cnt = graph_dataset.extract_validation(
-            self.batch_size, self.validation_percent
-        )
-        self.save_validation_keys(validation_batches)
         print("\nTraining...")
-        print("# Train Examples:", graph_dataset.n_proposals())
+        print("# Train Examples:", train_dataset.n_proposals())
         print("# Validation Examples:", example_cnt)
 
         # Main
@@ -398,28 +351,28 @@ class Trainer:
             # Train
             y, hat_y = [], []
             model.train()
-            for key, dataset in graph_dataset.generate_batches(self.batch_size):
+            for _, dataset in train_dataset.generate_batches(self.batch_size):
                 # Forward pass
                 hat_y_i, y_i = self.predict(model, dataset.data)
                 loss = self.criterion(hat_y_i, y_i)
                 self.writer.add_scalar("loss", loss, n_upds)
 
                 # Backward pass
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
                 loss.backward()
-                self.optimizer.step()
+                optimizer.step()
 
                 # Store prediction
                 y.extend(ml_util.toCPU(y_i))
                 hat_y.extend(ml_util.toCPU(hat_y_i))
 
             train_f1 = self.compute_metrics(y, hat_y, "train", epoch)
-            self.scheduler.step()
+            scheduler.step()
 
             # Validate
             model.eval()
             y, hat_y = [], []
-            for _, dataset in validation_batches:
+            for _, dataset in validation_dataset.generate_batches(self.batch_size):
                 hat_y_i, y_i = self.predict(model, dataset.data)
                 y.extend(ml_util.toCPU(y_i))
                 hat_y.extend(ml_util.toCPU(hat_y_i))
@@ -499,11 +452,6 @@ class Trainer:
         filename = f"GraphNeuralNet-{date}-{round(score, 4)}.pth"
         path = os.path.join(self.model_dir, filename)
         torch.save(model.state_dict(), path)
-
-    def save_validation_keys(self, validation_batches):
-        keys = set([key for key, _ in validation_batches])
-        path = os.path.join(self.model_dir, "validation-examples.txt")
-        util.write_list(path, keys)
 
 
 # -- Helpers --

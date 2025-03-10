@@ -124,7 +124,7 @@ class InferencePipeline:
             device=self.ml_config.device,
             multiscale=self.ml_config.multiscale,
             segmentation_path=segmentation_path,
-            is_multimodal=self.ml_configis_multimodal,
+            is_multimodal=self.ml_config.is_multimodal,
         )
 
         # Set output directory
@@ -518,8 +518,11 @@ class InferenceEngine:
         )
 
         # Model
-        self.model = ml_util.init_model(is_multimodal)
-        self.model.load_state_dict(torch.load(model_path))
+        if is_multimodal:
+            self.model = ml_util.init_model(is_multimodal)
+            self.model.load_state_dict(torch.load(model_path))
+        else:
+            self.model = torch.load(model_path, weights_only=False)
         self.model.to(self.device)
         self.model.eval()
 
