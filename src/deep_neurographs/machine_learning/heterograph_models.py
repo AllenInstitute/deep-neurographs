@@ -184,7 +184,6 @@ class MultiModalHGAT(torch.nn.Module):
         self,
         node_input_dims,
         edge_input_dims,
-        dropout=0.2,
         heads_1=2,
         heads_2=2,
         hidden_dim=128,
@@ -405,7 +404,7 @@ class ConvNet(nn.Module):
             ),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(),
-            nn.Dropout(p=0.2),
+            nn.Dropout(p=0.1),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
         return conv_layer
@@ -477,7 +476,7 @@ def init_gat_mixed(hidden_dim, edge_dim, heads):
     return gat
 
 
-def init_mlp(input_dim, output_dim, device="cuda", dropout=0.2):
+def init_mlp(input_dim, output_dim, device="cuda"):
     """
     Initializes a multi-layer perceptron (MLP).
 
@@ -497,7 +496,7 @@ def init_mlp(input_dim, output_dim, device="cuda", dropout=0.2):
     mlp = nn.Sequential(
         nn.Linear(input_dim, 2 * output_dim, device=device),
         nn.LeakyReLU(),
-        nn.Dropout(p=dropout),
+        nn.Dropout(p=0.1),
         nn.Linear(2 * output_dim, output_dim, device=device),
     )
     return mlp
