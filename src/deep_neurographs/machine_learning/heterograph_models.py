@@ -187,7 +187,7 @@ class MultiModalHGAT(torch.nn.Module):
         dropout=0.2,
         heads_1=2,
         heads_2=2,
-        hidden_dim=256,
+        hidden_dim=128,
         patch_shape=(64, 64, 64),
     ):
         # Call parent class

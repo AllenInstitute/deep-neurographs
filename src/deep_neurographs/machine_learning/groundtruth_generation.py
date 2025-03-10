@@ -17,7 +17,6 @@ import numpy as np
 from deep_neurographs.utils import geometry_util, util
 
 ALIGNED_THRESHOLD = 4.5
-MIN_INTERSECTION = 10
 
 
 def run(pred_graph, target_graph):
@@ -60,7 +59,7 @@ def get_valid_proposals(target_graph, pred_graph):
         target_graph, pred_graph, kdtree
     )
 
-    # Check whether aligned to same/adjacent target edges
+    # Check whether aligned to same or connected target edges
     valid_proposals = list()
     for p in pred_graph.proposals:
         i, j = tuple(p)
@@ -70,7 +69,7 @@ def get_valid_proposals(target_graph, pred_graph):
             if node_to_target[i] == node_to_target[j]:
                 # Check whether proposal is valid
                 target_id = node_to_target[i]
-                if is_valid(target_graph, pred_graph, kdtree, target_id, p):
+                if is_valid(target_graph, pred_graph, kdtree, p):
                     valid_proposals.append(p)
     return valid_proposals
 
@@ -111,12 +110,11 @@ def find_aligned_fragments(target_graph, pred_graph, kdtree):
 
 def is_component_aligned(target_graph, pred_graph, nodes, kdtree):
     """
-    Determines whether the connected component "nodes" is
-    close to some component in "target_graph". This routine iterates over
-    "node_subset" and projects each node onto "target_graph", then
-    computes the projection distance. If (on average) each node in
-    "node_subset" is less 3.5 microns from a component in the ground truth,
-    then "node_subset" is aligned.
+    Determines whether the connected component formed by "nodes" is close to
+    some component in "target_graph". This routine projects each node onto the
+    "target_graph", then computes the projection distance. If the nodes are on
+    average less 3.5 microns from a single component in "target_graph", then
+    the "nodes" are aligned.
 
     Parameters
     ----------
@@ -124,8 +122,8 @@ def is_component_aligned(target_graph, pred_graph, nodes, kdtree):
         Graph built from ground truth swc files.
     pred_graph : NeuroGraph
         Graph build from predicted swc files.
-    component : ...
-        ...
+    nodes : Set[int]
+        Nodes from a connected component in "pred_graph".
 
     Returns
     -------
@@ -136,25 +134,29 @@ def is_component_aligned(target_graph, pred_graph, nodes, kdtree):
     """
     # Compute distances
     dists = defaultdict(list)
+    point_cnt = 0
     for edge in pred_graph.subgraph(nodes).edges:
         for xyz in pred_graph.edges[edge]["xyz"]:
             hat_xyz = geometry_util.kdtree_query(kdtree, xyz)
             hat_swc_id = target_graph.xyz_to_id(hat_xyz)
             d = geometry_util.dist(hat_xyz, xyz)
             dists[hat_swc_id].append(d)
+            point_cnt += 1
 
     # Deterine whether aligned
     hat_swc_id = util.find_best(dists)
     dists = np.array(dists[hat_swc_id])
-    intersects = True if len(dists) > MIN_INTERSECTION else False
-    aligned_score = np.mean(dists[dists < np.percentile(dists, 85)])
+    percent_aligned = len(dists) / point_cnt
+
+    intersects = True if percent_aligned > 0.6 else False
+    aligned_score = np.mean(dists[dists < np.percentile(dists, 80)])
     if (aligned_score < ALIGNED_THRESHOLD and hat_swc_id) and intersects:
         return True, hat_swc_id
     else:
         return False, None
 
 
-def is_valid(target_graph, pred_graph, kdtree, target_id, edge):
+def is_valid(target_graph, pred_graph, kdtree, proposal):
     """
     Determines whether the proposal connects two branches that correspond to
     either the same or adjacent branches on the ground truth. If either
@@ -162,14 +164,12 @@ def is_valid(target_graph, pred_graph, kdtree, target_id, edge):
 
     Parameters
     ----------
-    target_graph : NeuroGraph
+    target_graph : FragmentsGraph
         Graph built from ground truth swc files.
     pred_graph : NeuroGraph
         Graph build from predicted swc files.
-    target_id : str
-        swc id of target that the proposal "edge" corresponds to.
-    edge : frozenset
-        Edge proposal to be checked.
+    proposal : frozenset
+        Proposal to be checked.
 
     Returns
     -------
@@ -177,65 +177,53 @@ def is_valid(target_graph, pred_graph, kdtree, target_id, edge):
         Indication of whether proposal is consistent.
 
     """
-    # Find closest edges from target_graph
-    i, j = tuple(edge)
-    hat_edge_i = proj_branch(target_graph, pred_graph, kdtree, target_id, i)
-    hat_edge_j = proj_branch(target_graph, pred_graph, kdtree, target_id, j)
+    # Find edges in target_graph closest to edges connected to proposal
+    i, j = tuple(proposal)
+    hat_edge_i = project_region(target_graph, pred_graph, kdtree, i)
+    hat_edge_j = project_region(target_graph, pred_graph, kdtree, j)
 
-    # Check if edges are identical or None
-    if not hat_edge_i or not hat_edge_j:
-        return False
-    elif hat_edge_i == hat_edge_j:
+    # Check if closest edges are identical
+    if hat_edge_i == hat_edge_j:
         return True
 
     # Check if edges are adjacent
-    if is_adjacent(target_graph, hat_edge_i, hat_edge_j):
-        hat_branch_i = target_graph.edges[hat_edge_i]["xyz"]
-        hat_branch_j = target_graph.edges[hat_edge_j]["xyz"]
-        xyz_i = pred_graph.nodes[i]["xyz"]
-        xyz_j = pred_graph.nodes[j]["xyz"]
-        if is_adjacent_aligned(hat_branch_i, hat_branch_j, xyz_i, xyz_j):
-            return True
-    else:
-        return False
+    if is_connected(hat_edge_i, hat_edge_j):
+        result = is_connected_aligned(
+            target_graph.edges[hat_edge_i]["xyz"],
+            target_graph.edges[hat_edge_j]["xyz"],
+            pred_graph.nodes[i]["xyz"],
+            pred_graph.nodes[j]["xyz"],
+        )
+        return result
+    return False
 
 
-def proj_branch(target_graph, pred_graph, kdtree, target_id, i):
-    # Compute projections
+def project_region(target_graph, pred_graph, kdtree, i):
+    """
+    Projects the edges (up to a certain depth) connected to node i onto
+    target graph.
+
+    Parameters
+    ----------
+    ...
+
+    """
     hits = defaultdict(list)
-    for branch in pred_graph.branches(i):
-        for xyz in branch:
+    for edge_xyz_list in pred_graph.truncated_edge_attr_xyz(i, 16):
+        for xyz in edge_xyz_list:
             hat_xyz = geometry_util.kdtree_query(kdtree, xyz)
-            swc_id = target_graph.xyz_to_id(hat_xyz)
-            if swc_id == target_id:
-                hat_edge = target_graph.xyz_to_edge[hat_xyz]
-                hits[hat_edge].append(hat_xyz)
-
-    # Determine closest edge
-    min_dist = np.inf
-    best_edge = None
-    xyz_i = pred_graph.nodes[i]["xyz"]
-    if len(hits.keys()) > 1:
-        swc_id = pred_graph.nodes[i]["swc_id"]
-        for edge in hits.keys():
-            nb, d = geometry_util.nearest_neighbor(hits[edge], xyz_i)
-            if d < min_dist:
-                min_dist = d
-                best_edge = edge
-    elif len(hits.keys()) == 1:
-        best_edge = list(hits.keys())[0]
-    return best_edge
+            hat_edge = target_graph.xyz_to_edge[hat_xyz]
+            hits[hat_edge].append(hat_xyz)
+    return util.find_best(hits)
 
 
-def is_adjacent(neurograph, edge_i, edge_j):
+def is_connected(edge_i, edge_j):
     """
     Determines whether "edge_i" and "edge_j" are adjacent, meaning there
     exists a nodes in "edge_i" and "edge_j" which are neighbors.
 
     Parameters
     ----------
-    neurograph : NeuroGraph
-        Graph that "edge_i" and "edge_j" are contained in.
     edge_i : tuple
         Edge to be checked.
     edge_j : tuple
@@ -244,58 +232,21 @@ def is_adjacent(neurograph, edge_i, edge_j):
     Returns
     -------
     bool
-        Indication of whether "edge_i" and "edge_j" are adjacent.
+        Indication of whether "edge_i" and "edge_j" are connected.
 
     """
-    for i in edge_i:
-        for j in edge_j:
-            if i == j:
-                return True
-    return False
+    return True if set(edge_i).intersection(set(edge_j)) else False
 
 
-def is_adjacent_aligned(hat_branch_i, hat_branch_j, xyz_i, xyz_j):
-    hat_branch_i, hat_branch_j = orient_branch(hat_branch_i, hat_branch_j)
-    hat_i, _ = geometry_util.nearest_neighbor(hat_branch_i, xyz_i)
-    hat_j, _ = geometry_util.nearest_neighbor(hat_branch_j, xyz_j)
-    hat_path_dist = hat_i + hat_j
-    path_dist = geometry_util.dist(xyz_i, xyz_j)
-    return True if 2 * path_dist / (path_dist + hat_path_dist) > 0.5 else False
+def is_connected_aligned(hat_edge_xyz_i, hat_edge_xyz_j, xyz_i, xyz_j):
+    hat_xyz_i = geometry_util.nearest_neighbor(hat_edge_xyz_i, xyz_i)
+    hat_xyz_j = geometry_util.nearest_neighbor(hat_edge_xyz_j, xyz_j)
+    hat_dist = geometry_util.dist(hat_xyz_i, hat_xyz_j)
+    dist = geometry_util.dist(xyz_i, xyz_j)
+    return True if 2 * dist / (dist + hat_dist) > 0.5 else False
 
 
 # -- util --
-def orient_branch(branch_i, branch_j):
-    """
-    Flips branches so that "all(branch_i[0] == branch_j[0])" is True.
-
-    Parameters
-    ----------
-    branch_i : numpy.ndarray
-        Array containing xyz coordinates corresponding to some edge in a
-        Neurograph.
-    branch_j : numpy.ndarray
-        Array containing xyz coordinates corresponding to some edge in a
-        Neurograph.
-
-    Returns
-    -------
-    branch_i : numpy.ndarray
-        xyz coordinates corresponding to some edge in a Neurograph.
-    branch_j : numpy.ndarray
-        xyz coordinates corresponding to some edge in a Neurograph.
-
-    """
-    # Orient branches
-    if all(branch_i[-1] == branch_j[0]):
-        branch_i = np.flip(branch_i, axis=0)
-    elif all(branch_i[0] == branch_j[-1]):
-        branch_j = np.flip(branch_j, axis=0)
-    elif all(branch_i[-1] == branch_j[-1]):
-        branch_i = np.flip(branch_i, axis=0)
-        branch_j = np.flip(branch_j, axis=0)
-    return branch_i, branch_j
-
-
 def upd_dict(node_to_target_id, nodes, target_id):
     for node in nodes:
         node_to_target_id[node] = target_id

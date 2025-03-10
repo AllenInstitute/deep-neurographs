@@ -316,7 +316,7 @@ class FeatureGenerator:
             branch_skeletal_features[frozenset(edge)] = np.array(
                 [
                     np.mean(fragments_graph.edges[edge]["radius"]),
-                    min(fragments_graph.edges[edge]["length"], 500) / 500,
+                    min(fragments_graph.edge_length(edge), 500) / 500,
                 ],
             )
         return branch_skeletal_features
@@ -515,9 +515,9 @@ class FeatureGenerator:
         # Main
         relabel_patch = np.zeros(label_patch.shape)
         relabel_patch[label_patch == segment_ids[0]] = 1
-        relabel_patch[label_patch == segment_ids[1]] = 1
+        relabel_patch[label_patch == segment_ids[1]] = 2
         line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
-        return geometry_util.fill_path(relabel_patch, line, val=2)
+        return geometry_util.fill_path(relabel_patch, line, val=3)
 
     def apply_img_augmentation(self, img_patch, label_patch):
         img_patch, label_patch = self.geometric_transforms(
