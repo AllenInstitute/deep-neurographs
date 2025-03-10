@@ -424,7 +424,7 @@ def trim_to_idx(fragments_graph, i, idx):
     fragments_graph.nodes[i]["radius"] = branch_radii[idx]
 
     # Update edge
-    j = fragments_graph.leaf_neighbor(i)
+    j = list(fragments_graph.neighbors(i))[0]
     fragments_graph.edges[i, j]["xyz"] = branch_xyz[idx::]
     fragments_graph.edges[i, j]["radius"] = branch_radii[idx::]
     for k in range(idx):
