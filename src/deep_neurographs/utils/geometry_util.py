@@ -570,11 +570,10 @@ def nearest_neighbor(xyz_arr, xyz):
         neighbor.
 
     """
-    min_dist = np.inf
-    idx = None
+    best_dist = np.inf
+    best_xyz = None
     for i, xyz_i in enumerate(xyz_arr):
-        d = dist(xyz, xyz_i)
-        if d < min_dist:
-            min_dist = d
-            idx = i
-    return idx, min_dist
+        if dist(xyz, xyz_i) < best_dist:
+            best_dist = dist(xyz, xyz_i)
+            best_xyz = xyz_i
+    return best_xyz

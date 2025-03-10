@@ -113,6 +113,24 @@ class FragmentsGraphDataset:
         """
         return np.sum([graph.n_proposals() for graph in self.graphs.values()])
 
+    def n_accepts(self):
+        """
+        Counts the number of accepted proposals in the ground truth across all
+        graphs.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Number of accepted proposals in the ground truth across all graphs.
+
+        """
+        cnts = [len(graph.gt_accepts) for graph in self.graphs.values()]
+        return np.sum(cnts)
+
     def p_accepts(self):
         """
         Computes the percentage of accepted proposals in ground truth.
@@ -127,9 +145,7 @@ class FragmentsGraphDataset:
             Percentage of accepted proposals in ground truth.
 
         """
-        n_proposals = self.n_proposals()
-        cnt_accepts = [len(graph.gt_accepts) for graph in self.graphs.values()]
-        return np.sum(cnt_accepts) / n_proposals
+        return self.n_accepts() / self.n_proposals()
 
     # --- Load Data ---
     def add_graph(
@@ -225,7 +241,6 @@ class FragmentsGraphDataset:
         random.shuffle(keys)
 
         # Main
-        batches = list()
         for key in keys:
             proposals = set(self.graphs[key].list_proposals())
             while len(proposals) > 0:
@@ -239,8 +254,7 @@ class FragmentsGraphDataset:
                 accepts = self.graphs[key].gt_accepts
                 features = self.extract_features(key, batch)
                 dataset = datasets.init(features, batch["graph"], accepts)
-                batches.append((key, dataset))
-        return batches
+                yield (key, dataset)
 
     def extract_validation(self, batch_size, validation_percent):
         # Initializations
@@ -249,13 +263,25 @@ class FragmentsGraphDataset:
         validation_batches = list()
         keys = set()
 
+        keys = set([
+            ('706301', '202405_106997260_633_mean100_dynamic', 'block_001'),
+            ('653158', '20230801_lower_mean_stddev', 'block_014'),
+            ('653158', '20230801_lower_mean_stddev', 'block_019'),
+            ('715347', '202502_73227862_855_mean80.mask.136168199.no_omitted_20k.ffn.mt_0.1', 'block_163989767'),
+            ('653158', '20230801_lower_mean_stddev', 'block_004'),
+            ('653158', '20230801_lower_mean_stddev', 'block_000'),
+            ('653158', '20230801_lower_mean_stddev', 'block_017'),
+            ('653158', '20230801_lower_mean_stddev', 'block_015'),
+        ])
+
         # Populate validation set
         cnt = 0
-        while cnt < n_proposals:
+        while batches and cnt < n_proposals:
             key, dataset = batches.pop()
-            validation_batches.append((key, dataset))
-            cnt += dataset.n_proposals()
-            keys.add(key)
+            if key in keys:
+                validation_batches.append((key, dataset))
+                cnt += dataset.n_proposals()
+                keys.add(key)
 
         # Add batches from same graphs
         while len(batches) > 0:
@@ -265,7 +291,10 @@ class FragmentsGraphDataset:
 
         # Delete graphs in validation set
         for key in keys:
-            del self.graphs[key]
+            try:
+                del self.graphs[key]
+            except:
+                pass
         return validation_batches, cnt
 
     # --- Helpers ---
@@ -309,8 +338,6 @@ class Trainer:
 
         Parameters
         ----------
-        n_epochs : int
-            Number of epochs. The default is 1000.
         ...
 
         Returns
@@ -361,17 +388,17 @@ class Trainer:
             self.batch_size, self.validation_percent
         )
         self.save_validation_keys(validation_batches)
+        print("\nTraining...")
         print("# Train Examples:", graph_dataset.n_proposals())
         print("# Validation Examples:", example_cnt)
 
         # Main
         best_f1 = 0
-        n_upds = 0
         for epoch in range(self.n_epochs):
             # Train
             y, hat_y = [], []
             model.train()
-            for _, dataset in graph_dataset.generate_batches(self.batch_size):
+            for key, dataset in graph_dataset.generate_batches(self.batch_size):
                 # Forward pass
                 hat_y_i, y_i = self.predict(model, dataset.data)
                 loss = self.criterion(hat_y_i, y_i)
@@ -381,7 +408,6 @@ class Trainer:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                n_upds += 1
 
                 # Store prediction
                 y.extend(ml_util.toCPU(y_i))
@@ -405,8 +431,6 @@ class Trainer:
                 print(scores + "  --  New Best!")
                 best_f1 = val_f1
                 self.save_model(model, best_f1)
-            else:
-                print(scores)
 
     def predict(self, model, data):
         """

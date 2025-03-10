@@ -23,6 +23,7 @@ Note: Each uncommented line in an SWC file corresponds to a node and contains
 
 """
 
+from collections import deque
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
@@ -47,18 +48,18 @@ class Reader:
 
     """
 
-    def __init__(self, anisotropy=[1.0, 1.0, 1.0], min_size=0):
+    def __init__(self, anisotropy=(1.0, 1.0, 1.0), min_size=0):
         """
         Initializes a Reader object that loads SWC files.
 
         Parameters
         ----------
-        anisotropy : List[float], optional
+        anisotropy : Tuple[float], optional
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
         min_size : int, optional
             Threshold on the number nodes in SWC files that are parsed and
-            returned.
+            returned. The default is 0.
 
         Returns
         -------
@@ -124,7 +125,7 @@ class Reader:
 
         Returns
         -------
-        List[dict]
+        Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
 
@@ -138,7 +139,7 @@ class Reader:
                 )
 
             # Store results
-            swc_dicts = list()
+            swc_dicts = deque()
             for process in as_completed(processes):
                 result = process.result()
                 if result:
@@ -180,13 +181,13 @@ class Reader:
 
         Returns
         -------
-        List[dict]
+        Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
 
         """
         with ZipFile(zip_path, "r") as zip_file:
-            swc_dicts = list()
+            swc_dicts = deque()
             swc_files = [f for f in zip_file.namelist() if f.endswith(".swc")]
             for f in tqdm(swc_files, desc="Read SWCs"):
                 result = self.load_from_zipped_file(zip_file, f)
@@ -232,7 +233,7 @@ class Reader:
 
         Returns
         -------
-        List[dict]
+        Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
 
@@ -253,7 +254,7 @@ class Reader:
                 )
 
             # Store results
-            swc_dicts = list()
+            swc_dicts = deque()
             for process in as_completed(processes):
                 swc_dicts.extend(process.result())
                 pbar.update(1)
@@ -271,7 +272,7 @@ class Reader:
 
         Returns
         -------
-        List[dict]
+        Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
 
@@ -289,7 +290,7 @@ class Reader:
                     )
 
                 # Process results
-                swc_dicts = list()
+                swc_dicts = deque()
                 for thread in as_completed(threads):
                     result = thread.result()
                     if result:
@@ -319,7 +320,7 @@ class Reader:
         content, offset = self.process_content(content)
         swc_dict = {
             "id": np.zeros((len(content)), dtype=int),
-            "radius": np.zeros((len(content)), dtype=np.float32),
+            "radius": np.zeros((len(content)), dtype=np.float16),
             "pid": np.zeros((len(content)), dtype=int),
             "xyz": np.zeros((len(content), 3), dtype=np.float32),
             "soma_nodes": set(),

@@ -132,7 +132,6 @@ class FragmentsGraph(nx.Graph):
         self.anisotropy = anisotropy
         self.leaf_kdtree = None
         self.node_cnt = 0
-        self.node_spacing = node_spacing
         self.soma_ids = set()
         self.swc_ids = set()
         self.verbose = verbose
@@ -142,7 +141,6 @@ class FragmentsGraph(nx.Graph):
         self.merged_ids = set()
         self.proposals = set()
 
-    # --- Build Graph --
     def load_fragments(self, fragments_pointer):
         """
         Loads fragments into "self" by reading SWC files stored on either the
@@ -166,6 +164,7 @@ class FragmentsGraph(nx.Graph):
             irreducibles = irreducibles_list.pop()
             self.add_irreducibles(irreducibles)
 
+    # --- Update Structure ---
     def add_irreducibles(self, irreducibles):
         """
         Adds the irreducibles from a single connected component to "self".
@@ -197,7 +196,6 @@ class FragmentsGraph(nx.Graph):
         if irreducibles["is_soma"]:
             self.soma_ids.add(swc_id)
 
-    # --- update graph structure ---
     def __add_nodes(self, irreducibles, node_type, node_ids):
         """
         Adds a set of nodes from "irreducibles" to "self".
@@ -255,7 +253,6 @@ class FragmentsGraph(nx.Graph):
         self.add_edge(
             i,
             j,
-            length=attrs["length"],
             radius=attrs["radius"],
             xyz=attrs["xyz"],
             swc_id=swc_id,
@@ -282,12 +279,9 @@ class FragmentsGraph(nx.Graph):
             nbs = list(self.neighbors(i))
             if len(nbs) == 2 and len(self.nodes[i]["proposals"]) == 0:
                 # Concatenate attributes
-                len_1 = self.edges[i, nbs[0]]["length"]
-                len_2 = self.edges[i, nbs[1]]["length"]
                 xyz = self.branches(i, key="xyz")
                 radius = self.branches(i, key="radius")
                 attrs = {
-                    "length": len_1 + len_2,
                     "radius": concatenate([np.flip(radius[0]), radius[1]]),
                     "xyz": concatenate([np.flip(xyz[0], axis=0), xyz[1]]),
                 }
@@ -456,7 +450,7 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
-        proposal = frozenset((i, j))
+        proposal = frozenset({i, j})
         self.nodes[i]["proposals"].add(j)
         self.nodes[j]["proposals"].add(i)
         self.xyz_to_proposal[tuple(self.nodes[i]["xyz"])] = proposal
@@ -683,7 +677,7 @@ class FragmentsGraph(nx.Graph):
 
         """
         i, j = tuple(proposal)
-        return True if self.is_leaf(i) and self.is_leaf(j) else False
+        return True if self.degree[i] == 1 and self.degree[j] == 1 else False
 
     def simple_proposals(self):
         return set([p for p in self.proposals if self.is_simple(p)])
@@ -717,12 +711,11 @@ class FragmentsGraph(nx.Graph):
         """
         i, j = tuple(proposal)
         if key == "swc_id":
-            attr = [
-                reformat(self.nodes[i][key]), reformat(self.nodes[j][key])
-            ]
+            swc_id_i = reformat(self.nodes[i][key])
+            swc_id_j = reformat(self.nodes[j][key])
+            return [swc_id_i, swc_id_j]
         else:
-            attr = np.array([self.nodes[i][key], self.nodes[j][key]])
-        return attr
+            return np.array([self.nodes[i][key], self.nodes[j][key]])
 
     def proposal_avg_radii(self, proposal):
         i, j = tuple(proposal)
@@ -770,18 +763,6 @@ class FragmentsGraph(nx.Graph):
                 attrs[k] = combine([self.nodes[i][k], self.nodes[j][k]])
 
             # Sparse attributes
-            if self.degree[i] == 1 and self.degree[j] == 1:
-                e_i = (i, self.leaf_neighbor(i))
-                e_j = (j, self.leaf_neighbor(j))
-                len_ij = self.edges[e_i]["length"] + self.edges[e_j]["length"]
-                attrs["length"] = len_ij
-            elif self.degree[i] == 1:
-                e_i = (i, self.leaf_neighbor(i))
-                attrs["length"] = self.edges[e_i]["length"]
-            else:
-                e_j = (j, self.leaf_neighbor(j))
-                attrs["length"] = self.edges[e_j]["length"]
-
             swc_id_i = self.nodes[i]["swc_id"]
             swc_id_j = self.nodes[j]["swc_id"]
             swc_id = swc_id_i if self.is_soma(i) else swc_id_j
@@ -845,6 +826,14 @@ class FragmentsGraph(nx.Graph):
         return len(self.query_kdtree(xyz, radius, "leaf")) - 1
 
     # --- miscellaneous ---
+    def edge_length(self, edge):
+        length = 0
+        for i in range(1, len(self.edges[edge]["xyz"])):
+            length += geometry.dist(
+                self.edges[edge]["xyz"][i], self.edges[edge]["xyz"][i - 1]
+            )
+        return length
+
     def dist(self, i, j):
         """
         Computes the Euclidean distance between nodes "i" and "j".
@@ -887,24 +876,7 @@ class FragmentsGraph(nx.Graph):
             Leaf nodes in graph.
 
         """
-        return [i for i in self.nodes if self.is_leaf(i)]
-
-    def is_leaf(self, i):
-        """
-        Checks if node "i" is a leaf.
-
-        Parameters
-        ----------
-        i : int
-            Node to be checked.
-
-        Returns
-        -------
-        bool
-            Indication of whether node "i" is a leaf
-
-        """
-        return True if self.degree[i] == 1 else False
+        return [i for i in self.nodes if self.degree[i] == 1]
 
     def is_soma(self, node_or_swc):
         """
@@ -1011,7 +983,7 @@ class FragmentsGraph(nx.Graph):
              Unique neighbor of the leaf node "i".
 
         """
-        assert self.is_leaf(i)
+        assert self.degree[i] == 1
         return list(self.neighbors(i))[0]
 
     def xyz_to_id(self, xyz, return_node=False):

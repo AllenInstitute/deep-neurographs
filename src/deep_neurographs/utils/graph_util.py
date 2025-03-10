@@ -43,7 +43,7 @@ class GraphLoader:
     def __init__(
         self,
         anisotropy=[1.0, 1.0, 1.0],
-        min_size=30.0,
+        min_size=40.0,
         node_spacing=1,
         prune_depth=20.0,
         remove_high_risk_merges=False,
@@ -670,7 +670,6 @@ def init_edge_attrs(graph, i):
 
     """
     attrs = {
-        "length": 0,
         "radius": [graph.nodes[i]["radius"]],
         "xyz": [graph.nodes[i]["xyz"]],
     }
@@ -699,7 +698,6 @@ def upd_edge_attrs(graph, attrs, i, j):
         Edge attribute dictionary.
 
     """
-    attrs["length"] += dist(graph, i, j)
     attrs["radius"].append(graph.nodes[i]["radius"])
     attrs["xyz"].append(graph.nodes[i]["xyz"])
 

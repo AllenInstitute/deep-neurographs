@@ -153,7 +153,8 @@ def get_candidates(
 
     # Process results
     if max_proposals < 0 and len(candidates) == 1:
-        return candidates if graph.is_leaf(candidates[0]) else []
+        is_leaf = graph.degree[candidates[0]] == 1
+        return candidates if is_leaf else []
     else:
         return list() if max_proposals < 0 else candidates
 

@@ -64,8 +64,6 @@ class InferencePipeline:
         model_path,
         output_dir,
         config,
-        device="cpu",
-        is_multimodal=False,
         segmentation_path=None,
         somas_path=None,
         s3_dict=None,
@@ -89,10 +87,6 @@ class InferencePipeline:
         config : Config
             Configuration object containing parameters and settings required
             for the inference pipeline.
-        device : str, optional
-            ...
-        is_multimodal : bool, optional
-            ...
         segmentation_path : str, optional
             Path to segmentation stored in GCS bucket. The default is None.
         somas_path : str, optional
@@ -127,10 +121,10 @@ class InferencePipeline:
             accept_threshold=self.ml_config.threshold,
             anisotropy=self.ml_config.anisotropy,
             batch_size=self.ml_config.batch_size,
-            device=device,
+            device=self.ml_config.device,
             multiscale=self.ml_config.multiscale,
             segmentation_path=segmentation_path,
-            is_multimodal=is_multimodal,
+            is_multimodal=self.ml_configis_multimodal,
         )
 
         # Set output directory
@@ -328,7 +322,7 @@ class InferencePipeline:
         """
         # Save result on local machine
         swc_dir = os.path.join(self.output_dir, "corrected-swcs")
-        self.graph.to_zipped_swcs_parallelized(swc_dir, min_size=50)
+        self.graph.to_zipped_swcs_parallelized(swc_dir, min_size=40)
         self.save_connections()
         self.write_metadata()
 
@@ -471,9 +465,9 @@ class InferenceEngine:
         anisotropy=[1.0, 1.0, 1.0],
         batch_size=2000,
         device=None,
+        is_multimodal=False,
         multiscale=1,
         segmentation_path=None,
-        is_multimodal=False
     ):
         """
         Initializes an inference engine by loading images and setting class
@@ -495,12 +489,12 @@ class InferenceEngine:
             anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
         batch_size : int, optional
             Number of proposals to classify in each batch.The default is 2000.
+        is_multimodal : bool, optional
+            ...
         multiscale : int, optional
             Level in the image pyramid that voxel coordinates must index into.
             The default is 1.
         segmentation_path : str or None, optional
-            ...
-        is_multimodal : bool, optional
             ...
 
         Returns
@@ -508,7 +502,7 @@ class InferenceEngine:
         None
 
         """
-        # Set class attributes
+        # Instance attributes
         self.batch_size = batch_size
         self.device = "cpu" if device is None else device
         self.radius = radius
@@ -519,16 +513,17 @@ class InferenceEngine:
             img_path,
             multiscale,
             anisotropy=anisotropy,
+            is_multimodal=is_multimodal,
             segmentation_path=segmentation_path,
-            is_multimodal=is_multimodal
         )
 
         # Model
-        self.model = ml_util.load_model(model_path)
-        if "cuda" in device:
-            self.model = self.model.to(self.device)
+        self.model = ml_util.init_model(is_multimodal)
+        self.model.load_state_dict(torch.load(model_path))
+        self.model.to(self.device)
+        self.model.eval()
 
-    def run(self, fragments_graph, proposals):
+    def run(self, fragments_graph, proposals, return_preds=False):
         """
         Runs inference by forming batches of proposals, then performing the
         following steps for each batch: (1) generate features, (2) classify
@@ -550,49 +545,32 @@ class InferenceEngine:
             Accepted proposals.
 
         """
-        flagged = set()  # get_large_proposal_components(fragments_graph, 4)
+        flagged = set()  #get_large_proposal_components(fragments_graph, 4)
         proposals = set(proposals)
         with tqdm(total=len(proposals), desc="Inference") as pbar:
             accepts = list()
-            while len(proposals) > 0:
+            hat_y = dict()
+            while proposals:
                 # Predict
-                batch = self.get_batch(fragments_graph, proposals, flagged)
+                batch = ml_util.get_batch(
+                    fragments_graph, proposals, self.batch_size, flagged
+                )
                 dataset = self.get_batch_dataset(fragments_graph, batch)
-                preds = self.predict(dataset)
+                hat_y_i = self.predict(dataset)
+                hat_y.update(hat_y_i)
 
                 # Update graph
-                for p in get_accepts(fragments_graph, preds, self.threshold):
+                for p in get_accepts(fragments_graph, hat_y_i, self.threshold):
                     fragments_graph.merge_proposal(p)
                     accepts.append(p)
                 pbar.update(len(batch["proposals"]))
             #fragments_graph.absorb_reducibles()  # - extremely slow
-        return fragments_graph, accepts
 
-    def get_batch(self, graph, proposals, flagged_proposals):
-        """
-        Generates a batch of proposals.
-
-        Parameters
-        ----------
-        graph : FragmentsGraph
-            Graph that proposals were generated from.
-        proposals : List[frozenset]
-            Proposals for which batch is to be generated from.
-        flagged_proposals : List[frozenset]
-            List of proposals that are part of a "large" connected component
-            in the proposal induced subgraph of "fragments_graph".
-
-        Returns
-        -------
-        dict
-            Batch which consists of a subset of "proposals" and the
-            computation graph if the model type is a gnn.
-
-        """
-        batch = ml_util.get_batch(
-            graph, proposals, self.batch_size, flagged_proposals
-        )
-        return batch
+        # Return results
+        if return_preds:
+            return fragments_graph, accepts, hat_y
+        else:
+            return fragments_graph, accepts
 
     def get_batch_dataset(self, graph, batch):
         """
@@ -612,7 +590,7 @@ class InferenceEngine:
 
         """
         features = self.feature_generator.run(graph, batch, self.radius)
-        return datasets.init(graph, features,  batch["graph"])
+        return datasets.init(features, batch["graph"])
 
     def predict(self, dataset):
         """
