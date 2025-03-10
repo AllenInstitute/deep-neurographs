@@ -311,6 +311,10 @@ class GraphDataLoader:
         pass
 
 
+class GraphDataloader:
+    pass
+
+
 class Trainer:
     """
     Custom class that trains graph neural networks.
