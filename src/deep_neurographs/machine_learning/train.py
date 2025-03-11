@@ -337,7 +337,7 @@ class Trainer:
         """
         # Initializations
         exp_name = "session-" + datetime.today().strftime("%Y%m%d_%H%M")
-        exp_dir = os.path.join(output_dir, exp_name, "tensorboards")
+        exp_dir = os.path.join(output_dir, exp_name)
         util.mkdir(exp_dir)
 
         # Instance attributes
