@@ -343,14 +343,14 @@ def run_trimming(fragments_graph, proposals, radius):
 def trim_endpoints(fragments_graph, proposal, radius):
     # Initializations
     i, j = tuple(proposal)
-    branch_i = fragments_graph.branches(i)[0]
-    branch_j = fragments_graph.branches(j)[0]
+    edge_xyz_i = fragments_graph.edge_attr(i)[0]
+    edge_xyz_j = fragments_graph.edge_attr(j)[0]
 
     # Check both orderings
-    idx_i, idx_j = trim_endpoints_ordered(branch_i, branch_j)
-    idx_jj, idx_ii = trim_endpoints_ordered(branch_j, branch_i)
-    d1 = geometry.dist(branch_i[idx_i], branch_j[idx_j])
-    d2 = geometry.dist(branch_i[idx_ii], branch_j[idx_jj])
+    idx_i, idx_j = trim_endpoints_ordered(edge_xyz_i, edge_xyz_j)
+    idx_jj, idx_ii = trim_endpoints_ordered(edge_xyz_j, edge_xyz_i)
+    d1 = geometry.dist(edge_xyz_i[idx_i], edge_xyz_j[idx_j])
+    d2 = geometry.dist(edge_xyz_i[idx_ii], edge_xyz_j[idx_jj])
     if d2 < d1:
         idx_i = idx_ii
         idx_j = idx_jj
@@ -359,32 +359,32 @@ def trim_endpoints(fragments_graph, proposal, radius):
     if min(d1, d2) > radius:
         fragments_graph.remove_proposal(frozenset((i, j)))
         return False
-    elif min(d1, d2) + 2 < geometry.dist(branch_i[0], branch_j[0]):
-        if compute_dot(branch_i, branch_j, idx_i, idx_j) < DOT_THRESHOLD:
+    elif min(d1, d2) + 2 < geometry.dist(edge_xyz_i[0], edge_xyz_j[0]):
+        if compute_dot(edge_xyz_i, edge_xyz_j, idx_i, idx_j) < DOT_THRESHOLD:
             fragments_graph = trim_to_idx(fragments_graph, i, idx_i)
             fragments_graph = trim_to_idx(fragments_graph, j, idx_j)
             return True
     return False
 
 
-def trim_endpoints_ordered(branch_1, branch_2):
-    idx_1 = trim_endpoint(branch_1, branch_2)
-    idx_2 = trim_endpoint(branch_2, branch_1[idx_1::])
+def trim_endpoints_ordered(xyz_list_1, xyz_list_2):
+    idx_1 = trim_endpoint(xyz_list_1, xyz_list_2)
+    idx_2 = trim_endpoint(xyz_list_2, xyz_list_1[idx_1::])
     return idx_1, idx_2
 
 
-def trim_endpoint(branch_1, branch_2):
+def trim_endpoint(xyz_list_1, xyz_list_2):
     idx = 0
     path_length = 0
-    best_dist = geometry.dist(branch_1[0], branch_2[0])
+    best_dist = geometry.dist(xyz_list_1[0], xyz_list_2[0])
     best_idx = None
     best_upd = False
-    while idx + 1 < len(branch_1):
+    while idx + 1 < len(xyz_list_1):
         idx += 1
-        path_length += geometry.dist(branch_1[idx - 1], branch_1[idx])
-        if geometry.dist(branch_1[idx], branch_2[0]) < best_dist:
+        path_length += geometry.dist(xyz_list_1[idx - 1], xyz_list_1[idx])
+        if geometry.dist(xyz_list_1[idx], xyz_list_2[0]) < best_dist:
             best_idx = idx
-            best_dist = geometry.dist(branch_1[idx], branch_2[0])
+            best_dist = geometry.dist(xyz_list_1[idx], xyz_list_2[0])
             best_upd = True
 
         # Determine whether to continue trimming
@@ -418,18 +418,18 @@ def trim_to_idx(fragments_graph, i, idx):
 
     """
     # Update node
-    branch_xyz = fragments_graph.branches(i, key="xyz")[0]
-    branch_radii = fragments_graph.branches(i, key="radius")[0]
-    fragments_graph.nodes[i]["xyz"] = branch_xyz[idx]
-    fragments_graph.nodes[i]["radius"] = branch_radii[idx]
+    edge_xyz = fragments_graph.edge_attr(i, key="xyz")[0]
+    edge_radii = fragments_graph.edge_attr(i, key="radius")[0]
+    fragments_graph.nodes[i]["xyz"] = edge_xyz[idx]
+    fragments_graph.nodes[i]["radius"] = edge_radii[idx]
 
     # Update edge
     j = list(fragments_graph.neighbors(i))[0]
-    fragments_graph.edges[i, j]["xyz"] = branch_xyz[idx::]
-    fragments_graph.edges[i, j]["radius"] = branch_radii[idx::]
+    fragments_graph.edges[i, j]["xyz"] = edge_xyz[idx::]
+    fragments_graph.edges[i, j]["radius"] = edge_radii[idx::]
     for k in range(idx):
         try:
-            del fragments_graph.xyz_to_edge[tuple(branch_xyz[k])]
+            del fragments_graph.xyz_to_edge[tuple(edge_xyz[k])]
         except KeyError:
             pass
     return fragments_graph

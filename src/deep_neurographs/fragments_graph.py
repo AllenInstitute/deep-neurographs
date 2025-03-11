@@ -279,8 +279,8 @@ class FragmentsGraph(nx.Graph):
             nbs = list(self.neighbors(i))
             if len(nbs) == 2 and len(self.nodes[i]["proposals"]) == 0:
                 # Concatenate attributes
-                xyz = self.branches(i, key="xyz")
-                radius = self.branches(i, key="radius")
+                xyz = self.edge_attr(i, key="xyz")
+                radius = self.edge_attr(i, key="radius")
                 attrs = {
                     "radius": concatenate([np.flip(radius[0]), radius[1]]),
                     "xyz": concatenate([np.flip(xyz[0], axis=0), xyz[1]]),
@@ -719,8 +719,8 @@ class FragmentsGraph(nx.Graph):
 
     def proposal_avg_radii(self, proposal):
         i, j = tuple(proposal)
-        radii_i = self.branches(i, key="radius")
-        radii_j = self.branches(j, key="radius")
+        radii_i = self.edge_attr(i, key="radius")
+        radii_j = self.edge_attr(j, key="radius")
         return np.array([avg_radius(radii_i), avg_radius(radii_j)])
 
     def proposal_directionals(self, proposal, depth):
@@ -747,7 +747,7 @@ class FragmentsGraph(nx.Graph):
         return np.array([dot_i, dot_j, dot_ij])
 
     def truncated_edge_attr_xyz(self, i, depth):
-        xyz_path_list = self.branches(i, "xyz")
+        xyz_path_list = self.edge_attr(i, "xyz")
         return [geometry.truncate_path(path, depth) for path in xyz_path_list]
 
     def merge_proposal(self, proposal):
@@ -845,6 +845,36 @@ class FragmentsGraph(nx.Graph):
         """
         return geometry.dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
+    def edge_attr(self, i, key="xyz"):
+        """
+        Gets the edge attribute specified by "key" for all edges connected to
+        the given node.
+
+        Parameters
+        ----------
+        ...
+
+        Returns
+        -------
+        ...
+
+        """
+        attrs = list()
+        for j in self.neighbors(i):
+            attr_ij = self.orient_edge_attr((i, j), i, key=key)
+            root = i
+            while self.degree[j] == 2:
+                k = [k for k in self.neighbors(j) if k != root][0]
+                attr_jk = self.orient_edge_attr((j, k), j, key=key)
+                if key == "xyz":
+                    attr_ij = np.vstack([attr_ij, attr_jk])
+                else:
+                    attr_ij = np.concatenate((attr_ij, attr_jk))
+                root = j
+                j = k
+            attrs.append(attr_ij)
+        return attrs
+
     def edge_length(self, edge):
         length = 0
         for i in range(1, len(self.edges[edge]["xyz"])):
@@ -909,27 +939,7 @@ class FragmentsGraph(nx.Graph):
             path_length += self.edges[i, j]["length"]
         return path_length
 
-    def branches(self, i, key="xyz"):
-        """
-        rename connected_edge_attr
-        """
-        attrs = list()
-        for j in self.neighbors(i):
-            attr_ij = self.oriented_edge_attr((i, j), i, key=key)
-            root = i
-            while self.degree[j] == 2:
-                k = [k for k in self.neighbors(j) if k != root][0]
-                attr_jk = self.oriented_edge_attr((j, k), j, key=key)
-                if key == "xyz":
-                    attr_ij = np.vstack([attr_ij, attr_jk])
-                else:
-                    attr_ij = np.concatenate((attr_ij, attr_jk))
-                root = j
-                j = k
-            attrs.append(attr_ij)
-        return attrs
-
-    def oriented_edge_attr(self, edge, i, key="xyz"):
+    def orient_edge_attr(self, edge, i, key="xyz"):
         assert i in edge
         if (self.edges[edge][key][0] == self.nodes[i][key]).all():
             return self.edges[edge][key]
@@ -1089,8 +1099,8 @@ class FragmentsGraph(nx.Graph):
         preserve_radius=False,
         sampling_rate=1,
     ):
-        branch_xyz = self.oriented_edge_attr((i, j), i, "xyz")
-        branch_radius = self.oriented_edge_attr((i, j), i, "radius")
+        branch_xyz = self.orient_edge_attr((i, j), i, "xyz")
+        branch_radius = self.orient_edge_attr((i, j), i, "radius")
         for k in util.spaced_idxs(len(branch_xyz), sampling_rate):
             # Get attributes
             node_id = n_entries + 1

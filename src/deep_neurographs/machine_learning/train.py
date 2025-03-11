@@ -368,7 +368,7 @@ class Trainer:
         # Initializations
         model.to(self.device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
-        scheduler = CosineAnnealingLR(optimizer, T_max=30)
+        scheduler = CosineAnnealingLR(optimizer, T_max=20)
 
         # Dataloaders
         train_dataloader = GraphDataLoader(train_dataset, self.batch_size)

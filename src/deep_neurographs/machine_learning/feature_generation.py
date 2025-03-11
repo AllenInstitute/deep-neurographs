@@ -396,8 +396,10 @@ class FeatureGenerator:
             # Assign threads
             threads = list()
             for p in proposals:
+                i, j = tuple(p)
                 segment_ids = graph.proposal_attr(p, "swc_id")
                 proposal_xyz = graph.proposal_attr(p, "xyz")
+                #edge_xyz_i = graph.
                 threads.append(
                     executor.submit(
                         self.get_patches, p, proposal_xyz, segment_ids
