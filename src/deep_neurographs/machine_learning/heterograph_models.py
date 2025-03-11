@@ -367,10 +367,11 @@ class ConvNet(nn.Module):
         self.conv1 = self._init_conv_layer(2, 32)
         self.conv2 = self._init_conv_layer(32, 64)
         self.conv3 = self._init_conv_layer(64, 128)
+        #self.conv4 = self._init_conv_layer(64, 128)
         self.output = nn.Sequential(
             nn.Linear(46656, 2 * output_dim),
             nn.LeakyReLU(),
-            nn.Dropout(0.2),
+            nn.Dropout(0.1),
             nn.Linear(2 * output_dim, output_dim),
         )
 

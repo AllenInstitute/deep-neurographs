@@ -19,18 +19,18 @@ METRICS_LIST = [
 ]
 
 
-def compute_metrics(fragments_graph, proposals, accepts):
+def compute_metrics(graph, proposals, accepts):
     """
     Computes statistics that reflect the accuracy of the predictions made by
     a proposal classication model.
 
     Parameters
     ----------
-    fragments_graph : FragmentsGraph
+    graph : FragmentsGraph
         Graph generated from fragments of a predicted segmentation.
-    proposals : list[frozenset]
-        List of proposals of a specified "proposal_type".
-    accepts : numpy.ndarray
+    proposals : List[frozenset]
+        Proposals.
+    accepts : List[frozenset]
         Accepted proposals.
 
     Returns
@@ -39,9 +39,9 @@ def compute_metrics(fragments_graph, proposals, accepts):
         Results of evaluation where the keys are identical to "METRICS_LIST".
 
     """
-    n_pos = len([p for p in proposals if p in fragments_graph.gt_accepts])
+    n_pos = len([p for p in proposals if p in graph.gt_accepts])
     a_baseline = n_pos / (len(proposals) if len(proposals) > 0 else 1)
-    tp, fp, a, p, r, f1 = get_accuracy(fragments_graph, proposals, accepts)
+    tp, fp, a, p, r, f1 = get_accuracy(graph, proposals, accepts)
     stats = {
         "# splits fixed": tp,
         "# merges created": fp,
@@ -54,7 +54,7 @@ def compute_metrics(fragments_graph, proposals, accepts):
     return stats
 
 
-def get_accuracy(fragments_graph, proposals, accepts):
+def get_accuracy(graph, proposals, accepts):
     """
     Computes the following metrics for a given set of predicted proposals:
     (1) true positives, (2) false positive, (3) accuracy, (4) precision,
@@ -62,11 +62,11 @@ def get_accuracy(fragments_graph, proposals, accepts):
 
     Parameters
     ----------
-    fragments_graph : FragmentsGraph
+    graph : FragmentsGraph
         Graph generated from fragments of a predicted segmentation.
-    proposals : set[frozenset]
-        List of proposals of a specified "proposal_type".
-    accepts : list
+    proposals : List[frozenset]
+        Proposals.
+    accepts : List[frozenset]
         Accepted proposals.
 
     Returns
@@ -76,7 +76,7 @@ def get_accuracy(fragments_graph, proposals, accepts):
         recall, and F1-score.
 
     """
-    tp, tn, fp, fn = get_detection_cnts(fragments_graph, proposals, accepts)
+    tp, tn, fp, fn = get_detection_cnts(graph, proposals, accepts)
     a = (tp + tn) / len(proposals) if len(proposals) else 1
     p = 1 if tp + fp == 0 else tp / (tp + fp)
     r = 1 if tp + fn == 0 else tp / (tp + fn)
@@ -84,18 +84,18 @@ def get_accuracy(fragments_graph, proposals, accepts):
     return tp, fp, a, p, r, f1
 
 
-def get_detection_cnts(fragments_graph, proposals, accepts):
+def get_detection_cnts(graph, proposals, accepts):
     """
     Computes the following values: (1) true positives, (2) true negatives,
     (3) false positive, and (4) false negatives.
 
     Parameters
     ----------
-    fragments_graph : FragmentsGraph
+    graph : FragmentsGraph
         Graph generated from fragments of a predicted segmentation.
-    proposals : set[frozenset]
-        List of proposals of a specified "proposal_type".
-    accepts : list
+    proposals : List[frozenset]
+        Proposals.
+    accepts : List[frozenset]
         Accepted proposals.
 
     Returns
@@ -107,7 +107,7 @@ def get_detection_cnts(fragments_graph, proposals, accepts):
     """
     tp, tn, fp, fn = 0, 0, 0, 0
     for p in proposals:
-        if p in fragments_graph.gt_accepts:
+        if p in graph.gt_accepts:
             tp += 1 if p in accepts else 0
             fn += 1 if p not in accepts else 0
         else:
