@@ -11,6 +11,7 @@ Graph neural network architectures that learn to classify edge proposals.
 from torch import nn
 from torch_geometric import nn as nn_geometric
 
+import ast
 import re
 import torch
 import torch.nn.init as init
@@ -50,13 +51,11 @@ class HGAT(torch.nn.Module):
         # Initial Embedding
         self.input_nodes = nn.ModuleDict()
         for key, d in node_dict.items():
-            self.input_nodes[key] = nn.Linear(d, hidden_dim, device=device)
+            self.input_nodes[key] = nn.Linear(d, hidden_dim)
 
         self.input_edges = nn.ModuleDict()
         for key, d in edge_dict.items():
-            self.input_edges[str(key)] = nn.Linear(
-                d, hidden_dim, device=device
-            )
+            self.input_edges[str(key)] = nn.Linear(d, hidden_dim)
 
         # Layer dimensions
         hidden_dim_1 = hidden_dim
@@ -175,9 +174,9 @@ class MultiModalHGAT(torch.nn.Module):
     """
     # Class attributes
     relations = [
-        ("proposal", "edge", "proposal"),
-        ("branch", "edge", "proposal"),
-        ("branch", "edge", "branch"),
+        str(("proposal", "edge", "proposal")),
+        str(("branch", "edge", "proposal")),
+        str(("branch", "edge", "branch")),
     ]
 
     def __init__(
@@ -267,9 +266,9 @@ class MultiModalHGAT(torch.nn.Module):
         None
 
         """
-        self.edge_embedding = dict()
+        self.edge_embedding = nn.ModuleDict()
         for key, input_dim in edge_input_dims.items():
-            self.edge_embedding[key] = init_mlp(input_dim, output_dim)
+            self.edge_embedding[str(key)] = init_mlp(input_dim, output_dim)
 
     def _init_patch_embedding(self, patch_shape, output_dim):
         """
@@ -293,8 +292,12 @@ class MultiModalHGAT(torch.nn.Module):
     def init_gat(self, hidden_dim, edge_dim, heads):
         gat_dict = dict()
         for relation in self.get_relations():
-            node_type_1, _, node_type_2 = relation
+            # Extract relation
+            relation = ast.literal_eval(relation)
+            node_type_1, edge_type, node_type_2 = relation
             is_same = True if node_type_1 == node_type_2 else False
+
+            # Initialize layer
             init_gat = init_gat_same if is_same else init_gat_mixed
             gat_dict[relation] = init_gat(hidden_dim, edge_dim, heads)
         return nn_geometric.HeteroConv(gat_dict, aggr="sum")
@@ -328,7 +331,8 @@ class MultiModalHGAT(torch.nn.Module):
 
         # Edge embeddings
         for key, f in self.edge_embedding.items():
-            edge_attr_dict[key] = f(edge_attr_dict[key])
+            attr_key = ast.literal_eval(key)
+            edge_attr_dict[attr_key] = f(edge_attr_dict[attr_key])
 
         # Message passing
         x_dict = self.gat1(
