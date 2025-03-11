@@ -337,10 +337,8 @@ class Trainer:
         """
         # Initializations
         exp_name = "session-" + datetime.today().strftime("%Y%m%d_%H%M")
-        log_dir = os.path.join(output_dir, "tensorboards", exp_name)
-        model_dir = os.path.join(output_dir, "saved-models", exp_name)
-        util.mkdir(output_dir)
-        util.mkdir(model_dir)
+        exp_dir = os.path.join(output_dir, exp_name, "tensorboards")
+        util.mkdir(exp_dir)
 
         # Instance attributes
         self.batch_size = batch_size
@@ -348,8 +346,8 @@ class Trainer:
         self.device = device
         self.lr = lr
         self.n_epochs = n_epochs
-        self.model_dir = model_dir
-        self.writer = SummaryWriter(log_dir=log_dir)
+        self.exp_dir = exp_dir
+        self.writer = SummaryWriter(log_dir=exp_dir)
 
     def run(self, model, train_dataset, validate_dataset):
         """
@@ -370,7 +368,7 @@ class Trainer:
         # Initializations
         model.to(self.device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
-        scheduler = CosineAnnealingLR(optimizer, T_max=50)
+        scheduler = CosineAnnealingLR(optimizer, T_max=30)
 
         # Dataloaders
         train_dataloader = GraphDataLoader(train_dataset, self.batch_size)
@@ -481,7 +479,7 @@ class Trainer:
     def save_model(self, model, score):
         date = datetime.today().strftime("%Y%m%d")
         filename = f"GraphNeuralNet-{date}-{round(score, 4)}.pth"
-        path = os.path.join(self.model_dir, filename)
+        path = os.path.join(self.exp_dir, filename)
         torch.save(model.state_dict(), path)
 
 

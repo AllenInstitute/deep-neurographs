@@ -203,13 +203,13 @@ class FeatureGenerator:
         """
         return self.node_skeletal(graph, computation_graph)
 
-    def run_on_branches(self, neurograph, computation_graph):
+    def run_on_branches(self, graph, computation_graph):
         """
         Generates feature vectors for every edge in "computation_graph".
 
         Parameters
         ----------
-        neurograph : FragmentsGraph
+        graph : FragmentsGraph
             FragmentsGraph generated from a predicted segmentation.
         computation_graph : networkx.Graph
             Graph used by GNN to classify proposals.
@@ -220,15 +220,15 @@ class FeatureGenerator:
             Dictionary that maps an branch id to a feature vector.
 
         """
-        return self.branch_skeletal(neurograph, computation_graph)
+        return self.branch_skeletal(graph, computation_graph)
 
-    def run_on_proposals(self, neurograph, proposals, radius):
+    def run_on_proposals(self, graph, proposals, radius):
         """
         Generates feature vectors for every proposal in "neurograph".
 
         Parameters
         ----------
-        neurograph : FragmentsGraph
+        graph : FragmentsGraph
             FragmentsGraph generated from a predicted segmentation.
         proposals : list[frozenset]
             List of proposals for which features will be generated.
@@ -241,15 +241,15 @@ class FeatureGenerator:
             Dictionary that maps a proposal id to a feature vector.
 
         """
-        features = self.proposal_skeletal(neurograph, proposals, radius)
+        features = self.proposal_skeletal(graph, proposals, radius)
         if not self.is_multimodal:
-            profiles = self.proposal_profiles(neurograph, proposals)
+            profiles = self.proposal_profiles(graph, proposals)
             for p in proposals:
                 features[p] = np.concatenate((features[p], profiles[p]))
         return features
 
     # -- Skeletal Features --
-    def node_skeletal(self, fragments_graph, computation_graph):
+    def node_skeletal(self, graph, computation_graph):
         """
         Generates skeleton-based features for nodes in "computation_graph".
 
@@ -270,15 +270,15 @@ class FeatureGenerator:
         for i in computation_graph.nodes:
             node_skeletal_features[i] = np.concatenate(
                 (
-                    fragments_graph.degree[i],
-                    fragments_graph.nodes[i]["radius"],
-                    len(fragments_graph.nodes[i]["proposals"]),
+                    graph.degree[i],
+                    graph.nodes[i]["radius"],
+                    len(graph.nodes[i]["proposals"]),
                 ),
                 axis=None,
             )
         return node_skeletal_features
 
-    def branch_skeletal(self, fragments_graph, computation_graph):
+    def branch_skeletal(self, graph, computation_graph):
         """
         Generates skeleton-based features for edges in "computation_graph".
 
@@ -296,16 +296,16 @@ class FeatureGenerator:
 
         """
         branch_skeletal_features = dict()
-        for edge in fragments_graph.edges:
+        for edge in graph.edges:
             branch_skeletal_features[frozenset(edge)] = np.array(
                 [
-                    np.mean(fragments_graph.edges[edge]["radius"]),
-                    min(fragments_graph.edge_length(edge), 500) / 500,
+                    np.mean(graph.edges[edge]["radius"]),
+                    min(graph.edge_length(edge), 500) / 500,
                 ],
             )
         return branch_skeletal_features
 
-    def proposal_skeletal(self, fragments_graph, proposals, radius):
+    def proposal_skeletal(self, graph, proposals, radius):
         """
         Generates skeleton-based features for "proposals".
 
@@ -328,20 +328,20 @@ class FeatureGenerator:
         for proposal in proposals:
             proposal_skeletal_features[proposal] = np.concatenate(
                 (
-                    fragments_graph.proposal_length(proposal) / radius,
-                    fragments_graph.n_nearby_leafs(proposal, radius),
-                    fragments_graph.proposal_attr(proposal, "radius"),
-                    fragments_graph.proposal_directionals(proposal, 16),
-                    fragments_graph.proposal_directionals(proposal, 32),
-                    fragments_graph.proposal_directionals(proposal, 64),
-                    fragments_graph.proposal_directionals(proposal, 128),
+                    graph.proposal_length(proposal) / radius,
+                    graph.n_nearby_leafs(proposal, radius),
+                    graph.proposal_attr(proposal, "radius"),
+                    graph.proposal_directionals(proposal, 16),
+                    graph.proposal_directionals(proposal, 32),
+                    graph.proposal_directionals(proposal, 64),
+                    graph.proposal_directionals(proposal, 128),
                 ),
                 axis=None,
             )
         return proposal_skeletal_features
 
     # --- Image features ---
-    def proposal_profiles(self, fragments_graph, proposals):
+    def proposal_profiles(self, graph, proposals):
         """
         Generates an image intensity profile along proposals.
 
@@ -364,7 +364,7 @@ class FeatureGenerator:
             threads = list()
             for p in proposals:
                 n_points = self.get_n_profile_points()
-                xyz_1, xyz_2 = fragments_graph.proposal_attr(p, "xyz")
+                xyz_1, xyz_2 = graph.proposal_attr(p, "xyz")
                 xyz_path = geometry_util.make_line(xyz_1, xyz_2, n_points)
                 threads.append(executor.submit(self.get_profile, xyz_path, p))
 
