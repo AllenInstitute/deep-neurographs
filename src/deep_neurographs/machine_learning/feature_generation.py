@@ -493,11 +493,9 @@ class FeatureGenerator:
         # Main
         relabel_patch = np.zeros(label_patch.shape)
         relabel_patch[label_patch == segment_ids[0]] = 1
-        relabel_patch[label_patch == segment_ids[1]] = 2
+        relabel_patch[label_patch == segment_ids[1]] = 1
         line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
-        return geometry_util.fill_path(relabel_patch, line, val=3)
-
-
+        return geometry_util.fill_path(relabel_patch, line, val=2)
 
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)

@@ -15,10 +15,10 @@ import random
 import torchvision.transforms as transforms
 
 
-# --- Geometric Transforms ---
-class GeometricTransforms:
+# --- Image Transforms ---
+class ImageTransforms:
     """
-    Class that applies a sequence of geometric transforms to a 3D image and
+    Class that applies a sequence of transforms to a 3D image and
     segmentation patch.
 
     """
@@ -36,22 +36,26 @@ class GeometricTransforms:
         None
 
         """
-        self.transforms = [
+        # Instance attributes
+        self.geometric_transforms = [
             RandomFlip3D(),
             RandomRotation3D(),
         ]
+        self.intensity_transforms = transforms.Compose(
+                [RandomContrast3D(), RandomNoise3D()]
+            )
 
-    def __call__(self, img_patch, label_patch):
+    def __call__(self, patches):
         """
         Applies geometric transforms to the input image and segmentation
         patch.
 
         Parameters
         ----------
-        img_patch : numpy.ndarray
-            Image patch to be flipped.
-        label_patch : numpy.ndarray
-            Segmentation patch to be flipped.
+        patches : numpy.ndarray
+            Image patches to be transformed. The shape should be (2, H, W, D)
+            where "patches[0, ...]" is from the input image and
+            "patches[1, ...]" is from the segmentation.
 
         Returns
         -------
@@ -59,11 +63,18 @@ class GeometricTransforms:
             Transformed 3D image and segmentation patch.
 
         """
-        for transform in self.transforms:
-            img_patch, label_patch = transform(img_patch, label_patch)
-        return img_patch, label_patch
+        # Geometric transforms
+        for transform in self.geometric_transforms:
+            patches[0, ...], patches[1, ...] = transform(
+                patches[0, ...], patches[1, ...]
+            )
+
+        # Intensity transforms
+        patches[0, ...] = self.intensity_transforms(patches[0, ...])
+        return patches
 
 
+# --- Geometric Transforms ---
 class RandomFlip3D:
     """
     Randomly flips a 3D image along one or more axes.
@@ -220,47 +231,6 @@ class RandomScale3D:
 
 
 # --- Intensity Transforms ---
-class IntensityTransforms:
-    """
-    Class that applies a sequence of image intensity transforms to a 3D image.
-
-    """
-    def __init__(self):
-        """
-        Initializes a GeometricTransforms instance that applies geomtery-based
-        augmentation to an image and segmentation patch.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        self.transforms = transforms.Compose(
-                [RandomContrast3D(), RandomNoise3D()]
-            )
-
-    def __call__(self, img_patch):
-        """
-        Applies geometric transforms to the input image.
-
-        Parameters
-        ----------
-        img_patch : numpy.ndarray
-            Image patch to be flipped.
-
-        Returns
-        -------
-        numpy.ndarray, numpy.ndarray
-            Transformed 3D image.
-
-        """
-        return self.transforms(img_patch)
-
-
 class RandomContrast3D:
     """
     Adjusts the contrast of a 3D image by scaling voxel intensities.
@@ -350,6 +320,25 @@ class RandomNoise3D:
 
 # --- Helpers ---
 def rotate3d(img_patch, angle, axes):
+    """
+    Rotates a 3D image patch around the specified axes by a given angle.
+
+    Parameters
+    ----------
+    img_patch : numpy.ndarray
+        Image to be rotated.
+    angle : float
+        Angle (in degrees) by which to rotate the image patch around the
+        specified axes.
+    axes : Tuple[int] 
+        Tuple representing the two axes of rotation.
+
+    Returns
+    -------
+    numpy.ndarray
+        Rotated 3D image patch.
+
+    """
     img_patch = rotate(
         img_patch,
         angle,

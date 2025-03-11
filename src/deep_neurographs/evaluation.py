@@ -19,41 +19,7 @@ METRICS_LIST = [
 ]
 
 
-def run_evaluation(fragments_graph, proposals, accepts):
-    """
-    Evaluates the accuracy of predictions made by a proposal
-    classication model.
-
-    Parameters
-    ----------
-    fragments_graphs : FragmentsGraph
-        Graph generated from fragments of a predicted segmentation.
-    proposals : list[frozenset]
-        Proposals classified by model.
-    accepts : list[frozenset]
-        Accepted proposals.
-
-    Returns
-    -------
-    dict
-        Dictionary that stores statistics calculated for all proposal
-        predictions and separately for simple and complex proposals, as
-        specified in "METRICS_LIST".
-
-    """
-    # Initializations
-    stats = dict()
-    simple_proposals = fragments_graph.simple_proposals()
-    complex_proposals = fragments_graph.complex_proposals()
-
-    # Evaluation
-    stats["Overall"] = get_stats(fragments_graph, proposals, accepts)
-    stats["Simple"] = get_stats(fragments_graph, simple_proposals, accepts)
-    stats["Complex"] = get_stats(fragments_graph, complex_proposals, accepts)
-    return stats
-
-
-def get_stats(fragments_graph, proposals, accepts):
+def compute_metrics(fragments_graph, proposals, accepts):
     """
     Computes statistics that reflect the accuracy of the predictions made by
     a proposal classication model.
@@ -73,7 +39,7 @@ def get_stats(fragments_graph, proposals, accepts):
         Results of evaluation where the keys are identical to "METRICS_LIST".
 
     """
-    n_pos = len([e for e in proposals if e in fragments_graph.gt_accepts])
+    n_pos = len([p for p in proposals if p in fragments_graph.gt_accepts])
     a_baseline = n_pos / (len(proposals) if len(proposals) > 0 else 1)
     tp, fp, a, p, r, f1 = get_accuracy(fragments_graph, proposals, accepts)
     stats = {

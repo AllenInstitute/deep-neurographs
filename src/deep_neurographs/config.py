@@ -102,7 +102,6 @@ class MLConfig:
     anisotropy: Tuple[float] = field(default_factory=tuple)
     batch_size: int = 2000
     device: str = "cpu"
-    high_threshold: float = 0.7
     is_multimodal: bool = False
     lr: float = 1e-3
     multiscale: int = 1

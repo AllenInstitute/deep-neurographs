@@ -32,9 +32,7 @@ import torch
 
 from deep_neurographs.fragments_graph import FragmentsGraph
 from deep_neurographs.machine_learning import datasets
-from deep_neurographs.machine_learning.augmentation import (
-       GeometricTransforms, IntensityTransforms
-)
+from deep_neurographs.machine_learning.augmentation import ImageTransforms
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator
 )
@@ -66,18 +64,14 @@ class GraphDataset:
         self.features = dict()
         self.feature_generators = dict()
         self.graphs = dict()
+        self.keys = set()
 
         # Configs
         self.graph_config = config.graph_config
         self.ml_config = config.ml_config
 
         # Data augmentation (if applicable)
-        if transform:
-            self.transform = True
-            self.geometric_transforms = GeometricTransforms()
-            self.intensity_transforms = IntensityTransforms()
-        else:
-            self.transform = False
+        self.transform = ImageTransforms() if transform else False
 
     def init_feature_generator(self, key, img_path, segmentation_path):
         brain_id, segmentation_id, _ = key
@@ -176,6 +170,7 @@ class GraphDataset:
             long_range_bool=self.graph_config.long_range_bool,
             proposals_per_leaf=self.graph_config.proposals_per_leaf,
         )
+        self.keys.add(key)
 
         # Generate features
         self.features[key] = self.generate_features(
@@ -249,7 +244,7 @@ class GraphDataset:
 
         """
         # Initializations
-        keys = list(self.graphs.keys())
+        keys = list(self.keys)
         random.shuffle(keys)
 
         # Main
@@ -266,7 +261,7 @@ class GraphDataset:
                 accepts = self.graphs[key].gt_accepts
                 features = self.get_features(key, batch)
                 dataset = datasets.init(features, batch["graph"], accepts)
-                yield (key, dataset)
+                yield dataset
 
     def get_features(self, key, batch):
         # Node features
@@ -291,12 +286,16 @@ class GraphDataset:
                     features["patches"][p] = patches
         return features
 
-    def apply_transforms(self, patches):
-        patches[0,...], patches[1,...] = self.geometric_transforms(
-            patches[0,...], patches[1,...]
-        )
-        patches[0,...] = self.intensity_transforms(patches[0,...])
-        return patches
+    def __getitem__(self, key):
+        # Get items
+        graph = deepcopy(self.graphs[key])
+        features = deepcopy(self.features[key])
+
+        # Apply data augmentation (if applicable)
+        if self.transform and self.ml_config.is_multimodal:
+            for p, patches in features["patches"].items():
+                features["patches"][p] = self.transform(patches)
+        return graph, features
 
 
 class GraphDataLoader:
@@ -308,11 +307,43 @@ class GraphDataLoader:
         self.shuffle = shuffle
 
     def __iter__(self):
-        pass
+        """
+        Generates a list of batches for training a graph neural network. Each
+        batch is a tuple that contains the following:
+            - key (str): Unique identifier of a graph in self.graphs.
+            - graph (networkx.Graph): GNN computation graph.
+            - proposals (List[frozenset[int]]): List of proposals in graph.
 
+        Parameters
+        ----------
+        batch_size : int
+            Maximum number of proposals in each batch.
 
-class GraphDataloader:
-    pass
+        Returns
+        -------
+        ...
+
+        """
+        # Initializations
+        if self.shuffle:
+            keys = list(self.graph_dataset.keys)
+            random.shuffle(keys)
+
+        # Main
+        for key in keys:
+            proposals = set(self.graph_dataset.graphs[key].list_proposals())
+            while len(proposals) > 0:
+                # Get batch
+                batch = ml_util.get_batch(
+                    self.graph_dataset.graphs[key], proposals, self.batch_size
+                )
+                proposals -= batch["proposals"]
+
+                # Add dataset
+                accepts = self.graphs[key].gt_accepts
+                features = self.get_features(key, batch)
+                dataset = datasets.init(features, batch["graph"], accepts)
+                yield dataset
 
 
 class Trainer:
@@ -388,7 +419,7 @@ class Trainer:
             # Train
             y, hat_y = [], []
             model.train()
-            for _, dataset in train_dataset.generate_batches(self.batch_size):
+            for dataset in train_dataset.generate_batches(self.batch_size):
                 # Forward pass
                 hat_y_i, y_i = self.predict(model, dataset.data)
                 loss = self.criterion(hat_y_i, y_i)
@@ -409,7 +440,7 @@ class Trainer:
             # Validate
             model.eval()
             y, hat_y = [], []
-            for _, dataset in validation_dataset.generate_batches(self.batch_size):
+            for dataset in validation_dataset.generate_batches(self.batch_size):
                 hat_y_i, y_i = self.predict(model, dataset.data)
                 y.extend(ml_util.toCPU(y_i))
                 hat_y.extend(ml_util.toCPU(hat_y_i))

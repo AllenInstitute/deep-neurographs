@@ -139,7 +139,7 @@ def get_inputs(data, device="cpu"):
     return data.x_dict, data.edge_index_dict, data.edge_attr_dict
 
 
-def init_model(is_multimodal, heads_1=2, heads_2=2):
+def init_model(is_multimodal, heads_1=4, heads_2=4):
     node_dict = feature_generation.get_node_dict(is_multimodal)
     edge_dict = feature_generation.get_edge_dict()
     if is_multimodal:

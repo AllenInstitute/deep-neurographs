@@ -117,14 +117,9 @@ class InferencePipeline:
         self.inference_engine = InferenceEngine(
             img_path,
             self.model_path,
+            self.ml_config,
             self.graph_config.search_radius,
-            accept_threshold=self.ml_config.threshold,
-            anisotropy=self.ml_config.anisotropy,
-            batch_size=self.ml_config.batch_size,
-            device=self.ml_config.device,
-            multiscale=self.ml_config.multiscale,
             segmentation_path=segmentation_path,
-            is_multimodal=self.ml_config.is_multimodal,
         )
 
         # Set output directory
@@ -460,13 +455,8 @@ class InferenceEngine:
         self,
         img_path,
         model_path,
+        ml_config,
         radius,
-        accept_threshold=0.6,
-        anisotropy=[1.0, 1.0, 1.0],
-        batch_size=2000,
-        device=None,
-        is_multimodal=False,
-        multiscale=1,
         segmentation_path=None,
     ):
         """
@@ -479,23 +469,13 @@ class InferenceEngine:
             Path to image.
         model_path : str
             Path to machine learning model weights.
+        ml_config : MLConfig
+            Configuration object containing parameters and settings required
+            for the inference.
         radius : float
             Search radius used to generate proposals.
-        accept_threshold : float, optional
-            Threshold for accepting proposals, where proposals with predicted
-            likelihood above this threshold are accepted. The default is 0.6.
-        anisotropy : List[float], optional
-            Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
-        batch_size : int, optional
-            Number of proposals to classify in each batch.The default is 2000.
-        is_multimodal : bool, optional
-            ...
-        multiscale : int, optional
-            Level in the image pyramid that voxel coordinates must index into.
-            The default is 1.
-        segmentation_path : str or None, optional
-            ...
+        segmentation_path : str, optional
+            Path to segmentation stored in GCS bucket. The default is None.
 
         Returns
         -------
@@ -503,23 +483,23 @@ class InferenceEngine:
 
         """
         # Instance attributes
-        self.batch_size = batch_size
-        self.device = "cpu" if device is None else device
+        self.batch_size = ml_config.batch_size
+        self.device = ml_config.device
         self.radius = radius
-        self.threshold = accept_threshold
+        self.threshold = ml_config.threshold
 
         # Features
         self.feature_generator = FeatureGenerator(
             img_path,
-            multiscale,
-            anisotropy=anisotropy,
-            is_multimodal=is_multimodal,
+            ml_config.multiscale,
+            anisotropy=ml_config.anisotropy,
+            is_multimodal=ml_config.is_multimodal,
             segmentation_path=segmentation_path,
         )
 
         # Model
-        if is_multimodal:
-            self.model = ml_util.init_model(is_multimodal)
+        if ml_config.is_multimodal:
+            self.model = ml_util.init_model(ml_config.is_multimodal)
             self.model.load_state_dict(torch.load(model_path))
         else:
             self.model = torch.load(model_path, weights_only=False)
