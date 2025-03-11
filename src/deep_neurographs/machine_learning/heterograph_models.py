@@ -33,7 +33,6 @@ class HGAT(torch.nn.Module):
         self,
         node_dict,
         edge_dict,
-        device=None,
         hidden_dim=96,
         dropout=0.2,
         heads_1=2,
@@ -65,7 +64,7 @@ class HGAT(torch.nn.Module):
         # Message passing layers
         self.gat1 = self.init_gat_layer(hidden_dim_1, hidden_dim_1, heads_1)
         self.gat2 = self.init_gat_layer(hidden_dim_2, hidden_dim_1, heads_2)
-        self.output = nn.Linear(output_dim, 1).to(device)
+        self.output = nn.Linear(output_dim, 1)
 
         # Initialize weights
         self.init_weights()
@@ -481,28 +480,28 @@ def init_gat_mixed(hidden_dim, edge_dim, heads):
     return gat
 
 
-def init_mlp(input_dim, output_dim, device="cuda"):
+def init_mlp(input_dim, output_dim):
     """
     Initializes a multi-layer perceptron (MLP).
 
-    Parameters
+    Parametersƒ
     ----------
     input_dim : int
         Dimension of input feature vector.
     output_dim : int
         Dimension of embedded feature vector.
-    device : str, optional
 
     Returns
     -------
-    ...
+    nn.Sequential
+        ...
 
     """
     mlp = nn.Sequential(
-        nn.Linear(input_dim, 2 * output_dim, device=device),
+        nn.Linear(input_dim, 2 * output_dim),
         nn.LeakyReLU(),
         nn.Dropout(p=0.1),
-        nn.Linear(2 * output_dim, output_dim, device=device),
+        nn.Linear(2 * output_dim, output_dim),
     )
     return mlp
 
