@@ -69,6 +69,9 @@ class ImageTransforms:
         # Intensity transforms
         patches[0, ...] = self.intensity_transforms(patches[0, ...])
         return patches
+        # Intensity transforms
+        patches[0, ...] = self.intensity_transforms(patches[0, ...])
+        return patches
 
 
 # --- Geometric Transforms ---
