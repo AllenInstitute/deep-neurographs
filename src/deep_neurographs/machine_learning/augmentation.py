@@ -45,13 +45,15 @@ class ImageTransforms:
                 [RandomContrast3D(), RandomNoise3D()]
             )
 
-    def __call__(self, patches):
+    def __call__(self, proposal, patches):
         """
         Applies geometric transforms to the input image and segmentation
         patch.
 
         Parameters
         ----------
+        proposal : Frozenset[int]
+            ...
         patches : numpy.ndarray
             Image with the shape (2, H, W, D), where "patches[0, ...]" is from
             the input image and "patches[1, ...]" is from the segmentation.
@@ -68,10 +70,7 @@ class ImageTransforms:
 
         # Intensity transforms
         patches[0, ...] = self.intensity_transforms(patches[0, ...])
-        return patches
-        # Intensity transforms
-        patches[0, ...] = self.intensity_transforms(patches[0, ...])
-        return patches
+        return proposal, patches
 
 
 # --- Geometric Transforms ---

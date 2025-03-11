@@ -13,6 +13,7 @@ To do: explain how the train pipeline is organized. how is the data organized?
 """
 
 from collections import defaultdict
+from concurrent.futures import as_completed, ProcessPoolExecutor
 from copy import deepcopy
 from datetime import datetime
 from sklearn.metrics import (
@@ -223,79 +224,23 @@ class GraphDataset:
         )
         return features
 
-    # --- Batch Generation ---
-    def generate_batches(self, batch_size):
-        """
-        Generates a list of batches for training a graph neural network. Each
-        batch is a tuple that contains the following:
-            - key (str): Unique identifier of a graph in self.graphs.
-            - graph (networkx.Graph): GNN computation graph.
-            - proposals (List[frozenset[int]]): List of proposals in graph.
-
-        Parameters
-        ----------
-        batch_size : int
-            Maximum number of proposals in each batch.
-
-        Returns
-        -------
-        List[tuple]
-            Batches for training a graph neural network.
-
-        """
-        # Initializations
-        keys = list(self.keys)
-        random.shuffle(keys)
-
-        # Main
-        for key in keys:
-            proposals = set(self.graphs[key].list_proposals())
-            while len(proposals) > 0:
-                # Get batch
-                batch = ml_util.get_batch(
-                    self.graphs[key], proposals, batch_size
-                )
-                proposals -= batch["proposals"]
-
-                # Add dataset
-                accepts = self.graphs[key].gt_accepts
-                features = self.get_features(key, batch)
-                dataset = datasets.init(features, batch["graph"], accepts)
-                yield dataset
-
-    def get_features(self, key, batch):
-        # Node features
-        features = defaultdict(lambda: defaultdict(dict))
-        for i in batch["graph"].nodes:
-            features["nodes"][i] = self.features[key]["nodes"][i]
-
-        # Edge features
-        for e in map(frozenset, batch["graph"].edges):
-            if e in batch["proposals"]:
-                features["proposals"][e] = self.features[key]["proposals"][e]
-            else:
-                features["branches"][e] = self.features[key]["branches"][e]
-
-        # Image patches
-        if self.ml_config.is_multimodal:
-            for p in batch["proposals"]:
-                patches = deepcopy(self.features[key]["patches"][p])
-                if self.transform:
-                    features["patches"][p] = self.apply_transforms(patches)
-                else:
-                    features["patches"][p] = patches
-        return features
-
+    # --- Get Data ---
     def __getitem__(self, key):
-        # Get items
-        graph = deepcopy(self.graphs[key])
         features = deepcopy(self.features[key])
-
-        # Apply data augmentation (if applicable)
         if self.transform and self.ml_config.is_multimodal:
-            for p, patches in features["patches"].items():
-                features["patches"][p] = self.transform(patches)
-        return graph, features
+            with ProcessPoolExecutor() as executor:
+                # Assign processes
+                processes = list()
+                for proposal, patches in features["patches"].items():
+                    processes.append(
+                        executor.submit(self.transform, proposal, patches)
+                    )
+
+                # Store results
+                for process in as_completed(processes):
+                    proposal, patches = process.result()
+                    features["patches"][proposal] = patches
+        return self.graphs[key], features
 
 
 class GraphDataLoader:
@@ -331,19 +276,37 @@ class GraphDataLoader:
 
         # Main
         for key in keys:
-            proposals = set(self.graph_dataset.graphs[key].list_proposals())
+            graph, features = self.graph_dataset[key]
+            proposals = set(graph.list_proposals())
             while len(proposals) > 0:
                 # Get batch
-                batch = ml_util.get_batch(
-                    self.graph_dataset.graphs[key], proposals, self.batch_size
-                )
+                batch = ml_util.get_batch(graph, proposals, self.batch_size)
                 proposals -= batch["proposals"]
 
-                # Add dataset
-                accepts = self.graphs[key].gt_accepts
-                features = self.get_features(key, batch)
-                dataset = datasets.init(features, batch["graph"], accepts)
-                yield dataset
+                # Extract features
+                accepts = graph.gt_accepts
+                batch_features = self.get_batch_features(batch, features)
+                data = datasets.init(batch_features, batch["graph"], accepts)
+                yield data
+
+    def get_batch_features(self, batch, features):
+        # Node features
+        batch_features = defaultdict(lambda: defaultdict(dict))
+        for i in batch["graph"].nodes:
+            batch_features["nodes"][i] = features["nodes"][i]
+
+        # Edge features
+        for e in map(frozenset, batch["graph"].edges):
+            if e in batch["proposals"]:
+                batch_features["proposals"][e] = features["proposals"][e]
+            else:
+                batch_features["branches"][e] = features["branches"][e]
+
+        # Image patches
+        if "patches" in features:
+            for p in batch["proposals"]:
+                batch_features["patches"][p] = features["patches"][p]
+        return batch_features
 
 
 class Trainer:
@@ -388,7 +351,7 @@ class Trainer:
         self.model_dir = model_dir
         self.writer = SummaryWriter(log_dir=log_dir)
 
-    def run(self, model, train_dataset, validation_dataset):
+    def run(self, model, train_dataset, validate_dataset):
         """
         Trains a graph neural network in the case where "datasets" is a
         dictionary of datasets such that each corresponds to a distinct graph.
@@ -409,9 +372,9 @@ class Trainer:
         optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
         scheduler = CosineAnnealingLR(optimizer, T_max=50)
 
-        print("\nTraining...")
-        print("# Train Examples:", train_dataset.n_proposals())
-        print("# Validation Examples:", validation_dataset.n_proposals())
+        # Dataloaders
+        train_dataloader = GraphDataLoader(train_dataset, self.batch_size)
+        validate_dataloader = GraphDataLoader(validate_dataset, 160)
 
         # Main
         best_f1 = 0
@@ -419,7 +382,7 @@ class Trainer:
             # Train
             y, hat_y = [], []
             model.train()
-            for dataset in train_dataset.generate_batches(self.batch_size):
+            for dataset in train_dataloader:
                 # Forward pass
                 hat_y_i, y_i = self.predict(model, dataset.data)
                 loss = self.criterion(hat_y_i, y_i)
@@ -440,7 +403,7 @@ class Trainer:
             # Validate
             model.eval()
             y, hat_y = [], []
-            for dataset in validation_dataset.generate_batches(self.batch_size):
+            for dataset in validate_dataloader:
                 hat_y_i, y_i = self.predict(model, dataset.data)
                 y.extend(ml_util.toCPU(y_i))
                 hat_y.extend(ml_util.toCPU(hat_y_i))
