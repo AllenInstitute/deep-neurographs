@@ -366,13 +366,15 @@ class ConvNet(nn.Module):
         # Call parent class
         nn.Module.__init__(self)
 
-        # Architecture
-        self.conv1 = self._init_conv_layer(2, 32)
-        self.conv2 = self._init_conv_layer(32, 64)
-        self.conv3 = self._init_conv_layer(64, 128)
-        #self.conv4 = self._init_conv_layer(64, 128)
+        # Convolutional layers
+        self.conv1 = self._init_conv_layer(2, 32, 5)
+        self.conv2 = self._init_conv_layer(32, 64, 3)
+        self.conv3 = self._init_conv_layer(64, 128, 3)
+        self.conv4 = self._init_conv_layer(128, 256, 3)
+
+        # Output layer
         self.output = nn.Sequential(
-            nn.Linear(46656, 2 * output_dim),
+            nn.Linear(256, 2 * output_dim),
             nn.LeakyReLU(),
             nn.Dropout(0.1),
             nn.Linear(2 * output_dim, output_dim),
@@ -381,7 +383,7 @@ class ConvNet(nn.Module):
         # Initialize weights
         self.apply(self.init_weights)
 
-    def _init_conv_layer(self, in_channels, out_channels):
+    def _init_conv_layer(self, in_channels, out_channels, kernel_size):
         """
         Initializes a convolutional layer.
 
@@ -391,6 +393,8 @@ class ConvNet(nn.Module):
             Number of channels that are input to this convolutional layer.
         out_channels : int
             Number of channels that are output from this convolutional layer.
+        kernel_size : int
+            Size of kernel used on convolutional layers.
 
         Returns
         -------
@@ -402,7 +406,7 @@ class ConvNet(nn.Module):
             nn.Conv3d(
                 in_channels,
                 out_channels,
-                kernel_size=5,
+                kernel_size=kernel_size,
                 stride=1,
                 padding=0,
             ),
@@ -455,8 +459,13 @@ class ConvNet(nn.Module):
             Output of neural network.
 
         """
+        # Convolutional layers
         x = self.conv1(x)
         x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+
+        # Output layer
         x = self.output(vectorize(x))
         return x
 
@@ -508,13 +517,9 @@ def init_mlp(input_dim, output_dim):
 
 def reformat_edge_key(key):
     if type(key) is str:
-        return tuple([rm_non_alphanumeric(s) for s in key.split(",")])
+        return tuple([re.sub(r'\W+', '', s) for s in key.split(",")])
     else:
         return key
-
-
-def rm_non_alphanumeric(s):
-    return re.sub(r'\W+', '', s)
 
 
 def vectorize(tensor):
