@@ -53,22 +53,22 @@ class ImageTransforms:
         Parameters
         ----------
         patches : numpy.ndarray
-            Image patches to be transformed. The shape should be (2, H, W, D)
-            where "patches[0, ...]" is from the input image and
-            "patches[1, ...]" is from the segmentation.
+            Image with the shape (2, H, W, D), where "patches[0, ...]" is from
+            the input image and "patches[1, ...]" is from the segmentation.
 
         Returns
         -------
-        numpy.ndarray, numpy.ndarray
+        numpy.ndarray
             Transformed 3D image and segmentation patch.
 
         """
         # Geometric transforms
         for transform in self.geometric_transforms:
-            patches[0, ...], patches[1, ...] = transform(
-                patches[0, ...], patches[1, ...]
-            )
+            patches = transform(patches)
 
+        # Intensity transforms
+        patches[0, ...] = self.intensity_transforms(patches[0, ...])
+        return patches
         # Intensity transforms
         patches[0, ...] = self.intensity_transforms(patches[0, ...])
         return patches
@@ -98,28 +98,27 @@ class RandomFlip3D:
         """
         self.axes = axes
 
-    def __call__(self, img_patch, label_patch):
+    def __call__(self, patches):
         """
         Applies random flipping to the input image and segmentation patch.
 
         Parameters
         ----------
-        img_patch : numpy.ndarray
-            Image patch to be flipped.
-        label_patch : numpy.ndarray
-            Segmentation patch to be flipped.
+        patches : numpy.ndarray
+            Image with the shape (2, H, W, D), where "patches[0, ...]" is from
+            the input image and "patches[1, ...]" is from the segmentation.
 
         Returns
         -------
-        numpy.ndarray, numpy.ndarray
+        numpy.ndarray
             Flipped 3D image and segmentation patch.
 
         """
         for axis in self.axes:
             if random.random() > 0.5:
-                img_patch = np.flip(img_patch, axis=axis)
-                label_patch = np.flip(label_patch, axis=axis)
-        return img_patch, label_patch
+                patches[0, ...] = np.flip(patches[0, ...], axis=axis)
+                patches[1, ...] = np.flip(patches[1, ...], axis=axis)
+        return patches
 
 
 class RandomRotation3D:
@@ -147,28 +146,27 @@ class RandomRotation3D:
         self.angles = angles
         self.axes = axes
 
-    def __call__(self, img_patch, label_patch):
+    def __call__(self, patches):
         """
         Rotates the input image and segmentation patch.
 
         Parameters
         ----------
-        img_patch : numpy.ndarray
-            Image patch to be rotated.
-        label_patch : numpy.ndarray
-            Segmentation patch to be rotated.
+        patches : numpy.ndarray
+            Image with the shape (2, H, W, D), where "patches[0, ...]" is from
+            the input image and "patches[1, ...]" is from the segmentation.
 
         Returns
         -------
-        numpy.ndarray, numpy.ndarray
+        numpy.ndarray
             Rotated 3D image and segmentation patch.
 
         """
         for axes in self.axes:
             angle = random.uniform(*self.angles)
-            img_patch = rotate3d(img_patch, angle, axes)
-            label_patch = rotate3d(label_patch, angle, axes)
-        return img_patch, label_patch
+            patches[0, ...] = rotate3d(patches[0, ...], angle, axes)
+            patches[1, ...] = rotate3d(patches[1, ...], angle, axes)
+        return patches
 
 
 class RandomScale3D:
@@ -193,41 +191,40 @@ class RandomScale3D:
         """
         self.scale_range = scale_range
 
-    def __call__(self, img_patch, label_patch):
+    def __call__(self, patches):
         """
         Applies random rescaling to the input 3D image.
 
         Parameters
         ----------
-        img_patch : numpy.ndarray
-            Image patch to be rescaled.
-        label_patch : numpy.ndarray
-            Segmentation patch to be rescaled.
+        patches : numpy.ndarray
+            Image with the shape (2, H, W, D), where "patches[0, ...]" is from
+            the input image and "patches[1, ...]" is from the segmentation.
 
         Returns
         -------
-        numpy.ndarray, numpy.ndarray
+        numpy.ndarray
             Rescaled 3D image and segmentation patch.
 
         """
         # Sample new image shape
         alpha = np.random.uniform(self.scale_range[0], self.scale_range[1])
         new_shape = (
-            int(img_patch.shape[0] * alpha),
-            int(img_patch.shape[1] * alpha),
-            int(img_patch.shape[2] * alpha),
+            int(patches.shape[1] * alpha),
+            int(patches.shape[2] * alpha),
+            int(patches.shape[3] * alpha),
         )
 
         # Compute the zoom factors
-        shape = img_patch.shape
+        shape = patches.shape[1:]
         zoom_factors = [
             new_dim / old_dim for old_dim, new_dim in zip(shape, new_shape)
         ]
 
         # Rescale images
-        img_patch = zoom(img_patch, zoom_factors, order=3)
-        label_patch = zoom(label_patch, zoom_factors, order=3)
-        return img_patch, label_patch
+        patches[0, ...] = zoom(patches[0, ...], zoom_factors, order=3)
+        patches[1, ...] = zoom(patches[1, ...], zoom_factors, order=3)
+        return patches
 
 
 # --- Intensity Transforms ---
@@ -330,7 +327,7 @@ def rotate3d(img_patch, angle, axes):
     angle : float
         Angle (in degrees) by which to rotate the image patch around the
         specified axes.
-    axes : Tuple[int] 
+    axes : Tuple[int]
         Tuple representing the two axes of rotation.
 
     Returns
