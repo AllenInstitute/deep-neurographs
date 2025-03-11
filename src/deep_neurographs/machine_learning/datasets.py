@@ -56,15 +56,14 @@ def init(features, graph, gt_accepts=set()):
     x_dict["nodes"] = features["nodes"]
 
     # Build patch matrix
-    is_multimodel = "patches" in features
-    if is_multimodel:
+    if "patches" in features:
         x_dict["patch"] = get_patches_matrix(
             features["patches"], idxs["proposals"]["id_to_idx"]
         )
 
     # Initialize dataset
     proposals = list(features["proposals"].keys())
-    if is_multimodel:
+    if "patches" in features:
         Dataset = HeteroGraphMultiModalDataset
     else:
         Dataset = HeteroGraphDataset
