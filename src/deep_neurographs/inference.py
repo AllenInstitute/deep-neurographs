@@ -219,7 +219,7 @@ class InferencePipeline:
         # Save valid labels and current graph
         swc_dir = os.path.join(self.output_dir, "swcs")
         valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        self.graph.to_zipped_swcs_parallelized(swc_dir, sampling_rate=4)
+        self.graph.to_zipped_swcs(swc_dir, sampling_rate=3)
         self.graph.save_labels(valid_labels_path)
 
         # Report results
@@ -317,7 +317,7 @@ class InferencePipeline:
         """
         # Save result on local machine
         swc_dir = os.path.join(self.output_dir, "corrected-swcs")
-        self.graph.to_zipped_swcs_parallelized(swc_dir, min_size=40)
+        self.graph.to_zipped_swcs(swc_dir)
         self.save_connections()
         self.write_metadata()
 

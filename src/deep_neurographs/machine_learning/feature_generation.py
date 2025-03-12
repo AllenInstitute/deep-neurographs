@@ -496,9 +496,11 @@ class FeatureGenerator:
 
         # Annotate label patch
         label_patch = (label_patch > 0).astype(float)
-        label_patch = self.annotate_proposal(label_patch, center, proposal_xyz)
         label_patch = self.annotate_edge(label_patch, center, edge_xyz_1)
         label_patch = self.annotate_edge(label_patch, center, edge_xyz_2)
+        label_patch = self.annotate_proposal(
+            label_patch, center, proposal_xyz
+        )
         return label_patch
 
     def annotate_proposal(self, label_patch, center, proposal_xyz):
