@@ -344,6 +344,7 @@ class Trainer:
         self.batch_size = batch_size
         self.criterion = nn.BCEWithLogitsLoss()
         self.device = device
+        self.exp_name = exp_name
         self.lr = lr
         self.n_epochs = n_epochs
         self.exp_dir = exp_dir
@@ -375,6 +376,8 @@ class Trainer:
         validate_dataloader = GraphDataLoader(validate_dataset, 160)
 
         # Main
+        print("\nTraining...")
+        print("Experiment:", self.exp_name)
         best_f1 = 0
         for epoch in range(self.n_epochs):
             # Train
