@@ -526,6 +526,12 @@ class FeatureGenerator:
         label_patch = self.annotate_edge(label_patch, center, edge_xyz_2)
         return label_patch
 
+    def get_local_coordinates(self, center_voxel, xyz_pts):
+        shape = self.label_patch_shape
+        offset = np.array([c - s // 2 for c, s in zip(center_voxel, shape)])
+        voxels = [img_util.to_voxels(xyz, self.anisotropy) for xyz in xyz_pts]
+        return geometry_util.shift_path(voxels, offset)
+
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
 
