@@ -940,7 +940,6 @@ class FragmentsGraph(nx.Graph):
         return path_length
 
     def orient_edge_attr(self, edge, i, key="xyz"):
-        assert i in edge
         if (self.edges[edge][key][0] == self.nodes[i][key]).all():
             return self.edges[edge][key]
         else:
@@ -958,15 +957,10 @@ class FragmentsGraph(nx.Graph):
             return None
 
     # --- write graph to swcs ---
-    def to_zipped_swcs_parallelized(
-        self,
-        swc_dir,
-        min_size=0,
-        sampling_rate=2,
-    ):
+    def to_zipped_swcs(self, swc_dir, sampling_rate=2):
         # Initializations
-        n_connected_components = nx.number_connected_components(self)
-        batch_size = n_connected_components / 1000
+        n = nx.number_connected_components(self)
+        batch_size = n / 1000 if n > 10 ** 4 else np.inf
         util.mkdir(swc_dir)
 
         # Main
@@ -985,7 +979,6 @@ class FragmentsGraph(nx.Graph):
                             self.batch_to_zipped_swcs,
                             batch,
                             zip_path,
-                            min_size,
                             sampling_rate
                         )
                     )
@@ -999,41 +992,15 @@ class FragmentsGraph(nx.Graph):
             for _ in as_completed(threads):
                 pbar.update(1)
 
-    def batch_to_zipped_swcs(
-        self, nodes_list, zip_path, min_size=0, sampling_rate=1
-    ):
+    def batch_to_zipped_swcs(self, nodes_list, zip_path, sampling_rate=1):
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
             cnt = 0
             for nodes in nodes_list:
                 root = util.sample_once(nodes)
-                if self.path_length(root) > min_size:
-                    self.nodes_to_zipped_swc(
-                        zip_writer, nodes, sampling_rate=sampling_rate
-                    )
-                    cnt += 1
-            return cnt
-
-    def to_zipped_swcs(
-        self,
-        zip_path,
-        color=None,
-        min_size=0,
-        preserve_radius=False,
-        sampling_rate=1,
-    ):
-        with zipfile.ZipFile(zip_path, "w") as zip_writer:
-            cnt = 0
-            for nodes in nx.connected_components(self):
-                root = util.sample_once(nodes)
-                if self.path_length(root) > min_size:
-                    self.nodes_to_zipped_swc(
-                        zip_writer,
-                        nodes,
-                        color=color,
-                        preserve_radius=preserve_radius,
-                        sampling_rate=sampling_rate
-                    )
-                    cnt += 1
+                self.nodes_to_zipped_swc(
+                    zip_writer, nodes, sampling_rate=sampling_rate
+                )
+                cnt += 1
             return cnt
 
     def nodes_to_zipped_swc(

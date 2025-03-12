@@ -496,9 +496,11 @@ class FeatureGenerator:
 
         # Annotate label patch
         label_patch = (label_patch > 0).astype(float)
-        label_patch = self.annotate_proposal(label_patch, center, proposal_xyz)
         label_patch = self.annotate_edge(label_patch, center, edge_xyz_1)
         label_patch = self.annotate_edge(label_patch, center, edge_xyz_2)
+        label_patch = self.annotate_proposal(
+            label_patch, center, proposal_xyz
+        )
         return label_patch
 
     def annotate_proposal(self, label_patch, center, proposal_xyz):
@@ -517,11 +519,12 @@ class FeatureGenerator:
         voxels = get_inbounds(voxels, label_patch.shape)
         return geometry_util.fill_path(label_patch, voxels, val=2)
 
-    def get_local_coordinates(self, center_voxel, xyz_pts):
-        shape = self.label_patch_shape
-        offset = np.array([c - s // 2 for c, s in zip(center_voxel, shape)])
-        voxels = [img_util.to_voxels(xyz, self.anisotropy) for xyz in xyz_pts]
-        return geometry_util.shift_path(voxels, offset)
+        # Annotate label patch
+        label_patch = (label_patch > 0).astype(float)
+        label_patch = self.annotate_proposal(label_patch, center, proposal_xyz)
+        label_patch = self.annotate_edge(label_patch, center, edge_xyz_1)
+        label_patch = self.annotate_edge(label_patch, center, edge_xyz_2)
+        return label_patch
 
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
