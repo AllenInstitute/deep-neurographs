@@ -345,6 +345,74 @@ class FragmentsGraph(nx.Graph):
             graph.add_edges_from(deepcopy(self.edges))
         return graph
 
+    # -- KDTree --
+    def init_kdtree(self, node_type):
+        """
+        Builds a KD-Tree from the xyz coordinates of the subset of nodes
+        indicated by "node_type".
+
+        Parameters
+        ----------
+        node_type : None or str
+            Type of node used to build kdtree.
+
+        Returns
+        -------
+        None
+
+        """
+        assert node_type in ["leaf", "proposal"]
+        if node_type == "leaf":
+            self.leaf_kdtree = self.get_kdtree(node_type="leaf")
+        elif node_type == "proposal":
+            self.proposal_kdtree = self.get_kdtree(node_type="proposal")
+
+    def get_kdtree(self, node_type=None):
+        """
+        Builds KD-Tree from xyz coordinates across all nodes and edges.
+
+        Parameters
+        ----------
+        node_type : None or str, optional
+            Type of nodes used to build kdtree.
+
+        Returns
+        -------
+        KDTree
+            KD-Tree generated from xyz coordinates across all nodes and edges.
+
+        """
+        # Get xyz coordinates
+        if node_type == "leaf":
+            xyz_list = [self.nodes[i]["xyz"] for i in self.get_leafs()]
+        elif node_type == "proposal":
+            xyz_list = list(self.xyz_to_proposal.keys())
+        else:
+            xyz_list = list(self.xyz_to_edge.keys())
+        return KDTree(xyz_list)
+
+    def query_kdtree(self, xyz, d, node_type):
+        """
+        Parameters
+        ----------
+        xyz : int
+            Node id.
+        d : float
+            Distance from "xyz" that is searched.
+
+        Returns
+        -------
+        generator[tuple]
+            Generator that generates the xyz coordinates cooresponding to all
+            nodes within a distance of "d" from "xyz".
+
+        """
+        assert node_type in ["leaf", "proposal"]
+        if node_type == "leaf":
+            return geometry.query_ball(self.leaf_kdtree, xyz, d)
+        elif node_type == "proposal":
+            return geometry.query_ball(self.proposal_kdtree, xyz, d)
+
     # --- Proposal Generation ---
     def generate_proposals(
         self,
@@ -575,74 +643,6 @@ class FragmentsGraph(nx.Graph):
                     if p_ij not in visited:
                         queue.append(p_ij)
         return visited
-
-    # -- KDTree --
-    def init_kdtree(self, node_type):
-        """
-        Builds a KD-Tree from the xyz coordinates of the subset of nodes
-        indicated by "node_type".
-
-        Parameters
-        ----------
-        node_type : None or str
-            Type of node used to build kdtree.
-
-        Returns
-        -------
-        None
-
-        """
-        assert node_type in ["leaf", "proposal"]
-        if node_type == "leaf":
-            self.leaf_kdtree = self.get_kdtree(node_type="leaf")
-        elif node_type == "proposal":
-            self.proposal_kdtree = self.get_kdtree(node_type="proposal")
-
-    def get_kdtree(self, node_type=None):
-        """
-        Builds KD-Tree from xyz coordinates across all nodes and edges.
-
-        Parameters
-        ----------
-        node_type : None or str, optional
-            Type of nodes used to build kdtree.
-
-        Returns
-        -------
-        KDTree
-            KD-Tree generated from xyz coordinates across all nodes and edges.
-
-        """
-        # Get xyz coordinates
-        if node_type == "leaf":
-            xyz_list = [self.nodes[i]["xyz"] for i in self.get_leafs()]
-        elif node_type == "proposal":
-            xyz_list = list(self.xyz_to_proposal.keys())
-        else:
-            xyz_list = list(self.xyz_to_edge.keys())
-        return KDTree(xyz_list)
-
-    def query_kdtree(self, xyz, d, node_type):
-        """
-        Parameters
-        ----------
-        xyz : int
-            Node id.
-        d : float
-            Distance from "xyz" that is searched.
-
-        Returns
-        -------
-        generator[tuple]
-            Generator that generates the xyz coordinates cooresponding to all
-            nodes within a distance of "d" from "xyz".
-
-        """
-        assert node_type in ["leaf", "proposal"]
-        if node_type == "leaf":
-            return geometry.query_ball(self.leaf_kdtree, xyz, d)
-        elif node_type == "proposal":
-            return geometry.query_ball(self.proposal_kdtree, xyz, d)
 
     # --- Proposal util ---
     def n_proposals(self):
@@ -918,26 +918,6 @@ class FragmentsGraph(nx.Graph):
         if isinstance(node_or_swc, int):
             node_or_swc = self.nodes[node_or_swc]["swc_id"]
         return node_or_swc in self.soma_ids
-
-    def path_length(self, root):
-        """
-        Computes the path length of the connected component containing "root".
-
-        Parameters
-        ----------
-        root : int
-            Node in connected component to be search.
-
-        Returns
-        -------
-        float
-            Path length of connected component containing "root".
-
-        """
-        path_length = 0
-        for i, j in nx.dfs_edges(self, source=root):
-            path_length += self.edges[i, j]["length"]
-        return path_length
 
     def orient_edge_attr(self, edge, i, key="xyz"):
         if (self.edges[edge][key][0] == self.nodes[i][key]).all():
