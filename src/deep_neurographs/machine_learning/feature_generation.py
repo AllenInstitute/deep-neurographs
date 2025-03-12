@@ -395,14 +395,20 @@ class FeatureGenerator:
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
-            for p in proposals:
-                i, j = tuple(p)
-                segment_ids = graph.proposal_attr(p, "swc_id")
-                proposal_xyz = graph.proposal_attr(p, "xyz")
-                #edge_xyz_i = graph.
+            for proposal in proposals:
+                i, j = tuple(proposal)
+                segment_ids = graph.proposal_attr(proposal, "swc_id")
+                proposal_xyz = graph.proposal_attr(proposal, "xyz")
+                edge_xyz_i = np.vstack(graph.edge_attr(i, "xyz"))
+                edge_xyz_j = np.vstack(graph.edge_attr(j, "xyz"))
                 threads.append(
                     executor.submit(
-                        self.get_patches, p, proposal_xyz, segment_ids
+                        self.get_patches,
+                        proposal,
+                        proposal_xyz,
+                        edge_xyz_i,
+                        edge_xyz_j,
+                        segment_ids
                     )
                 )
 
@@ -465,19 +471,51 @@ class FeatureGenerator:
         }
         return bbox
 
-    def get_patches(self, proposal, proposal_xyz, segment_ids):
-        # Image patch
+    def get_patches(
+        self, proposal, proposal_xyz, edge_xyz_1, edge_xyz_2, segment_ids
+    ):
         center_xyz = np.mean(proposal_xyz, axis=0)
-        center = self.to_voxels(center_xyz)
-        img_patch = self.img_reader.read(center, self.img_patch_shape)
-        img_patch = img_util.normalize(img_patch)
-
-        # Labels patch
-        center = img_util.to_voxels(center_xyz, self.anisotropy)
-        proposal_voxels = self.get_local_coordinates(center, proposal_xyz)
-        label_patch = self.labels_reader.read(center, self.label_patch_shape)
-        label_patch = self.relabel(label_patch, proposal_voxels, segment_ids)
+        img_patch = self.get_img_patch(center_xyz)
+        label_patch = self.get_label_patch(
+            center_xyz, proposal_xyz, edge_xyz_1, edge_xyz_2, segment_ids
+        )
         return {proposal: np.stack([img_patch, label_patch], axis=0)}
+
+    def get_img_patch(self, center_xyz):
+        center_voxel = self.to_voxels(center_xyz)
+        img_patch = self.img_reader.read(center_voxel, self.img_patch_shape)
+        return img_util.normalize(img_patch)
+
+    def get_label_patch(
+        self, center_xyz, proposal_xyz, edge_xyz_1, edge_xyz_2, segment_ids
+    ):
+        # Read label patch
+        center = img_util.to_voxels(center_xyz, self.anisotropy)
+        label_patch = self.labels_reader.read(center, self.label_patch_shape)
+        label_patch = zoom(label_patch, 1.0 / 2 ** self.multiscale, order=0)
+
+        # Annotate label patch
+        label_patch = (label_patch > 0).astype(float)
+        label_patch = self.annotate_proposal(label_patch, center, proposal_xyz)
+        label_patch = self.annotate_edge(label_patch, center, edge_xyz_1)
+        label_patch = self.annotate_edge(label_patch, center, edge_xyz_2)
+        return label_patch
+
+    def annotate_proposal(self, label_patch, center, proposal_xyz):
+        # Convert proposal xyz to local voxel coordinates
+        voxels = self.get_local_coordinates(center, proposal_xyz)
+        for i, voxel in enumerate(voxels):
+            voxels[i] = [v // 2 ** self.multiscale for v in voxel]
+
+        # Draw line along proposal
+        n_points = int(geometry_util.dist(voxels[0], voxels[-1]))
+        line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
+        return geometry_util.fill_path(label_patch, line, val=4)
+
+    def annotate_edge(self, label_patch, center, edge_xyz):
+        voxels = self.get_local_coordinates(center, edge_xyz)
+        voxels = get_inbounds(voxels, label_patch.shape)
+        return geometry_util.fill_path(label_patch, voxels, val=2)
 
     def get_local_coordinates(self, center_voxel, xyz_pts):
         shape = self.label_patch_shape
@@ -485,68 +523,8 @@ class FeatureGenerator:
         voxels = [img_util.to_voxels(xyz, self.anisotropy) for xyz in xyz_pts]
         return geometry_util.shift_path(voxels, offset)
 
-    def relabel(self, label_patch, voxels, segment_ids):
-        # Initializations
-        n_points = int(geometry_util.dist(voxels[0], voxels[-1]))
-        label_patch = zoom(label_patch, 1.0 / 2 ** self.multiscale, order=0)
-        for i, voxel in enumerate(voxels):
-            voxels[i] = [v // 2 ** self.multiscale for v in voxel]
-
-        # Main
-        relabel_patch = np.zeros(label_patch.shape)
-        relabel_patch[label_patch == segment_ids[0]] = 1
-        relabel_patch[label_patch == segment_ids[1]] = 1
-        line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
-        return geometry_util.fill_path(relabel_patch, line, val=2)
-
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
-
-
-# --- Profile utils ---
-def get_leaf_path(graph, i):
-    """
-    Gets path that profile will be computed over for the leaf node "i".
-
-    Parameters
-    ----------
-    graph : FragmentsGraph
-        Graph that node belongs to.
-    i : int
-        Leaf node in "graph".
-
-    Returns
-    -------
-    list
-        Voxel coordinates that profile is generated from.
-
-    """
-    j = graph.leaf_neighbor(i)
-    xyz_path = graph.oriented_edge((i, j), i)
-    return geometry_util.truncate_path(xyz_path)
-
-
-def get_branching_path(graph, i):
-    """
-    Gets path that profile will be computed over for the branching node "i".
-
-    Parameters
-    ----------
-    graph : FragmentsGraph
-        Graph containing node "i".
-    i : int
-        Branching node in "fragments_graph".
-
-    Returns
-    -------
-    list
-        Voxel coordinates that profile is generated from.
-
-    """
-    j1, j2 = tuple(graph.neighbors(i))
-    voxels_1 = geometry_util.truncate_path(graph.oriented_edge((i, j1), i))
-    voxles_2 = geometry_util.truncate_path(graph.oriented_edge((i, j2), i))
-    return np.vstack([np.flip(voxels_1, axis=0), voxles_2])
 
 
 # --- Build feature matrix ---
@@ -598,6 +576,16 @@ def init_idx_mapping(idx_to_id):
 
 
 # --- Helpers ---
+def get_inbounds(voxels, shape):
+    filtered_voxels = list()
+    for voxel in voxels:
+        lower_bound_bool = all(v > 0 for v in voxel)
+        upper_bound_bool = all(v < s - 1 for v, s in zip(voxel, shape))
+        if lower_bound_bool and upper_bound_bool:
+            filtered_voxels.append(voxel)
+    return filtered_voxels
+
+
 def get_node_dict(is_multimodal=False):
     """
     Returns the number of features for different node types.
