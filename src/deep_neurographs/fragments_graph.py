@@ -752,8 +752,7 @@ class FragmentsGraph(nx.Graph):
 
     def merge_proposal(self, proposal):
         i, j = tuple(proposal)
-        somas_check = not (self.is_soma(i) and self.is_soma(j))
-        if somas_check and self.check_proposal_degrees(i, j):
+        if self.is_mergeable(i, j):
             # Dense attributes
             attrs = dict()
             self.nodes[i]["radius"] = 5.3141592
@@ -773,10 +772,11 @@ class FragmentsGraph(nx.Graph):
             self.__add_edge((i, j), attrs, swc_id)
             self.proposals.remove(proposal)
 
-    def check_proposal_degrees(self, i, j):
+    def is_mergeable(self, i, j):
         one_leaf = self.degree[i] == 1 or self.degree[j] == 1
         branching = self.degree[i] > 2 or self.degree[j] > 2
-        return one_leaf and not branching
+        somas_check = not (self.is_soma(i) and self.is_soma(j))
+        return somas_check and (one_leaf and not branching)
 
     def upd_ids(self, swc_id, r):
         """
@@ -929,10 +929,7 @@ class FragmentsGraph(nx.Graph):
         if tuple(xyz) in self.xyz_to_edge.keys():
             edge = self.xyz_to_edge[tuple(xyz)]
             i, j = tuple(edge)
-            if return_node:
-                return self.nodes[i]["swc_id"], i
-            else:
-                return self.nodes[i]["swc_id"]
+            return self.nodes[i]["swc_id"]
         else:
             return None
 

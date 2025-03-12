@@ -366,15 +366,26 @@ class ConvNet(nn.Module):
         # Call parent class
         nn.Module.__init__(self)
 
-        # Convolutional layers
-        self.conv1 = self._init_conv_layer(2, 32, 5)
-        self.conv2 = self._init_conv_layer(32, 64, 3)
-        self.conv3 = self._init_conv_layer(64, 128, 3)
-        self.conv4 = self._init_conv_layer(128, 256, 3)
+        # Layer 1
+        self.conv1a = self._init_conv_layer(2, 16, 5)
+        self.conv1b = self._init_conv_layer(16, 16, 3)
+        self.pool1 = nn.MaxPool3d(kernel_size=2, stride=2)
+
+        # Layer 2
+        self.conv2 = self._init_conv_layer(16, 32, 3)
+        self.pool2 = nn.MaxPool3d(kernel_size=2, stride=2)
+
+        # Layer 3
+        self.conv3 = self._init_conv_layer(32, 64, 3)
+        self.pool3 = nn.MaxPool3d(kernel_size=2, stride=2)
+
+        # Layer 4
+        self.conv4 = self._init_conv_layer(64, 128, 3)
+        self.pool4 = nn.MaxPool3d(kernel_size=2, stride=2)
 
         # Output layer
         self.output = nn.Sequential(
-            nn.Linear(256, 2 * output_dim),
+            nn.Linear(128, 128),
             nn.LeakyReLU(),
             nn.Dropout(0.1),
             nn.Linear(2 * output_dim, output_dim),
@@ -412,8 +423,7 @@ class ConvNet(nn.Module):
             ),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(),
-            nn.Dropout(p=0.1),
-            nn.MaxPool3d(kernel_size=2, stride=2),
+            nn.Dropout(p=0.2),
         )
         return conv_layer
 
@@ -433,7 +443,9 @@ class ConvNet(nn.Module):
 
         """
         if isinstance(m, nn.Conv3d):
-            init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+            init.kaiming_normal_(
+                m.weight, mode="fan_in", nonlinearity="leaky_relu"
+            )
             if m.bias is not None:
                 init.constant_(m.bias, 0)
         elif isinstance(m, nn.Linear):
@@ -459,11 +471,22 @@ class ConvNet(nn.Module):
             Output of neural network.
 
         """
-        # Convolutional layers
-        x = self.conv1(x)
+        # Layer 1
+        x = self.conv1a(x)
+        x = self.conv1b(x)
+        x = self.pool1(x)
+
+        # Layer 2
         x = self.conv2(x)
+        x = self.pool2(x)
+
+        # Layer 3
         x = self.conv3(x)
+        x = self.pool3(x)
+
+        # Layer 4
         x = self.conv4(x)
+        x = self.pool4(x)
 
         # Output layer
         x = self.output(vectorize(x))
@@ -509,7 +532,7 @@ def init_mlp(input_dim, output_dim):
     mlp = nn.Sequential(
         nn.Linear(input_dim, 2 * output_dim),
         nn.LeakyReLU(),
-        nn.Dropout(p=0.1),
+        nn.Dropout(p=0.15),
         nn.Linear(2 * output_dim, output_dim),
     )
     return mlp
