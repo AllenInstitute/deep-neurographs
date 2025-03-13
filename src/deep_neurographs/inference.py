@@ -8,10 +8,10 @@ Code that executes the full GraphTrace inference pipeline.
 
     Inference Algorithm:
         1. Graph Construction
-            Builds a graph from neuron fragments.
+            Build graph from neuron fragments.
 
         2. Proposal Generation
-            Generates proposals for potential connections between fragments.
+            Generate proposals for potential connections between fragments.
 
         3. Proposal Classification
             a. Feature Generation
@@ -29,15 +29,17 @@ Note: Steps 2 and 3 of the inference pipeline can be iterated in a loop that
 
 """
 
-import os
+
+from collections import deque
 from datetime import datetime
 from time import time
+from torch.nn.functional import sigmoid
+from tqdm import tqdm
 
 import networkx as nx
 import numpy as np
+import os
 import torch
-from torch.nn.functional import sigmoid
-from tqdm import tqdm
 
 from deep_neurographs import fragment_filtering
 from deep_neurographs.fragments_graph import FragmentsGraph
@@ -506,16 +508,16 @@ class InferenceEngine:
         self.model.to(self.device)
         self.model.eval()
 
-    def run(self, fragments_graph, proposals, return_preds=False):
+    def run(self, graph, proposals, return_preds=False):
         """
         Runs inference by forming batches of proposals, then performing the
         following steps for each batch: (1) generate features, (2) classify
         proposals by running model, and (3) adding each accepted proposal as
-        an edge to "fragments_graph" if it does not create a cycle.
+        an edge to "graph" if it does not create a cycle.
 
         Parameters
         ----------
-        fragments_graph : FragmentsGraph
+        graph : FragmentsGraph
             Graph that inference will be performed on.
         proposals : list
             Proposals to be classified as accept or reject.
@@ -528,54 +530,36 @@ class InferenceEngine:
             Accepted proposals.
 
         """
-        flagged = set()  #get_large_proposal_components(fragments_graph, 4)
-        proposals = set(proposals)
-        with tqdm(total=len(proposals), desc="Inference") as pbar:
-            accepts = list()
-            hat_y = dict()
-            while proposals:
-                # Predict
-                batch = ml_util.get_batch(
-                    fragments_graph, proposals, self.batch_size, flagged
-                )
-                dataset = self.get_batch_dataset(fragments_graph, batch)
-                hat_y_i = self.predict(dataset)
+        # Initializations
+        dataloader = GraphDataLoader(graph, proposals, self.batch_size)
+        pbar = tqdm(total=len(proposals), desc="Inference")
+
+        # Main
+        accepts = list()
+        hat_y = dict()
+        for batch in dataloader:
+            # Feature generation
+            features = self.feature_generator.run(graph, batch, self.radius)
+            heterograph_data = datasets.init(features, batch["graph"])
+
+            # Run model
+            hat_y_i = self.predict(heterograph_data)
+            if return_preds:
                 hat_y.update(hat_y_i)
 
-                # Update graph
-                for p in get_accepts(fragments_graph, hat_y_i, self.threshold):
-                    fragments_graph.merge_proposal(p)
-                    accepts.append(p)
-                pbar.update(len(batch["proposals"]))
-            #fragments_graph.absorb_reducibles()  # - extremely slow
+            # Determine which proposals to accept
+            for p in get_accepts(graph, hat_y_i, self.threshold):
+                graph.merge_proposal(p)
+                accepts.append(p)
+            pbar.update(len(batch["proposals"]))
 
         # Return results
         if return_preds:
-            return fragments_graph, accepts, hat_y
+            return graph, accepts, hat_y
         else:
-            return fragments_graph, accepts
+            return graph, accepts
 
-    def get_batch_dataset(self, graph, batch):
-        """
-        Generates features and initializes dataset that can be input to a
-        machine learning model.
-
-        Parameters
-        ----------
-        graph : FragmentsGraph
-            Graph that inference will be performed on.
-        batch : list
-            Proposals to be classified.
-
-        Returns
-        -------
-        ...
-
-        """
-        features = self.feature_generator.run(graph, batch, self.radius)
-        return datasets.init(features, batch["graph"])
-
-    def predict(self, dataset):
+    def predict(self, heterograph_data):
         """
         Runs the model on the given dataset to generate and filter
         predictions.
@@ -592,44 +576,143 @@ class InferenceEngine:
             probability).
 
         """
-        preds = predict(self.model, dataset.data, self.device)
-        idxs = dataset.idxs_proposals["idx_to_id"]
-        return {idxs[i]: p for i, p in enumerate(preds)}
+        # Generate predictions
+        with torch.no_grad():
+            x, edge_index, edge_attr = ml_util.get_inputs(
+                heterograph_data.data, self.device
+            )
+            hat_y = sigmoid(self.model(x, edge_index, edge_attr))
+
+        # Reformat predictions
+        n_proposals = len(heterograph_data.data["proposal"]["y"])
+        hat_y = ml_util.toCPU(hat_y[0:n_proposals, 0])
+        idxs = heterograph_data.idxs_proposals["idx_to_id"]
+        return {idxs[i]: p for i, p in enumerate(hat_y)}
+
+
+# --- Custom Dataloader ---
+class GraphDataLoader:
+
+    def __init__(self, graph, proposals, batch_size=200, gnn_depth=2):
+        # Instance attributes
+        self.batch_size = batch_size
+        self.gnn_depth = gnn_depth
+        self.graph = graph
+        self.proposals = set(proposals)
+
+        # Identify clustered proposals
+        self.flagged = self.find_proposal_clusters(5)
+
+    def find_proposal_clusters(self, k):
+        flagged = set()
+        visited = set()
+        for proposal in self.proposals:
+            if proposal not in visited:
+                cluster = self.extract_cluster(proposal)
+                if len(cluster) >= k:
+                    flagged = flagged.union(cluster)
+                visited = visited.union(cluster)
+        return flagged
+
+    def extract_cluster(self, proposal):
+        """
+        Extracts the connected component that "proposal" belongs to in the
+        proposal induced subgraph.
+
+        Parameters
+        ----------
+        proposal : Frozenset[int]
+            Proposal used as the root to extract its connected component in
+            the proposal induced subgraph.
+
+        Returns
+        -------
+        Set[Frozenset[int]]
+            Connected component that "proposal" belongs to in the proposal
+            induced subgraph.
+
+        """
+        queue = deque([proposal])
+        visited = set()
+        while len(queue) > 0:
+            # Visit proposal
+            proposal = queue.pop()
+            visited.add(proposal)
+
+            # Update queue
+            for i in proposal:
+                for j in self.graph.nodes[i]["proposals"]:
+                    proposal_ij = frozenset({i, j})
+                    if proposal_ij not in visited:
+                        queue.append(proposal_ij)
+        return visited
+
+    # --- Batch Generation ---
+    def __iter__(self):
+        while self.proposals:
+            # Run BFS
+            graph = nx.Graph()
+            proposals = set()
+            while len(proposals) < self.batch_size and self.proposals:
+                self.populate_with_bfs(graph, proposals)
+
+            # Yield batch
+            yield {"graph": graph, "proposals": proposals}
+
+    def populate_with_bfs(self, graph, proposals):
+        i, j = tuple(util.sample_once(self.proposals))
+        queue = deque([(i, 0), (j, 0)])
+        visited = set()
+        while queue:
+            # Visit node
+            i, d_i = queue.pop()
+            self.visit_nbhd(graph, i)
+            self.visit_proposals(graph, proposals, queue, visited, i)
+            visited.add(i)
+
+            # Update queue
+            for j in self.graph.neighbors(i):
+                if j not in visited:
+                    n_j = len(self.graph.nodes[j]["proposals"])
+                    d_j = min(d_i + 1, -n_j)
+                    if d_j <= self.gnn_depth:
+                        queue.append((j, d_i + 1))
+
+    def visit_nbhd(self, graph, i):
+        for j in self.graph.neighbors(i):
+            if (i, j) not in graph.edges:
+                graph.add_edge(i, j)
+
+    def visit_proposals(self, graph, proposals, queue, visited, i):
+        if len(proposals) < self.batch_size:
+            for j in self.graph.nodes[i]["proposals"]:
+                # Visit proposal
+                proposal = frozenset({i, j})
+                if proposal in self.proposals:
+                    graph.add_edge(i, j)
+                    proposals.add(proposal)
+
+                # Add nodes in flagged proposal cluster to queue
+                if proposal in self.flagged and proposal in self.proposals:
+                    nodes_added = set()
+                    for p in self.extract_cluster(proposal):
+                        # Add proposal
+                        node_1, node_2 = tuple(p)
+                        graph.add_edge(node_1, node_2)
+                        proposals.add(p)
+                        self.proposals.discard(proposal)
+
+                        # Update queue
+                        if not (node_1 in visited and node_1 in nodes_added):
+                            queue.append((node_1, 0))
+                        if not (node_2 in visited and node_2 in nodes_added):
+                            queue.append((node_2, 0))
+
+                # Finish visit
+                self.proposals.discard(proposal)
 
 
 # --- Accepting Proposals ---
-def predict(model, data, device=None):
-    """
-    Generates predictions using a Graph Neural Network (GNN) on the given
-    dataset.
-
-    Parameters:
-    ----------
-    model : torch.nn.Module
-        GNN model used to generate predictions. It should accept node
-        features, edge indices, and edge attributes as input and output
-        predictions.
-    data : dict
-        Dataset containing graph information, including feature matrices
-        and other relevant attributes needed for GNN input.
-    device : str, optional
-        The device (CPU or GPU) on which the prediction will be run. The
-        default is None.
-
-    Returns:
-    -------
-    torch.Tensor
-        A tensor of predictions, converted to CPU, for the 'proposal' entries
-        in the dataset. Only the relevant predictions for 'proposal' nodes are
-        returned.
-
-    """
-    with torch.no_grad():
-        x, edge_index, edge_attr = ml_util.get_inputs(data, device)
-        preds = sigmoid(model(x, edge_index, edge_attr))
-    return ml_util.toCPU(preds[0:len(data["proposal"]["y"]), 0])
-
-
 def get_accepts(fragments_graph, preds, threshold, high_threshold=0.9):
     """
     Determines which proposals to accept based on prediction scores and the
@@ -739,27 +822,14 @@ def sort_proposals(fragments_graph, proposals):
     ----------
     fragments_graph : FragmentsGraph
         Graph that proposals were generated from.
-    proposals : list[frozenset]
+    proposals : List[Frozenset[int]]
         List of proposals.
 
     Returns
     -------
-    list[frozenset]
+    List[Frozenset[int]]
         Sorted proposals.
 
     """
     idxs = np.argsort([fragments_graph.proposal_length(p) for p in proposals])
     return [proposals[idx] for idx in idxs]
-
-
-# --- Batch Formation ---
-def get_large_proposal_components(fragments_graph, k):
-    flagged_proposals = set()
-    visited = set()
-    for p in fragments_graph.list_proposals():
-        if p not in visited:
-            component = fragments_graph.proposal_connected_component(p)
-            if len(component) > k:
-                flagged_proposals = flagged_proposals.union(component)
-            visited = visited.union(component)
-    return flagged_proposals

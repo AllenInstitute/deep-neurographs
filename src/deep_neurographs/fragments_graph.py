@@ -160,7 +160,7 @@ class FragmentsGraph(nx.Graph):
         """
         swc_dicts = self.swc_reader.load(fragments_pointer)
         irreducibles_list = self.graph_loader.extract_irreducibles(swc_dicts)
-        while len(irreducibles_list) > 0:
+        while irreducibles_list:
             irreducibles = irreducibles_list.pop()
             self.add_irreducibles(irreducibles)
 
@@ -611,39 +611,6 @@ class FragmentsGraph(nx.Graph):
         """
         return list(self.proposals)
 
-    def extract_proposal_component(self, proposal):
-        """
-        Extracts the connected component that "proposal" belongs to in the
-        proposal induced subgraph.
-
-        Parameters
-        ----------
-        proposal : frozenset
-            Proposal used to as the root to extract its connected component
-            in the proposal induced subgraph.
-
-        Returns
-        -------
-        List[Frozenset[int]]
-            List of proposals in the connected component that "proposal"
-            belongs to in the proposal induced subgraph.
-
-        """
-        queue = [proposal]
-        visited = set()
-        while len(queue) > 0:
-            # Visit proposal
-            p = queue.pop()
-            visited.add(p)
-
-            # Update queue
-            for i in p:
-                for j in self.nodes[i]["proposals"]:
-                    p_ij = frozenset({i, j})
-                    if p_ij not in visited:
-                        queue.append(p_ij)
-        return visited
-
     # --- Proposal util ---
     def n_proposals(self):
         """
@@ -973,7 +940,6 @@ class FragmentsGraph(nx.Graph):
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
             cnt = 0
             for nodes in nodes_list:
-                root = util.sample_once(nodes)
                 self.nodes_to_zipped_swc(
                     zip_writer, nodes, sampling_rate=sampling_rate
                 )
