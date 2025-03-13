@@ -40,6 +40,7 @@ from deep_neurographs.machine_learning.feature_generation import (
 from deep_neurographs.utils import ml_util, util
 
 
+# --- Custom Datasets ---
 class GraphDataset:
     """
     Custom dataset for storing a list of graphs to be used to train a graph
@@ -243,6 +244,7 @@ class GraphDataset:
         return self.graphs[key], features
 
 
+# --- Custom Dataloaders ---
 class GraphDataLoader:
 
     def __init__(self, graph_dataset, batch_size=32, shuffle=True):
@@ -309,6 +311,7 @@ class GraphDataLoader:
         return batch_features
 
 
+# --- Custom Trainer ---
 class Trainer:
     """
     Custom class that trains graph neural networks.

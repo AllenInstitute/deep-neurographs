@@ -15,7 +15,7 @@ Note: We use the term "branch" to refer to a path in a graph from a branching
 
 """
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from concurrent.futures import (
     as_completed,
     ProcessPoolExecutor,
@@ -184,7 +184,7 @@ class GraphLoader:
                 i += 1
 
             # Store results
-            irreducibles = list()
+            irreducibles = deque()
             for process in as_completed(processes):
                 pbar.update(1) if self.verbose else None
                 result = process.result()

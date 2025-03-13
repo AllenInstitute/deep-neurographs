@@ -9,6 +9,8 @@ models.
 
 """
 
+from collections import deque
+
 import networkx as nx
 import numpy as np
 import torch
@@ -26,9 +28,9 @@ GNN_DEPTH = 2
 # --- Batch Generation ---
 def get_batch(graph, proposals, batch_size, flagged_proposals=set()):
     """
-    Gets a batch for training or inference that consist of a computation graph
-    and list of proposals. Note: queue contains tuples that consist of a node
-    id and distance from proposal.
+    Gets a batch for training that consist of a computation graph and list of
+    proposals. Note: queue contains tuples that consist of a node id and
+    distance from proposal.
 
     Parameters
     ----------
@@ -56,11 +58,11 @@ def get_batch(graph, proposals, batch_size, flagged_proposals=set()):
         queue.append((j, 0))
 
     # Main
-    batch = reset_batch()
+    batch = {"graph": nx.Graph(), "proposals": set()}
     visited = set()
     while len(proposals) > 0 and len(batch["proposals"]) < batch_size:
         root = tuple(util.sample_once(proposals))
-        queue = [(root[0], 0), (root[1], 0)]
+        queue = deque[(root[0], 0), (root[1], 0)]
         while len(queue) > 0:
             # Visit node's nbhd
             i, d = queue.pop()
@@ -90,23 +92,6 @@ def get_batch(graph, proposals, batch_size, flagged_proposals=set()):
                     if d_j <= GNN_DEPTH:
                         queue.append((j, d + 1))
     return batch
-
-
-def reset_batch():
-    """
-    Resets the current batch.
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    dict
-        Batch that consists of a graph and list of proposals.
-
-    """
-    return {"graph": nx.Graph(), "proposals": set()}
 
 
 # --- Miscellaneous ---
