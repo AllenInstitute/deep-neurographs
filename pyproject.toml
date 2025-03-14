@@ -30,7 +30,7 @@ dependencies = [
     'scikit-learn',
     'scipy',
     'tensorboard',
-    'tensorstore',
+    'tensorstore==0.1.71',
     'torch',
     'torcheval',
     'torchio',
