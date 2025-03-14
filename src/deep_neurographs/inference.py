@@ -673,13 +673,12 @@ class GraphDataLoader:
     def populate_with_bfs(self, graph, proposals):
         i, j = tuple(util.sample_once(self.proposals))
         queue = deque([(i, 0), (j, 0)])
-        visited = set()
+        visited = set({i, j})
         while queue:
             # Visit node
             i, d_i = queue.pop()
             self.visit_nbhd(graph, i)
             self.visit_proposals(graph, proposals, queue, visited, i)
-            visited.add(i)
 
             # Update queue
             for j in self.graph.neighbors(i):
@@ -687,31 +686,36 @@ class GraphDataLoader:
                     n_j = len(self.graph.nodes[j]["proposals"])
                     d_j = min(d_i + 1, -n_j)
                     if d_j <= self.gnn_depth:
-                        queue.append((j, d_i + 1))
+                        queue.append((j, d_j))
+                        visited.add(j)
 
     def visit_nbhd(self, graph, i):
+        edges = list()
         for j in self.graph.neighbors(i):
-            if (i, j) not in graph.edges:
-                graph.add_edge(i, j)
+            edges.append((i, j))    
+        graph.add_edges_from(edges)
 
     def visit_proposals(self, graph, proposals, queue, visited, i):
         if len(proposals) < self.batch_size:
+            to_discard = set()
             for j in self.graph.nodes[i]["proposals"]:
                 # Visit proposal
                 proposal = frozenset({i, j})
                 if proposal in self.proposals:
                     graph.add_edge(i, j)
                     proposals.add(proposal)
+                    to_discard.add(proposal)
 
                 # Add nodes in flagged proposal cluster to queue
-                if proposal in self.flagged and proposal in self.proposals:
+                if False: 
+                #proposal in self.flagged and proposal in self.proposals:
                     nodes_added = set()
                     for p in self.extract_cluster(proposal):
                         # Add proposal
                         node_1, node_2 = tuple(p)
                         graph.add_edge(node_1, node_2)
                         proposals.add(p)
-                        self.proposals.discard(proposal)
+                        to_discard.add(p)
 
                         # Update queue
                         if not (node_1 in visited and node_1 in nodes_added):
@@ -719,8 +723,7 @@ class GraphDataLoader:
                         if not (node_2 in visited and node_2 in nodes_added):
                             queue.append((node_2, 0))
 
-                # Finish visit
-                self.proposals.discard(proposal)
+            self.proposals.difference_update(to_discard)
 
 
 # --- Accepting Proposals ---
