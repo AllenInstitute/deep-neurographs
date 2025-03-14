@@ -593,7 +593,7 @@ class InferenceEngine:
 # --- Custom Dataloader ---
 class GraphDataLoader:
 
-    def __init__(self, graph, proposals, batch_size=200, gnn_depth=2):
+    def __init__(self, graph, proposals, batch_size=2000, gnn_depth=2):
         # Instance attributes
         self.batch_size = batch_size
         self.gnn_depth = gnn_depth
