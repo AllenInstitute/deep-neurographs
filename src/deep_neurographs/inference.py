@@ -487,17 +487,12 @@ class InferenceEngine:
         # Instance attributes
         self.batch_size = ml_config.batch_size
         self.device = ml_config.device
+        self.ml_config = ml_config
         self.radius = radius
         self.threshold = ml_config.threshold
 
-        # Features
-        self.feature_generator = FeatureGenerator(
-            img_path,
-            ml_config.multiscale,
-            anisotropy=ml_config.anisotropy,
-            is_multimodal=ml_config.is_multimodal,
-            segmentation_path=segmentation_path,
-        )
+        self.img_path = img_path
+        self.segmentation_path = segmentation_path
 
         # Model
         if ml_config.is_multimodal:
@@ -532,25 +527,39 @@ class InferenceEngine:
         """
         # Initializations
         dataloader = GraphDataLoader(graph, proposals, self.batch_size)
+        feature_generator = FeatureGenerator(
+            graph,
+            self.img_path,
+            anisotropy=self.ml_config.anisotropy,
+            is_multimodal=self.ml_config.is_multimodal,
+            segmentation_path=self.segmentation_path,
+        )
         pbar = tqdm(total=len(proposals), desc="Inference")
+        print("Batch Size:", self.batch_size)
 
         # Main
         accepts = list()
         hat_y = dict()
         for batch in dataloader:
             # Feature generation
-            features = self.feature_generator.run(graph, batch, self.radius)
+            t0 = time()
+            features = feature_generator.run(batch, self.radius)
             heterograph_data = datasets.init(features, batch["graph"])
+            print("Feature Generation:", time() - t0)
 
             # Run model
+            t0 = time()
             hat_y_i = self.predict(heterograph_data)
             if return_preds:
                 hat_y.update(hat_y_i)
+            print("Run Model:", time() - t0)
 
             # Determine which proposals to accept
+            t0 = time()
             for p in get_accepts(graph, hat_y_i, self.threshold):
                 graph.merge_proposal(p)
                 accepts.append(p)
+            print("Get Accepts:", time() - t0)
             pbar.update(len(batch["proposals"]))
 
         # Return results
@@ -651,12 +660,14 @@ class GraphDataLoader:
     def __iter__(self):
         while self.proposals:
             # Run BFS
+            t0 = time()
             graph = nx.Graph()
             proposals = set()
             while len(proposals) < self.batch_size and self.proposals:
                 self.populate_with_bfs(graph, proposals)
 
             # Yield batch
+            print("Batch Formation:", time() - t0)
             yield {"graph": graph, "proposals": proposals}
 
     def populate_with_bfs(self, graph, proposals):
