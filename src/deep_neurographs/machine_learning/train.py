@@ -80,10 +80,11 @@ class GraphDataset:
         generator_key = (brain_id, segmentation_id)
         if generator_key not in self.feature_generators:
             self.feature_generators[generator_key] = FeatureGenerator(
+                self.graphs[key],
                 img_path,
-                self.ml_config.multiscale,
                 anisotropy=self.ml_config.anisotropy,
                 is_multimodal=self.ml_config.is_multimodal,
+                multiscale=self.ml_config.multiscale,
                 segmentation_path=segmentation_path,
             )
 
@@ -211,7 +212,7 @@ class GraphDataset:
     def generate_features(self, key, img_path, segmentation_path):
         # Initializations
         self.init_feature_generator(key, img_path, segmentation_path)
-        proposals_dict = {
+        batch = {
             "proposals": self.graphs[key].list_proposals(),
             "graph": self.graphs[key].copy_graph()
         }
@@ -219,9 +220,7 @@ class GraphDataset:
         # Main
         generator_key = (key[0], key[1])
         features = self.feature_generators[generator_key].run(
-            self.graphs[key],
-            proposals_dict,
-            self.graph_config.search_radius
+            batch, self.graph_config.search_radius
         )
         return features
 
