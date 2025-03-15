@@ -62,7 +62,7 @@ def get_batch(graph, proposals, batch_size, flagged_proposals=set()):
     visited = set()
     while len(proposals) > 0 and len(batch["proposals"]) < batch_size:
         root = tuple(util.sample_once(proposals))
-        queue = deque[(root[0], 0), (root[1], 0)]
+        queue = deque([(root[0], 0), (root[1], 0)])
         while len(queue) > 0:
             # Visit node's nbhd
             i, d = queue.pop()

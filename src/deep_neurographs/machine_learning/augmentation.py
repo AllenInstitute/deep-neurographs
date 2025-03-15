@@ -275,7 +275,7 @@ class RandomNoise3D:
 
     """
 
-    def __init__(self, mean=0.0, std=0.025):
+    def __init__(self, mean=0.0, std=0.03):
         """
         Initializes a RandomNoise3D transformer.
 
