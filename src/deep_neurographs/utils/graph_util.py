@@ -100,7 +100,7 @@ class GraphLoader:
         self.verbose = verbose
 
         # Set irreducibles extracter
-        if remove_high_risk_merges:
+        if remove_high_risk_merges and somas_path:
             self.extracter = self.break_and_extract
         else:
             self.extracter = self.extract

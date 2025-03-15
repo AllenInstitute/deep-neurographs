@@ -104,6 +104,7 @@ class InferencePipeline:
         """
         # Instance attributes
         self.accepted_proposals = list()
+        self.img_path = img_path
         self.model_path = model_path
         self.brain_id = brain_id
         self.segmentation_id = segmentation_id
@@ -114,15 +115,6 @@ class InferencePipeline:
         # Extract config settings
         self.graph_config = config.graph_config
         self.ml_config = config.ml_config
-
-        # Inference engine
-        self.inference_engine = InferenceEngine(
-            img_path,
-            self.model_path,
-            self.ml_config,
-            self.graph_config.search_radius,
-            segmentation_path=segmentation_path,
-        )
 
         # Set output directory
         self.output_dir = output_dir
@@ -294,7 +286,15 @@ class InferencePipeline:
 
         # Main
         t0 = time()
-        self.graph, accepts = self.inference_engine.run(self.graph, proposals)
+        self.inference_engine = InferenceEngine(
+            self.graph,
+            self.img_path,
+            self.model_path,
+            self.ml_config,
+            self.graph_config.search_radius,
+            segmentation_path=self.segmentation_path,
+        )
+        accepts = self.inference_engine.run()
         self.accepted_proposals.extend(accepts)
 
         # Report results
@@ -455,6 +455,7 @@ class InferenceEngine:
 
     def __init__(
         self,
+        graph,
         img_path,
         model_path,
         ml_config,
@@ -487,6 +488,7 @@ class InferenceEngine:
         # Instance attributes
         self.batch_size = ml_config.batch_size
         self.device = ml_config.device
+        self.graph = graph
         self.ml_config = ml_config
         self.radius = radius
         self.threshold = ml_config.threshold
@@ -503,7 +505,7 @@ class InferenceEngine:
         self.model.to(self.device)
         self.model.eval()
 
-    def run(self, graph, proposals, return_preds=False):
+    def run(self, return_preds=False):
         """
         Runs inference by forming batches of proposals, then performing the
         following steps for each batch: (1) generate features, (2) classify
@@ -526,15 +528,15 @@ class InferenceEngine:
 
         """
         # Initializations
-        dataloader = GraphDataLoader(graph, proposals, self.batch_size)
+        dataloader = GraphDataLoader(self.graph, self.batch_size)
         feature_generator = FeatureGenerator(
-            graph,
+            self.graph,
             self.img_path,
             anisotropy=self.ml_config.anisotropy,
             is_multimodal=self.ml_config.is_multimodal,
             segmentation_path=self.segmentation_path,
         )
-        pbar = tqdm(total=len(proposals), desc="Inference")
+        pbar = tqdm(total=self.graph.n_proposals(), desc="Inference")
         print("Batch Size:", self.batch_size)
 
         # Main
@@ -556,17 +558,15 @@ class InferenceEngine:
 
             # Determine which proposals to accept
             t0 = time()
-            for p in get_accepts(graph, hat_y_i, self.threshold):
-                graph.merge_proposal(p)
-                accepts.append(p)
+            accepts.extend(self.update_graph(hat_y_i))
             print("Get Accepts:", time() - t0)
             pbar.update(len(batch["proposals"]))
 
         # Return results
         if return_preds:
-            return graph, accepts, hat_y
+            return accepts, hat_y
         else:
-            return graph, accepts
+            return accepts
 
     def predict(self, heterograph_data):
         """
@@ -598,6 +598,98 @@ class InferenceEngine:
         idxs = heterograph_data.idxs_proposals["idx_to_id"]
         return {idxs[i]: p for i, p in enumerate(hat_y)}
 
+    def update_graph(self, preds, high_threshold=0.9):
+        """
+        Determines which proposals to accept based on prediction scores and the
+        specified threshold.
+
+        Parameters
+        ----------
+        preds : dict
+            Dictionary that maps proposal ids to probability generated from
+            machine learning model.
+        high_threshold : float, optional
+            Threshold value for separating the best proposals from the rest. The
+            default is 0.9.
+
+        Returns
+        -------
+        list
+            Proposals to be added as edges to "graph".
+
+        """
+        # Partition proposals into best and the rest
+        preds = {k: v for k, v in preds.items() if v > self.threshold}
+        best_proposals, proposals = self.separate_best(preds, high_threshold)
+
+        # Determine which proposals to accept
+        accepts = list()
+        accepts.extend(self.add_accepts(best_proposals))
+        accepts.extend(self.add_accepts(proposals))
+        return accepts
+
+    def separate_best(self, preds, high_threshold):
+        """
+        Splits "preds" into two separate dictionaries such that one contains the
+        best proposals (i.e. simple proposals with high confidence) and the other
+        contains all other proposals.
+
+        Parameters
+        ----------
+        preds : dict
+            Dictionary that maps proposal ids to probability generated from
+            machine learning model.
+        high_threshold : float
+            Threshold on acceptance probability for proposals.
+
+        Returns
+        -------
+        list
+            Proposal IDs determined to be the best.
+        list
+            All other proposal IDs.
+
+        """
+        best_probs, probs = list(), list()
+        best_proposals, proposals = list(), list()
+        simple_proposals = self.graph.simple_proposals()
+        for proposal, prob in preds.items():
+            if proposal in simple_proposals and prob > high_threshold:
+                best_proposals.append(proposal)
+                best_probs.append(prob)
+            else:
+                proposals.append(proposal)
+                probs.append(prob)
+        best_idxs = np.argsort(best_probs)
+        idxs = np.argsort(probs)
+        return np.array(best_proposals)[best_idxs], np.array(proposals)[idxs]
+
+
+    def add_accepts(self, proposals):
+        """
+        ...
+
+        Parameters
+        ----------
+        proposals : list[frozenset]
+            Proposals with predicted probability above threshold to be added
+            to the graph.
+
+        Returns
+        -------
+        List[frozenset]
+            List of proposals that do not create a cycle when iteratively added to
+            "graph".
+
+        """
+        accepts = list()
+        for proposal in proposals:
+            i, j = tuple(proposal)
+            if not nx.has_path(self.graph, i, j):
+                self.graph.merge_proposal(proposal)
+                accepts.append(proposal)
+        return accepts
+
 
 # --- Custom Dataloader ---
 class GraphDataLoader:
@@ -607,7 +699,7 @@ class GraphDataLoader:
         self.batch_size = batch_size
         self.gnn_depth = gnn_depth
         self.graph = graph
-        self.proposals = set(proposals)
+        self.proposals = set(graph.list_proposals())
 
         # Identify clustered proposals
         self.flagged = set()  #self.find_proposal_clusters(5)
@@ -724,126 +816,3 @@ class GraphDataLoader:
                             queue.append((node_2, 0))
 
             self.proposals.difference_update(to_discard)
-
-
-# --- Accepting Proposals ---
-def get_accepts(fragments_graph, preds, threshold, high_threshold=0.9):
-    """
-    Determines which proposals to accept based on prediction scores and the
-    specified threshold.
-
-    Parameters
-    ----------
-    fragments_graph : FragmentsGraph
-        Graph that proposals belong to.
-    preds : dict
-        Dictionary that maps proposal ids to probability generated from
-        machine learning model.
-    high_threshold : float, optional
-        Threshold value for separating the best proposals from the rest. The
-        default is 0.9.
-
-    Returns
-    -------
-    list
-        Proposals to be added as edges to "fragments_graph".
-
-    """
-    # Partition proposals into best and the rest
-    preds = {k: v for k, v in preds.items() if v > threshold}
-    best_proposals, proposals = separate_best(
-        preds, fragments_graph.simple_proposals(), high_threshold
-    )
-
-    # Determine which proposals to accept
-    accepts = list()
-    accepts.extend(filter_proposals(fragments_graph, best_proposals))
-    accepts.extend(filter_proposals(fragments_graph, proposals))
-    fragments_graph.remove_edges_from(map(tuple, accepts))
-    return accepts
-
-
-def separate_best(preds, simple_proposals, high_threshold):
-    """
-    Splits "preds" into two separate dictionaries such that one contains the
-    best proposals (i.e. simple proposals with high confidence) and the other
-    contains all other proposals.
-
-    Parameters
-    ----------
-    preds : dict
-        Dictionary that maps proposal ids to probability generated from
-        machine learning model.
-    simple_proposals : list
-        List of simple proposals.
-    high_threshold : float
-        Threshold on acceptance probability for proposals.
-
-    Returns
-    -------
-    list
-        Proposal IDs determined to be the best.
-    list
-        All other proposal IDs.
-
-    """
-    best_probs, probs = list(), list()
-    best_proposals, proposals = list(), list()
-    for proposal, prob in preds.items():
-        if proposal in simple_proposals and prob > high_threshold:
-            best_proposals.append(proposal)
-            best_probs.append(prob)
-        else:
-            proposals.append(proposal)
-            probs.append(prob)
-    best_idxs = np.argsort(best_probs)
-    idxs = np.argsort(probs)
-    return np.array(best_proposals)[best_idxs], np.array(proposals)[idxs]
-
-
-def filter_proposals(graph, proposals):
-    """
-    Filters a list of proposals by removing the ones that create a cycle when
-    added to "graph".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to which edges are being added.
-    proposals : list[frozenset]
-        List of proposals to be checked.
-
-    Returns
-    -------
-    list[frozenset]
-        List of proposals that do not create a cycle when iteratively added to
-        "graph".
-
-    """
-    accepts = list()
-    for i, j in proposals:
-        if not nx.has_path(graph, i, j):
-            graph.add_edge(i, j)
-            accepts.append(frozenset({i, j}))
-    return accepts
-
-
-def sort_proposals(fragments_graph, proposals):
-    """
-    Sorts proposals by length.
-
-    Parameters
-    ----------
-    fragments_graph : FragmentsGraph
-        Graph that proposals were generated from.
-    proposals : List[Frozenset[int]]
-        List of proposals.
-
-    Returns
-    -------
-    List[Frozenset[int]]
-        Sorted proposals.
-
-    """
-    idxs = np.argsort([fragments_graph.proposal_length(p) for p in proposals])
-    return [proposals[idx] for idx in idxs]
