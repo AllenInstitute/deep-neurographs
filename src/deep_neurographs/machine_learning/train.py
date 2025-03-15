@@ -64,7 +64,6 @@ class GraphDataset:
     def __init__(self, config, transform=False):
         # Instance Attributes
         self.features = dict()
-        self.feature_generators = dict()
         self.graphs = dict()
         self.keys = set()
 
@@ -74,19 +73,6 @@ class GraphDataset:
 
         # Data augmentation (if applicable)
         self.transform = ImageTransforms() if transform else False
-
-    def init_feature_generator(self, key, img_path, segmentation_path):
-        brain_id, segmentation_id, _ = key
-        generator_key = (brain_id, segmentation_id)
-        if generator_key not in self.feature_generators:
-            self.feature_generators[generator_key] = FeatureGenerator(
-                self.graphs[key],
-                img_path,
-                anisotropy=self.ml_config.anisotropy,
-                is_multimodal=self.ml_config.is_multimodal,
-                multiscale=self.ml_config.multiscale,
-                segmentation_path=segmentation_path,
-            )
 
     # --- Data Properties ---
     def __len__(self):
@@ -211,15 +197,21 @@ class GraphDataset:
 
     def generate_features(self, key, img_path, segmentation_path):
         # Initializations
-        self.init_feature_generator(key, img_path, segmentation_path)
+        feature_generator = FeatureGenerator(
+            self.graphs[key],
+            img_path,
+            anisotropy=self.ml_config.anisotropy,
+            is_multimodal=self.ml_config.is_multimodal,
+            multiscale=self.ml_config.multiscale,
+            segmentation_path=segmentation_path,
+        )
         batch = {
             "proposals": self.graphs[key].list_proposals(),
             "graph": self.graphs[key].copy_graph()
         }
 
         # Main
-        generator_key = (key[0], key[1])
-        features = self.feature_generators[generator_key].run(
+        features = feature_generator.run(
             batch, self.graph_config.search_radius
         )
         return features
@@ -406,10 +398,11 @@ class Trainer:
             # Validate
             model.eval()
             y, hat_y = [], []
-            for dataset in validate_dataloader:
-                hat_y_i, y_i = self.predict(model, dataset.data)
-                y.extend(ml_util.toCPU(y_i))
-                hat_y.extend(ml_util.toCPU(hat_y_i))
+            with torch.no_grad():
+                for dataset in validate_dataloader:
+                    hat_y_i, y_i = self.predict(model, dataset.data)
+                    y.extend(ml_util.toCPU(y_i))
+                    hat_y.extend(ml_util.toCPU(hat_y_i))
 
             # Check for new best model
             val_f1 = self.compute_metrics(y, hat_y, "val", epoch)

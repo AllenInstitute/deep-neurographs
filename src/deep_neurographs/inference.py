@@ -538,13 +538,6 @@ class InferenceEngine:
         """
         # Initializations
         dataloader = GraphDataLoader(self.graph, self.batch_size)
-        feature_generator = FeatureGenerator(
-            self.graph,
-            self.img_path,
-            anisotropy=self.ml_config.anisotropy,
-            is_multimodal=self.ml_config.is_multimodal,
-            segmentation_path=self.segmentation_path,
-        )
         pbar = tqdm(total=self.graph.n_proposals(), desc="Inference")
         print("Batch Size:", self.batch_size)
 
