@@ -437,9 +437,10 @@ class Trainer:
             Prediction.
 
         """
-        x, edge_index, edge_attr = ml_util.get_inputs(data, self.device)
-        hat_y = model(x, edge_index, edge_attr)
-        y = data["proposal"]["y"]
+        with torch.no_grad():
+            x, edge_index, edge_attr = ml_util.get_inputs(data, self.device)
+            hat_y = model(x, edge_index, edge_attr)
+            y = data["proposal"]["y"]
         return truncate(hat_y, y), y
 
     def compute_metrics(self, y, hat_y, prefix, epoch):
