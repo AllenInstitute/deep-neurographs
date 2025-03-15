@@ -496,6 +496,15 @@ class InferenceEngine:
         self.img_path = img_path
         self.segmentation_path = segmentation_path
 
+        # Feature generator
+        self.feature_generator = FeatureGenerator(
+            self.graph,
+            self.img_path,
+            anisotropy=self.ml_config.anisotropy,
+            is_multimodal=self.ml_config.is_multimodal,
+            segmentation_path=self.segmentation_path,
+        )
+
         # Model
         if ml_config.is_multimodal:
             self.model = ml_util.init_model(ml_config.is_multimodal)
@@ -545,7 +554,7 @@ class InferenceEngine:
         for batch in dataloader:
             # Feature generation
             t0 = time()
-            features = feature_generator.run(batch, self.radius)
+            features = self.feature_generator.run(batch, self.radius)
             heterograph_data = datasets.init(features, batch["graph"])
             print("Feature Generation:", time() - t0)
 
@@ -811,3 +820,4 @@ class GraphDataLoader:
                             queue.append((node_1, 0))
                         if not (node_2 in visited and node_2 in nodes_added):
                             queue.append((node_2, 0))
+
