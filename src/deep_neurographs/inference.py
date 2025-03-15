@@ -771,8 +771,9 @@ class GraphDataLoader:
         while queue:
             # Visit node
             i, d_i = queue.pop()
-            self.visit_nbhd(graph, i)
             self.visit_proposals(graph, proposals, queue, visited, i)
+            for j in self.graph.neighbors(i):
+                graph.add_edge(i, j)
 
             # Update queue
             for j in self.graph.neighbors(i):
@@ -783,12 +784,6 @@ class GraphDataLoader:
                         queue.append((j, d_j))
                         visited.add(j)
 
-    def visit_nbhd(self, graph, i):
-        edges = list()
-        for j in self.graph.neighbors(i):
-            edges.append((i, j))    
-        graph.add_edges_from(edges)
-
     def visit_proposals(self, graph, proposals, queue, visited, i):
         if len(proposals) < self.batch_size:
             to_discard = set()
@@ -798,7 +793,9 @@ class GraphDataLoader:
                 if proposal in self.proposals:
                     graph.add_edge(i, j)
                     proposals.add(proposal)
-                    to_discard.add(proposal)
+                    self.proposals.remove(proposal)
+                    if j not in visited:
+                        queue.append((j, 0))
 
                 # Add nodes in flagged proposal cluster to queue
                 if False: 
@@ -817,4 +814,3 @@ class GraphDataLoader:
                         if not (node_2 in visited and node_2 in nodes_added):
                             queue.append((node_2, 0))
 
-            self.proposals.difference_update(to_discard)
