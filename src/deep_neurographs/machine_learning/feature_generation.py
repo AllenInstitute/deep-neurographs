@@ -40,9 +40,9 @@ class FeatureGenerator:
         self,
         graph,
         img_path,
-        multiscale=1,
         anisotropy=(1.0, 1.0, 1.0),
         is_multimodal=False,
+        multiscale=1,
         segmentation_path=None,
     ):
         """
@@ -185,7 +185,7 @@ class FeatureGenerator:
 
         # Generate image patches (if applicable)
         if self.is_multimodal:
-            features["patches"] = self.proposal_patches(graph, proposals)
+            features["patches"] = self.proposal_patches(proposals)
         return features
 
     def run_on_proposals(self, proposals, radius):
@@ -351,21 +351,7 @@ class FeatureGenerator:
             # Assign threads
             threads = list()
             for proposal in proposals:
-                i, j = tuple(proposal)
-                segment_ids = self.graph.proposal_attr(proposal, "swc_id")
-                proposal_xyz = self.graph.proposal_attr(proposal, "xyz")
-                edge_xyz_i = np.vstack(self.graph.edge_attr(i, "xyz"))
-                edge_xyz_j = np.vstack(self.graph.edge_attr(j, "xyz"))
-                threads.append(
-                    executor.submit(
-                        self.get_patches,
-                        proposal,
-                        proposal_xyz,
-                        edge_xyz_i,
-                        edge_xyz_j,
-                        segment_ids
-                    )
-                )
+                threads.append(executor.submit(self.get_patches, proposal))
 
             # Store results
             img_patches = dict()
@@ -426,14 +412,12 @@ class FeatureGenerator:
         }
         return bbox
 
-    def get_patches(
-        self, proposal, proposal_xyz, edge_xyz_1, edge_xyz_2, segment_ids
-    ):
+    def get_patches(self, proposal):
+        # Extract attributes
+        proposal_xyz = self.graph.proposal_attr(proposal, "xyz")
         center_xyz = np.mean(proposal_xyz, axis=0)
         img_patch = self.get_img_patch(center_xyz)
-        label_patch = self.get_label_patch(
-            center_xyz, proposal_xyz, edge_xyz_1, edge_xyz_2, segment_ids
-        )
+        label_patch = self.get_label_patch(center_xyz, proposal)
         return {proposal: np.stack([img_patch, label_patch], axis=0)}
 
     def get_img_patch(self, center_xyz):
@@ -441,51 +425,50 @@ class FeatureGenerator:
         img_patch = self.img_reader.read(center_voxel, self.img_patch_shape)
         return img_util.normalize(img_patch)
 
-    def get_label_patch(
-        self, center_xyz, proposal_xyz, edge_xyz_1, edge_xyz_2, segment_ids
-    ):
+    def get_label_patch(self, center_xyz, proposal):
         # Read label patch
         center = img_util.to_voxels(center_xyz, self.anisotropy)
         label_patch = self.labels_reader.read(center, self.label_patch_shape)
         label_patch = zoom(label_patch, 1.0 / 2 ** self.multiscale, order=0)
 
+        # Extract attributes
+        i, j = tuple(proposal)
+        edge_xyz_i = np.vstack(self.graph.edge_attr(i, "xyz"))
+        edge_xyz_j = np.vstack(self.graph.edge_attr(j, "xyz"))
+
         # Annotate label patch
         label_patch = (label_patch > 0).astype(float)
-        label_patch = self.annotate_edge(label_patch, center, edge_xyz_1)
-        label_patch = self.annotate_edge(label_patch, center, edge_xyz_2)
-        label_patch = self.annotate_proposal(
-            label_patch, center, proposal_xyz
-        )
+        label_patch = self.annotate_edge(label_patch, center, edge_xyz_i)
+        label_patch = self.annotate_edge(label_patch, center, edge_xyz_j)
+        label_patch = self.annotate_proposal(label_patch, center, proposal)
         return label_patch
 
-    def annotate_proposal(self, label_patch, center, proposal_xyz):
+    def annotate_proposal(self, label_patch, center, proposal):
         # Convert proposal xyz to local voxel coordinates
+        proposal_xyz = self.graph.proposal_attr(proposal, "xyz")
         voxels = self.get_local_coordinates(center, proposal_xyz)
-        for i, voxel in enumerate(voxels):
-            voxels[i] = [v // 2 ** self.multiscale for v in voxel]
 
         # Draw line along proposal
         n_points = int(geometry_util.dist(voxels[0], voxels[-1]))
         line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
-        return geometry_util.fill_path(label_patch, line, val=4)
+        return geometry_util.fill_path(label_patch, line, val=3)
 
     def annotate_edge(self, label_patch, center, edge_xyz):
         voxels = self.get_local_coordinates(center, edge_xyz)
         voxels = get_inbounds(voxels, label_patch.shape)
         return geometry_util.fill_path(label_patch, voxels, val=2)
 
-        # Annotate label patch
-        label_patch = (label_patch > 0).astype(float)
-        label_patch = self.annotate_proposal(label_patch, center, proposal_xyz)
-        label_patch = self.annotate_edge(label_patch, center, edge_xyz_1)
-        label_patch = self.annotate_edge(label_patch, center, edge_xyz_2)
-        return label_patch
-
     def get_local_coordinates(self, center_voxel, xyz_pts):
+        # Compute offset
         shape = self.label_patch_shape
         offset = np.array([c - s // 2 for c, s in zip(center_voxel, shape)])
+
+        # Transform points
         voxels = [img_util.to_voxels(xyz, self.anisotropy) for xyz in xyz_pts]
-        return geometry_util.shift_path(voxels, offset)
+        voxels = geometry_util.shift_path(voxels, offset)
+        for i, voxel in enumerate(voxels):
+            voxels[i] = [v // 2 ** self.multiscale for v in voxel]
+        return voxels
 
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
