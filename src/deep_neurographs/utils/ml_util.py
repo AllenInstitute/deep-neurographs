@@ -10,6 +10,7 @@ models.
 """
 
 from collections import deque
+from time import time
 
 import networkx as nx
 import numpy as np
@@ -58,6 +59,7 @@ def get_batch(graph, proposals, batch_size, flagged_proposals=set()):
         queue.append((j, 0))
 
     # Main
+    t0 = time()
     batch = {"graph": nx.Graph(), "proposals": set()}
     visited = set()
     while len(proposals) > 0 and len(batch["proposals"]) < batch_size:
@@ -91,6 +93,7 @@ def get_batch(graph, proposals, batch_size, flagged_proposals=set()):
                     d_j = min(d + 1, -len(graph.nodes[j]["proposals"]))
                     if d_j <= GNN_DEPTH:
                         queue.append((j, d + 1))
+    print("Batch Generation:", time() - t0)
     return batch
 
 
