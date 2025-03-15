@@ -8,7 +8,8 @@ Routines for applying image augmentation during training.
 
 """
 
-from scipy.ndimage import rotate, zoom
+from scipy.ndimage import affine_transform, map_coordinates, rotate, zoom
+from scipy.spatial.transform import Rotation
 
 import numpy as np
 import random
@@ -126,7 +127,7 @@ class RandomRotation3D:
 
     """
 
-    def __init__(self, angles=(-45, 45), axes=((0, 1), (0, 2), (1, 2))):
+    def __init__(self, angles=(-90, 90), axes=((0, 1), (0, 2), (1, 2))):
         """
         Initializes a RandomRotation3D transformer.
 
@@ -162,9 +163,10 @@ class RandomRotation3D:
 
         """
         for axes in self.axes:
-            angle = random.uniform(*self.angles)
-            patches[0, ...] = rotate3d(patches[0, ...], angle, axes)
-            patches[1, ...] = rotate3d(patches[1, ...], angle, axes)
+            if random.random() > 0.3:
+                angle = random.uniform(*self.angles)
+                patches[0, ...] = rotate3d(patches[0, ...], angle, axes)
+                patches[1, ...] = rotate3d(patches[1, ...], angle, axes)
         return patches
 
 
@@ -275,7 +277,7 @@ class RandomNoise3D:
 
     """
 
-    def __init__(self, mean=0.0, std=0.03):
+    def __init__(self, mean=0.0, std=0.05):
         """
         Initializes a RandomNoise3D transformer.
 
