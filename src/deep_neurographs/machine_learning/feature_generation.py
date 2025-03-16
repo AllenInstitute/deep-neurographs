@@ -83,8 +83,9 @@ class FeatureGenerator:
         self.is_multimodal = is_multimodal
 
         # Image readers
+        driver = "n5" if "n5" in img_path else "zarr"
         self.img_patch_shape = self.set_patch_shape(multiscale)
-        self.img_reader = self.init_img_reader(img_path, "zarr")
+        self.img_reader = self.init_img_reader(img_path, driver)
         if segmentation_path is not None:
             driver = "neuroglancer_precomputed"
             self.label_patch_shape = self.set_patch_shape(0)
