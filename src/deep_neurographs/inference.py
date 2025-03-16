@@ -210,6 +210,8 @@ class InferencePipeline:
         self.graph.load_fragments(fragments_pointer)
         self.filter_fragments()
 
+        print("# Soma Fragments:", len(self.graph.soma_ids))
+
         # Save valid labels and current graph
         swc_dir = os.path.join(self.output_dir, "swcs")
         valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
@@ -261,6 +263,7 @@ class InferencePipeline:
         # Report results
         t, unit = util.time_writer(time() - t0)
         self.report(f"# Proposals: {n_proposals}")
+        self.report(f"# Proposals Blocked: {self.graph.n_proposals_blocked}")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
 
     def classify_proposals(self):
@@ -299,6 +302,7 @@ class InferencePipeline:
 
         # Report results
         t, unit = util.time_writer(time() - t0)
+        self.report(f"# Merges Blocked: {self.graph.n_merges_blocked}")
         self.report(f"# Accepted: {util.reformat_number(len(accepts))}")
         self.report(f"% Accepted: {round(len(accepts) / n_proposals, 4)}")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
@@ -493,16 +497,13 @@ class InferenceEngine:
         self.radius = radius
         self.threshold = ml_config.threshold
 
-        self.img_path = img_path
-        self.segmentation_path = segmentation_path
-
         # Feature generator
         self.feature_generator = FeatureGenerator(
             self.graph,
-            self.img_path,
+            img_path,
             anisotropy=self.ml_config.anisotropy,
             is_multimodal=self.ml_config.is_multimodal,
-            segmentation_path=self.segmentation_path,
+            segmentation_path=segmentation_path,
         )
 
         # Model
@@ -513,6 +514,14 @@ class InferenceEngine:
             self.model = torch.load(model_path, weights_only=False)
         self.model.to(self.device)
         self.model.eval()
+
+    def init_dataloader(self):
+        if len(self.graph.soma_ids) > 0:
+            print("using seeded dataloader")
+            return SeededGraphDataLoader(self.graph, self.batch_size)
+        else:
+            print("using regular dataloader")
+            return GraphDataLoader(self.graph, self.batch_size)
 
     def run(self, return_preds=False):
         """
@@ -537,31 +546,24 @@ class InferenceEngine:
 
         """
         # Initializations
-        dataloader = GraphDataLoader(self.graph, self.batch_size)
+        dataloader = self.init_dataloader()
         pbar = tqdm(total=self.graph.n_proposals(), desc="Inference")
-        print("Batch Size:", self.batch_size)
 
         # Main
         accepts = list()
         hat_y = dict()
         for batch in dataloader:
             # Feature generation
-            t0 = time()
             features = self.feature_generator.run(batch, self.radius)
             heterograph_data = datasets.init(features, batch["graph"])
-            print("Feature Generation:", time() - t0)
 
             # Run model
-            t0 = time()
             hat_y_i = self.predict(heterograph_data)
             if return_preds:
                 hat_y.update(hat_y_i)
-            print("Run Model:", time() - t0)
 
             # Determine which proposals to accept
-            t0 = time()
             accepts.extend(self.update_graph(hat_y_i))
-            print("Get Accepts:", time() - t0)
             pbar.update(len(batch["proposals"]))
 
         # Return results
@@ -602,8 +604,8 @@ class InferenceEngine:
 
     def update_graph(self, preds, high_threshold=0.9):
         """
-        Determines which proposals to accept based on prediction scores and the
-        specified threshold.
+        Determines which proposals to accept based on prediction scores and
+        the specified threshold.
 
         Parameters
         ----------
@@ -611,8 +613,8 @@ class InferenceEngine:
             Dictionary that maps proposal ids to probability generated from
             machine learning model.
         high_threshold : float, optional
-            Threshold value for separating the best proposals from the rest. The
-            default is 0.9.
+            Threshold value for separating the best proposals from the rest.
+            The default is 0.9.
 
         Returns
         -------
@@ -632,9 +634,9 @@ class InferenceEngine:
 
     def separate_best(self, preds, high_threshold):
         """
-        Splits "preds" into two separate dictionaries such that one contains the
-        best proposals (i.e. simple proposals with high confidence) and the other
-        contains all other proposals.
+        Splits "preds" into two separate dictionaries such that one contains
+        the best proposals (i.e. simple proposals with high confidence) and
+        the other contains all other proposals.
 
         Parameters
         ----------
@@ -666,7 +668,6 @@ class InferenceEngine:
         idxs = np.argsort(probs)
         return np.array(best_proposals)[best_idxs], np.array(proposals)[idxs]
 
-
     def add_accepts(self, proposals):
         """
         ...
@@ -680,8 +681,8 @@ class InferenceEngine:
         Returns
         -------
         List[frozenset]
-            List of proposals that do not create a cycle when iteratively added to
-            "graph".
+            List of proposals that do not create a cycle when iteratively
+            added to "graph".
 
         """
         accepts = list()
@@ -693,7 +694,7 @@ class InferenceEngine:
         return accepts
 
 
-# --- Custom Dataloader ---
+# --- Custom Dataloaders ---
 class GraphDataLoader:
 
     def __init__(self, graph, proposals, batch_size=2000, gnn_depth=2):
@@ -754,26 +755,23 @@ class GraphDataLoader:
     def __iter__(self):
         while self.proposals:
             # Run BFS
-            t0 = time()
-            graph = nx.Graph()
-            proposals = set()
-            while len(proposals) < self.batch_size and self.proposals:
-                self.populate_with_bfs(graph, proposals)
+            batch = {"graph": nx.Graph(), "proposals": set()}
+            while not self.is_batch_full(batch) and self.proposals:
+                root = util.sample_once(self.proposals)
+                self.populate_via_bfs(batch, root)
 
             # Yield batch
-            print("Batch Formation:", time() - t0)
-            yield {"graph": graph, "proposals": proposals}
+            yield batch
 
-    def populate_with_bfs(self, graph, proposals):
-        i, j = tuple(util.sample_once(self.proposals))
+    def populate_via_bfs(self, batch, root):
+        i, j = tuple(root)
         queue = deque([(i, 0), (j, 0)])
         visited = set({i, j})
         while queue:
             # Visit node
-            i, d_i = queue.pop()
-            self.visit_proposals(graph, proposals, queue, visited, i)
-            for j in self.graph.neighbors(i):
-                graph.add_edge(i, j)
+            i, d_i = queue.popleft()
+            self.visit_nbhd(batch, i)
+            self.visit_proposals(batch, queue, visited, i)
 
             # Update queue
             for j in self.graph.neighbors(i):
@@ -784,33 +782,134 @@ class GraphDataLoader:
                         queue.append((j, d_j))
                         visited.add(j)
 
-    def visit_proposals(self, graph, proposals, queue, visited, i):
-        if len(proposals) < self.batch_size:
-            to_discard = set()
+    def visit_nbhd(self, batch, i):
+        for j in self.graph.neighbors(i):
+            batch["graph"].add_edge(i, j)
+
+    def visit_proposals(self, batch, queue, visited, i):
+        if len(batch["proposals"]) < self.batch_size:
             for j in self.graph.nodes[i]["proposals"]:
                 # Visit proposal
                 proposal = frozenset({i, j})
                 if proposal in self.proposals:
-                    graph.add_edge(i, j)
-                    proposals.add(proposal)
+                    batch["graph"].add_edge(i, j)
+                    batch["proposals"].add(proposal)
                     self.proposals.remove(proposal)
                     if j not in visited:
                         queue.append((j, 0))
 
-                # Add nodes in flagged proposal cluster to queue
-                if False: 
+                # Check if proposal is flagged
                 #proposal in self.flagged and proposal in self.proposals:
-                    nodes_added = set()
-                    for p in self.extract_cluster(proposal):
-                        # Add proposal
-                        node_1, node_2 = tuple(p)
-                        graph.add_edge(node_1, node_2)
-                        proposals.add(p)
-                        to_discard.add(p)
+                if False:
+                    self.visit_flagged_proposal(batch)
 
-                        # Update queue
-                        if not (node_1 in visited and node_1 in nodes_added):
-                            queue.append((node_1, 0))
-                        if not (node_2 in visited and node_2 in nodes_added):
-                            queue.append((node_2, 0))
+    def visit_flagged_proposal(self, batch, queue, visited, proposal):
+        nodes_added = set()
+        for p in self.extract_cluster(proposal):
+            # Add proposal
+            node_1, node_2 = tuple(p)
+            batch["graph"].add_edge(node_1, node_2)
+            batch["proposals"].add(p)
 
+            # Update queue
+            if not (node_1 in visited and node_1 in nodes_added):
+                queue.append((node_1, 0))
+            if not (node_2 in visited and node_2 in nodes_added):
+                queue.append((node_2, 0))
+
+    def is_batch_full(self, batch):
+        return True if len(batch["proposals"]) >= self.batch_size else False
+
+
+class SeededGraphDataLoader(GraphDataLoader):
+
+    def __init__(self, graph, proposals, batch_size=2000, gnn_depth=2):
+        # Call parent class
+        super(SeededGraphDataLoader, self).__init__(
+            graph, proposals, batch_size, gnn_depth
+        )
+
+    # --- Batch Generation ---
+    def __iter__(self):
+        soma_connected_proposals_exist = True
+        while soma_connected_proposals_exist:
+            # Run BFS
+            batch = {
+                "graph": nx.Graph(),
+                "proposals": set(),
+                "soma_proposals": set()
+            }
+            while not self.is_batch_full(batch) and self.proposals:
+                root = self.find_bfs_root()
+                if root:
+                    self.populate_via_seeded_bfs(batch, root)
+                else:
+                    soma_connected_proposals_exist = False
+                    break
+
+            # Yield batch
+            yield batch
+
+        # Call parent class dataloader
+        for batch in super().__iter__():
+            yield batch
+
+    def find_bfs_root(self):
+        for proposal in self.proposals:
+            i, j = tuple(proposal)
+            if self.graph.is_soma(i):
+                return i
+            elif self.graph.is_soma(j):
+                return j
+        return False
+
+    def populate_via_seeded_bfs(self, batch, root):
+        queue = self.init_seeded_queue(root)
+        visited = set({root})
+        while queue:
+            # Visit node
+            i, d_i = queue.popleft()
+            self.visit_nbhd(batch, i)
+            self.visit_proposals(batch, queue, visited, i)
+
+            # Update queue
+            for j in self.graph.neighbors(i):
+                if j not in visited:
+                    n_j = len(self.graph.nodes[j]["proposals"])
+                    d_j = min(d_i + 1, -n_j)
+                    if d_j <= self.gnn_depth:
+                        queue.append((j, d_j))
+                        visited.add(j)
+
+    def init_seeded_queue(self, root):
+        seeded_queue = deque([(root, 0)])
+        queue = deque([root])
+        visited = set({root})
+        while queue:
+            # Visit node
+            i = queue.pop()
+            if self.graph.nodes[i]["proposals"]:
+                seeded_queue.append((i, 0))
+
+            # Update queue
+            for j in self.graph.neighbors(i):
+                if j not in visited:
+                    queue.append(j)
+                    visited.add(j)
+        return seeded_queue
+
+    def visit_proposals(self, batch, queue, visited, i):
+        if len(batch["proposals"]) < self.batch_size:
+            for j in self.graph.nodes[i]["proposals"]:
+                # Visit proposal
+                proposal = frozenset({i, j})
+                if proposal in self.proposals:
+                    batch["graph"].add_edge(i, j)
+                    batch["proposals"].add(proposal)
+                    self.proposals.remove(proposal)
+                    if j not in visited:
+                        queue.append((j, 0))
+
+                # Check if proposal is connected to soma
+                if self.graph.is_soma(i) or self.graph.is_soma(j):
+                    batch["soma_proposals"].add(proposal)
