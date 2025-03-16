@@ -193,7 +193,7 @@ def is_valid(target_graph, pred_graph, kdtree, proposal):
             pred_graph.nodes[i]["xyz"],
             pred_graph.nodes[j]["xyz"],
         )
-        return result
+        return True
     return False
 
 
