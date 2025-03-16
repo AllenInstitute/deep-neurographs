@@ -99,22 +99,44 @@ class Reader:
                 - "soma_nodes": nodes with soma type.
 
         """
-        if type(swc_pointer) is dict:
-            return self.load_from_gcs(swc_pointer)
-        if type(swc_pointer) is list:
-            return self.load_from_local_paths(swc_pointer)
-        if type(swc_pointer) is str:
+        # Dictionary with GCS specs
+        if isinstance(swc_pointer, dict):
+            return self.read_from_gcs(swc_pointer)
+
+        # List of paths to SWC files
+        if isinstance(swc_pointer, list):
+            return self.read_from_paths(swc_pointer)
+
+        # Directory containing...
+        if os.path.isdir(swc_pointer):
+            # ZIP archives with SWC files
+            paths = util.list_paths(swc_pointer, extension=".zip")
+            if len(paths) > 0:
+                return self.read_from_zips(swc_pointer)
+
+            # SWC files
+            paths = util.read_paths(swc_pointer, extension=".swc")
+            if len(paths) > 0:
+                return self.read_from_paths(paths)
+
+            raise Exception("Directory is invalid!")
+
+        # Path to...
+        if isinstance(swc_pointer, str):
+            # ZIP archive with SWC files
             if ".zip" in swc_pointer:
-                return self.load_from_local_zip(swc_pointer)
+                return self.read_from_zip(swc_pointer)
+
+            # Path to single SWC file
             if ".swc" in swc_pointer:
-                return self.load_from_local_path(swc_pointer)
-            if os.path.isdir(swc_pointer):
-                paths = util.list_paths(swc_pointer, extension=".swc")
-                return self.load_from_local_paths(paths)
-        raise Exception("SWC Pointer is not Valid!")
+                return self.read_from_path(swc_pointer)
+
+            raise Exception("Path is invalid!")
+
+        raise Exception("SWC Pointer is invalid!")
 
     # --- Load subroutines ---
-    def load_from_local_paths(self, swc_paths):
+    def read_from_paths(self, swc_paths):
         """
         Reads a list of SWC files stored on the local machine.
 
@@ -135,7 +157,7 @@ class Reader:
             processes = list()
             for path in swc_paths:
                 processes.append(
-                    executor.submit(self.load_from_local_path, path)
+                    executor.submit(self.load, path)
                 )
 
             # Store results
@@ -146,7 +168,7 @@ class Reader:
                     swc_dicts.append(result)
         return swc_dicts
 
-    def load_from_local_path(self, path):
+    def read_from_path(self, path):
         """
         Reads a single SWC file stored on the local machine.
 
@@ -170,7 +192,44 @@ class Reader:
         else:
             return False
 
-    def load_from_local_zip(self, zip_path):
+    def read_from_zips(self, zip_dir):
+        """
+        Processes a directory containing ZIP archives with SWC files.
+
+        Parameters
+        ----------
+        zip_dir : str
+            Path to directory containing ZIP archives with SWC files.
+
+        Returns
+        -------
+        Deque[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
+
+        """
+        # Initializations
+        zip_names = [f for f in os.listdir(zip_dir) if f.endswith(".zip")]
+        pbar = tqdm(total=len(zip_names), desc="Read SWCs")
+
+        # Main
+        with ProcessPoolExecutor() as executor:
+            # Assign threads
+            processes = list()
+            for f in zip_names:
+                zip_path = os.path.join(zip_dir, f)
+                processes.append(
+                    executor.submit(self.read_from_zip, zip_path)
+                )
+
+            # Store results
+            swc_dicts = deque()
+            for process in as_completed(processes):
+                swc_dicts.extend(process.result())
+                pbar.update(1)
+        return swc_dicts
+
+    def read_from_zip(self, zip_path):
         """
         Reads SWC files from a ZIP archive stored on the local machine.
 
@@ -189,13 +248,13 @@ class Reader:
         with ZipFile(zip_path, "r") as zip_file:
             swc_dicts = deque()
             swc_files = [f for f in zip_file.namelist() if f.endswith(".swc")]
-            for f in tqdm(swc_files, desc="Read SWCs"):
-                result = self.load_from_zipped_file(zip_file, f)
+            for f in swc_files:
+                result = self.read_from_zipped_file(zip_file, f)
                 if result:
                     swc_dicts.append(result)
         return swc_dicts
 
-    def load_from_zipped_file(self, zip_file, path):
+    def read_from_zipped_file(self, zip_file, path):
         """
         Reads SWC file stored in a ZIP archive.
 
@@ -221,7 +280,7 @@ class Reader:
         else:
             return False
 
-    def load_from_gcs(self, gcs_dict):
+    def read_from_gcs(self, gcs_dict):
         """
         Reads SWC files from ZIP archives stored in a GCS bucket.
 
@@ -250,7 +309,7 @@ class Reader:
             for path in zip_paths:
                 zip_content = bucket.blob(path).download_as_bytes()
                 processes.append(
-                    executor.submit(self.load_from_cloud_zip, zip_content)
+                    executor.submit(self.read_from_cloud_zip, zip_content)
                 )
 
             # Store results
@@ -260,7 +319,7 @@ class Reader:
                 pbar.update(1)
         return swc_dicts
 
-    def load_from_cloud_zip(self, zip_content):
+    def read_from_cloud_zip(self, zip_content):
         """
         Reads SWC files stored in a ZIP archive downloaded from a cloud
         bucket.
@@ -285,7 +344,7 @@ class Reader:
                 for f in util.list_files_in_zip(zip_content):
                     threads.append(
                         executor.submit(
-                            self.load_from_zipped_file, zip_file, f
+                            self.read_from_zipped_file, zip_file, f
                         )
                     )
 
