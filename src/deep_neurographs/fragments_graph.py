@@ -131,6 +131,8 @@ class FragmentsGraph(nx.Graph):
         # Instance attributes - Graph
         self.anisotropy = anisotropy
         self.leaf_kdtree = None
+        self.n_merges_blocked = 0
+        self.n_proposals_blocked = 0
         self.node_cnt = 0
         self.soma_ids = set()
         self.swc_ids = set()
@@ -591,6 +593,7 @@ class FragmentsGraph(nx.Graph):
         if i is not None:
             skip_soma = self.is_soma(i) and self.is_soma(leaf)
             skip_complex = self.degree[i] > 1 and not complex_bool
+            self.n_proposals_blocked += 1 if skip_soma else 0
             return not (skip_soma or skip_complex)
         else:
             return False
@@ -611,7 +614,7 @@ class FragmentsGraph(nx.Graph):
         """
         return list(self.proposals)
 
-    # --- Proposal util ---
+    # --- Proposal Helpers ---
     def n_proposals(self):
         """
         Counts the number of proposals.
@@ -738,6 +741,8 @@ class FragmentsGraph(nx.Graph):
             self.upd_ids(swc_id, j if swc_id == swc_id_i else i)
             self.__add_edge((i, j), attrs, swc_id)
             self.proposals.remove(proposal)
+        else:
+            self.n_merges_blocked += 1
 
     def is_mergeable(self, i, j):
         one_leaf = self.degree[i] == 1 or self.degree[j] == 1
@@ -900,7 +905,7 @@ class FragmentsGraph(nx.Graph):
         else:
             return None
 
-    # --- write graph to swcs ---
+    # --- Writer to SWCs ---
     def to_zipped_swcs(self, swc_dir, sampling_rate=2):
         # Initializations
         n = nx.number_connected_components(self)
