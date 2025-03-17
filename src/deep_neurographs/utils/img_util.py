@@ -10,6 +10,7 @@ Helper routines for reading and processing images.
 """
 
 from abc import ABC, abstractmethod
+from scipy.ndimage import zoom
 from skimage.color import label2rgb
 
 import numpy as np
@@ -225,6 +226,9 @@ class TensorStoreReader(ImageReader):
             self.img = self.img[ts.d["channel"][0]]
             self.img = self.img[ts.d[0].transpose[2]]
             self.img = self.img[ts.d[0].transpose[1]]
+        elif self.driver == "n5":
+            self.img = self.img[ts.d[0].transpose[2]]
+            self.img = self.img[ts.d[0].transpose[1]]
 
     def read(self, voxel, shape, from_center=True):
         """
@@ -339,71 +343,6 @@ def get_start_end(voxel, shape, from_center=True):
     return start, end
 
 
-# -- Operations --
-def normalize(img):
-    """
-    Normalizes an image so that the minimum and maximum intensity values are 0
-    and 1.
-
-    Parameters
-    ----------
-    img : numpy.ndarray
-        Image to be normalized.
-
-    Returns
-    -------
-    numpy.ndarray
-        Normalized image.
-
-    """
-    img -= np.min(img)
-    return img / max(1, np.max(img))
-
-
-def get_mip(img, axis=0):
-    """
-    Compute the maximum intensity projection (MIP) of "img" along "axis".
-
-    Parameters
-    ----------
-    img : numpy.ndarray
-        Image to compute MIP of.
-    axis : int, optional
-        Projection axis. The default is 0.
-
-    Returns
-    -------
-    numpy.ndarray
-        MIP of "img".
-
-    """
-    return np.max(img, axis=axis)
-
-
-def get_labels_mip(img, axis=0):
-    """
-    Compute the maximum intensity projection (MIP) of a segmentation along
-    "axis". This routine differs from "get_mip" because it retuns an RGB
-    image.
-
-    Parameters
-    ----------
-    img : numpy.ndarray
-        Image to compute MIP of.
-    axis : int, optional
-        Projection axis. The default is 0.
-
-    Returns
-    -------
-    numpy.ndarray
-        MIP of "img".
-
-    """
-    mip = get_mip(img, axis=axis)
-    mip = label2rgb(mip)
-    return (255 * mip).astype(np.uint8)
-
-
 def get_profile(img_reader, spec, profile_id):
     """
     Gets the image profile for a given proposal.
@@ -483,7 +422,7 @@ def to_voxels(xyz, anisotropy, multiscale=0):
     return tuple(voxel[::-1])
 
 
-# --- miscellaneous ---
+# --- Helpers ---
 def find_img_path(bucket_name, root_dir, dataset_name):
     """
     Finds the path to an image in a GCS bucket for the dataset given by
@@ -536,6 +475,50 @@ def get_minimal_bbox(voxels, buffer=0):
     return bbox
 
 
+def get_mip(img, axis=0):
+    """
+    Compute the maximum intensity projection (MIP) of "img" along "axis".
+
+    Parameters
+    ----------
+    img : numpy.ndarray
+        Image to compute MIP of.
+    axis : int, optional
+        Projection axis. The default is 0.
+
+    Returns
+    -------
+    numpy.ndarray
+        MIP of "img".
+
+    """
+    return np.max(img, axis=axis)
+
+
+def get_labels_mip(img, axis=0):
+    """
+    Compute the maximum intensity projection (MIP) of a segmentation along
+    "axis". This routine differs from "get_mip" because it retuns an RGB
+    image.
+
+    Parameters
+    ----------
+    img : numpy.ndarray
+        Image to compute MIP of.
+    axis : int, optional
+        Projection axis. The default is 0.
+
+    Returns
+    -------
+    numpy.ndarray
+        MIP of "img".
+
+    """
+    mip = get_mip(img, axis=axis)
+    mip = label2rgb(mip)
+    return (255 * mip).astype(np.uint8)
+
+
 def is_contained(bbox, voxel):
     """
     Checks whether a given voxel is contained within the image bounding box
@@ -582,3 +565,30 @@ def is_list_contained(bbox, voxels):
 
     """
     return all([is_contained(bbox, voxel) for voxel in voxels])
+
+
+def normalize(img):
+    """
+    Normalizes an image so that the minimum and maximum intensity values are 0
+    and 1.
+
+    Parameters
+    ----------
+    img : numpy.ndarray
+        Image to be normalized.
+
+    Returns
+    -------
+    numpy.ndarray
+        Normalized image.
+
+    """
+    img -= np.min(img)
+    return img / max(1, np.max(img))
+
+
+def resize(img, new_shape):
+    depth, height, width = img.shape
+    zoom_factors = np.array(new_shape) / np.array([depth, height, width])
+    resized_img = zoom(img, zoom_factors, order=1)
+    return resized_img

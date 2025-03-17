@@ -100,7 +100,7 @@ class MLConfig:
 
     """
     anisotropy: Tuple[float] = field(default_factory=tuple)
-    batch_size: int = 200
+    batch_size: int = 160
     device: str = "cpu"
     is_multimodal: bool = False
     lr: float = 1e-3

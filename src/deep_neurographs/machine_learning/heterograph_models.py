@@ -185,7 +185,6 @@ class MultiModalHGAT(torch.nn.Module):
         heads_1=2,
         heads_2=2,
         hidden_dim=128,
-        patch_shape=(64, 64, 64),
     ):
         # Call parent class
         super().__init__()
@@ -193,7 +192,7 @@ class MultiModalHGAT(torch.nn.Module):
         # Initial embeddings
         self._init_node_embedding(node_input_dims, hidden_dim)
         self._init_edge_embedding(edge_input_dims, hidden_dim)
-        self._init_patch_embedding(patch_shape, hidden_dim // 2)
+        self._init_patch_embedding(hidden_dim // 2)
 
         # Message passing layers
         self.gat1 = self.init_gat(hidden_dim, hidden_dim, heads_1)
@@ -269,15 +268,13 @@ class MultiModalHGAT(torch.nn.Module):
         for key, input_dim in edge_input_dims.items():
             self.edge_embedding[str(key)] = init_mlp(input_dim, output_dim)
 
-    def _init_patch_embedding(self, patch_shape, output_dim):
+    def _init_patch_embedding(self, output_dim):
         """
         Builds the initial image patch embedding layer using a Convolutional
         Neural Network (CNN).
 
         Parameters
         ----------
-        patch_shape : Tuple[int]
-            Shape of image patches.
         output_dim : int
             Output dimension for the embeddings.
 
@@ -286,7 +283,7 @@ class MultiModalHGAT(torch.nn.Module):
         None
 
         """
-        self.patch_embedding = ConvNet(patch_shape, output_dim)
+        self.patch_embedding = ConvNet(output_dim)
 
     def init_gat(self, hidden_dim, edge_dim, heads):
         gat_dict = dict()
@@ -350,7 +347,7 @@ class ConvNet(nn.Module):
 
     """
 
-    def __init__(self, patch_shape, output_dim):
+    def __init__(self, output_dim):
         """
         Constructs a ConvNet object.
 

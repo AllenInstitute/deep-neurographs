@@ -115,7 +115,7 @@ class Reader:
                 return self.read_from_zips(swc_pointer)
 
             # SWC files
-            paths = util.read_paths(swc_pointer, extension=".swc")
+            paths = util.list_paths(swc_pointer, extension=".swc")
             if len(paths) > 0:
                 return self.read_from_paths(paths)
 
