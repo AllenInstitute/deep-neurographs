@@ -18,7 +18,6 @@ Note: We assume that a segmentation mask corresponds to multiscale 0. Thus,
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from scipy.ndimage import zoom
 
 import numpy as np
 
@@ -424,25 +423,21 @@ class FeatureGenerator:
     def get_img_patch(self, center_xyz):
         center_voxel = self.to_voxels(center_xyz)
         img_patch = self.img_reader.read(center_voxel, self.img_patch_shape)
-        return img_util.normalize(img_patch)
+        img_patch = img_util.normalize(img_patch)
+        return img_util.resize(img_patch, (64, 64, 64))
 
     def get_label_patch(self, center_xyz, proposal):
         # Read label patch
         center = img_util.to_voxels(center_xyz, self.anisotropy)
         label_patch = self.labels_reader.read(center, self.label_patch_shape)
-        label_patch = zoom(label_patch, 1.0 / 2 ** self.multiscale, order=0)
-
-        # Extract attributes
-        i, j = tuple(proposal)
-        edge_xyz_i = np.vstack(self.graph.edge_attr(i, "xyz"))
-        edge_xyz_j = np.vstack(self.graph.edge_attr(j, "xyz"))
 
         # Annotate label patch
+        i, j = tuple(proposal)
         label_patch = (label_patch > 0).astype(float)
-        label_patch = self.annotate_edge(label_patch, center, edge_xyz_i)
-        label_patch = self.annotate_edge(label_patch, center, edge_xyz_j)
+        label_patch = self.annotate_edge(label_patch, center, i)
+        label_patch = self.annotate_edge(label_patch, center, j)
         label_patch = self.annotate_proposal(label_patch, center, proposal)
-        return label_patch
+        return img_util.resize(label_patch, (64, 64, 64))
 
     def annotate_proposal(self, label_patch, center, proposal):
         # Convert proposal xyz to local voxel coordinates
@@ -454,7 +449,8 @@ class FeatureGenerator:
         line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
         return geometry_util.fill_path(label_patch, line, val=3)
 
-    def annotate_edge(self, label_patch, center, edge_xyz):
+    def annotate_edge(self, label_patch, center, i):
+        edge_xyz = np.vstack(self.graph.edge_attr(i, "xyz"))
         voxels = self.get_local_coordinates(center, edge_xyz)
         voxels = get_inbounds(voxels, label_patch.shape)
         return geometry_util.fill_path(label_patch, voxels, val=2)

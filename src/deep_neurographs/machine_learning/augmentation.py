@@ -8,8 +8,7 @@ Routines for applying image augmentation during training.
 
 """
 
-from scipy.ndimage import affine_transform, map_coordinates, rotate, zoom
-from scipy.spatial.transform import Rotation
+from scipy.ndimage import rotate, zoom
 
 import numpy as np
 import random

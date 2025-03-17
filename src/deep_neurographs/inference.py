@@ -503,6 +503,7 @@ class InferenceEngine:
             img_path,
             anisotropy=self.ml_config.anisotropy,
             is_multimodal=self.ml_config.is_multimodal,
+            multiscale=self.ml_config.multiscale,
             segmentation_path=segmentation_path,
         )
 
@@ -521,6 +522,7 @@ class InferenceEngine:
             return SeededGraphDataLoader(self.graph, self.batch_size)
         else:
             print("using regular dataloader")
+            print(self.batch_size)
             return GraphDataLoader(self.graph, self.batch_size)
 
     def run(self, return_preds=False):
@@ -697,7 +699,7 @@ class InferenceEngine:
 # --- Custom Dataloaders ---
 class GraphDataLoader:
 
-    def __init__(self, graph, proposals, batch_size=2000, gnn_depth=2):
+    def __init__(self, graph, batch_size=200, gnn_depth=2):
         # Instance attributes
         self.batch_size = batch_size
         self.gnn_depth = gnn_depth
@@ -787,7 +789,7 @@ class GraphDataLoader:
             batch["graph"].add_edge(i, j)
 
     def visit_proposals(self, batch, queue, visited, i):
-        if len(batch["proposals"]) < self.batch_size:
+        if not self.is_batch_full(batch):
             for j in self.graph.nodes[i]["proposals"]:
                 # Visit proposal
                 proposal = frozenset({i, j})
@@ -823,7 +825,7 @@ class GraphDataLoader:
 
 class SeededGraphDataLoader(GraphDataLoader):
 
-    def __init__(self, graph, proposals, batch_size=2000, gnn_depth=2):
+    def __init__(self, graph, proposals, batch_size=200, gnn_depth=2):
         # Call parent class
         super(SeededGraphDataLoader, self).__init__(
             graph, proposals, batch_size, gnn_depth
@@ -870,7 +872,7 @@ class SeededGraphDataLoader(GraphDataLoader):
             # Visit node
             i, d_i = queue.popleft()
             self.visit_nbhd(batch, i)
-            self.visit_proposals(batch, queue, visited, i)
+            self.visit_proposals_seeded(batch, queue, visited, i)
 
             # Update queue
             for j in self.graph.neighbors(i):
@@ -898,7 +900,7 @@ class SeededGraphDataLoader(GraphDataLoader):
                     visited.add(j)
         return seeded_queue
 
-    def visit_proposals(self, batch, queue, visited, i):
+    def visit_proposals_seeded(self, batch, queue, visited, i):
         if len(batch["proposals"]) < self.batch_size:
             for j in self.graph.nodes[i]["proposals"]:
                 # Visit proposal
