@@ -870,7 +870,7 @@ class SeededGraphDataLoader(GraphDataLoader):
             # Visit node
             i, d_i = queue.popleft()
             self.visit_nbhd(batch, i)
-            self.visit_proposals(batch, queue, visited, i)
+            self.visit_proposals_seeded(batch, queue, visited, i)
 
             # Update queue
             for j in self.graph.neighbors(i):
@@ -898,7 +898,7 @@ class SeededGraphDataLoader(GraphDataLoader):
                     visited.add(j)
         return seeded_queue
 
-    def visit_proposals(self, batch, queue, visited, i):
+    def visit_proposals_seeded(self, batch, queue, visited, i):
         if len(batch["proposals"]) < self.batch_size:
             for j in self.graph.nodes[i]["proposals"]:
                 # Visit proposal
