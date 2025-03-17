@@ -825,10 +825,10 @@ class GraphDataLoader:
 
 class SeededGraphDataLoader(GraphDataLoader):
 
-    def __init__(self, graph, proposals, batch_size=200, gnn_depth=2):
+    def __init__(self, graph, batch_size=200, gnn_depth=2):
         # Call parent class
         super(SeededGraphDataLoader, self).__init__(
-            graph, proposals, batch_size, gnn_depth
+            graph, batch_size, gnn_depth
         )
 
     # --- Batch Generation ---
