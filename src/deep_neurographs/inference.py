@@ -850,7 +850,8 @@ class SeededGraphDataLoader(GraphDataLoader):
                     break
 
             # Yield batch
-            yield batch
+            if batch["proposals"]:
+                yield batch
 
         # Call parent class dataloader
         for batch in super().__iter__():
