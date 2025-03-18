@@ -15,13 +15,13 @@ Code that executes the full GraphTrace inference pipeline.
 
         3. Proposal Classification
             a. Feature Generation
-                Extracts features from proposals and graph for a machine
+                Extract features from proposals and graph for a machine
                 learning model.
             b. Predict with Graph Neural Network (GNN)
-                Runs a GNN to classify proposals as accept/reject
+                Run a GNN to classify proposals as accept/reject
                 based on the learned features.
             c. Merge Accepted Proposals
-                Adds accepted proposals to the fragments graph as edges.
+                Add accepted proposals to the fragments graph as edges.
 
 Note: Steps 2 and 3 of the inference pipeline can be iterated in a loop that
       repeats multiple times by calling the routine "run_schedule" within the

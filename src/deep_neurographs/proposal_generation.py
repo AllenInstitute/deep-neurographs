@@ -418,8 +418,8 @@ def trim_to_idx(fragments_graph, i, idx):
 
     """
     # Update node
-    edge_xyz = fragments_graph.edge_attr(i, key="xyz")[0]
-    edge_radii = fragments_graph.edge_attr(i, key="radius")[0]
+    edge_xyz = fragments_graph.edge_attr(i, key="xyz", ignore=True)[0]
+    edge_radii = fragments_graph.edge_attr(i, key="radius", ignore=True)[0]
     fragments_graph.nodes[i]["xyz"] = edge_xyz[idx]
     fragments_graph.nodes[i]["radius"] = edge_radii[idx]
 
