@@ -32,7 +32,7 @@ class FeatureGenerator:
 
     """
     # Class attributes
-    patch_shape = (100, 100, 100)
+    patch_shape = (96, 96, 96)
     n_profile_points = 16
 
     def __init__(
@@ -41,7 +41,7 @@ class FeatureGenerator:
         img_path,
         anisotropy=(1.0, 1.0, 1.0),
         is_multimodal=False,
-        multiscale=1,
+        multiscale=0,
         segmentation_path=None,
     ):
         """
@@ -424,7 +424,7 @@ class FeatureGenerator:
         center_voxel = self.to_voxels(center_xyz)
         img_patch = self.img_reader.read(center_voxel, self.img_patch_shape)
         img_patch = img_util.normalize(img_patch)
-        return img_util.resize(img_patch, (64, 64, 64))
+        return img_util.resize(img_patch, (50, 50, 50))
 
     def get_label_patch(self, center_xyz, proposal):
         # Read label patch
@@ -437,7 +437,7 @@ class FeatureGenerator:
         label_patch = self.annotate_edge(label_patch, center, i)
         label_patch = self.annotate_edge(label_patch, center, j)
         label_patch = self.annotate_proposal(label_patch, center, proposal)
-        return img_util.resize(label_patch, (64, 64, 64))
+        return img_util.resize(label_patch, (50, 50, 50))
 
     def annotate_proposal(self, label_patch, center, proposal):
         # Convert proposal xyz to local voxel coordinates

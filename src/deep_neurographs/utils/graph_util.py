@@ -198,7 +198,7 @@ class GraphLoader:
                 elif isinstance(result, dict):
                     irreducibles.append(result)
 
-        print("# High Risk Merges Detected:", self.n_high_risk_merges)
+        #print("# High Risk Merges Detected:", self.n_high_risk_merges)
         return irreducibles
 
     def extract(self, swc_dict):

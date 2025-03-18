@@ -162,7 +162,7 @@ class RandomRotation3D:
 
         """
         for axes in self.axes:
-            if random.random() > 0.3:
+            if random.random() > 0.4:
                 angle = random.uniform(*self.angles)
                 patches[0, ...] = rotate3d(patches[0, ...], angle, axes)
                 patches[1, ...] = rotate3d(patches[1, ...], angle, axes)
