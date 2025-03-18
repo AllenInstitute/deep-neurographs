@@ -93,7 +93,6 @@ def get_batch(graph, proposals, batch_size, flagged_proposals=set()):
                     d_j = min(d + 1, -len(graph.nodes[j]["proposals"]))
                     if d_j <= GNN_DEPTH:
                         queue.append((j, d + 1))
-    print("Batch Generation:", time() - t0)
     return batch
 
 

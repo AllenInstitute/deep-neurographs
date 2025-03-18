@@ -518,11 +518,8 @@ class InferenceEngine:
 
     def init_dataloader(self):
         if len(self.graph.soma_ids) > 0:
-            print("using seeded dataloader")
             return SeededGraphDataLoader(self.graph, self.batch_size)
         else:
-            print("using regular dataloader")
-            print(self.batch_size)
             return GraphDataLoader(self.graph, self.batch_size)
 
     def run(self, return_preds=False):

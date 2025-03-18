@@ -32,7 +32,7 @@ class FeatureGenerator:
 
     """
     # Class attributes
-    patch_shape = (100, 100, 100)
+    patch_shape = (96, 96, 96)
     n_profile_points = 16
 
     def __init__(
@@ -41,7 +41,7 @@ class FeatureGenerator:
         img_path,
         anisotropy=(1.0, 1.0, 1.0),
         is_multimodal=False,
-        multiscale=1,
+        multiscale=0,
         segmentation_path=None,
     ):
         """

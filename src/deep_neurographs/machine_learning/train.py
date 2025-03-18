@@ -40,6 +40,188 @@ from deep_neurographs.machine_learning.feature_generation import (
 from deep_neurographs.utils import ml_util, util
 
 
+# --- Custom Trainer ---
+class Trainer:
+    """
+    Custom class that trains graph neural networks.
+
+    """
+
+    def __init__(
+        self,
+        output_dir,
+        batch_size=64,
+        device="cuda",
+        lr=1e-4,
+        n_epochs=1000,
+    ):
+        """
+        Constructs a GraphTrainer object.
+
+        Parameters
+        ----------
+        ...
+
+        Returns
+        -------
+        None.
+
+        """
+        # Initializations
+        exp_name = "session-" + datetime.today().strftime("%Y%m%d_%H%M")
+        exp_dir = os.path.join(output_dir, exp_name)
+        util.mkdir(exp_dir)
+
+        # Instance attributes
+        self.batch_size = batch_size
+        self.criterion = nn.BCEWithLogitsLoss()
+        self.device = device
+        self.exp_name = exp_name
+        self.lr = lr
+        self.n_epochs = n_epochs
+        self.exp_dir = exp_dir
+        self.writer = SummaryWriter(log_dir=exp_dir)
+
+    def run(self, model, train_dataset, validate_dataset):
+        """
+        Trains a graph neural network in the case where "datasets" is a
+        dictionary of datasets such that each corresponds to a distinct graph.
+
+        Parameters
+        ----------
+        ...
+
+        Returns
+        -------
+        torch.nn.Module
+            Graph neural network that has been fit onto the given graph
+            dataset.
+
+        """
+        # Initializations
+        model.to(self.device)
+        optimizer = torch.optim.AdamW(
+            model.parameters(), lr=self.lr, weight_decay=1e-3
+        )
+        scheduler = CosineAnnealingLR(optimizer, T_max=20)
+
+        # Dataloaders
+        train_dataloader = GraphDataLoader(train_dataset, self.batch_size)
+        validate_dataloader = GraphDataLoader(validate_dataset, 160)
+
+        # Main
+        print("\nTraining...")
+        print("Experiment:", self.exp_name)
+        best_f1 = 0
+        for epoch in range(self.n_epochs):
+            # Train
+            y, hat_y = [], []
+            model.train()
+            for dataset in train_dataloader:
+                # Forward pass
+                hat_y_i, y_i = self.predict(model, dataset.data)
+                loss = self.criterion(hat_y_i + 1e-8, y_i)
+                self.writer.add_scalar("loss", loss, epoch)
+
+                # Backward pass
+                optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+
+                # Store prediction
+                y.extend(ml_util.toCPU(y_i))
+                hat_y.extend(ml_util.toCPU(hat_y_i))
+
+            train_f1 = self.compute_metrics(y, hat_y, "train", epoch)
+            scheduler.step()
+
+            # Validate
+            model.eval()
+            y, hat_y = [], []
+            with torch.no_grad():
+                for dataset in validate_dataloader:
+                    hat_y_i, y_i = self.predict(model, dataset.data)
+                    y.extend(ml_util.toCPU(y_i))
+                    hat_y.extend(ml_util.toCPU(hat_y_i))
+
+            # Check for new best model
+            val_f1 = self.compute_metrics(y, hat_y, "val", epoch)
+            scores = f"Epoch {epoch}:  train_f1={train_f1}  val_f1={val_f1}"
+            if val_f1 > best_f1:
+                print(scores + "  --  New Best!")
+                best_f1 = val_f1
+                self.save_model(model, best_f1)
+
+    def predict(self, model, data):
+        """
+        Runs "data" through "self.model" to generate a prediction.
+
+        Parameters
+        ----------
+        data : GraphDataset
+            Graph dataset that corresponds to a single connected component.
+
+        Returns
+        -------
+        torch.Tensor
+            Ground truth.
+        torch.Tensor
+            Prediction.
+
+        """
+        x, edge_index, edge_attr = ml_util.get_inputs(data, self.device)
+        hat_y = model(x, edge_index, edge_attr)
+        y = data["proposal"]["y"]
+        return truncate(hat_y, y), y
+
+    def compute_metrics(self, y, hat_y, prefix, epoch):
+        """
+        Computes and logs evaluation metrics for binary classification.
+
+        Parameters
+        ----------
+        y : torch.Tensor
+            Ground truth.
+        hat_y : torch.Tensor
+            Prediction.
+        prefix : str
+            Prefix to be added to the metric names when logging.
+        epoch : int
+            Current epoch.
+
+        Returns
+        -------
+        float
+            F1 score.
+
+        """
+        # Initializations
+        y = np.array(y, dtype=int).tolist()
+        hat_y = (np.array(hat_y) > 0).tolist()
+
+        # Compute
+        accuracy = accuracy_score(y, hat_y)
+        accuracy_dif = accuracy - np.sum(y) / len(y)
+        precision = precision_score(y, hat_y)
+        recall = recall_score(y, hat_y)
+        f1 = f1_score(y, hat_y)
+
+        # Log
+        self.writer.add_scalar(prefix + "_accuracy:", accuracy, epoch)
+        self.writer.add_scalar(prefix + "_accuracy_df:", accuracy_dif, epoch)
+        self.writer.add_scalar(prefix + "_precision:", precision, epoch)
+        self.writer.add_scalar(prefix + "_recall:", recall, epoch)
+        self.writer.add_scalar(prefix + "_f1:", f1, epoch)
+        return round(f1, 4)
+
+    def save_model(self, model, score):
+        date = datetime.today().strftime("%Y%m%d")
+        filename = f"GraphNeuralNet-{date}-{round(score, 4)}.pth"
+        path = os.path.join(self.exp_dir, filename)
+        torch.save(model.state_dict(), path)
+
+
 # --- Custom Datasets ---
 class GraphDataset:
     """
@@ -300,188 +482,6 @@ class GraphDataLoader:
             for p in batch["proposals"]:
                 batch_features["patches"][p] = features["patches"][p]
         return batch_features
-
-
-# --- Custom Trainer ---
-class Trainer:
-    """
-    Custom class that trains graph neural networks.
-
-    """
-
-    def __init__(
-        self,
-        output_dir,
-        batch_size=64,
-        device="cuda",
-        lr=1e-4,
-        n_epochs=1000,
-    ):
-        """
-        Constructs a GraphTrainer object.
-
-        Parameters
-        ----------
-        ...
-
-        Returns
-        -------
-        None.
-
-        """
-        # Initializations
-        exp_name = "session-" + datetime.today().strftime("%Y%m%d_%H%M")
-        exp_dir = os.path.join(output_dir, exp_name)
-        util.mkdir(exp_dir)
-
-        # Instance attributes
-        self.batch_size = batch_size
-        self.criterion = nn.BCEWithLogitsLoss()
-        self.device = device
-        self.exp_name = exp_name
-        self.lr = lr
-        self.n_epochs = n_epochs
-        self.exp_dir = exp_dir
-        self.writer = SummaryWriter(log_dir=exp_dir)
-
-    def run(self, model, train_dataset, validate_dataset):
-        """
-        Trains a graph neural network in the case where "datasets" is a
-        dictionary of datasets such that each corresponds to a distinct graph.
-
-        Parameters
-        ----------
-        ...
-
-        Returns
-        -------
-        torch.nn.Module
-            Graph neural network that has been fit onto the given graph
-            dataset.
-
-        """
-        # Initializations
-        model.to(self.device)
-        optimizer = torch.optim.AdamW(
-            model.parameters(), lr=self.lr, weight_decay=1e-3
-        )
-        scheduler = CosineAnnealingLR(optimizer, T_max=20)
-
-        # Dataloaders
-        train_dataloader = GraphDataLoader(train_dataset, self.batch_size)
-        validate_dataloader = GraphDataLoader(validate_dataset, 160)
-
-        # Main
-        print("\nTraining...")
-        print("Experiment:", self.exp_name)
-        best_f1 = 0
-        for epoch in range(self.n_epochs):
-            # Train
-            y, hat_y = [], []
-            model.train()
-            for dataset in train_dataloader:
-                # Forward pass
-                hat_y_i, y_i = self.predict(model, dataset.data)
-                loss = self.criterion(hat_y_i, y_i)
-                self.writer.add_scalar("loss", loss, epoch)
-
-                # Backward pass
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
-
-                # Store prediction
-                y.extend(ml_util.toCPU(y_i))
-                hat_y.extend(ml_util.toCPU(hat_y_i))
-
-            train_f1 = self.compute_metrics(y, hat_y, "train", epoch)
-            scheduler.step()
-
-            # Validate
-            model.eval()
-            y, hat_y = [], []
-            with torch.no_grad():
-                for dataset in validate_dataloader:
-                    hat_y_i, y_i = self.predict(model, dataset.data)
-                    y.extend(ml_util.toCPU(y_i))
-                    hat_y.extend(ml_util.toCPU(hat_y_i))
-
-            # Check for new best model
-            val_f1 = self.compute_metrics(y, hat_y, "val", epoch)
-            scores = f"Epoch {epoch}:  train_f1={train_f1}  val_f1={val_f1}"
-            if val_f1 > best_f1:
-                print(scores + "  --  New Best!")
-                best_f1 = val_f1
-                self.save_model(model, best_f1)
-
-    def predict(self, model, data):
-        """
-        Runs "data" through "self.model" to generate a prediction.
-
-        Parameters
-        ----------
-        data : GraphDataset
-            Graph dataset that corresponds to a single connected component.
-
-        Returns
-        -------
-        torch.Tensor
-            Ground truth.
-        torch.Tensor
-            Prediction.
-
-        """
-        x, edge_index, edge_attr = ml_util.get_inputs(data, self.device)
-        hat_y = model(x, edge_index, edge_attr)
-        y = data["proposal"]["y"]
-        return truncate(hat_y, y), y
-
-    def compute_metrics(self, y, hat_y, prefix, epoch):
-        """
-        Computes and logs evaluation metrics for binary classification.
-
-        Parameters
-        ----------
-        y : torch.Tensor
-            Ground truth.
-        hat_y : torch.Tensor
-            Prediction.
-        prefix : str
-            Prefix to be added to the metric names when logging.
-        epoch : int
-            Current epoch.
-
-        Returns
-        -------
-        float
-            F1 score.
-
-        """
-        # Initializations
-        y = np.array(y, dtype=int).tolist()
-        hat_y = (np.array(hat_y) > 0).tolist()
-
-        # Compute
-        accuracy = accuracy_score(y, hat_y)
-        accuracy_dif = accuracy - np.sum(y) / len(y)
-        precision = precision_score(y, hat_y)
-        recall = recall_score(y, hat_y)
-        f1 = f1_score(y, hat_y)
-
-        # Log
-        self.writer.add_scalar(prefix + "_accuracy:", accuracy, epoch)
-        self.writer.add_scalar(prefix + "_accuracy_df:", accuracy_dif, epoch)
-        self.writer.add_scalar(prefix + "_precision:", precision, epoch)
-        self.writer.add_scalar(prefix + "_recall:", recall, epoch)
-        self.writer.add_scalar(prefix + "_f1:", f1, epoch)
-        return round(f1, 4)
-
-    def save_model(self, model, score):
-        date = datetime.today().strftime("%Y%m%d")
-        filename = f"GraphNeuralNet-{date}-{round(score, 4)}.pth"
-        path = os.path.join(self.exp_dir, filename)
-        torch.save(model.state_dict(), path)
 
 
 # -- Helpers --
