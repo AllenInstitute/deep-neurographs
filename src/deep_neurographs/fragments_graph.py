@@ -817,33 +817,45 @@ class FragmentsGraph(nx.Graph):
         """
         return geometry.dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
 
-    def edge_attr(self, i, key="xyz"):
+    def edge_attr(self, i, key="xyz", ignore=False):
         """
         Gets the edge attribute specified by "key" for all edges connected to
         the given node.
 
         Parameters
         ----------
-        ...
+        i : int
+            Node for which the edge attributes are to be retrieved.
+        key : str, optional
+            Key specifying the type of edge attribute to retrieve. The default
+            is "xyz".
+        ignore : bool, optional
+            If False, the method will follow add the edge attributes along the
+            path of chain-like connections from node "i" to its neighbors,
+            provided that the neighbor nodes have degree 2. If True, it will
+            only consider direct neighbors of node "i".
 
         Returns
         -------
-        ...
+        List[numpy.ndarray]
+            Edge attribute specified by "key" for all edges connected to the
+            given node.
 
         """
         attrs = list()
         for j in self.neighbors(i):
             attr_ij = self.orient_edge_attr((i, j), i, key=key)
-            root = i
-            while self.degree[j] == 2:
-                k = [k for k in self.neighbors(j) if k != root][0]
-                attr_jk = self.orient_edge_attr((j, k), j, key=key)
-                if key == "xyz":
-                    attr_ij = np.vstack([attr_ij, attr_jk])
-                else:
-                    attr_ij = np.concatenate((attr_ij, attr_jk))
-                root = j
-                j = k
+            if not ignore:
+                root = i
+                while self.degree[j] == 2:
+                    k = [k for k in self.neighbors(j) if k != root][0]
+                    attr_jk = self.orient_edge_attr((j, k), j, key=key)
+                    if key == "xyz":
+                        attr_ij = np.vstack([attr_ij, attr_jk])
+                    else:
+                        attr_ij = np.concatenate((attr_ij, attr_jk))
+                    root = j
+                    j = k
             attrs.append(attr_ij)
         return attrs
 
