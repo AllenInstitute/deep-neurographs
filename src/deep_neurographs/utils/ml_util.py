@@ -10,7 +10,6 @@ models.
 """
 
 from collections import deque
-from time import time
 
 import networkx as nx
 import numpy as np
@@ -59,7 +58,6 @@ def get_batch(graph, proposals, batch_size, flagged_proposals=set()):
         queue.append((j, 0))
 
     # Main
-    t0 = time()
     batch = {"graph": nx.Graph(), "proposals": set()}
     visited = set()
     while len(proposals) > 0 and len(batch["proposals"]) < batch_size:
