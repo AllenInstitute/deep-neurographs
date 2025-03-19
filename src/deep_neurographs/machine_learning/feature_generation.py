@@ -390,6 +390,7 @@ class FeatureGenerator:
         # Shift voxel profile path
         voxel_path = [self.to_voxels(xyz) for xyz in xyz_path]
         voxel_path = geometry_util.shift_path(voxel_path, bbox["min"])
+        voxel_path = get_inbounds(voxel_path, shape)
         return {"bbox": bbox, "profile_path": voxel_path}
 
     def get_patches(self, proposal):
