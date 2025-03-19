@@ -91,7 +91,6 @@ class GraphLoader:
 
         """
         # Instance attributes
-        self.merges_dict = dict()  # key: swc_id, value: soma xyz
         self.min_size = min_size
         self.n_high_risk_merges = 0
         self.node_spacing = node_spacing
@@ -129,7 +128,7 @@ class GraphLoader:
         """
         # Process soma locations
         driver = "neuroglancer_precomputed"
-        reader = img_util.TensorStoreReader(segmentation_path, driver)
+        reader = img_util.TensorStoreReader(segmentation_path)
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
@@ -139,18 +138,20 @@ class GraphLoader:
                 threads.append(executor.submit(reader.read_voxel, voxel, xyz))
 
             # Store results
-            id_to_xyz = defaultdict(list)
-            xyz_list = list()
+            self.id_to_soma = defaultdict(list)
+            soma_xyz_list = list()
             for thread in as_completed(threads):
                 xyz, seg_id = thread.result()
                 if seg_id != 0:
-                    id_to_xyz[str(seg_id)].append(xyz)
-                    xyz_list.append(xyz)
-        self.soma_kdtree = KDTree(xyz_list)
+                    self.id_to_soma[str(seg_id)].append(xyz)
+                    soma_xyz_list.append(xyz)
+        self.soma_kdtree = KDTree(soma_xyz_list)
 
         # Detect merges - ids that intersect with 2+ somas
-        self.merges_dict = {k: v for k, v in id_to_xyz.items() if len(v) > 1}
-        print("# Merges Detected:", len(self.merges_dict))
+
+        print("# Somas:", len(soma_xyz_list))
+        print("# Soma-Fragment Intersections:", len(self.id_to_soma))
+
 
     # --- Irreducibles Extraction ---
     def extract_irreducibles(self, swc_dicts):
@@ -312,13 +313,18 @@ class GraphLoader:
             broken down into smaller fragments.
 
         """
-        if len(self.merges_dict) > 0:
-            # Break fragments
+        # Detect merges
+        merges_dict = {k: v for k, v in self.id_to_soma.items() if len(v) > 1}
+        print("# Merges Detected:", len(merges_dict))
+
+        # Break fragments
+        if len(merges_dict) > 0:
+            # Find swc_dict of merged fragment
             updates = list()
             for i, swc_dict in enumerate(swc_dicts):
                 swc_id = swc_dict["swc_id"].split(".")[0]
-                if swc_id in self.merges_dict:
-                    somas_xyz = self.merges_dict[swc_id]
+                if swc_id in merges_dict:
+                    somas_xyz = merges_dict[swc_id]
                     swc_dict_list = self.break_soma_merge(swc_dict, somas_xyz)
                     updates.append((i, swc_dict_list))
 
