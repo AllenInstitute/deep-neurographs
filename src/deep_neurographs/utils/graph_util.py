@@ -91,6 +91,7 @@ class GraphLoader:
 
         """
         # Instance attributes
+        self.id_to_soma = defaultdict(list)
         self.min_size = min_size
         self.n_high_risk_merges = 0
         self.node_spacing = node_spacing
@@ -138,7 +139,6 @@ class GraphLoader:
                 threads.append(executor.submit(reader.read_voxel, voxel, xyz))
 
             # Store results
-            self.id_to_soma = defaultdict(list)
             soma_xyz_list = list()
             for thread in as_completed(threads):
                 xyz, seg_id = thread.result()
@@ -147,11 +147,9 @@ class GraphLoader:
                     soma_xyz_list.append(xyz)
         self.soma_kdtree = KDTree(soma_xyz_list)
 
-        # Detect merges - ids that intersect with 2+ somas
-
+        # Report results
         print("# Somas:", len(soma_xyz_list))
         print("# Soma-Fragment Intersections:", len(self.id_to_soma))
-
 
     # --- Irreducibles Extraction ---
     def extract_irreducibles(self, swc_dicts):
@@ -283,13 +281,21 @@ class GraphLoader:
                 graph, leafs, branchings, self.smooth_bool
             )
 
+            # Check if fragment is connected to soma
+            if len(graph.graph["soma_nodes"]) > 0:
+                is_soma = True
+            elif graph.graph["swc_id"] in self.id_to_soma:
+                is_soma = True
+            else:
+                is_soma = False
+
             # Output
             irreducibles = {
                 "leaf": set_node_attrs(graph, leafs),
                 "branching": set_node_attrs(graph, branchings),
                 "edge": set_edge_attrs(graph, edges, self.node_spacing),
                 "swc_id": graph.graph["swc_id"],
-                "is_soma": len(graph.graph["soma_nodes"]) > 0,
+                "is_soma": is_soma,
             }
             return irreducibles
         else:
@@ -327,6 +333,7 @@ class GraphLoader:
                     somas_xyz = merges_dict[swc_id]
                     swc_dict_list = self.break_soma_merge(swc_dict, somas_xyz)
                     updates.append((i, swc_dict_list))
+                    self.id_to_soma.pop(swc_id, None)                    
 
             # Update swc_dicts
             updates.reverse()
