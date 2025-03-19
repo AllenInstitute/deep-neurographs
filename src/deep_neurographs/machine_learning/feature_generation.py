@@ -32,7 +32,6 @@ class FeatureGenerator:
 
     """
     # Class attributes
-    patch_shape = (96, 96, 96)
     n_profile_points = 16
 
     def __init__(
@@ -40,6 +39,7 @@ class FeatureGenerator:
         graph,
         img_path,
         anisotropy=(1.0, 1.0, 1.0),
+        context=30,
         is_multimodal=False,
         multiscale=0,
         segmentation_path=None,
@@ -54,14 +54,17 @@ class FeatureGenerator:
             to be computed for.
         img_path : str
             Path to the raw image assumed to be stored in a GCS bucket.
-        multiscale : int
-            Level in the image pyramid that voxel coordinates must index into.
         anisotropy : Tuple[float], optional
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. The default is (1.0, 1.0, 1.0).
+        context : int, optional
+            ...
         is_multimodal : bool, optional
             Indication of whether to generate multimodal features (i.e. image
             and label patch for each proposal). The default is False.
+        multiscale : int, optional
+            Level in the image pyramid that voxel coordinates must index into.
+            The default is 0.
         segmentation_path : str, optional
             Path to the segmentation assumed to be stored on a GCS bucket. The
             default is None.
@@ -77,38 +80,15 @@ class FeatureGenerator:
 
         # Instance attributes
         self.anisotropy = anisotropy
+        self.context = context
         self.graph = graph
-        self.multiscale = multiscale
+        self.multiscale = multiscale if not is_multimodal else 0
         self.is_multimodal = is_multimodal
 
-        # Image readers
-        driver = "n5" if "n5" in img_path else "zarr"
-        self.img_patch_shape = self.set_patch_shape(multiscale)
-        self.img_reader = self.init_img_reader(img_path, driver)
+        # Readers
+        self.img_reader = self.init_img_reader(img_path)
         if segmentation_path is not None:
-            driver = "neuroglancer_precomputed"
-            self.label_patch_shape = self.set_patch_shape(0)
-            self.labels_reader = self.init_img_reader(
-                segmentation_path, driver
-            )
-
-    @classmethod
-    def set_patch_shape(cls, multiscale):
-        """
-        Adjusts the patch shape by downsampling each dimension by a specified
-        factor.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        List[int]
-            Patch shape with each dimension reduced by the multiscale.
-
-        """
-        return [s // 2 ** multiscale for s in cls.patch_shape]
+            self.labels_reader = self.init_img_reader(segmentation_path)
 
     @classmethod
     def get_n_profile_points(cls):
@@ -127,7 +107,7 @@ class FeatureGenerator:
         """
         return cls.n_profile_points
 
-    def init_img_reader(self, img_path, driver=None):
+    def init_img_reader(self, img_path):
         """
         Initializes an image reader.
 
@@ -135,8 +115,6 @@ class FeatureGenerator:
         ----------
         img_path : str
             Path to where the image is located.
-        driver : str, optional
-            Storage driver needed to read image. The default is None.
 
         Returns
         -------
@@ -147,7 +125,7 @@ class FeatureGenerator:
         if "s3" in img_path:
             return ZarrReader(img_path)
         else:
-            return TensorStoreReader(img_path, driver)
+            return TensorStoreReader(img_path)
 
     def run(self, batch, radius):
         """
@@ -398,74 +376,75 @@ class FeatureGenerator:
             Specifications needed to read image patch and generate profile.
 
         """
-        voxel_path = np.vstack([self.to_voxels(xyz) for xyz in xyz_path])
-        bbox = self.get_bbox(voxel_path)
-        voxel_path = geometry_util.shift_path(voxel_path, bbox["min"])
-        return {"bbox": bbox, "profile_path": voxel_path}
-
-    def get_bbox(self, voxels, is_img=True):
-        center = np.round(np.mean(voxels, axis=0)).astype(int)
-        shape = self.img_patch_shape if is_img else self.label_patch_shape
+        # Compute bounding box
+        center, shape = self.compute_bbox(xyz_path)
         bbox = {
             "min": [c - s // 2 for c, s in zip(center, shape)],
             "max": [c + s // 2 for c, s in zip(center, shape)],
         }
-        return bbox
+
+        # Shift voxel profile path
+        voxel_path = [self.to_voxels(xyz) for xyz in xyz_path]
+        voxel_path = geometry_util.shift_path(voxel_path, bbox["min"])
+        return {"bbox": bbox, "profile_path": voxel_path}
 
     def get_patches(self, proposal):
-        # Extract attributes
-        proposal_xyz = self.graph.proposal_attr(proposal, "xyz")
-        center_xyz = np.mean(proposal_xyz, axis=0)
-        img_patch = self.get_img_patch(center_xyz)
-        label_patch = self.get_label_patch(center_xyz, proposal)
+        xyz_pts = self.graph.proposal_attr(proposal, "xyz")
+        center, shape = self.compute_bbox(xyz_pts)        
+        img_patch = self.get_img_patch(center, shape)
+        label_patch = self.get_label_patch(center, shape, proposal)
         return {proposal: np.stack([img_patch, label_patch], axis=0)}
 
-    def get_img_patch(self, center_xyz):
-        center_voxel = self.to_voxels(center_xyz)
-        img_patch = self.img_reader.read(center_voxel, self.img_patch_shape)
+    def get_img_patch(self, center, shape):
+        img_patch = self.img_reader.read(center, shape)
         img_patch = img_util.normalize(img_patch)
-        return img_util.resize(img_patch, (50, 50, 50))
+        return img_patch  #img_util.resize(img_patch, (64, 64, 64))
 
-    def get_label_patch(self, center_xyz, proposal):
+    def get_label_patch(self, center, shape, proposal):
         # Read label patch
-        center = img_util.to_voxels(center_xyz, self.anisotropy)
-        label_patch = self.labels_reader.read(center, self.label_patch_shape)
+        label_patch = self.labels_reader.read(center, shape)
 
         # Annotate label patch
         i, j = tuple(proposal)
         label_patch = (label_patch > 0).astype(float)
-        label_patch = self.annotate_edge(label_patch, center, i)
-        label_patch = self.annotate_edge(label_patch, center, j)
-        label_patch = self.annotate_proposal(label_patch, center, proposal)
-        return img_util.resize(label_patch, (50, 50, 50))
+        label_patch = self.annotate_edge(label_patch, center, shape, i)
+        label_patch = self.annotate_edge(label_patch, center, shape, j)
+        label_patch = self.annotate_proposal(
+            label_patch, center, shape, proposal
+        )
+        return label_patch  #img_util.resize(label_patch, (64, 64, 64))
 
-    def annotate_proposal(self, label_patch, center, proposal):
+    def annotate_proposal(self, label_patch, center, shape, proposal):
         # Convert proposal xyz to local voxel coordinates
         proposal_xyz = self.graph.proposal_attr(proposal, "xyz")
-        voxels = self.get_local_coordinates(center, proposal_xyz)
+        voxels = self.get_local_coordinates(center, shape, proposal_xyz)
 
         # Draw line along proposal
         n_points = int(geometry_util.dist(voxels[0], voxels[-1]))
         line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
         return geometry_util.fill_path(label_patch, line, val=3)
 
-    def annotate_edge(self, label_patch, center, i):
+    def annotate_edge(self, label_patch, center, shape, i):
         edge_xyz = np.vstack(self.graph.edge_attr(i, "xyz"))
-        voxels = self.get_local_coordinates(center, edge_xyz)
+        voxels = self.get_local_coordinates(center, shape, edge_xyz)
         voxels = get_inbounds(voxels, label_patch.shape)
         return geometry_util.fill_path(label_patch, voxels, val=2)
 
-    def get_local_coordinates(self, center_voxel, xyz_pts):
-        # Compute offset
-        shape = self.label_patch_shape
-        offset = np.array([c - s // 2 for c, s in zip(center_voxel, shape)])
-
-        # Transform points
-        voxels = [img_util.to_voxels(xyz, self.anisotropy) for xyz in xyz_pts]
+    def get_local_coordinates(self, center, shape, xyz_pts):
+        offset = np.array([c - s // 2 for c, s in zip(center, shape)])
+        voxels = [self.to_voxels(xyz) for xyz in xyz_pts]
         voxels = geometry_util.shift_path(voxels, offset)
-        for i, voxel in enumerate(voxels):
-            voxels[i] = [v // 2 ** self.multiscale for v in voxel]
         return voxels
+
+    def compute_bbox(self, xyz_pts):
+        # Compute bounds
+        voxels = [self.to_voxels(xyz) for xyz in xyz_pts]        
+        bounds = img_util.get_minimal_bbox(voxels, self.context)
+
+        # Transform into square
+        center = np.mean(voxels, axis=0).astype(int)
+        length = np.max([u - l for u, l in zip(bounds["max"], bounds["min"])])
+        return center, (length, length, length)
 
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
