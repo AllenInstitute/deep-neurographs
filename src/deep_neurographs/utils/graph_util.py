@@ -151,7 +151,6 @@ class GraphLoader:
         print("# Somas:", len(soma_xyz_list))
         print("# Soma-Fragment Intersections:", len(self.id_to_soma))
 
-
     # --- Irreducibles Extraction ---
     def extract_irreducibles(self, swc_dicts):
         """
