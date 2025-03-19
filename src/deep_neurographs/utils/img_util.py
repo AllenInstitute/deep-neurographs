@@ -174,7 +174,7 @@ class TensorStoreReader(ImageReader):
 
     """
 
-    def __init__(self, img_path, driver):
+    def __init__(self, img_path):
         """
         Constructs a TensorStore image reader.
 
@@ -182,16 +182,35 @@ class TensorStoreReader(ImageReader):
         ----------
         img_path : str
             Path to image.
-        driver : str
-            Storage driver needed to read the image.
 
         Returns
         -------
         None
 
         """
-        self.driver = driver
+        self.driver = self.init_driver(img_path)
         super().__init__(img_path)
+
+    def init_driver(self, img_path):
+        """
+        Gets the storage driver needed to read the image.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        str
+            Storage driver needed to read the image.
+
+        """
+        if ".zarr" in img_path:
+            return "zarr"
+        elif ".n5" in img_path:
+            return "n5"
+        else:
+            return "neuroglancer_precomputed"
 
     def _load_image(self):
         """
