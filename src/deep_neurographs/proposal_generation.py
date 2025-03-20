@@ -343,8 +343,8 @@ def run_trimming(fragments_graph, proposals, radius):
 def trim_endpoints(fragments_graph, proposal, radius):
     # Initializations
     i, j = tuple(proposal)
-    edge_xyz_i = fragments_graph.edge_attr(i)[0]
-    edge_xyz_j = fragments_graph.edge_attr(j)[0]
+    edge_xyz_i = fragments_graph.edge_attr(i, ignore=True)[0]
+    edge_xyz_j = fragments_graph.edge_attr(j, ignore=True)[0]
 
     # Check both orderings
     idx_i, idx_j = trim_endpoints_ordered(edge_xyz_i, edge_xyz_j)
