@@ -423,7 +423,7 @@ class FragmentsGraph(nx.Graph):
         groundtruth_graph=None,
         long_range_bool=False,
         proposals_per_leaf=3,
-        trim_endpoints_bool=False,
+        trim_endpoints_bool=True,
     ):
         """
         Generates proposals from leaf nodes.
@@ -444,7 +444,7 @@ class FragmentsGraph(nx.Graph):
             Maximum number of proposals generated for each leaf. The default
             is 3.
         trim_endpoints_bool : bool, optional
-            Indication of whether to trim endpoints. The default is False.
+            Indication of whether to trim endpoints. The default is True.
 
         Returns
         -------

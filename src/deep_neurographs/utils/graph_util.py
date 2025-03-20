@@ -128,7 +128,6 @@ class GraphLoader:
 
         """
         # Process soma locations
-        driver = "neuroglancer_precomputed"
         reader = img_util.TensorStoreReader(segmentation_path)
         with ThreadPoolExecutor() as executor:
             # Assign threads
@@ -197,7 +196,7 @@ class GraphLoader:
                 elif isinstance(result, dict):
                     irreducibles.append(result)
 
-        #print("# High Risk Merges Detected:", self.n_high_risk_merges)
+        # print("# High Risk Merges Detected:", self.n_high_risk_merges)
         return irreducibles
 
     def extract(self, swc_dict):
@@ -282,9 +281,10 @@ class GraphLoader:
             )
 
             # Check if fragment is connected to soma
+            swc_id = graph.graph["swc_id"].split(".")[0]
             if len(graph.graph["soma_nodes"]) > 0:
                 is_soma = True
-            elif graph.graph["swc_id"] in self.id_to_soma:
+            if swc_id in self.id_to_soma:
                 is_soma = True
             else:
                 is_soma = False
@@ -333,7 +333,7 @@ class GraphLoader:
                     somas_xyz = merges_dict[swc_id]
                     swc_dict_list = self.break_soma_merge(swc_dict, somas_xyz)
                     updates.append((i, swc_dict_list))
-                    self.id_to_soma.pop(swc_id, None)                    
+                    self.id_to_soma.pop(swc_id, None)
 
             # Update swc_dicts
             updates.reverse()
