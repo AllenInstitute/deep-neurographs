@@ -176,16 +176,19 @@ class GraphLoader:
 
         # Extract irreducible subgraphs
         desc = "Extract Graphs"
+        pbar_test = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         with ProcessPoolExecutor() as executor:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
-            while len(swc_dicts) > 0:
+            while swc_dicts:
                 swc_dict = swc_dicts.pop()
                 processes[i] = executor.submit(self.extracter, swc_dict)
                 i += 1
+                pbar_test.update(1) if self.verbose else None
 
+            print("processes assigned")
             # Store results
             irreducibles = deque()
             for process in as_completed(processes):
@@ -327,7 +330,7 @@ class GraphLoader:
         if len(merges_dict) > 0:
             # Find swc_dict of merged fragment
             updates = list()
-            for i, swc_dict in enumerate(swc_dicts):
+            for i, swc_dict in tqdm(enumerate(swc_dicts), desc="Remove Soma Merges"):
                 swc_id = swc_dict["swc_id"].split(".")[0]
                 if swc_id in merges_dict:
                     somas_xyz = merges_dict[swc_id]
@@ -348,7 +351,7 @@ class GraphLoader:
         Removes high risk merge sites from a graph, which is defined to be
         either (1) two branching points within "max_dist" or (2) branching
         point with degree 4+. Note: if soma locations are provided, we skip
-        branching points within 300um of a soma.
+        branching points within 400um of a soma.
 
         Parameters
         ----------
@@ -356,7 +359,7 @@ class GraphLoader:
             Graph to be searched.
         max_dist : float, optional
             Maximum distance between branching points that qualifies a site to
-            be considered "high risk". The default is 7.0.
+            be considered "high risk". The default is 6.0.
 
         Returns
         -------
@@ -369,7 +372,7 @@ class GraphLoader:
             # Determine whether to visit
             root = branchings.pop()
             root_xyz = graph.nodes[root]["xyz"]
-            if self.dist_from_soma(root_xyz) < 500:
+            if self.dist_from_soma(root_xyz) < 400:
                 continue
 
             # BFS
@@ -439,7 +442,7 @@ class GraphLoader:
                 }
                 swc_dict_list.append(swc_dict_i)
         else:
-            swc_dict_list = [swc_dict] if len(somas_xyz) < 30 else None
+            swc_dict_list = [swc_dict] if len(somas_xyz) < 20 else None
         return swc_dict_list
 
     # --- Helpers ---
