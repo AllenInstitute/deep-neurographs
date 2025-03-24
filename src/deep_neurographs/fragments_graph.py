@@ -918,23 +918,23 @@ class FragmentsGraph(nx.Graph):
             return None
 
     # --- Writer to SWCs ---
-    def to_zipped_swcs(self, swc_dir, sampling_rate=2):
+    def to_zipped_swcs(self, swc_dir, sampling_rate=1):
         # Initializations
         n = nx.number_connected_components(self)
         batch_size = n / 1000 if n > 10 ** 4 else np.inf
         util.mkdir(swc_dir)
 
         # Main
-        cnt = 0
-        batch = list()
-        threads = list()
+        zip_cnt = 0
         with ThreadPoolExecutor() as executor:
             # Assign threads
+            batch = list()
+            threads = list()
             for nodes in nx.connected_components(self):
                 batch.append(nodes)
                 if len(batch) > batch_size:
                     # Zip batch
-                    zip_path = os.path.join(swc_dir, f"{cnt}.zip")
+                    zip_path = os.path.join(swc_dir, f"{zip_cnt}.zip")
                     threads.append(
                         executor.submit(
                             self.batch_to_zipped_swcs,
@@ -946,7 +946,19 @@ class FragmentsGraph(nx.Graph):
 
                     # Reset batch
                     batch = list()
-                    cnt += 1
+                    zip_cnt += 1
+
+            # Submit last batch
+            if batch:
+                zip_path = os.path.join(swc_dir, f"{zip_cnt}.zip")
+                threads.append(
+                    executor.submit(
+                        self.batch_to_zipped_swcs,
+                        batch,
+                        zip_path,
+                        sampling_rate
+                    )
+                )
 
             # Watch progress
             pbar = tqdm(total=len(threads), desc="Write SWCs")
