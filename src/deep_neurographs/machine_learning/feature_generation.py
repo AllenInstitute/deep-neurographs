@@ -39,7 +39,7 @@ class FeatureGenerator:
         graph,
         img_path,
         anisotropy=(1.0, 1.0, 1.0),
-        context=30,
+        context=36,
         is_multimodal=False,
         multiscale=0,
         patch_shape=(50, 50, 50),

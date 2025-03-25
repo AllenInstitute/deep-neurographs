@@ -382,7 +382,7 @@ class ConvNet(nn.Module):
 
         # Output layer
         self.output = nn.Sequential(
-            nn.Linear(4096, 128),
+            nn.Linear(1024, 128),
             nn.LeakyReLU(),
             nn.Dropout(0.3),
             nn.Linear(2 * output_dim, output_dim),
