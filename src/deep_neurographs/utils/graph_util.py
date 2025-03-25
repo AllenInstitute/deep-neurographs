@@ -29,6 +29,7 @@ from tqdm import tqdm
 import ast
 import networkx as nx
 import numpy as np
+import os
 
 from deep_neurographs.utils import geometry_util, img_util, swc_util, util
 
@@ -42,10 +43,10 @@ class GraphLoader:
 
     def __init__(
         self,
-        anisotropy=[1.0, 1.0, 1.0],
+        anisotropy=(1.0, 1.0, 1.0),
         min_size=40.0,
         node_spacing=1,
-        prune_depth=20.0,
+        prune_depth=24.0,
         remove_high_risk_merges=False,
         segmentation_path=None,
         smooth_bool=True,
@@ -60,10 +61,10 @@ class GraphLoader:
         ----------
         anisotropy : List[float], optional
             Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
+            anisotropy of the microscope. The default is (1.0, 1.0, 1.0).
         min_size : float, optional
             Minimum path length of swc files that are loaded into the
-            FragmentsGraph. The default is 30.0 microns.
+            FragmentsGraph. The default is 24.0 microns.
         node_spacing : int, optional
             Sampling rate for nodes in FragmentsGraph. Every "node_spacing"
             node is retained. The default is 1.
@@ -93,7 +94,6 @@ class GraphLoader:
         # Instance attributes
         self.id_to_soma = defaultdict(list)
         self.min_size = min_size
-        self.n_high_risk_merges = 0
         self.node_spacing = node_spacing
         self.prune_depth = prune_depth
         self.smooth_bool = smooth_bool
@@ -176,7 +176,6 @@ class GraphLoader:
 
         # Extract irreducible subgraphs
         desc = "Extract Graphs"
-        pbar_test = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         with ProcessPoolExecutor() as executor:
             # Assign Processes
@@ -186,20 +185,20 @@ class GraphLoader:
                 swc_dict = swc_dicts.pop()
                 processes[i] = executor.submit(self.extracter, swc_dict)
                 i += 1
-                pbar_test.update(1) if self.verbose else None
 
-            print("processes assigned")
             # Store results
             irreducibles = deque()
+            high_risk_cnt = 0
             for process in as_completed(processes):
                 pbar.update(1) if self.verbose else None
-                result = process.result()
+                result, cnt = process.result()
+                high_risk_cnt += cnt
                 if isinstance(result, list):
                     irreducibles.extend(result)
                 elif isinstance(result, dict):
                     irreducibles.append(result)
 
-        # print("# High Risk Merges Detected:", self.n_high_risk_merges)
+        print("# High Risk Merges Detected:", high_risk_cnt)
         return irreducibles
 
     def extract(self, swc_dict):
@@ -219,7 +218,7 @@ class GraphLoader:
             subgraph.
 
         """
-        return self.extract_from_graph(self.to_graph(swc_dict))
+        return self.extract_from_graph(self.to_graph(swc_dict)), 0
 
     def break_and_extract(self, swc_dict):
         """
@@ -243,7 +242,16 @@ class GraphLoader:
         irreducibles = list()
         soma_nodes = graph.graph["soma_nodes"]
         if self.satifies_path_length_condition(graph):
-            self.remove_high_risk_merges(graph)
+            # Check whether to remove high risk merges
+            if len(graph.graph["soma_nodes"]) == 0:
+                high_risk_cnt = self.remove_high_risk_merges(graph)
+            else:
+                high_risk_cnt = 0
+
+            # if high_risk_cnt == 0:
+            #    return None, 0
+
+            # Iterate over connected components
             swc_id = graph.graph["swc_id"]
             for i, nodes in enumerate(nx.connected_components(graph)):
                 # Extract subgraph
@@ -255,9 +263,9 @@ class GraphLoader:
                 result = self.extract_from_graph(subgraph)
                 if result is not None:
                     irreducibles.append(result)
-            return irreducibles
+            return irreducibles, high_risk_cnt
         else:
-            return None
+            return None, 0
 
     def extract_from_graph(self, graph):
         """
@@ -330,7 +338,7 @@ class GraphLoader:
         if len(merges_dict) > 0:
             # Find swc_dict of merged fragment
             updates = list()
-            for i, swc_dict in tqdm(enumerate(swc_dicts), desc="Remove Soma Merges"):
+            for i, swc_dict in enumerate(swc_dicts):
                 swc_id = swc_dict["swc_id"].split(".")[0]
                 if swc_id in merges_dict:
                     somas_xyz = merges_dict[swc_id]
@@ -366,37 +374,46 @@ class GraphLoader:
         None
 
         """
+        high_risk_cnt = 0
         nodes = set()
         _, branchings = get_irreducible_nodes(graph)
         while len(branchings) > 0:
-            # Determine whether to visit
+            # Initializations
             root = branchings.pop()
-            root_xyz = graph.nodes[root]["xyz"]
-            if self.dist_from_soma(root_xyz) < 400:
+            hit_branching = False
+            queue = [(root, 0)]
+            visited = set({root})
+
+            # Check if close to soma
+            if self.dist_from_soma(graph.nodes[root]["xyz"]) < 300:
                 continue
 
             # BFS
-            hit_branching = False
-            queue = [(root, 0)]
-            visited = set()
             while len(queue) > 0:
                 # Visit node
                 i, dist_i = queue.pop()
                 if graph.degree(i) > 2 and i != root:
                     hit_branching = True
-                visited.add(i)
 
                 # Update queue
                 for j in graph.neighbors(i):
                     dist_j = dist_i + dist(graph, i, j)
-                    if j not in visited and dist_j <= max_dist:
+                    if j not in visited and dist_j < max_dist:
                         queue.append((j, dist_j))
+                        visited.add(j)
 
             # Determine whether to remove visited nodes
             if hit_branching or graph.degree(root) > 3:
                 nodes = nodes.union(visited)
-                self.n_high_risk_merges += 1
+                high_risk_cnt += 1
+
+        # temp
+        path = os.path.join("high_risk", graph.graph["swc_id"] + ".swc")
+        if high_risk_cnt > 0:
+            swc_util.write_graph(path, graph)
+
         graph.remove_nodes_from(nodes)
+        return high_risk_cnt
 
     def break_soma_merge(self, swc_dict, somas_xyz):
         """

@@ -704,7 +704,7 @@ class GraphDataLoader:
         self.proposals = set(graph.list_proposals())
 
         # Identify clustered proposals
-        self.flagged = set()  #self.find_proposal_clusters(5)
+        self.flagged = set()  # self.find_proposal_clusters(5)
 
     def find_proposal_clusters(self, k):
         flagged = set()
@@ -798,7 +798,7 @@ class GraphDataLoader:
                         queue.append((j, 0))
 
                 # Check if proposal is flagged
-                #proposal in self.flagged and proposal in self.proposals:
+                # proposal in self.flagged and proposal in self.proposals:
                 if False:
                     self.visit_flagged_proposal(batch)
 
