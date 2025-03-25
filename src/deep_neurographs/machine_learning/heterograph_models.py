@@ -377,12 +377,12 @@ class ConvNet(nn.Module):
         self.pool3 = nn.MaxPool3d(kernel_size=2, stride=2)
 
         # Layer 4
-        #self.conv4 = self._init_conv_layer(64, 128, 3)
-        #self.pool4 = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.conv4 = self._init_conv_layer(64, 128, 3)
+        self.pool4 = nn.MaxPool3d(kernel_size=2, stride=2)
 
         # Output layer
         self.output = nn.Sequential(
-            nn.Linear(4096, 128),
+            nn.Linear(1024, 128),
             nn.LeakyReLU(),
             nn.Dropout(0.3),
             nn.Linear(2 * output_dim, output_dim),
@@ -482,8 +482,8 @@ class ConvNet(nn.Module):
         x = self.pool3(x)
 
         # Layer 4
-        #x = self.conv4(x)
-        #x = self.pool4(x)
+        x = self.conv4(x)
+        x = self.pool4(x)
 
         # Output layer
         x = self.output(vectorize(x))

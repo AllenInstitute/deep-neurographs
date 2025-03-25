@@ -39,7 +39,7 @@ class FeatureGenerator:
         graph,
         img_path,
         anisotropy=(1.0, 1.0, 1.0),
-        context=30,
+        context=36,
         is_multimodal=False,
         multiscale=0,
         segmentation_path=None,
@@ -398,7 +398,7 @@ class FeatureGenerator:
     def get_img_patch(self, center, shape):
         img_patch = self.img_reader.read(center, shape)
         img_patch = img_util.normalize(img_patch)
-        return img_patch  #img_util.resize(img_patch, (64, 64, 64))
+        return img_util.resize(img_patch, (72, 72, 72))
 
     def get_label_patch(self, center, shape, proposal):
         # Read label patch
@@ -412,7 +412,7 @@ class FeatureGenerator:
         label_patch = self.annotate_proposal(
             label_patch, center, shape, proposal
         )
-        return label_patch  #img_util.resize(label_patch, (64, 64, 64))
+        return img_util.resize(label_patch, (72, 72, 72))
 
     def annotate_proposal(self, label_patch, center, shape, proposal):
         # Convert proposal xyz to local voxel coordinates
