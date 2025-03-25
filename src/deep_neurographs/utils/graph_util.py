@@ -91,7 +91,7 @@ class GraphLoader:
 
         """
         # Instance attributes
-        self.merges_dict = dict()  # key: swc_id, value: soma xyz
+        self.id_to_soma = defaultdict(list)
         self.min_size = min_size
         self.n_high_risk_merges = 0
         self.node_spacing = node_spacing
@@ -128,8 +128,7 @@ class GraphLoader:
 
         """
         # Process soma locations
-        driver = "neuroglancer_precomputed"
-        reader = img_util.TensorStoreReader(segmentation_path, driver)
+        reader = img_util.TensorStoreReader(segmentation_path)
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
@@ -139,18 +138,17 @@ class GraphLoader:
                 threads.append(executor.submit(reader.read_voxel, voxel, xyz))
 
             # Store results
-            id_to_xyz = defaultdict(list)
-            xyz_list = list()
+            soma_xyz_list = list()
             for thread in as_completed(threads):
                 xyz, seg_id = thread.result()
                 if seg_id != 0:
-                    id_to_xyz[str(seg_id)].append(xyz)
-                    xyz_list.append(xyz)
-        self.soma_kdtree = KDTree(xyz_list)
+                    self.id_to_soma[str(seg_id)].append(xyz)
+                    soma_xyz_list.append(xyz)
+        self.soma_kdtree = KDTree(soma_xyz_list)
 
-        # Detect merges - ids that intersect with 2+ somas
-        self.merges_dict = {k: v for k, v in id_to_xyz.items() if len(v) > 1}
-        print("# Merges Detected:", len(self.merges_dict))
+        # Report results
+        print("# Somas:", len(soma_xyz_list))
+        print("# Soma-Fragment Intersections:", len(self.id_to_soma))
 
     # --- Irreducibles Extraction ---
     def extract_irreducibles(self, swc_dicts):
@@ -178,16 +176,19 @@ class GraphLoader:
 
         # Extract irreducible subgraphs
         desc = "Extract Graphs"
+        pbar_test = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         with ProcessPoolExecutor() as executor:
             # Assign Processes
             i = 0
             processes = [None] * len(swc_dicts)
-            while len(swc_dicts) > 0:
+            while swc_dicts:
                 swc_dict = swc_dicts.pop()
                 processes[i] = executor.submit(self.extracter, swc_dict)
                 i += 1
+                pbar_test.update(1) if self.verbose else None
 
+            print("processes assigned")
             # Store results
             irreducibles = deque()
             for process in as_completed(processes):
@@ -198,7 +199,7 @@ class GraphLoader:
                 elif isinstance(result, dict):
                     irreducibles.append(result)
 
-        #print("# High Risk Merges Detected:", self.n_high_risk_merges)
+        # print("# High Risk Merges Detected:", self.n_high_risk_merges)
         return irreducibles
 
     def extract(self, swc_dict):
@@ -282,13 +283,22 @@ class GraphLoader:
                 graph, leafs, branchings, self.smooth_bool
             )
 
+            # Check if fragment is connected to soma
+            swc_id = graph.graph["swc_id"].split(".")[0]
+            if len(graph.graph["soma_nodes"]) > 0:
+                is_soma = True
+            if swc_id in self.id_to_soma:
+                is_soma = True
+            else:
+                is_soma = False
+
             # Output
             irreducibles = {
                 "leaf": set_node_attrs(graph, leafs),
                 "branching": set_node_attrs(graph, branchings),
                 "edge": set_edge_attrs(graph, edges, self.node_spacing),
                 "swc_id": graph.graph["swc_id"],
-                "is_soma": len(graph.graph["soma_nodes"]) > 0,
+                "is_soma": is_soma,
             }
             return irreducibles
         else:
@@ -312,15 +322,21 @@ class GraphLoader:
             broken down into smaller fragments.
 
         """
-        if len(self.merges_dict) > 0:
-            # Break fragments
+        # Detect merges
+        merges_dict = {k: v for k, v in self.id_to_soma.items() if len(v) > 1}
+        print("# Merges Detected:", len(merges_dict))
+
+        # Break fragments
+        if len(merges_dict) > 0:
+            # Find swc_dict of merged fragment
             updates = list()
-            for i, swc_dict in enumerate(swc_dicts):
+            for i, swc_dict in tqdm(enumerate(swc_dicts), desc="Remove Soma Merges"):
                 swc_id = swc_dict["swc_id"].split(".")[0]
-                if swc_id in self.merges_dict:
-                    somas_xyz = self.merges_dict[swc_id]
+                if swc_id in merges_dict:
+                    somas_xyz = merges_dict[swc_id]
                     swc_dict_list = self.break_soma_merge(swc_dict, somas_xyz)
                     updates.append((i, swc_dict_list))
+                    self.id_to_soma.pop(swc_id, None)
 
             # Update swc_dicts
             updates.reverse()
@@ -335,7 +351,7 @@ class GraphLoader:
         Removes high risk merge sites from a graph, which is defined to be
         either (1) two branching points within "max_dist" or (2) branching
         point with degree 4+. Note: if soma locations are provided, we skip
-        branching points within 300um of a soma.
+        branching points within 400um of a soma.
 
         Parameters
         ----------
@@ -343,7 +359,7 @@ class GraphLoader:
             Graph to be searched.
         max_dist : float, optional
             Maximum distance between branching points that qualifies a site to
-            be considered "high risk". The default is 7.0.
+            be considered "high risk". The default is 6.0.
 
         Returns
         -------
@@ -356,7 +372,7 @@ class GraphLoader:
             # Determine whether to visit
             root = branchings.pop()
             root_xyz = graph.nodes[root]["xyz"]
-            if self.dist_from_soma(root_xyz) < 500:
+            if self.dist_from_soma(root_xyz) < 400:
                 continue
 
             # BFS
@@ -426,7 +442,7 @@ class GraphLoader:
                 }
                 swc_dict_list.append(swc_dict_i)
         else:
-            swc_dict_list = [swc_dict] if len(somas_xyz) < 30 else None
+            swc_dict_list = [swc_dict] if len(somas_xyz) < 20 else None
         return swc_dict_list
 
     # --- Helpers ---

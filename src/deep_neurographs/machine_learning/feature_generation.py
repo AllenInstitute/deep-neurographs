@@ -42,6 +42,7 @@ class FeatureGenerator:
         context=36,
         is_multimodal=False,
         multiscale=0,
+        patch_shape=(50, 50, 50),
         segmentation_path=None,
     ):
         """
@@ -65,6 +66,8 @@ class FeatureGenerator:
         multiscale : int, optional
             Level in the image pyramid that voxel coordinates must index into.
             The default is 0.
+        patch_shape : Tuple[int], optional
+            ...
         segmentation_path : str, optional
             Path to the segmentation assumed to be stored on a GCS bucket. The
             default is None.
@@ -82,8 +85,9 @@ class FeatureGenerator:
         self.anisotropy = anisotropy
         self.context = context
         self.graph = graph
-        self.multiscale = multiscale if not is_multimodal else 0
         self.is_multimodal = is_multimodal
+        self.multiscale = multiscale if not is_multimodal else 0
+        self.patch_shape = patch_shape
 
         # Readers
         self.img_reader = self.init_img_reader(img_path)
@@ -386,11 +390,12 @@ class FeatureGenerator:
         # Shift voxel profile path
         voxel_path = [self.to_voxels(xyz) for xyz in xyz_path]
         voxel_path = geometry_util.shift_path(voxel_path, bbox["min"])
+        voxel_path = get_inbounds(voxel_path, shape)
         return {"bbox": bbox, "profile_path": voxel_path}
 
     def get_patches(self, proposal):
         xyz_pts = self.graph.proposal_attr(proposal, "xyz")
-        center, shape = self.compute_bbox(xyz_pts)        
+        center, shape = self.compute_bbox(xyz_pts)
         img_patch = self.get_img_patch(center, shape)
         label_patch = self.get_label_patch(center, shape, proposal)
         return {proposal: np.stack([img_patch, label_patch], axis=0)}
@@ -398,7 +403,7 @@ class FeatureGenerator:
     def get_img_patch(self, center, shape):
         img_patch = self.img_reader.read(center, shape)
         img_patch = img_util.normalize(img_patch)
-        return img_util.resize(img_patch, (72, 72, 72))
+        return img_util.resize(img_patch, self.patch_shape)
 
     def get_label_patch(self, center, shape, proposal):
         # Read label patch
@@ -412,7 +417,7 @@ class FeatureGenerator:
         label_patch = self.annotate_proposal(
             label_patch, center, shape, proposal
         )
-        return img_util.resize(label_patch, (72, 72, 72))
+        return img_util.resize(label_patch, self.patch_shape)
 
     def annotate_proposal(self, label_patch, center, shape, proposal):
         # Convert proposal xyz to local voxel coordinates
@@ -438,7 +443,7 @@ class FeatureGenerator:
 
     def compute_bbox(self, xyz_pts):
         # Compute bounds
-        voxels = [self.to_voxels(xyz) for xyz in xyz_pts]        
+        voxels = [self.to_voxels(xyz) for xyz in xyz_pts]
         bounds = img_util.get_minimal_bbox(voxels, self.context)
 
         # Transform into square
