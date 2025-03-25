@@ -409,7 +409,7 @@ class GraphLoader:
 
         # temp
         path = os.path.join("high_risk", graph.graph["swc_id"] + ".swc")
-        if high_risk_cnt > 0:
+        if False:  # high_risk_cnt > 0:
             swc_util.write_graph(path, graph)
 
         graph.remove_nodes_from(nodes)
