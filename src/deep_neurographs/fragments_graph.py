@@ -988,14 +988,13 @@ class FragmentsGraph(nx.Graph):
             # Preamble
             n_entries = 0
             node_to_idx = dict()
-            if color:
-                text_buffer.write("# COLOR " + color)
+            text_buffer.write("# COLOR " + color) if color else None
             text_buffer.write("# id, type, x, y, z, r, pid")
 
             # Write entries
             for i, j in nx.dfs_edges(self.subgraph(nodes)):
                 # Root entry
-                if n_entries == 0:
+                if len(node_to_idx) == 0:
                     # Get attributes
                     x, y, z = tuple(self.nodes[i]["xyz"])
                     if preserve_radius:
