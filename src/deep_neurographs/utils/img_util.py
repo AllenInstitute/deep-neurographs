@@ -538,6 +538,46 @@ def get_labels_mip(img, axis=0):
     return (255 * mip).astype(np.uint8)
 
 
+def get_neighbors(voxel, shape):
+    """
+    Gets the neighbors of a given voxel coordinate.
+
+    Parameters
+    ----------
+    voxel : Tuple[int]
+        Voxel coordinate in a 3D image.
+    shape : Tuplep[int]
+        Shape of the 3D image that voxel is contained within.
+
+    Returns
+    -------
+    List[Tuple[int]]
+         Voxel coordinates of the 26 neighbors of the given voxel.
+
+    """
+    # Initializations
+    x, y, z = voxel
+    depth, height, width = shape
+
+    # Iterate over the possible offsets for x, y, and z
+    neighbors = []
+    for dx in [-1, 0, 1]:
+        for dy in [-1, 0, 1]:
+            for dz in [-1, 0, 1]:
+                # Skip the (0, 0, 0) offset, which refers to the voxel itself
+                if dx == 0 and dy == 0 and dz == 0:
+                    continue
+
+                # Calculate the neighbor's coordinates
+                nx, ny, nz = x + dx, y + dy, z + dz
+
+                # Check if the neighbor is within the bounds of the 3D image
+                if 0 <= nx < depth and 0 <= ny < height and 0 <= nz < width:
+                    neighbors.append((nx, ny, nz))
+
+    return neighbors
+
+
 def is_contained(bbox, voxel):
     """
     Checks whether a given voxel is contained within the image bounding box

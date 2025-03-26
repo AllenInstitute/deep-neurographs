@@ -243,7 +243,10 @@ class GraphLoader:
         soma_nodes = graph.graph["soma_nodes"]
         if self.satifies_path_length_condition(graph):
             # Check whether to remove high risk merges
-            high_risk_cnt = self.remove_high_risk_merges(graph)
+            if not soma_nodes:
+                high_risk_cnt = self.remove_high_risk_merges(graph)
+            else:
+                high_risk_cnt = 0
 
             # temp
             if high_risk_cnt == 0:
@@ -374,7 +377,8 @@ class GraphLoader:
             visited = set({root})
 
             # Check if close to soma
-            if self.dist_from_soma(graph.nodes[root]["xyz"]) < 300:
+            soma_dist = self.dist_from_soma(graph.nodes[root]["xyz"])
+            if graph.graph["soma_nodes"]: # and soma_dist < 400:
                 continue
 
             # BFS
