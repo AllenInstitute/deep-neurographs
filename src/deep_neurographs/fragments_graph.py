@@ -593,7 +593,7 @@ class FragmentsGraph(nx.Graph):
         if i is not None:
             skip_soma = self.is_soma(i) and self.is_soma(leaf)
             skip_complex = self.degree[i] > 1 and not complex_bool
-            self.n_proposals_blocked += 1 if skip_soma else 0
+            self.n_proposals_blocked += 1 if skip_soma else 0            
             return not (skip_soma or skip_complex)
         else:
             return False
@@ -918,7 +918,7 @@ class FragmentsGraph(nx.Graph):
             return None
 
     # --- Writer to SWCs ---
-    def to_zipped_swcs(self, swc_dir, sampling_rate=1):
+    def to_zipped_swcs(self, swc_dir, preserve_radius=False, sampling_rate=1):
         # Initializations
         n = nx.number_connected_components(self)
         batch_size = n / 1000 if n > 10 ** 4 else np.inf
@@ -940,6 +940,7 @@ class FragmentsGraph(nx.Graph):
                             self.batch_to_zipped_swcs,
                             batch,
                             zip_path,
+                            preserve_radius,
                             sampling_rate
                         )
                     )
@@ -965,33 +966,34 @@ class FragmentsGraph(nx.Graph):
             for _ in as_completed(threads):
                 pbar.update(1)
 
-    def batch_to_zipped_swcs(self, nodes_list, zip_path, sampling_rate=1):
+    def batch_to_zipped_swcs(
+        self, nodes_list, zip_path, preserve_radius=False, sampling_rate=1
+    ):
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
-            cnt = 0
             for nodes in nodes_list:
                 self.nodes_to_zipped_swc(
-                    zip_writer, nodes, sampling_rate=sampling_rate
+                    zip_writer,
+                    nodes,
+                    preserve_radius=preserve_radius,
+                    sampling_rate=sampling_rate
                 )
-                cnt += 1
-            return cnt
 
     def nodes_to_zipped_swc(
         self,
         zip_writer,
         nodes,
         color=None,
-        prefix="",
         preserve_radius=False,
         sampling_rate=1,
     ):
         with StringIO() as text_buffer:
             # Preamble
-            n_entries = 0
-            node_to_idx = dict()
             text_buffer.write("# COLOR " + color) if color else None
             text_buffer.write("# id, type, x, y, z, r, pid")
 
             # Write entries
+            n_entries = 0
+            node_to_idx = dict()
             for i, j in nx.dfs_edges(self.subgraph(nodes)):
                 # Root entry
                 if len(node_to_idx) == 0:
@@ -1022,7 +1024,7 @@ class FragmentsGraph(nx.Graph):
                 node_to_idx[j] = n_entries
 
             # Write SWC file
-            filename = prefix + self.nodes[i]["swc_id"]
+            filename = self.nodes[i]["swc_id"]
             filename = util.set_zip_path(zip_writer, filename, ".swc")
             zip_writer.writestr(filename, text_buffer.getvalue())
 
