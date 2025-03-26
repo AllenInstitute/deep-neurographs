@@ -243,13 +243,11 @@ class GraphLoader:
         soma_nodes = graph.graph["soma_nodes"]
         if self.satifies_path_length_condition(graph):
             # Check whether to remove high risk merges
-            if len(graph.graph["soma_nodes"]) == 0:
-                high_risk_cnt = self.remove_high_risk_merges(graph)
-            else:
-                high_risk_cnt = 0
+            high_risk_cnt = self.remove_high_risk_merges(graph)
 
-            # if high_risk_cnt == 0:
-            #    return None, 0
+            # temp
+            if high_risk_cnt == 0:
+                return None, 0
 
             # Iterate over connected components
             swc_id = graph.graph["swc_id"]
@@ -291,22 +289,13 @@ class GraphLoader:
                 graph, leafs, branchings, self.smooth_bool
             )
 
-            # Check if fragment is connected to soma
-            swc_id = graph.graph["swc_id"].split(".")[0]
-            if len(graph.graph["soma_nodes"]) > 0:
-                is_soma = True
-            if swc_id in self.id_to_soma:
-                is_soma = True
-            else:
-                is_soma = False
-
             # Output
             irreducibles = {
                 "leaf": set_node_attrs(graph, leafs),
                 "branching": set_node_attrs(graph, branchings),
                 "edge": set_edge_attrs(graph, edges, self.node_spacing),
                 "swc_id": graph.graph["swc_id"],
-                "is_soma": is_soma,
+                "is_soma": True if graph.graph["soma_nodes"] else False,
             }
             return irreducibles
         else:
@@ -409,7 +398,7 @@ class GraphLoader:
 
         # temp
         path = os.path.join("high_risk", graph.graph["swc_id"] + ".swc")
-        if False:  # high_risk_cnt > 0:
+        if high_risk_cnt > 0:
             swc_util.write_graph(path, graph)
 
         graph.remove_nodes_from(nodes)
@@ -434,7 +423,7 @@ class GraphLoader:
             subgraph that was disconnected.
 
         """
-        graph = self.to_graph(swc_dict)
+        graph = self.to_graph(swc_dict, check_soma=False)
         if len(somas_xyz) <= 10:
             # Break connecting path
             nodes = set()
@@ -501,7 +490,7 @@ class GraphLoader:
         """
         return path_length(graph, self.min_size) > self.min_size
 
-    def to_graph(self, swc_dict):
+    def to_graph(self, swc_dict, check_soma=True):
         """
         Converts a dictionary containing swc attributes to a graph.
 
@@ -520,12 +509,18 @@ class GraphLoader:
         # Get graph
         if swc_dict is None:
             graph = nx.Graph()
-            swc_dict = {"soma_nodes": set()}
+            swc_dict = {"soma_nodes": set(), "swc_id": ""}
         elif "graph" in swc_dict:
             graph = swc_dict["graph"]
         else:
             graph = swc_util.to_graph(swc_dict, set_attrs=True)
             prune_branches(graph, self.prune_depth)
+
+        # Check if segment intersects with soma
+        swc_id = swc_dict["swc_id"].split(".")[0]
+        if check_soma and swc_id in self.id_to_soma:
+            somas_xyz = self.id_to_soma[swc_id]
+            swc_dict["soma_nodes"] = find_soma_nodes(graph, somas_xyz)
 
         # Add graph-level attributes
         graph.graph["soma_nodes"] = swc_dict["soma_nodes"]
