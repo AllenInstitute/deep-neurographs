@@ -243,11 +243,14 @@ class GraphLoader:
         soma_nodes = graph.graph["soma_nodes"]
         if self.satifies_path_length_condition(graph):
             # Check whether to remove high risk merges
-            high_risk_cnt = self.remove_high_risk_merges(graph)
+            if not soma_nodes:
+                high_risk_cnt = self.remove_high_risk_merges(graph)
+            else:
+                high_risk_cnt = 0
 
             # temp
-            if high_risk_cnt == 0:
-                return None, 0
+            #if high_risk_cnt == 0:
+            #    return None, 0
 
             # Iterate over connected components
             swc_id = graph.graph["swc_id"]
@@ -374,7 +377,8 @@ class GraphLoader:
             visited = set({root})
 
             # Check if close to soma
-            if self.dist_from_soma(graph.nodes[root]["xyz"]) < 300:
+            soma_dist = self.dist_from_soma(graph.nodes[root]["xyz"])
+            if graph.graph["soma_nodes"]: # and soma_dist < 400:
                 continue
 
             # BFS
@@ -397,9 +401,9 @@ class GraphLoader:
                 high_risk_cnt += 1
 
         # temp
-        path = os.path.join("high_risk", graph.graph["swc_id"] + ".swc")
-        if high_risk_cnt > 0:
-            swc_util.write_graph(path, graph)
+        #path = os.path.join("high_risk", graph.graph["swc_id"] + ".swc")
+        #if high_risk_cnt > 0:
+        #    swc_util.write_graph(path, graph)
 
         graph.remove_nodes_from(nodes)
         return high_risk_cnt
