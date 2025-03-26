@@ -148,7 +148,15 @@ class ImageReader(ABC):
             Image profile.
 
         """
-        img_patch = normalize(self.read_with_bbox(spec["bbox"]))
+        try:
+            img_patch = normalize(self.read_with_bbox(spec["bbox"]))
+        except:
+            s = self.shape()
+            s = s[2:] if len(s) == 5 else s
+            for i in range(3):
+                spec["bbox"]["min"][i] = max(0, spec["bbox"]["min"][i])
+                spec["bbox"]["max"][i] = min(spec["bbox"]["max"][i], s[i] - 1)
+            img_patch = normalize(self.read_with_bbox(spec["bbox"]))
         return [img_patch[v] for v in map(tuple, spec["profile_path"])]
 
     def shape(self):
