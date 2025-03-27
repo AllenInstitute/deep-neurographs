@@ -254,7 +254,10 @@ class GraphLoader:
         soma_nodes = graph.graph["soma_nodes"]
         if self.satifies_path_length_condition(graph):
             # Check whether to remove high risk merges
-            high_risk_cnt = self.remove_high_risk_merges(graph)
+            if not soma_nodes:
+                high_risk_cnt = self.remove_high_risk_merges(graph)
+            else:
+                high_risk_cnt = 0
 
             # temp
             #if high_risk_cnt == 0:
@@ -407,7 +410,6 @@ class GraphLoader:
             if hit_branching or graph.degree(root) > 3:
                 nodes = nodes.union(visited)
                 high_risk_cnt += 0.5
-                #print(graph.nodes[root]["xyz"])
 
         graph.remove_nodes_from(nodes)
         return high_risk_cnt
