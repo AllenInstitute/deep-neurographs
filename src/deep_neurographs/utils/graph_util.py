@@ -5,10 +5,20 @@ Created on Wed June 5 16:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 
-Overview
---------
 Code that loads and preprocesses neuron fragments stored as swc files, then
 constructs a custom graph object called a "FragmentsGraph".
+
+    Graph Loading Algorithm:
+        1. Load Soma Locations (Optional)
+
+        2. Break Soma Merges (Optional)
+
+        3. Extract Irreducibles from SWC files
+            a. Build graph from SWC file
+            b. Break high risk merges (optional)
+            c. Find irreducible nodes
+            d. Find irreducible edges
+
 
 Note: We use the term "branch" to refer to a path in a graph from a branching
       node to a leaf.
@@ -17,9 +27,7 @@ Note: We use the term "branch" to refer to a path in a graph from a branching
 
 from collections import defaultdict, deque
 from concurrent.futures import (
-    as_completed,
-    ProcessPoolExecutor,
-    ThreadPoolExecutor,
+    as_completed, ProcessPoolExecutor, ThreadPoolExecutor,
 )
 from copy import deepcopy
 from random import sample
@@ -29,7 +37,6 @@ from tqdm import tqdm
 import ast
 import networkx as nx
 import numpy as np
-import os
 
 from deep_neurographs.utils import geometry_util, img_util, swc_util, util
 
@@ -218,7 +225,11 @@ class GraphLoader:
             subgraph.
 
         """
-        return self.extract_from_graph(self.to_graph(swc_dict)), 0
+        graph = self.to_graph(swc_dict)
+        if self.satifies_path_length_condition(graph):
+            return self.extract_from_graph(graph)
+        else:
+            return None, 0
 
     def break_and_extract(self, swc_dict):
         """
@@ -243,10 +254,7 @@ class GraphLoader:
         soma_nodes = graph.graph["soma_nodes"]
         if self.satifies_path_length_condition(graph):
             # Check whether to remove high risk merges
-            if not soma_nodes:
-                high_risk_cnt = self.remove_high_risk_merges(graph)
-            else:
-                high_risk_cnt = 0
+            high_risk_cnt = self.remove_high_risk_merges(graph)
 
             # temp
             #if high_risk_cnt == 0:
@@ -254,16 +262,19 @@ class GraphLoader:
 
             # Iterate over connected components
             swc_id = graph.graph["swc_id"]
+            proxy_dist = 15 * self.node_spacing
             for i, nodes in enumerate(nx.connected_components(graph)):
                 # Extract subgraph
-                subgraph = graph.subgraph(nodes)
-                subgraph.graph["swc_id"] = deepcopy(swc_id) + f".{i}"
-                subgraph.graph["soma_nodes"] = nodes.intersection(soma_nodes)
+                if len(nodes) > proxy_dist:
+                    subgraph_soma_nodes = nodes.intersection(soma_nodes)
+                    subgraph = graph.subgraph(nodes)
+                    subgraph.graph["swc_id"] = deepcopy(swc_id) + f".{i}"
+                    subgraph.graph["soma_nodes"] = subgraph_soma_nodes
 
-                # Extract irreducibles
-                result = self.extract_from_graph(subgraph)
-                if result is not None:
-                    irreducibles.append(result)
+                    # Extract irreducibles
+                    result = self.extract_from_graph(subgraph)
+                    if result is not None:
+                        irreducibles.append(result)
             return irreducibles, high_risk_cnt
         else:
             return None, 0
@@ -285,24 +296,21 @@ class GraphLoader:
             subgraph.
 
         """
-        if self.satifies_path_length_condition(graph):
-            # Irreducibles
-            leafs, branchings = get_irreducible_nodes(graph)
-            edges = get_irreducible_edges(
-                graph, leafs, branchings, self.smooth_bool
-            )
+        # Irreducibles
+        leafs, branchings = get_irreducible_nodes(graph)
+        edges = get_irreducible_edges(
+            graph, leafs, branchings, self.smooth_bool
+        )
 
-            # Output
-            irreducibles = {
-                "leaf": set_node_attrs(graph, leafs),
-                "branching": set_node_attrs(graph, branchings),
-                "edge": set_edge_attrs(graph, edges, self.node_spacing),
-                "swc_id": graph.graph["swc_id"],
-                "is_soma": True if graph.graph["soma_nodes"] else False,
-            }
-            return irreducibles
-        else:
-            return None
+        # Compile results
+        irreducibles = {
+            "leaf": set_node_attrs(graph, leafs),
+            "branching": set_node_attrs(graph, branchings),
+            "edge": set_edge_attrs(graph, edges, self.node_spacing),
+            "swc_id": graph.graph["swc_id"],
+            "is_soma": True if graph.graph["soma_nodes"] else False,
+        }
+        return irreducibles
 
     # --- Merge Removal ---
     def remove_soma_merges(self, swc_dicts):
@@ -351,7 +359,7 @@ class GraphLoader:
         Removes high risk merge sites from a graph, which is defined to be
         either (1) two branching points within "max_dist" or (2) branching
         point with degree 4+. Note: if soma locations are provided, we skip
-        branching points within 400um of a soma.
+        branching points within 300um of a soma.
 
         Parameters
         ----------
@@ -369,7 +377,7 @@ class GraphLoader:
         high_risk_cnt = 0
         nodes = set()
         _, branchings = get_irreducible_nodes(graph)
-        while len(branchings) > 0:
+        while branchings:
             # Initializations
             root = branchings.pop()
             hit_branching = False
@@ -378,7 +386,7 @@ class GraphLoader:
 
             # Check if close to soma
             soma_dist = self.dist_from_soma(graph.nodes[root]["xyz"])
-            if graph.graph["soma_nodes"]: # and soma_dist < 400:
+            if graph.graph["soma_nodes"] and soma_dist < 300:
                 continue
 
             # BFS
@@ -398,12 +406,8 @@ class GraphLoader:
             # Determine whether to remove visited nodes
             if hit_branching or graph.degree(root) > 3:
                 nodes = nodes.union(visited)
-                high_risk_cnt += 1
-
-        # temp
-        #path = os.path.join("high_risk", graph.graph["swc_id"] + ".swc")
-        #if high_risk_cnt > 0:
-        #    swc_util.write_graph(path, graph)
+                high_risk_cnt += 0.5
+                #print(graph.nodes[root]["xyz"])
 
         graph.remove_nodes_from(nodes)
         return high_risk_cnt

@@ -1002,7 +1002,7 @@ class FragmentsGraph(nx.Graph):
                     if preserve_radius:
                         r = self.nodes[i]["radius"]
                     else:
-                        r = 5 if self.nodes[i]["radius"] == 5.3141592 else 2
+                        r = 6 if self.nodes[i]["radius"] == 5.3141592 else 2
 
                     # Write entry
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
@@ -1049,7 +1049,7 @@ class FragmentsGraph(nx.Graph):
             if preserve_radius:
                 r = branch_radius[k]
             else:
-                r = 5 if branch_radius[k] == 5.3141592 else 2
+                r = 6 if branch_radius[k] == 5.3141592 else 2
 
             # Write entry
             text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
