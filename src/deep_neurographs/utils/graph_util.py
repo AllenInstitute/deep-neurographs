@@ -275,7 +275,7 @@ class GraphLoader:
                     subgraph.graph["soma_nodes"] = subgraph_soma_nodes
 
                     # Extract irreducibles
-                    result = self.extract_from_graph(subgraph)
+                    result, _ = self.extract_from_graph(subgraph)
                     if result is not None:
                         irreducibles.append(result)
             return irreducibles, high_risk_cnt
@@ -313,7 +313,7 @@ class GraphLoader:
             "swc_id": graph.graph["swc_id"],
             "is_soma": True if graph.graph["soma_nodes"] else False,
         }
-        return irreducibles
+        return irreducibles, 0
 
     # --- Merge Removal ---
     def remove_soma_merges(self, swc_dicts):
