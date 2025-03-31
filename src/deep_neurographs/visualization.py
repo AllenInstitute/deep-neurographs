@@ -202,7 +202,7 @@ def visualize_subset(
 def plot_nodes(graph):
     xyz = nx.get_node_attributes(graph, "xyz")
     xyz = np.array(list(xyz.values()))
-    return go.Scatter3d(
+    trace = go.Scatter3d(
         x=xyz[:, 0],
         y=xyz[:, 1],
         z=xyz[:, 2],
@@ -210,6 +210,7 @@ def plot_nodes(graph):
         name="Nodes",
         marker=dict(size=2, color="red"),
     )
+    return trace
 
 
 def plot_proposals(graph, proposals, color=None, width=5):

@@ -335,7 +335,8 @@ class GraphLoader:
         """
         # Detect merges
         merges_dict = {k: v for k, v in self.id_to_soma.items() if len(v) > 1}
-        print("# Merges Detected:", len(merges_dict))
+        if self.verbose:
+            print("# Merges Detected:", len(merges_dict))
 
         # Break fragments
         if len(merges_dict) > 0:
