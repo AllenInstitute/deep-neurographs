@@ -70,11 +70,12 @@ class Trainer:
         # Initializations
         exp_name = "session-" + datetime.today().strftime("%Y%m%d_%H%M")
         exp_dir = os.path.join(output_dir, exp_name)
+        pos_weight = torch.Tensor([0.5]).to(device, dtype=torch.float)
         util.mkdir(exp_dir)
 
         # Instance attributes
         self.batch_size = batch_size
-        self.criterion = nn.BCEWithLogitsLoss()
+        self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
         self.device = device
         self.exp_name = exp_name
         self.lr = lr
@@ -107,15 +108,14 @@ class Trainer:
 
         # Dataloaders
         train_dataloader = GraphDataLoader(train_dataset, self.batch_size)
-        validate_dataloader = GraphDataLoader(validate_dataset, 160)
+        validate_dataloader = GraphDataLoader(validate_dataset, 200)
 
         # Main
         print("\nTraining...")
         print("Experiment:", self.exp_name)
-        best_f1 = 0
+        best_f1, n_upds = 0, 0
         for epoch in range(self.n_epochs):
-            # Train
-            y, hat_y = [], []
+            y, hat_y, losses = list(), list(), list()
             model.train()
             for dataset in train_dataloader:
                 # Forward pass
@@ -132,26 +132,19 @@ class Trainer:
                 # Store prediction
                 y.extend(ml_util.toCPU(y_i))
                 hat_y.extend(ml_util.toCPU(hat_y_i))
+                losses.append(float(loss.detach()))
+                n_upds += 1
 
+                # Check whether to validate model
+                if n_upds % 100 == 0:
+                    train_f1 = self.compute_metrics(y, hat_y, "train", epoch)
+                    best_f1 = self.validate_model(
+                        validate_dataloader, model, epoch, best_f1, train_f1
+                    )
+
+            self.writer.add_scalar("loss", np.mean(losses), epoch)
             train_f1 = self.compute_metrics(y, hat_y, "train", epoch)
             scheduler.step()
-
-            # Validate
-            model.eval()
-            y, hat_y = [], []
-            with torch.no_grad():
-                for dataset in validate_dataloader:
-                    hat_y_i, y_i = self.predict(model, dataset.data)
-                    y.extend(ml_util.toCPU(y_i))
-                    hat_y.extend(ml_util.toCPU(hat_y_i))
-
-            # Check for new best model
-            val_f1 = self.compute_metrics(y, hat_y, "val", epoch)
-            scores = f"Epoch {epoch}:  train_f1={train_f1}  val_f1={val_f1}"
-            if val_f1 > best_f1:
-                print(scores + "  --  New Best!")
-                best_f1 = val_f1
-                self.save_model(model, best_f1)
 
     def predict(self, model, data):
         """
@@ -174,6 +167,24 @@ class Trainer:
         hat_y = model(x, edge_index, edge_attr)
         y = data["proposal"]["y"]
         return truncate(hat_y, y), y
+
+    def validate_model(self, dataloader, model, epoch, best_f1, train_f1):
+        # Generate predictions
+        with torch.no_grad():
+            model.eval()
+            y, hat_y = [], []
+            for dataset in dataloader:
+                hat_y_i, y_i = self.predict(model, dataset.data)
+                y.extend(ml_util.toCPU(y_i))
+                hat_y.extend(ml_util.toCPU(hat_y_i))
+
+        # Check for new best model
+        val_f1 = self.compute_metrics(y, hat_y, "val", epoch)
+        if val_f1 > best_f1:
+            print(f"Epoch {epoch}:  train_f1={train_f1}  val_f1={val_f1}")
+            best_f1 = val_f1
+            self.save_model(model, best_f1)
+        return best_f1
 
     def compute_metrics(self, y, hat_y, prefix, epoch):
         """

@@ -176,7 +176,6 @@ class GraphLoader:
 
         # Extract irreducible subgraphs
         desc = "Extract Graphs"
-        pbar_test = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         with ProcessPoolExecutor() as executor:
             # Assign Processes
@@ -186,9 +185,7 @@ class GraphLoader:
                 swc_dict = swc_dicts.pop()
                 processes[i] = executor.submit(self.extracter, swc_dict)
                 i += 1
-                pbar_test.update(1) if self.verbose else None
 
-            print("processes assigned")
             # Store results
             irreducibles = deque()
             for process in as_completed(processes):
@@ -324,7 +321,8 @@ class GraphLoader:
         """
         # Detect merges
         merges_dict = {k: v for k, v in self.id_to_soma.items() if len(v) > 1}
-        print("# Merges Detected:", len(merges_dict))
+        if self.verbose:
+            print("# Merges Detected:", len(merges_dict))
 
         # Break fragments
         if len(merges_dict) > 0:

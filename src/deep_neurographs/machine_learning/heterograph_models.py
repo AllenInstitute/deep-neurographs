@@ -288,10 +288,10 @@ class MultiModalHGAT(torch.nn.Module):
     def init_gat(self, hidden_dim, edge_dim, heads):
         gat_dict = dict()
         for relation in self.get_relations():
-            # Extract relation
+            # Parse relation string
             relation = ast.literal_eval(relation)
             node_type_1, edge_type, node_type_2 = relation
-            is_same = True if node_type_1 == node_type_2 else False
+            is_same = node_type_1 == node_type_2
 
             # Initialize layer
             init_gat = init_gat_same if is_same else init_gat_mixed
@@ -364,7 +364,7 @@ class ConvNet(nn.Module):
         nn.Module.__init__(self)
 
         # Layer 1
-        self.conv1a = self._init_conv_layer(2, 16, 5)
+        self.conv1a = self._init_conv_layer(2, 16, 3)
         self.conv1b = self._init_conv_layer(16, 16, 3)
         self.pool1 = nn.MaxPool3d(kernel_size=2, stride=2)
 
@@ -377,16 +377,11 @@ class ConvNet(nn.Module):
         self.pool3 = nn.MaxPool3d(kernel_size=2, stride=2)
 
         # Layer 4
-        # self.conv4 = self._init_conv_layer(64, 128, 3)
-        # self.pool4 = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.conv4 = self._init_conv_layer(64, 64, 3)
+        self.pool4 = nn.MaxPool3d(kernel_size=2, stride=2)
 
         # Output layer
-        self.output = nn.Sequential(
-            nn.Linear(1024, 128),
-            nn.LeakyReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(2 * output_dim, output_dim),
-        )
+        self.output = init_mlp(4096, output_dim)
 
         # Initialize weights
         self.apply(self.init_weights)
@@ -416,11 +411,11 @@ class ConvNet(nn.Module):
                 out_channels,
                 kernel_size=kernel_size,
                 stride=1,
-                padding=0,
+                padding="same",
             ),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(),
-            nn.Dropout(p=0.2),
+            nn.Dropout(p=0.25),
         )
         return conv_layer
 
@@ -482,8 +477,8 @@ class ConvNet(nn.Module):
         x = self.pool3(x)
 
         # Layer 4
-        # x = self.conv4(x)
-        # x = self.pool4(x)
+        x = self.conv4(x)
+        x = self.pool4(x)
 
         # Output layer
         x = self.output(vectorize(x))
@@ -493,7 +488,7 @@ class ConvNet(nn.Module):
 # --- Helpers ---
 def init_gat_same(hidden_dim, edge_dim, heads):
     gat = nn_geometric.GATv2Conv(
-        -1, hidden_dim, edge_dim=edge_dim, heads=heads
+        -1, hidden_dim, dropout=0.25, edge_dim=edge_dim, heads=heads
     )
     return gat
 
@@ -503,6 +498,7 @@ def init_gat_mixed(hidden_dim, edge_dim, heads):
         (hidden_dim, hidden_dim),
         hidden_dim,
         add_self_loops=False,
+        dropout=0.25,
         edge_dim=edge_dim,
         heads=heads,
     )
@@ -529,7 +525,7 @@ def init_mlp(input_dim, output_dim):
     mlp = nn.Sequential(
         nn.Linear(input_dim, 2 * output_dim),
         nn.LeakyReLU(),
-        nn.Dropout(p=0.3),
+        nn.Dropout(p=0.25),
         nn.Linear(2 * output_dim, output_dim),
     )
     return mlp
