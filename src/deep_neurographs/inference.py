@@ -149,12 +149,12 @@ class InferencePipeline:
         self.build_graph(fragments_pointer)
         self.generate_proposals()
         self.classify_proposals()
-        self.save_results()
 
         # Finish
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nFinal")
         self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
+        self.save_results()
 
     def run_schedule(self, fragments_pointer, radius_schedule):
         # Initializations
@@ -170,12 +170,12 @@ class InferencePipeline:
             self.generate_proposals(radius)
             self.classify_proposals()
             self.report_graph(prefix="Current")
-        self.save_results()
 
         # Finish
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nFinal")
         self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
+        self.save_results()
 
     def build_graph(self, fragments_pointer):
         """
@@ -215,7 +215,7 @@ class InferencePipeline:
         # Save valid labels and current graph
         swc_dir = os.path.join(self.output_dir, "swcs")
         valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        self.graph.to_zipped_swcs(swc_dir, sampling_rate=3)
+        self.graph.to_zipped_swcs(swc_dir, sampling_rate=2)
         self.graph.save_labels(valid_labels_path)
 
         # Report results
@@ -326,6 +326,7 @@ class InferencePipeline:
         self.graph.to_zipped_swcs(swc_dir)
         self.save_connections()
         self.write_metadata()
+        self.log_handle.close()
 
         # Save result on s3 (if applicable)
         if self.s3_dict is not None:
@@ -704,7 +705,7 @@ class GraphDataLoader:
         self.proposals = set(graph.list_proposals())
 
         # Identify clustered proposals
-        self.flagged = set()  #self.find_proposal_clusters(5)
+        self.flagged = set()  # self.find_proposal_clusters(5)
 
     def find_proposal_clusters(self, k):
         flagged = set()
@@ -798,7 +799,7 @@ class GraphDataLoader:
                         queue.append((j, 0))
 
                 # Check if proposal is flagged
-                #proposal in self.flagged and proposal in self.proposals:
+                # proposal in self.flagged and proposal in self.proposals:
                 if False:
                     self.visit_flagged_proposal(batch)
 
