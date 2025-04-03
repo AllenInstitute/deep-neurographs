@@ -84,12 +84,16 @@ class ImageReader(ABC):
 
         """
         s, e = get_start_end(voxel, shape, from_center=from_center)
-        if len(self.shape()) == 3:
-            return self.img[s[0]: e[0], s[1]: e[1], s[2]: e[2]]
-        elif len(self.shape()) == 5:
-            return self.img[0, 0, s[0]: e[0], s[1]: e[1], s[2]: e[2]]
-        else:
-            raise ValueError(f"Unsupported image shape: {self.shape()}")
+        try:
+            if len(self.shape()) == 3:
+                return self.img[s[0]: e[0], s[1]: e[1], s[2]: e[2]]
+            elif len(self.shape()) == 5:
+                return self.img[0, 0, s[0]: e[0], s[1]: e[1], s[2]: e[2]]
+            else:
+                raise ValueError(f"Unsupported image shape: {self.shape()}")
+        except Exception:
+            print(f"Unable to read from bounding box {start, end}!")
+            return np.ones(shape)
 
     def read_with_bbox(self, bbox):
         """
