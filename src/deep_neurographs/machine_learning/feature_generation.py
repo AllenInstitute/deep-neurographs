@@ -247,7 +247,7 @@ class FeatureGenerator:
                 skeletal_features[frozenset(edge)] = np.array(
                     [
                         np.mean(self.graph.edges[edge]["radius"]),
-                        min(self.graph.edge_length(edge), 500) / 500,
+                        min(self.graph.edge_length(edge), 2000) / 1000,
                     ],
                 )
         return skeletal_features

@@ -166,6 +166,14 @@ class Trainer:
         x, edge_index, edge_attr = ml_util.get_inputs(data, self.device)
         hat_y = model(x, edge_index, edge_attr)
         y = data["proposal"]["y"]
+        if torch.isnan(hat_y).any():
+            print("Loss is NaN!")
+            print("hat_y:", truncate(hat_y, y))
+            print("y:", y)
+            for key in x:
+                if torch.isnan(x[key]).any():
+                    print(f"x[{key}]: {x[key]}")
+            stop
         return truncate(hat_y, y), y
 
     def validate_model(self, dataloader, model, epoch, best_f1, train_f1):
