@@ -154,8 +154,9 @@ class GraphLoader:
         self.soma_kdtree = KDTree(soma_xyz_list)
 
         # Report results
-        print("# Somas:", len(soma_xyz_list))
-        print("# Soma-Fragment Intersections:", len(self.id_to_soma))
+        if self.verbose:
+            print("# Somas:", len(soma_xyz_list))
+            print("# Soma-Fragment Intersections:", len(self.id_to_soma))
 
     # --- Irreducibles Extraction ---
     def extract_irreducibles(self, swc_dicts):
@@ -205,7 +206,8 @@ class GraphLoader:
                 elif isinstance(result, dict):
                     irreducibles.append(result)
 
-        print("# High Risk Merges Detected:", high_risk_cnt)
+        if self.verbose:
+            print("# High Risk Merges Detected:", high_risk_cnt)
         return irreducibles
 
     def extract(self, swc_dict):
@@ -336,7 +338,7 @@ class GraphLoader:
         # Detect merges
         merges_dict = {k: v for k, v in self.id_to_soma.items() if len(v) > 1}
         if self.verbose:
-            print("# Merges Detected:", len(merges_dict))
+            print("# Soma Merges Detected:", len(merges_dict))
 
         # Break fragments
         if len(merges_dict) > 0:

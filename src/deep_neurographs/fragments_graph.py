@@ -700,10 +700,13 @@ class FragmentsGraph(nx.Graph):
         xyz_list_j = self.truncated_edge_attr_xyz(j, depth)
         origin = self.proposal_midpoint(proposal)
 
-        # Compute tangent vectors
+        # Compute tangent vectors - branches
         direction_i = geometry.get_directional(xyz_list_i, origin, depth)
         direction_j = geometry.get_directional(xyz_list_j, origin, depth)
         direction = geometry.tangent(self.proposal_attr(proposal, "xyz"))
+        if np.isnan(direction).any():
+            direction[0] = 0
+            direction[1] = 0
 
         # Compute features
         dot_i = abs(np.dot(direction, direction_i))
