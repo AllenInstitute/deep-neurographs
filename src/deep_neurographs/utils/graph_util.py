@@ -183,28 +183,28 @@ class GraphLoader:
         swc_dicts = self.remove_soma_merges(swc_dicts)
 
         # Extract irreducible subgraphs
+        irreducibles = deque()
+        high_risk_cnt = 0
         desc = "Extract Graphs"
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         with ProcessPoolExecutor() as executor:
-            # Assign Processes
-            i = 0
-            processes = [None] * len(swc_dicts)
+            processes = list()
             while swc_dicts:
                 swc_dict = swc_dicts.pop()
-                processes[i] = executor.submit(self.extracter, swc_dict)
-                i += 1
+                processes.append(executor.submit(self.extracter, swc_dict))
+                if len(processes) > 10**6 or not swc_dicts:
+                    # Store results
+                    for process in as_completed(processes):
+                        pbar.update(1) if self.verbose else None
+                        result, cnt = process.result()
+                        high_risk_cnt += cnt
+                        if isinstance(result, list):
+                            irreducibles.extend(result)
+                        elif isinstance(result, dict):
+                            irreducibles.append(result)
 
-            # Store results
-            irreducibles = deque()
-            high_risk_cnt = 0
-            for process in as_completed(processes):
-                pbar.update(1) if self.verbose else None
-                result, cnt = process.result()
-                high_risk_cnt += cnt
-                if isinstance(result, list):
-                    irreducibles.extend(result)
-                elif isinstance(result, dict):
-                    irreducibles.append(result)
+                    # Reset processes
+                    processes = list()
 
         if self.verbose:
             print("# High Risk Merges Detected:", high_risk_cnt)
