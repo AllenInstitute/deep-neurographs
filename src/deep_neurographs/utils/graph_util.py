@@ -360,7 +360,7 @@ class GraphLoader:
                     swc_dicts.extend(swc_dict_list)
         return swc_dicts
 
-    def remove_high_risk_merges(self, graph, max_dist=6.0):
+    def remove_high_risk_merges(self, graph, max_dist=7):
         """
         Removes high risk merge sites from a graph, which is defined to be
         either (1) two branching points within "max_dist" or (2) branching
@@ -373,7 +373,7 @@ class GraphLoader:
             Graph to be searched.
         max_dist : float, optional
             Maximum distance between branching points that qualifies a site to
-            be considered "high risk". The default is 6.0.
+            be considered "high risk". The default is 7.
 
         Returns
         -------
