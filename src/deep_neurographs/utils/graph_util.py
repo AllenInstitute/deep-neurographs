@@ -229,10 +229,14 @@ class GraphLoader:
             subgraph.
 
         """
-        graph = self.to_graph(swc_dict)
-        if self.satifies_path_length_condition(graph):
-            return self.extract_from_graph(graph)
-        else:
+        try:
+            graph = self.to_graph(swc_dict)
+            if self.satifies_path_length_condition(graph):
+                return self.extract_from_graph(graph)
+            else:
+                return None, 0
+        except:
+            print("Fail!")
             return None, 0
 
     def break_and_extract(self, swc_dict):
