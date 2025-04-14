@@ -35,6 +35,7 @@ from scipy.spatial import KDTree
 from tqdm import tqdm
 
 import ast
+import multiprocessing
 import networkx as nx
 import numpy as np
 
@@ -187,6 +188,7 @@ class GraphLoader:
         high_risk_cnt = 0
         desc = "Extract Graphs"
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
+        multiprocessing.set_start_method('spawn', force=True)
         with ProcessPoolExecutor() as executor:
             processes = list()
             while swc_dicts:
