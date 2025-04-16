@@ -35,7 +35,6 @@ from scipy.spatial import KDTree
 from tqdm import tqdm
 
 import ast
-import multiprocessing
 import networkx as nx
 import numpy as np
 
@@ -186,7 +185,6 @@ class GraphLoader:
         # Extract irreducible subgraphs
         desc = "Extract Graphs"
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
-        multiprocessing.set_start_method('spawn', force=True)
         with ProcessPoolExecutor() as executor:
             # Assign Processes
             i = 0
@@ -262,10 +260,6 @@ class GraphLoader:
                 high_risk_cnt = self.remove_high_risk_merges(graph)
             else:
                 high_risk_cnt = 0
-
-            # temp
-            #if high_risk_cnt == 0:
-            #    return None, 0
 
             # Iterate over connected components
             swc_id = graph.graph["swc_id"]

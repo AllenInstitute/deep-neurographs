@@ -92,7 +92,7 @@ class ImageReader(ABC):
             else:
                 raise ValueError(f"Unsupported image shape: {self.shape()}")
         except Exception:
-            print(f"Unable to read from bounding box {start, end}!")
+            print(f"Unable to read from bounding box {s, e}!")
             return np.ones(shape)
 
     def read_with_bbox(self, bbox):
