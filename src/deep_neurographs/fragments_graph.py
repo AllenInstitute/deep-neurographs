@@ -252,13 +252,7 @@ class FragmentsGraph(nx.Graph):
 
         """
         i, j = tuple(edge)
-        self.add_edge(
-            i,
-            j,
-            radius=attrs["radius"],
-            xyz=attrs["xyz"],
-            swc_id=swc_id,
-        )
+        self.add_edge(i, j, radius=attrs["radius"], xyz=attrs["xyz"])
         self.xyz_to_edge.update({tuple(xyz): edge for xyz in attrs["xyz"]})
 
     def absorb_reducibles(self):
@@ -348,7 +342,7 @@ class FragmentsGraph(nx.Graph):
         return graph
 
     # -- KDTree --
-    def init_kdtree(self, node_type):
+    def init_kdtree(self, node_type=None):
         """
         Builds a KD-Tree from the xyz coordinates of the subset of nodes
         indicated by "node_type".
@@ -363,11 +357,12 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
-        assert node_type in ["leaf", "proposal"]
         if node_type == "leaf":
-            self.leaf_kdtree = self.get_kdtree(node_type="leaf")
+            self.leaf_kdtree = self.get_kdtree(node_type=node_type)
         elif node_type == "proposal":
-            self.proposal_kdtree = self.get_kdtree(node_type="proposal")
+            self.proposal_kdtree = self.get_kdtree(node_type=node_type)
+        else:
+            self.kdtree = self.get_kdtree()
 
     def get_kdtree(self, node_type=None):
         """
@@ -388,12 +383,17 @@ class FragmentsGraph(nx.Graph):
         if node_type == "leaf":
             xyz_list = [self.nodes[i]["xyz"] for i in self.get_leafs()]
         elif node_type == "proposal":
-            xyz_list = list(self.xyz_to_proposal.keys())
+            xyz_set = set()
+            for p in self.proposals:
+                xyz_i, xyz_j = self.proposal_attr(p, attr="xyz")
+                xyz_set.add(tuple(xyz_i))
+                xyz_set.add(tuple(xyz_j))
+            xyz_list = list(xyz_set)
         else:
             xyz_list = list(self.xyz_to_edge.keys())
         return KDTree(xyz_list)
 
-    def query_kdtree(self, xyz, d, node_type):
+    def query_kdtree(self, xyz, d, node_type=None):
         """
         Parameters
         ----------
@@ -409,11 +409,12 @@ class FragmentsGraph(nx.Graph):
             nodes within a distance of "d" from "xyz".
 
         """
-        assert node_type in ["leaf", "proposal"]
         if node_type == "leaf":
             return geometry.query_ball(self.leaf_kdtree, xyz, d)
         elif node_type == "proposal":
             return geometry.query_ball(self.proposal_kdtree, xyz, d)
+        else:
+            return geometry.query_ball(self.kdtree, xyz, d)
 
     # --- Proposal Generation ---
     def generate_proposals(
@@ -484,7 +485,6 @@ class FragmentsGraph(nx.Graph):
 
         """
         self.proposals = set()
-        self.xyz_to_proposal = dict()
         for i in self.nodes:
             self.nodes[i]["proposals"] = set()
 
@@ -523,8 +523,6 @@ class FragmentsGraph(nx.Graph):
         proposal = frozenset({i, j})
         self.nodes[i]["proposals"].add(j)
         self.nodes[j]["proposals"].add(i)
-        self.xyz_to_proposal[tuple(self.nodes[i]["xyz"])] = proposal
-        self.xyz_to_proposal[tuple(self.nodes[j]["xyz"])] = proposal
         self.proposals.add(proposal)
 
     def remove_proposal(self, proposal):
@@ -593,7 +591,7 @@ class FragmentsGraph(nx.Graph):
         if i is not None:
             skip_soma = self.is_soma(i) and self.is_soma(leaf)
             skip_complex = self.degree[i] > 1 and not complex_bool
-            self.n_proposals_blocked += 1 if skip_soma else 0            
+            self.n_proposals_blocked += 1 if skip_soma else 0
             return not (skip_soma or skip_complex)
         else:
             return False
@@ -869,6 +867,26 @@ class FragmentsGraph(nx.Graph):
                 self.edges[edge]["xyz"][i], self.edges[edge]["xyz"][i - 1]
             )
         return length
+
+    def find_fragments_near_xyz(self, query_xyz, max_dist):
+        hits = dict()
+        for xyz in self.query_kdtree(query_xyz, max_dist):
+            i, j = self.xyz_to_edge[tuple(xyz)]
+            dist_i = geometry.dist(self.nodes[i]["xyz"], query_xyz)
+            dist_j = geometry.dist(self.nodes[j]["xyz"], query_xyz)
+            hits[self.nodes[i]["swc_id"]] = i if dist_i < dist_j else j
+        return hits
+
+    def get_connected_nodes(self, root):
+        queue = [root]
+        visited = set({root})
+        while queue:
+            i = queue.pop()
+            for j in self.neighbors(i):
+                if j not in visited:
+                    queue.append(j)
+                    visited.add(j)
+        return visited
 
     def get_leafs(self):
         """

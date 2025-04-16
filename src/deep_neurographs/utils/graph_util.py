@@ -267,10 +267,6 @@ class GraphLoader:
             else:
                 high_risk_cnt = 0
 
-            # temp
-            #if high_risk_cnt == 0:
-            #    return None, 0
-
             # Iterate over connected components
             swc_id = graph.graph["swc_id"]
             proxy_dist = 15 * self.node_spacing

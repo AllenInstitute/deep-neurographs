@@ -36,6 +36,7 @@ from time import time
 from torch.nn.functional import sigmoid
 from tqdm import tqdm
 
+import ast
 import networkx as nx
 import numpy as np
 import os
@@ -147,6 +148,7 @@ class InferencePipeline:
 
         # Main
         self.build_graph(fragments_pointer)
+        self.connect_soma_fragments() if self.somas_path else None
         self.generate_proposals()
         self.classify_proposals()
 
@@ -229,6 +231,46 @@ class InferencePipeline:
             self.graph = fragment_filtering.remove_doubles(
                 self.graph, 200, self.graph_config.node_spacing
             )
+
+    def connect_soma_fragments(self):
+        self.graph.init_kdtree()
+        nodes_list = list()
+        merge_cnt, soma_cnt = 0, 0
+        for soma_xyz in map(ast.literal_eval, util.read_txt(self.somas_path)):
+            hits = self.graph.find_fragments_near_xyz(soma_xyz, 15)
+            if len(hits) > 1:
+                # Determine new swc id
+                soma_cnt += 1
+                hit_soma = None
+                for swc_id in hits:
+                    if swc_id in self.graph.soma_ids and hit_soma:
+                        break
+                self.graph.soma_ids.add(swc_id)
+
+                # Add soma node
+                soma_node = self.graph.node_cnt + 1
+                self.graph.add_node(
+                    soma_node,
+                    proposals=set(),
+                    radius=2,
+                    swc_id=swc_id,
+                    xyz=soma_xyz,
+                )
+                self.graph.node_cnt += 1
+
+                # Merge fragments to soma
+                for swc_id_i, i in hits.items():
+                    radius = np.array([2, 2])
+                    xyz_i = self.graph.nodes[i]["xyz"]
+                    xyz = np.array([soma_xyz, xyz_i])
+                    self.graph.add_edge(soma_node, i, radius=radius, xyz=xyz)
+                    self.graph.xyz_to_edge[tuple(xyz_i)] = (soma_node, i)
+                    self.graph.upd_ids(swc_id, i)
+                    merge_cnt += 1
+
+        print("# Somas Connected:", soma_cnt)
+        print("# Merges:", merge_cnt)
+        del self.graph.kdtree
 
     def generate_proposals(self, radius=None):
         """

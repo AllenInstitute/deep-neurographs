@@ -157,7 +157,7 @@ def is_component_aligned(gt_graph, pred_graph, nodes, kdtree):
 
     intersects = True if percent_aligned > 0.5 else False
     aligned_score = np.mean(dists[dists < np.percentile(dists, 80)])
-    
+
     # Deterine whether aligned
     if (aligned_score < ALIGNED_THRESHOLD and hat_swc_id) and intersects:
         return True, hat_swc_id
