@@ -237,7 +237,7 @@ class InferencePipeline:
         nodes_list = list()
         merge_cnt, soma_cnt = 0, 0
         for soma_xyz in map(ast.literal_eval, util.read_txt(self.somas_path)):
-            hits = self.graph.find_fragments_near_xyz(soma_xyz, 15)
+            hits = self.graph.find_fragments_near_xyz(soma_xyz, 20)
             if len(hits) > 1:
                 # Determine new swc id
                 soma_cnt += 1
