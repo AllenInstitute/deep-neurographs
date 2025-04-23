@@ -149,8 +149,8 @@ class InferencePipeline:
         # Main
         self.build_graph(fragments_pointer)
         self.connect_soma_fragments() if self.somas_path else None
-        self.generate_proposals()
-        self.classify_proposals()
+        self.generate_proposals(self.graph_config.search_radius)
+        self.classify_proposals(self.ml_config.threshold)
 
         # Finish
         t, unit = util.time_writer(time() - t0)
@@ -158,7 +158,9 @@ class InferencePipeline:
         self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
         self.save_results()
 
-    def run_schedule(self, fragments_pointer, radius_schedule):
+    def run_schedule(
+        self, fragments_pointer, radius_schedule, threshold_schedule
+    ):
         # Initializations
         self.log_experiment()
         self.write_metadata()
@@ -166,11 +168,10 @@ class InferencePipeline:
 
         # Main
         self.build_graph(fragments_pointer)
-        for round_id, radius in enumerate(radius_schedule):
-            round_id += 1
-            self.report(f"\n--- Round {round_id}:  Radius = {radius} ---")
-            self.generate_proposals(radius)
-            self.classify_proposals()
+        for i, radius in enumerate(radius_schedule):
+            self.report(f"\n--- Round {i + 1}:  Radius = {radius} ---")
+            self.generate_proposals(radius_schedule[i])
+            self.classify_proposals(threshold_schedule[i])
             self.report_graph(prefix="Current")
 
         # Finish
@@ -272,7 +273,7 @@ class InferencePipeline:
         print("# Merges:", merge_cnt)
         del self.graph.kdtree
 
-    def generate_proposals(self, radius=None):
+    def generate_proposals(self, radius):
         """
         Generates proposals for the fragments graph based on the specified
         configuration.
@@ -286,13 +287,9 @@ class InferencePipeline:
         None
 
         """
-        # Initializations
-        self.report("Step 2: Generate Proposals")
-        if radius is None:
-            radius = self.graph_config.search_radius
-
         # Main
         t0 = time()
+        self.report("Step 2: Generate Proposals")
         self.graph.generate_proposals(
             radius,
             complex_bool=self.graph_config.complex_bool,
@@ -308,7 +305,7 @@ class InferencePipeline:
         self.report(f"# Proposals Blocked: {self.graph.n_proposals_blocked}")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
 
-    def classify_proposals(self):
+    def classify_proposals(self, accept_threshold):
         """
         Classifies proposals by calling "self.inference_engine". This routine
         generates features and runs a GNN to make predictions. Proposals with
@@ -337,6 +334,7 @@ class InferencePipeline:
             self.model_path,
             self.ml_config,
             self.graph_config.search_radius,
+            accept_threshold=accept_threshold,
             segmentation_path=self.segmentation_path,
         )
         accepts = self.inference_engine.run()
@@ -507,6 +505,7 @@ class InferenceEngine:
         model_path,
         ml_config,
         radius,
+        accept_threshold=0.9,
         segmentation_path=None,
     ):
         """
@@ -538,7 +537,7 @@ class InferenceEngine:
         self.graph = graph
         self.ml_config = ml_config
         self.radius = radius
-        self.threshold = ml_config.threshold
+        self.threshold = accept_threshold
 
         # Feature generator
         self.feature_generator = FeatureGenerator(
