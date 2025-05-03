@@ -939,13 +939,40 @@ class FragmentsGraph(nx.Graph):
             return None
 
     # --- Writer to SWCs ---
-    def to_zipped_swcs(
-        self, swc_dir, distributed=True, preserve_radius=False, sampling_rate=1
+    def to_zipped_swcs(self, swc_dir, preserve_radius=False, sampling_rate=1):
+        # Initializations
+        util.mkdir(swc_dir)
+        n = nx.number_connected_components(self)
+        pbar = tqdm(total=n, desc="Write SWCs")
+        zip_writer = zipfile.ZipFile(os.path.join(swc_dir, f"swcs.zip"), "w")
+
+        # Main
+        with ThreadPoolExecutor() as executor:
+            threads = list()
+            for i, nodes in enumerate(nx.connected_components(self)):
+                # Submit thread
+                threads.append(
+                    executor.submit(
+                        self.nodes_to_zipped_swc,
+                        zip_writer,
+                        nodes,
+                        preserve_radius,
+                        sampling_rate
+                    )
+                )
+
+                # Check whether to wait
+                if len(threads) > 1000 or i == n - 1:
+                    for _ in as_completed(threads):
+                        pbar.update(1)
+                    threads = list()
+
+    def to_zipped_swcs_parallelized(
+        self, swc_dir, preserve_radius=False, sampling_rate=1
     ):
         # Initializations
-        t = 10 ** 4 if distributed else np.inf
         n = nx.number_connected_components(self)
-        batch_size = n / 1000 if t else np.inf
+        batch_size = n / 1000 if n > 10 ** 4 else np.inf
         util.mkdir(swc_dir)
 
         # Main
@@ -954,9 +981,9 @@ class FragmentsGraph(nx.Graph):
             # Assign threads
             batch = list()
             threads = list()
-            for nodes in nx.connected_components(self):
+            for i, nodes in enumerate(nx.connected_components(self)):
                 batch.append(nodes)
-                if len(batch) > batch_size:
+                if len(batch) > batch_size or i == n - 1:
                     # Zip batch
                     zip_path = os.path.join(swc_dir, f"{zip_cnt}.zip")
                     threads.append(
@@ -971,19 +998,7 @@ class FragmentsGraph(nx.Graph):
 
                     # Reset batch
                     batch = list()
-                    zip_cnt += 1 if distributed else 0
-
-            # Submit last batch
-            if batch:
-                zip_path = os.path.join(swc_dir, f"{zip_cnt}.zip")
-                threads.append(
-                    executor.submit(
-                        self.batch_to_zipped_swcs,
-                        batch,
-                        zip_path,
-                        sampling_rate
-                    )
-                )
+                    zip_cnt += 1
 
             # Watch progress
             pbar = tqdm(total=len(threads), desc="Write SWCs")
@@ -1006,13 +1021,11 @@ class FragmentsGraph(nx.Graph):
         self,
         zip_writer,
         nodes,
-        color=None,
         preserve_radius=False,
         sampling_rate=1,
     ):
         with StringIO() as text_buffer:
             # Preamble
-            text_buffer.write("# COLOR " + color) if color else None
             text_buffer.write("# id, type, x, y, z, r, pid")
 
             # Write entries
@@ -1041,7 +1054,6 @@ class FragmentsGraph(nx.Graph):
                     i,
                     j,
                     parent,
-                    color,
                     preserve_radius=preserve_radius,
                     sampling_rate=sampling_rate
                 )
@@ -1059,7 +1071,6 @@ class FragmentsGraph(nx.Graph):
         i,
         j,
         parent,
-        color,
         preserve_radius=False,
         sampling_rate=1,
     ):
