@@ -363,7 +363,7 @@ class InferencePipeline:
         """
         # Save result on local machine
         swc_dir = os.path.join(self.output_dir, "corrected-swcs")
-        self.graph.to_zipped_swcs(swc_dir)
+        self.graph.to_zipped_swcs(swc_dir, distributed=False, sampling_rate=2)
         self.save_connections()
         self.write_metadata()
         self.log_handle.close()

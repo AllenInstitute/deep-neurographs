@@ -939,10 +939,13 @@ class FragmentsGraph(nx.Graph):
             return None
 
     # --- Writer to SWCs ---
-    def to_zipped_swcs(self, swc_dir, preserve_radius=False, sampling_rate=1):
+    def to_zipped_swcs(
+        self, swc_dir, distributed=True, preserve_radius=False, sampling_rate=1
+    ):
         # Initializations
+        t = 10 ** 4 if distributed else np.inf
         n = nx.number_connected_components(self)
-        batch_size = n / 1000 if n > 10 ** 4 else np.inf
+        batch_size = n / 1000 if t else np.inf
         util.mkdir(swc_dir)
 
         # Main
@@ -968,7 +971,7 @@ class FragmentsGraph(nx.Graph):
 
                     # Reset batch
                     batch = list()
-                    zip_cnt += 1
+                    zip_cnt += 1 if distributed else 0
 
             # Submit last batch
             if batch:
