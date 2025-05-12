@@ -947,25 +947,14 @@ class FragmentsGraph(nx.Graph):
         zip_writer = zipfile.ZipFile(os.path.join(swc_dir, f"swcs.zip"), "w")
 
         # Main
-        with ThreadPoolExecutor() as executor:
-            threads = list()
-            for i, nodes in enumerate(nx.connected_components(self)):
-                # Submit thread
-                threads.append(
-                    executor.submit(
-                        self.nodes_to_zipped_swc,
-                        zip_writer,
-                        nodes,
-                        preserve_radius,
-                        sampling_rate
-                    )
-                )
-
-                # Check whether to wait
-                if len(threads) > 1000 or i == n - 1:
-                    for _ in as_completed(threads):
-                        pbar.update(1)
-                    threads = list()
+        for nodes in nx.connected_components(self):
+            self.nodes_to_zipped_swc(
+                zip_writer,
+                nodes,
+                preserve_radius,
+                sampling_rate
+            )
+            pbar.update(1)
 
     def to_zipped_swcs_parallelized(
         self, swc_dir, preserve_radius=False, sampling_rate=1
