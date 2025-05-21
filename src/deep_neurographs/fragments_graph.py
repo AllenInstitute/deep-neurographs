@@ -938,27 +938,8 @@ class FragmentsGraph(nx.Graph):
         else:
             return None
 
-    # --- Writer to SWCs ---
+    # --- SWC Writer ---
     def to_zipped_swcs(self, swc_dir, preserve_radius=False, sampling_rate=1):
-        # Initializations
-        util.mkdir(swc_dir)
-        n = nx.number_connected_components(self)
-        pbar = tqdm(total=n, desc="Write SWCs")
-        zip_writer = zipfile.ZipFile(os.path.join(swc_dir, f"swcs.zip"), "w")
-
-        # Main
-        for nodes in nx.connected_components(self):
-            self.nodes_to_zipped_swc(
-                zip_writer,
-                nodes,
-                preserve_radius,
-                sampling_rate
-            )
-            pbar.update(1)
-
-    def to_zipped_swcs_parallelized(
-        self, swc_dir, preserve_radius=False, sampling_rate=1
-    ):
         # Initializations
         n = nx.number_connected_components(self)
         batch_size = n / 1000 if n > 10 ** 4 else np.inf

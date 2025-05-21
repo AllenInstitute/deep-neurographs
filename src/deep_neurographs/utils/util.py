@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from google.cloud import storage
 from io import BytesIO
 from random import sample
+from tqdm import tqdm
 from zipfile import ZipFile
 
 import boto3
@@ -27,7 +28,7 @@ import shutil
 from deep_neurographs.utils import graph_util as gutil
 
 
-# --- os utils ---
+# --- OS Utils ---
 def mkdir(path, delete=False):
     """
     Creates a directory at "path".
@@ -214,7 +215,33 @@ def set_zip_path(zip_writer, filename, extension):
     return f
 
 
-# -- gcs utils --
+def combine_zips(zip_paths, output_zip_path):
+    """
+    Combines a list of ZIP archives into a single ZIP archive.
+
+    Parameters
+    ----------
+    zip_paths : List[str]
+        List of ZIP archieves to be combined.
+    output_zip_path : str
+        Path to ZIP archive to be written.
+
+    Returns
+    -------
+    None
+
+    """
+    seen_files = set()
+    with ZipFile(output_zip_path, 'w') as out_zip:
+        for zip_path in tqdm(zip_paths, desc="Combine ZIPs"):
+            with ZipFile(zip_path, 'r') as zip_in:
+                for item in zip_in.infolist():
+                    if item.filename not in seen_files:
+                        seen_files.add(item.filename)
+                        out_zip.writestr(item, zip_in.read(item.filename))
+
+
+# -- GCS Utils --
 def list_files_in_zip(zip_content):
     """
     Lists all files in a zip file stored in a GCS bucket.

@@ -213,15 +213,10 @@ class InferencePipeline:
         self.graph.load_fragments(fragments_pointer)
         self.filter_fragments()
 
+        # Report results
+        self.graph.save_labels(f"{self.output_dir}/segment_ids.txt")
         print("# Soma Fragments:", len(self.graph.soma_ids))
 
-        # Save valid labels and current graph
-        swc_dir = os.path.join(self.output_dir, "swcs")
-        valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        self.graph.to_zipped_swcs_parallelized(swc_dir, sampling_rate=2)
-        self.graph.save_labels(valid_labels_path)
-
-        # Report results
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nInitial")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
@@ -361,9 +356,20 @@ class InferencePipeline:
         None
 
         """
-        # Save result on local machine
+        # Save temp result on local machine
+        temp_dir = os.path.join(self.output_dir, "temp")
+        self.graph.to_zipped_swcs(temp_dir, sampling_rate=2)
+
+        # Merge ZIPs
         swc_dir = os.path.join(self.output_dir, "corrected-swcs")
-        self.graph.to_zipped_swcs(swc_dir, sampling_rate=2)
+        swc_path = os.path.join(swc_dir, "corrected-swcs.zip")
+        util.mkdir(swc_dir)
+
+        zip_paths = util.list_paths(temp_dir, extension=".zip")
+        util.combine_zips(zip_paths, swc_path)
+        util.rmdir(temp_dir)
+
+        # Save additional info
         self.save_connections()
         self.write_metadata()
         self.log_handle.close()
