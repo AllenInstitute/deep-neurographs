@@ -84,12 +84,16 @@ class ImageReader(ABC):
 
         """
         s, e = get_start_end(voxel, shape, from_center=from_center)
-        if len(self.shape()) == 3:
-            return self.img[s[0]: e[0], s[1]: e[1], s[2]: e[2]]
-        elif len(self.shape()) == 5:
-            return self.img[0, 0, s[0]: e[0], s[1]: e[1], s[2]: e[2]]
-        else:
-            raise ValueError(f"Unsupported image shape: {self.shape()}")
+        try:
+            if len(self.shape()) == 3:
+                return self.img[s[0]: e[0], s[1]: e[1], s[2]: e[2]]
+            elif len(self.shape()) == 5:
+                return self.img[0, 0, s[0]: e[0], s[1]: e[1], s[2]: e[2]]
+            else:
+                raise ValueError(f"Unsupported image shape: {self.shape()}")
+        except Exception:
+            print(f"Unable to read from bounding box {s, e}!")
+            return np.ones(shape)
 
     def read_with_bbox(self, bbox):
         """
@@ -148,7 +152,15 @@ class ImageReader(ABC):
             Image profile.
 
         """
-        img_patch = normalize(self.read_with_bbox(spec["bbox"]))
+        try:
+            img_patch = normalize(self.read_with_bbox(spec["bbox"]))
+        except:
+            s = self.shape()
+            s = s[2:] if len(s) == 5 else s
+            for i in range(3):
+                spec["bbox"]["min"][i] = max(0, spec["bbox"]["min"][i])
+                spec["bbox"]["max"][i] = min(spec["bbox"]["max"][i], s[i] - 1)
+            img_patch = normalize(self.read_with_bbox(spec["bbox"]))
         return [img_patch[v] for v in map(tuple, spec["profile_path"])]
 
     def shape(self):
@@ -536,6 +548,46 @@ def get_labels_mip(img, axis=0):
     mip = get_mip(img, axis=axis)
     mip = label2rgb(mip)
     return (255 * mip).astype(np.uint8)
+
+
+def get_neighbors(voxel, shape):
+    """
+    Gets the neighbors of a given voxel coordinate.
+
+    Parameters
+    ----------
+    voxel : Tuple[int]
+        Voxel coordinate in a 3D image.
+    shape : Tuplep[int]
+        Shape of the 3D image that voxel is contained within.
+
+    Returns
+    -------
+    List[Tuple[int]]
+         Voxel coordinates of the 26 neighbors of the given voxel.
+
+    """
+    # Initializations
+    x, y, z = voxel
+    depth, height, width = shape
+
+    # Iterate over the possible offsets for x, y, and z
+    neighbors = []
+    for dx in [-1, 0, 1]:
+        for dy in [-1, 0, 1]:
+            for dz in [-1, 0, 1]:
+                # Skip the (0, 0, 0) offset, which refers to the voxel itself
+                if dx == 0 and dy == 0 and dz == 0:
+                    continue
+
+                # Calculate the neighbor's coordinates
+                nx, ny, nz = x + dx, y + dy, z + dz
+
+                # Check if the neighbor is within the bounds of the 3D image
+                if 0 <= nx < depth and 0 <= ny < height and 0 <= nz < width:
+                    neighbors.append((nx, ny, nz))
+
+    return neighbors
 
 
 def is_contained(bbox, voxel):

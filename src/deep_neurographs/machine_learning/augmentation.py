@@ -234,7 +234,7 @@ class RandomContrast3D:
 
     """
 
-    def __init__(self, factor_range=(0.8, 1.2)):
+    def __init__(self, factor_range=(0.7, 1.3)):
         """
         Initializes a RandomContrast3D transformer.
 
@@ -267,7 +267,7 @@ class RandomContrast3D:
 
         """
         factor = random.uniform(*self.factor_range)
-        return np.clip(img * factor, img.min(), img.max())
+        return np.clip(img * factor, 0, 1)
 
 
 class RandomNoise3D:
@@ -276,7 +276,7 @@ class RandomNoise3D:
 
     """
 
-    def __init__(self, mean=0.0, std=0.04):
+    def __init__(self, max_std=0.1):
         """
         Initializes a RandomNoise3D transformer.
 
@@ -293,8 +293,7 @@ class RandomNoise3D:
         None
 
         """
-        self.mean = mean
-        self.std = std
+        self.max_std = max_std
 
     def __call__(self, img):
         """
@@ -311,7 +310,8 @@ class RandomNoise3D:
             Noisy 3D image.
 
         """
-        noise = np.random.normal(self.mean, self.std, img.shape)
+        std = self.max_std * random.random()
+        noise = np.random.normal(0, std, img.shape)
         return img + noise
 
 

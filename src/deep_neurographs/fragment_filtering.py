@@ -51,7 +51,7 @@ def remove_curvy(graph, max_length, ratio=0.5):
         length = graph.edge_length((i, j))
         endpoint_dist = graph.dist(i, j)
         if endpoint_dist / length < ratio and length < max_length:
-            deleted_ids.add(graph.edges[i, j]["swc_id"])
+            deleted_ids.add(graph.nodes[i]["swc_id"])
             graph = delete_fragment(graph, i, j)
     return graph
 
@@ -123,7 +123,7 @@ def compute_projections(graph, kdtree, edge):
 
     """
     hits = defaultdict(list)
-    query_id = graph.edges[edge]["swc_id"]
+    query_id = graph.nodes[edge[0]]["swc_id"]
     for i, xyz in enumerate(graph.edges[edge]["xyz"]):
         # Compute projections
         best_id = None

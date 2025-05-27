@@ -39,10 +39,10 @@ class FeatureGenerator:
         graph,
         img_path,
         anisotropy=(1.0, 1.0, 1.0),
-        context=30,
+        context=40,
         is_multimodal=False,
         multiscale=0,
-        patch_shape=(50, 50, 50),
+        patch_shape=(64, 64, 64),
         segmentation_path=None,
     ):
         """
@@ -153,21 +153,15 @@ class FeatureGenerator:
 
         """
         # Initializations
-        computation_graph = batch["graph"]
-        proposals = batch["proposals"]
         if self.graph.leaf_kdtree is None:
             self.graph.init_kdtree(node_type="leaf")
 
         # Main
         features = {
-            "nodes": self.node_skeletal(computation_graph),
-            "branches": self.branch_skeletal(computation_graph),
-            "proposals": self.run_on_proposals(proposals, radius)
+            "nodes": self.node_skeletal(batch["graph"]),
+            "branches": self.branch_skeletal(batch["graph"]),
         }
-
-        # Generate image patches (if applicable)
-        if self.is_multimodal:
-            features["patches"] = self.proposal_patches(proposals)
+        features.update(self.run_on_proposals(batch["proposals"], radius))
         return features
 
     def run_on_proposals(self, proposals, radius):
@@ -187,11 +181,21 @@ class FeatureGenerator:
             Dictionary that maps a proposal id to a feature vector.
 
         """
-        features = self.proposal_skeletal(proposals, radius)
-        if not self.is_multimodal:
+        # Generate features
+        skel_features = self.proposal_skeletal(proposals, radius)
+        if self.is_multimodal:
+            patches, profiles = self.proposal_patches(proposals)
+        else:
             profiles = self.proposal_profiles(proposals)
-            for p in proposals:
-                features[p] = np.concatenate((features[p], profiles[p]))
+
+        # Concatenate image profiles
+        for p in proposals:
+            skel_features[p] = np.concatenate((skel_features[p], profiles[p]))
+
+        # Output
+        features = {"proposals": skel_features}
+        if self.is_multimodal:
+            features["patches"] = patches
         return features
 
     # -- Skeletal Features --
@@ -243,7 +247,7 @@ class FeatureGenerator:
                 skeletal_features[frozenset(edge)] = np.array(
                     [
                         np.mean(self.graph.edges[edge]["radius"]),
-                        min(self.graph.edge_length(edge), 500) / 500,
+                        min(self.graph.edge_length(edge), 2000) / 1000,
                     ],
                 )
         return skeletal_features
@@ -336,10 +340,12 @@ class FeatureGenerator:
                 threads.append(executor.submit(self.get_patches, proposal))
 
             # Store results
-            img_patches = dict()
+            patches, profiles = dict(), dict()
             for thread in as_completed(threads):
-                img_patches.update(thread.result())
-        return img_patches
+                proposal, patches_i, profile_i = thread.result()
+                patches[proposal] = patches_i
+                profiles[proposal] = profile_i
+        return patches, profiles
 
     def get_profile(self, xyz_path, profile_id):
         """
@@ -394,53 +400,54 @@ class FeatureGenerator:
         return {"bbox": bbox, "profile_path": voxel_path}
 
     def get_patches(self, proposal):
+        # Compute bounding box
         xyz_pts = self.graph.proposal_attr(proposal, "xyz")
         center, shape = self.compute_bbox(xyz_pts)
-        img_patch = self.get_img_patch(center, shape)
-        label_patch = self.get_label_patch(center, shape, proposal)
-        return {proposal: np.stack([img_patch, label_patch], axis=0)}
 
-    def get_img_patch(self, center, shape):
-        img_patch = self.img_reader.read(center, shape)
-        img_patch = img_util.normalize(img_patch)
-        return img_util.resize(img_patch, (64, 64, 64))
+        # Compute profile coordinates
+        # to do...
+
+        # Get patches
+        img_patch, profile = self.get_img_patch(center, shape, proposal)
+        label_patch = self.get_label_patch(center, shape, proposal)
+        patches = np.stack([img_patch, label_patch], axis=0)
+        return proposal, patches, profile
+
+    def get_img_patch(self, center, shape, proposal):
+        # Get image patch
+        patch = self.img_reader.read(center, shape)
+        intensity = np.percentile(patch, 99.9)
+        patch = np.minimum(patch / intensity, 1)
+
+        # Get image profile
+        profile_path = self.get_profile_line(center, shape, proposal)
+        profile = [patch[tuple(voxel)] for voxel in profile_path]
+        profile.extend([np.mean(profile), np.std(profile)])
+        return img_util.resize(patch, self.patch_shape), profile
 
     def get_label_patch(self, center, shape, proposal):
         # Read label patch
-        label_patch = self.labels_reader.read(center, shape)
+        patch = self.labels_reader.read(center, shape)
 
         # Annotate label patch
         i, j = tuple(proposal)
-        label_patch = (label_patch > 0).astype(float)
-        label_patch = self.annotate_edge(label_patch, center, shape, i)
-        label_patch = self.annotate_edge(label_patch, center, shape, j)
-        label_patch = self.annotate_proposal(
-            label_patch, center, shape, proposal
-        )
-        return img_util.resize(label_patch, (64, 64, 64))
+        patch = (patch > 0).astype(float)
+        patch = self.annotate_edge(patch, center, shape, i)
+        patch = self.annotate_edge(patch, center, shape, j)
+        patch = self.annotate_proposal(patch, center, shape, proposal)
+        return img_util.resize(patch, self.patch_shape)
 
-    def annotate_proposal(self, label_patch, center, shape, proposal):
-        # Convert proposal xyz to local voxel coordinates
-        proposal_xyz = self.graph.proposal_attr(proposal, "xyz")
-        voxels = self.get_local_coordinates(center, shape, proposal_xyz)
+    def annotate_proposal(self, patch, center, shape, proposal):
+        profile_path = self.get_profile_line(center, shape, proposal, False)
+        return geometry_util.fill_path(patch, profile_path, val=3)
 
-        # Draw line along proposal
-        n_points = int(geometry_util.dist(voxels[0], voxels[-1]))
-        line = geometry_util.make_line(voxels[0], voxels[-1], n_points)
-        return geometry_util.fill_path(label_patch, line, val=3)
-
-    def annotate_edge(self, label_patch, center, shape, i):
+    def annotate_edge(self, patch, center, shape, i):
         edge_xyz = np.vstack(self.graph.edge_attr(i, "xyz"))
         voxels = self.get_local_coordinates(center, shape, edge_xyz)
-        voxels = get_inbounds(voxels, label_patch.shape)
-        return geometry_util.fill_path(label_patch, voxels, val=2)
+        voxels = get_inbounds(voxels, patch.shape)
+        return geometry_util.fill_path(patch, voxels, val=2)
 
-    def get_local_coordinates(self, center, shape, xyz_pts):
-        offset = np.array([c - s // 2 for c, s in zip(center, shape)])
-        voxels = [self.to_voxels(xyz) for xyz in xyz_pts]
-        voxels = geometry_util.shift_path(voxels, offset)
-        return voxels
-
+    # --- Helpers ---
     def compute_bbox(self, xyz_pts):
         # Compute bounds
         voxels = [self.to_voxels(xyz) for xyz in xyz_pts]
@@ -450,6 +457,21 @@ class FeatureGenerator:
         center = np.mean(voxels, axis=0).astype(int)
         length = np.max([u - l for u, l in zip(bounds["max"], bounds["min"])])
         return center, (length, length, length)
+
+    def get_profile_line(self, center, shape, proposal, fixed_len=True):
+        # Convert proposal xyz to local voxel coordinates
+        proposal_xyz = self.graph.proposal_attr(proposal, "xyz")
+        voxels = self.get_local_coordinates(center, shape, proposal_xyz)
+
+        # Draw line along proposal
+        n_pts = 16 if fixed_len else geometry_util.dist(voxels[0], voxels[-1])
+        return geometry_util.make_line(voxels[0], voxels[-1], int(n_pts))
+
+    def get_local_coordinates(self, center, shape, xyz_pts):
+        offset = np.array([c - s // 2 for c, s in zip(center, shape)])
+        voxels = [self.to_voxels(xyz) for xyz in xyz_pts]
+        voxels = geometry_util.shift_path(voxels, offset)
+        return voxels
 
     def to_voxels(self, xyz):
         return img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
@@ -514,7 +536,7 @@ def get_inbounds(voxels, shape):
     return filtered_voxels
 
 
-def get_node_dict(is_multimodal=False):
+def get_node_dict():
     """
     Returns the number of features for different node types.
 
@@ -528,10 +550,7 @@ def get_node_dict(is_multimodal=False):
         A dictionary containing the number of features for each node type
 
     """
-    if is_multimodal:
-        return {"branch": 2, "proposal": 16}
-    else:
-        return {"branch": 2, "proposal": 34}
+    return {"branch": 2, "proposal": 34}
 
 
 def get_edge_dict():

@@ -5,10 +5,20 @@ Created on Wed June 5 16:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 
-Overview
---------
 Code that loads and preprocesses neuron fragments stored as swc files, then
 constructs a custom graph object called a "FragmentsGraph".
+
+    Graph Loading Algorithm:
+        1. Load Soma Locations (Optional)
+
+        2. Break Soma Merges (Optional)
+
+        3. Extract Irreducibles from SWC files
+            a. Build graph from SWC file
+            b. Break high risk merges (optional)
+            c. Find irreducible nodes
+            d. Find irreducible edges
+
 
 Note: We use the term "branch" to refer to a path in a graph from a branching
       node to a leaf.
@@ -17,9 +27,7 @@ Note: We use the term "branch" to refer to a path in a graph from a branching
 
 from collections import defaultdict, deque
 from concurrent.futures import (
-    as_completed,
-    ProcessPoolExecutor,
-    ThreadPoolExecutor,
+    as_completed, ProcessPoolExecutor, ThreadPoolExecutor,
 )
 from copy import deepcopy
 from random import sample
@@ -27,6 +35,7 @@ from scipy.spatial import KDTree
 from tqdm import tqdm
 
 import ast
+import multiprocessing
 import networkx as nx
 import numpy as np
 
@@ -42,10 +51,10 @@ class GraphLoader:
 
     def __init__(
         self,
-        anisotropy=[1.0, 1.0, 1.0],
+        anisotropy=(1.0, 1.0, 1.0),
         min_size=40.0,
         node_spacing=1,
-        prune_depth=20.0,
+        prune_depth=24.0,
         remove_high_risk_merges=False,
         segmentation_path=None,
         smooth_bool=True,
@@ -60,10 +69,10 @@ class GraphLoader:
         ----------
         anisotropy : List[float], optional
             Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
+            anisotropy of the microscope. The default is (1.0, 1.0, 1.0).
         min_size : float, optional
             Minimum path length of swc files that are loaded into the
-            FragmentsGraph. The default is 30.0 microns.
+            FragmentsGraph. The default is 24.0 microns.
         node_spacing : int, optional
             Sampling rate for nodes in FragmentsGraph. Every "node_spacing"
             node is retained. The default is 1.
@@ -93,7 +102,6 @@ class GraphLoader:
         # Instance attributes
         self.id_to_soma = defaultdict(list)
         self.min_size = min_size
-        self.n_high_risk_merges = 0
         self.node_spacing = node_spacing
         self.prune_depth = prune_depth
         self.smooth_bool = smooth_bool
@@ -128,7 +136,6 @@ class GraphLoader:
 
         """
         # Process soma locations
-        driver = "neuroglancer_precomputed"
         reader = img_util.TensorStoreReader(segmentation_path)
         with ThreadPoolExecutor() as executor:
             # Assign threads
@@ -148,8 +155,9 @@ class GraphLoader:
         self.soma_kdtree = KDTree(soma_xyz_list)
 
         # Report results
-        print("# Somas:", len(soma_xyz_list))
-        print("# Soma-Fragment Intersections:", len(self.id_to_soma))
+        if self.verbose:
+            print("# Somas:", len(soma_xyz_list))
+            print("# Soma-Fragment Intersections:", len(self.id_to_soma))
 
     # --- Irreducibles Extraction ---
     def extract_irreducibles(self, swc_dicts):
@@ -176,28 +184,32 @@ class GraphLoader:
         swc_dicts = self.remove_soma_merges(swc_dicts)
 
         # Extract irreducible subgraphs
+        irreducibles = deque()
+        high_risk_cnt = 0
         desc = "Extract Graphs"
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
+        multiprocessing.set_start_method('spawn', force=True)
         with ProcessPoolExecutor() as executor:
-            # Assign Processes
-            i = 0
-            processes = [None] * len(swc_dicts)
-            while len(swc_dicts) > 0:
+            processes = list()
+            while swc_dicts:
                 swc_dict = swc_dicts.pop()
-                processes[i] = executor.submit(self.extracter, swc_dict)
-                i += 1
+                processes.append(executor.submit(self.extracter, swc_dict))
+                if len(processes) > 1000 or not swc_dicts:
+                    # Store results
+                    for process in as_completed(processes):
+                        pbar.update(1) if self.verbose else None
+                        result, cnt = process.result()
+                        high_risk_cnt += cnt
+                        if isinstance(result, list):
+                            irreducibles.extend(result)
+                        elif isinstance(result, dict):
+                            irreducibles.append(result)
 
-            # Store results
-            irreducibles = deque()
-            for process in as_completed(processes):
-                pbar.update(1) if self.verbose else None
-                result = process.result()
-                if isinstance(result, list):
-                    irreducibles.extend(result)
-                elif isinstance(result, dict):
-                    irreducibles.append(result)
+                    # Reset processes
+                    processes = list()
 
-        #print("# High Risk Merges Detected:", self.n_high_risk_merges)
+        if self.verbose:
+            print("# High Risk Merges Detected:", high_risk_cnt)
         return irreducibles
 
     def extract(self, swc_dict):
@@ -217,7 +229,15 @@ class GraphLoader:
             subgraph.
 
         """
-        return self.extract_from_graph(self.to_graph(swc_dict))
+        try:
+            graph = self.to_graph(swc_dict)
+            if self.satifies_path_length_condition(graph):
+                return self.extract_from_graph(graph)
+            else:
+                return None, 0
+        except:
+            print("Fail!")
+            return None, 0
 
     def break_and_extract(self, swc_dict):
         """
@@ -241,21 +261,30 @@ class GraphLoader:
         irreducibles = list()
         soma_nodes = graph.graph["soma_nodes"]
         if self.satifies_path_length_condition(graph):
-            self.remove_high_risk_merges(graph)
+            # Check whether to remove high risk merges
+            if not soma_nodes:
+                high_risk_cnt = self.remove_high_risk_merges(graph)
+            else:
+                high_risk_cnt = 0
+
+            # Iterate over connected components
             swc_id = graph.graph["swc_id"]
+            proxy_dist = 15 * self.node_spacing
             for i, nodes in enumerate(nx.connected_components(graph)):
                 # Extract subgraph
-                subgraph = graph.subgraph(nodes)
-                subgraph.graph["swc_id"] = deepcopy(swc_id) + f".{i}"
-                subgraph.graph["soma_nodes"] = nodes.intersection(soma_nodes)
+                if len(nodes) > proxy_dist:
+                    subgraph_soma_nodes = nodes.intersection(soma_nodes)
+                    subgraph = graph.subgraph(nodes)
+                    subgraph.graph["swc_id"] = deepcopy(swc_id) + f".{i}"
+                    subgraph.graph["soma_nodes"] = subgraph_soma_nodes
 
-                # Extract irreducibles
-                result = self.extract_from_graph(subgraph)
-                if result is not None:
-                    irreducibles.append(result)
-            return irreducibles
+                    # Extract irreducibles
+                    result, _ = self.extract_from_graph(subgraph)
+                    if result is not None:
+                        irreducibles.append(result)
+            return irreducibles, high_risk_cnt
         else:
-            return None
+            return None, 0
 
     def extract_from_graph(self, graph):
         """
@@ -274,32 +303,21 @@ class GraphLoader:
             subgraph.
 
         """
-        if self.satifies_path_length_condition(graph):
-            # Irreducibles
-            leafs, branchings = get_irreducible_nodes(graph)
-            edges = get_irreducible_edges(
-                graph, leafs, branchings, self.smooth_bool
-            )
+        # Irreducibles
+        leafs, branchings = get_irreducible_nodes(graph)
+        edges = get_irreducible_edges(
+            graph, leafs, branchings, self.smooth_bool
+        )
 
-            # Check if fragment is connected to soma
-            if len(graph.graph["soma_nodes"]) > 0:
-                is_soma = True
-            elif graph.graph["swc_id"] in self.id_to_soma:
-                is_soma = True
-            else:
-                is_soma = False
-
-            # Output
-            irreducibles = {
-                "leaf": set_node_attrs(graph, leafs),
-                "branching": set_node_attrs(graph, branchings),
-                "edge": set_edge_attrs(graph, edges, self.node_spacing),
-                "swc_id": graph.graph["swc_id"],
-                "is_soma": is_soma,
-            }
-            return irreducibles
-        else:
-            return None
+        # Compile results
+        irreducibles = {
+            "leaf": set_node_attrs(graph, leafs),
+            "branching": set_node_attrs(graph, branchings),
+            "edge": set_edge_attrs(graph, edges, self.node_spacing),
+            "swc_id": graph.graph["swc_id"],
+            "is_soma": True if graph.graph["soma_nodes"] else False,
+        }
+        return irreducibles, 0
 
     # --- Merge Removal ---
     def remove_soma_merges(self, swc_dicts):
@@ -321,7 +339,8 @@ class GraphLoader:
         """
         # Detect merges
         merges_dict = {k: v for k, v in self.id_to_soma.items() if len(v) > 1}
-        print("# Merges Detected:", len(merges_dict))
+        if self.verbose:
+            print("# Soma Merges Detected:", len(merges_dict))
 
         # Break fragments
         if len(merges_dict) > 0:
@@ -333,7 +352,7 @@ class GraphLoader:
                     somas_xyz = merges_dict[swc_id]
                     swc_dict_list = self.break_soma_merge(swc_dict, somas_xyz)
                     updates.append((i, swc_dict_list))
-                    self.id_to_soma.pop(swc_id, None)                    
+                    self.id_to_soma.pop(swc_id, None)
 
             # Update swc_dicts
             updates.reverse()
@@ -343,7 +362,7 @@ class GraphLoader:
                     swc_dicts.extend(swc_dict_list)
         return swc_dicts
 
-    def remove_high_risk_merges(self, graph, max_dist=6.0):
+    def remove_high_risk_merges(self, graph, max_dist=7):
         """
         Removes high risk merge sites from a graph, which is defined to be
         either (1) two branching points within "max_dist" or (2) branching
@@ -356,44 +375,49 @@ class GraphLoader:
             Graph to be searched.
         max_dist : float, optional
             Maximum distance between branching points that qualifies a site to
-            be considered "high risk". The default is 7.0.
+            be considered "high risk". The default is 7.
 
         Returns
         -------
         None
 
         """
+        high_risk_cnt = 0
         nodes = set()
         _, branchings = get_irreducible_nodes(graph)
-        while len(branchings) > 0:
-            # Determine whether to visit
+        while branchings:
+            # Initializations
             root = branchings.pop()
-            root_xyz = graph.nodes[root]["xyz"]
-            if self.dist_from_soma(root_xyz) < 500:
+            hit_branching = False
+            queue = [(root, 0)]
+            visited = set({root})
+
+            # Check if close to soma
+            soma_dist = self.dist_from_soma(graph.nodes[root]["xyz"])
+            if graph.graph["soma_nodes"] and soma_dist < 300:
                 continue
 
             # BFS
-            hit_branching = False
-            queue = [(root, 0)]
-            visited = set()
             while len(queue) > 0:
                 # Visit node
                 i, dist_i = queue.pop()
                 if graph.degree(i) > 2 and i != root:
                     hit_branching = True
-                visited.add(i)
 
                 # Update queue
                 for j in graph.neighbors(i):
                     dist_j = dist_i + dist(graph, i, j)
-                    if j not in visited and dist_j <= max_dist:
+                    if j not in visited and dist_j < max_dist:
                         queue.append((j, dist_j))
+                        visited.add(j)
 
             # Determine whether to remove visited nodes
             if hit_branching or graph.degree(root) > 3:
                 nodes = nodes.union(visited)
-                self.n_high_risk_merges += 1
+                high_risk_cnt += 0.5
+
         graph.remove_nodes_from(nodes)
+        return high_risk_cnt
 
     def break_soma_merge(self, swc_dict, somas_xyz):
         """
@@ -414,7 +438,7 @@ class GraphLoader:
             subgraph that was disconnected.
 
         """
-        graph = self.to_graph(swc_dict)
+        graph = self.to_graph(swc_dict, check_soma=False)
         if len(somas_xyz) <= 10:
             # Break connecting path
             nodes = set()
@@ -439,7 +463,7 @@ class GraphLoader:
                 }
                 swc_dict_list.append(swc_dict_i)
         else:
-            swc_dict_list = [swc_dict] if len(somas_xyz) < 30 else None
+            swc_dict_list = [swc_dict] if len(somas_xyz) < 20 else None
         return swc_dict_list
 
     # --- Helpers ---
@@ -481,7 +505,7 @@ class GraphLoader:
         """
         return path_length(graph, self.min_size) > self.min_size
 
-    def to_graph(self, swc_dict):
+    def to_graph(self, swc_dict, check_soma=True):
         """
         Converts a dictionary containing swc attributes to a graph.
 
@@ -500,12 +524,18 @@ class GraphLoader:
         # Get graph
         if swc_dict is None:
             graph = nx.Graph()
-            swc_dict = {"soma_nodes": set()}
+            swc_dict = {"soma_nodes": set(), "swc_id": ""}
         elif "graph" in swc_dict:
             graph = swc_dict["graph"]
         else:
             graph = swc_util.to_graph(swc_dict, set_attrs=True)
             prune_branches(graph, self.prune_depth)
+
+        # Check if segment intersects with soma
+        swc_id = swc_dict["swc_id"].split(".")[0]
+        if check_soma and swc_id in self.id_to_soma:
+            somas_xyz = self.id_to_soma[swc_id]
+            swc_dict["soma_nodes"] = find_soma_nodes(graph, somas_xyz)
 
         # Add graph-level attributes
         graph.graph["soma_nodes"] = swc_dict["soma_nodes"]

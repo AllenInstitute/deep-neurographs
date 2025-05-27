@@ -119,7 +119,7 @@ class Reader:
             if len(paths) > 0:
                 return self.read_from_paths(paths)
 
-            raise Exception("Directory is invalid!")
+            raise Exception(f"Directory is invalid - {swc_pointer}")
 
         # Path to...
         if isinstance(swc_pointer, str):
@@ -131,9 +131,9 @@ class Reader:
             if ".swc" in swc_pointer:
                 return self.read_from_path(swc_pointer)
 
-            raise Exception("Path is invalid!")
+            raise Exception(f"Path is invalid - {swc_pointer}")
 
-        raise Exception("SWC Pointer is invalid!")
+        raise Exception(f"SWC Pointer is invalid - {swc_pointer}")
 
     # --- Load subroutines ---
     def read_from_paths(self, swc_paths):

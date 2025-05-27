@@ -36,6 +36,7 @@ from time import time
 from torch.nn.functional import sigmoid
 from tqdm import tqdm
 
+import ast
 import networkx as nx
 import numpy as np
 import os
@@ -147,16 +148,19 @@ class InferencePipeline:
 
         # Main
         self.build_graph(fragments_pointer)
-        self.generate_proposals()
-        self.classify_proposals()
-        self.save_results()
+        self.connect_soma_fragments() if self.somas_path else None
+        self.generate_proposals(self.graph_config.search_radius)
+        self.classify_proposals(self.ml_config.threshold)
 
         # Finish
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nFinal")
         self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
+        self.save_results()
 
-    def run_schedule(self, fragments_pointer, radius_schedule):
+    def run_schedule(
+        self, fragments_pointer, radius_schedule, threshold_schedule
+    ):
         # Initializations
         self.log_experiment()
         self.write_metadata()
@@ -164,18 +168,17 @@ class InferencePipeline:
 
         # Main
         self.build_graph(fragments_pointer)
-        for round_id, radius in enumerate(radius_schedule):
-            round_id += 1
-            self.report(f"\n--- Round {round_id}:  Radius = {radius} ---")
-            self.generate_proposals(radius)
-            self.classify_proposals()
+        for i, radius in enumerate(radius_schedule):
+            self.report(f"\n--- Round {i + 1}:  Radius = {radius} ---")
+            self.generate_proposals(radius_schedule[i])
+            self.classify_proposals(threshold_schedule[i])
             self.report_graph(prefix="Current")
-        self.save_results()
 
         # Finish
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nFinal")
         self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
+        self.save_results()
 
     def build_graph(self, fragments_pointer):
         """
@@ -210,15 +213,10 @@ class InferencePipeline:
         self.graph.load_fragments(fragments_pointer)
         self.filter_fragments()
 
+        # Report results
+        self.graph.save_labels(f"{self.output_dir}/segment_ids.txt")
         print("# Soma Fragments:", len(self.graph.soma_ids))
 
-        # Save valid labels and current graph
-        swc_dir = os.path.join(self.output_dir, "swcs")
-        valid_labels_path = os.path.join(self.output_dir, "valid_labels.txt")
-        self.graph.to_zipped_swcs(swc_dir, sampling_rate=3)
-        self.graph.save_labels(valid_labels_path)
-
-        # Report results
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nInitial")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
@@ -230,7 +228,47 @@ class InferencePipeline:
                 self.graph, 200, self.graph_config.node_spacing
             )
 
-    def generate_proposals(self, radius=None):
+    def connect_soma_fragments(self):
+        self.graph.init_kdtree()
+        nodes_list = list()
+        merge_cnt, soma_cnt = 0, 0
+        for soma_xyz in map(ast.literal_eval, util.read_txt(self.somas_path)):
+            hits = self.graph.find_fragments_near_xyz(soma_xyz, 20)
+            if len(hits) > 1:
+                # Determine new swc id
+                soma_cnt += 1
+                hit_soma = None
+                for swc_id in hits:
+                    if swc_id in self.graph.soma_ids and hit_soma:
+                        break
+                self.graph.soma_ids.add(swc_id)
+
+                # Add soma node
+                soma_node = self.graph.node_cnt + 1
+                self.graph.add_node(
+                    soma_node,
+                    proposals=set(),
+                    radius=2,
+                    swc_id=swc_id,
+                    xyz=soma_xyz,
+                )
+                self.graph.node_cnt += 1
+
+                # Merge fragments to soma
+                for swc_id_i, i in hits.items():
+                    radius = np.array([2, 2])
+                    xyz_i = self.graph.nodes[i]["xyz"]
+                    xyz = np.array([soma_xyz, xyz_i])
+                    self.graph.add_edge(soma_node, i, radius=radius, xyz=xyz)
+                    self.graph.xyz_to_edge[tuple(xyz_i)] = (soma_node, i)
+                    self.graph.upd_ids(swc_id, i)
+                    merge_cnt += 1
+
+        print("# Somas Connected:", soma_cnt)
+        print("# Merges:", merge_cnt)
+        del self.graph.kdtree
+
+    def generate_proposals(self, radius):
         """
         Generates proposals for the fragments graph based on the specified
         configuration.
@@ -244,13 +282,9 @@ class InferencePipeline:
         None
 
         """
-        # Initializations
-        self.report("Step 2: Generate Proposals")
-        if radius is None:
-            radius = self.graph_config.search_radius
-
         # Main
         t0 = time()
+        self.report("Step 2: Generate Proposals")
         self.graph.generate_proposals(
             radius,
             complex_bool=self.graph_config.complex_bool,
@@ -266,7 +300,7 @@ class InferencePipeline:
         self.report(f"# Proposals Blocked: {self.graph.n_proposals_blocked}")
         self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
 
-    def classify_proposals(self):
+    def classify_proposals(self, accept_threshold):
         """
         Classifies proposals by calling "self.inference_engine". This routine
         generates features and runs a GNN to make predictions. Proposals with
@@ -295,6 +329,7 @@ class InferencePipeline:
             self.model_path,
             self.ml_config,
             self.graph_config.search_radius,
+            accept_threshold=accept_threshold,
             segmentation_path=self.segmentation_path,
         )
         accepts = self.inference_engine.run()
@@ -321,11 +356,23 @@ class InferencePipeline:
         None
 
         """
-        # Save result on local machine
+        # Save temp result on local machine
+        temp_dir = os.path.join(self.output_dir, "temp")
+        self.graph.to_zipped_swcs(temp_dir, sampling_rate=2)
+
+        # Merge ZIPs
         swc_dir = os.path.join(self.output_dir, "corrected-swcs")
-        self.graph.to_zipped_swcs(swc_dir)
+        swc_path = os.path.join(swc_dir, "corrected-swcs.zip")
+        util.mkdir(swc_dir)
+
+        zip_paths = util.list_paths(temp_dir, extension=".zip")
+        util.combine_zips(zip_paths, swc_path)
+        util.rmdir(temp_dir)
+
+        # Save additional info
         self.save_connections()
         self.write_metadata()
+        self.log_handle.close()
 
         # Save result on s3 (if applicable)
         if self.s3_dict is not None:
@@ -464,6 +511,7 @@ class InferenceEngine:
         model_path,
         ml_config,
         radius,
+        accept_threshold=0.9,
         segmentation_path=None,
     ):
         """
@@ -495,7 +543,7 @@ class InferenceEngine:
         self.graph = graph
         self.ml_config = ml_config
         self.radius = radius
-        self.threshold = ml_config.threshold
+        self.threshold = accept_threshold
 
         # Feature generator
         self.feature_generator = FeatureGenerator(
@@ -704,7 +752,7 @@ class GraphDataLoader:
         self.proposals = set(graph.list_proposals())
 
         # Identify clustered proposals
-        self.flagged = set()  #self.find_proposal_clusters(5)
+        self.flagged = set()  # self.find_proposal_clusters(5)
 
     def find_proposal_clusters(self, k):
         flagged = set()
@@ -798,7 +846,7 @@ class GraphDataLoader:
                         queue.append((j, 0))
 
                 # Check if proposal is flagged
-                #proposal in self.flagged and proposal in self.proposals:
+                # proposal in self.flagged and proposal in self.proposals:
                 if False:
                     self.visit_flagged_proposal(batch)
 

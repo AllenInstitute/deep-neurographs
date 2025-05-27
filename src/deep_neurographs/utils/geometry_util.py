@@ -92,7 +92,8 @@ def tangent(xyz_arr):
 
     """
     if len(xyz_arr) == 2:
-        tangent_vec = (xyz_arr[1] - xyz_arr[0]) / dist(xyz_arr[1], xyz_arr[0])
+        d = max(dist(xyz_arr[1], xyz_arr[0]), 0.1)
+        tangent_vec = (xyz_arr[1] - xyz_arr[0]) / d
     else:
         _, _, VT = compute_svd(xyz_arr)
         tangent_vec = VT[0]

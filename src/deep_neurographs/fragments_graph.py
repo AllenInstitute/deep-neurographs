@@ -252,13 +252,7 @@ class FragmentsGraph(nx.Graph):
 
         """
         i, j = tuple(edge)
-        self.add_edge(
-            i,
-            j,
-            radius=attrs["radius"],
-            xyz=attrs["xyz"],
-            swc_id=swc_id,
-        )
+        self.add_edge(i, j, radius=attrs["radius"], xyz=attrs["xyz"])
         self.xyz_to_edge.update({tuple(xyz): edge for xyz in attrs["xyz"]})
 
     def absorb_reducibles(self):
@@ -348,7 +342,7 @@ class FragmentsGraph(nx.Graph):
         return graph
 
     # -- KDTree --
-    def init_kdtree(self, node_type):
+    def init_kdtree(self, node_type=None):
         """
         Builds a KD-Tree from the xyz coordinates of the subset of nodes
         indicated by "node_type".
@@ -363,11 +357,12 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
-        assert node_type in ["leaf", "proposal"]
         if node_type == "leaf":
-            self.leaf_kdtree = self.get_kdtree(node_type="leaf")
+            self.leaf_kdtree = self.get_kdtree(node_type=node_type)
         elif node_type == "proposal":
-            self.proposal_kdtree = self.get_kdtree(node_type="proposal")
+            self.proposal_kdtree = self.get_kdtree(node_type=node_type)
+        else:
+            self.kdtree = self.get_kdtree()
 
     def get_kdtree(self, node_type=None):
         """
@@ -388,12 +383,17 @@ class FragmentsGraph(nx.Graph):
         if node_type == "leaf":
             xyz_list = [self.nodes[i]["xyz"] for i in self.get_leafs()]
         elif node_type == "proposal":
-            xyz_list = list(self.xyz_to_proposal.keys())
+            xyz_set = set()
+            for p in self.proposals:
+                xyz_i, xyz_j = self.proposal_attr(p, attr="xyz")
+                xyz_set.add(tuple(xyz_i))
+                xyz_set.add(tuple(xyz_j))
+            xyz_list = list(xyz_set)
         else:
             xyz_list = list(self.xyz_to_edge.keys())
         return KDTree(xyz_list)
 
-    def query_kdtree(self, xyz, d, node_type):
+    def query_kdtree(self, xyz, d, node_type=None):
         """
         Parameters
         ----------
@@ -409,11 +409,12 @@ class FragmentsGraph(nx.Graph):
             nodes within a distance of "d" from "xyz".
 
         """
-        assert node_type in ["leaf", "proposal"]
         if node_type == "leaf":
             return geometry.query_ball(self.leaf_kdtree, xyz, d)
         elif node_type == "proposal":
             return geometry.query_ball(self.proposal_kdtree, xyz, d)
+        else:
+            return geometry.query_ball(self.kdtree, xyz, d)
 
     # --- Proposal Generation ---
     def generate_proposals(
@@ -423,7 +424,7 @@ class FragmentsGraph(nx.Graph):
         groundtruth_graph=None,
         long_range_bool=False,
         proposals_per_leaf=3,
-        trim_endpoints_bool=False,
+        trim_endpoints_bool=True,
     ):
         """
         Generates proposals from leaf nodes.
@@ -444,7 +445,7 @@ class FragmentsGraph(nx.Graph):
             Maximum number of proposals generated for each leaf. The default
             is 3.
         trim_endpoints_bool : bool, optional
-            Indication of whether to trim endpoints. The default is False.
+            Indication of whether to trim endpoints. The default is True.
 
         Returns
         -------
@@ -484,7 +485,6 @@ class FragmentsGraph(nx.Graph):
 
         """
         self.proposals = set()
-        self.xyz_to_proposal = dict()
         for i in self.nodes:
             self.nodes[i]["proposals"] = set()
 
@@ -523,8 +523,6 @@ class FragmentsGraph(nx.Graph):
         proposal = frozenset({i, j})
         self.nodes[i]["proposals"].add(j)
         self.nodes[j]["proposals"].add(i)
-        self.xyz_to_proposal[tuple(self.nodes[i]["xyz"])] = proposal
-        self.xyz_to_proposal[tuple(self.nodes[j]["xyz"])] = proposal
         self.proposals.add(proposal)
 
     def remove_proposal(self, proposal):
@@ -700,10 +698,13 @@ class FragmentsGraph(nx.Graph):
         xyz_list_j = self.truncated_edge_attr_xyz(j, depth)
         origin = self.proposal_midpoint(proposal)
 
-        # Compute tangent vectors
+        # Compute tangent vectors - branches
         direction_i = geometry.get_directional(xyz_list_i, origin, depth)
         direction_j = geometry.get_directional(xyz_list_j, origin, depth)
         direction = geometry.tangent(self.proposal_attr(proposal, "xyz"))
+        if np.isnan(direction).any():
+            direction[0] = 0
+            direction[1] = 0
 
         # Compute features
         dot_i = abs(np.dot(direction, direction_i))
@@ -867,6 +868,26 @@ class FragmentsGraph(nx.Graph):
             )
         return length
 
+    def find_fragments_near_xyz(self, query_xyz, max_dist):
+        hits = dict()
+        for xyz in self.query_kdtree(query_xyz, max_dist):
+            i, j = self.xyz_to_edge[tuple(xyz)]
+            dist_i = geometry.dist(self.nodes[i]["xyz"], query_xyz)
+            dist_j = geometry.dist(self.nodes[j]["xyz"], query_xyz)
+            hits[self.nodes[i]["swc_id"]] = i if dist_i < dist_j else j
+        return hits
+
+    def get_connected_nodes(self, root):
+        queue = [root]
+        visited = set({root})
+        while queue:
+            i = queue.pop()
+            for j in self.neighbors(i):
+                if j not in visited:
+                    queue.append(j)
+                    visited.add(j)
+        return visited
+
     def get_leafs(self):
         """
         Gets all leaf nodes in graph.
@@ -917,79 +938,78 @@ class FragmentsGraph(nx.Graph):
         else:
             return None
 
-    # --- Writer to SWCs ---
-    def to_zipped_swcs(self, swc_dir, sampling_rate=2):
+    # --- SWC Writer ---
+    def to_zipped_swcs(self, swc_dir, preserve_radius=False, sampling_rate=1):
         # Initializations
         n = nx.number_connected_components(self)
         batch_size = n / 1000 if n > 10 ** 4 else np.inf
         util.mkdir(swc_dir)
 
         # Main
-        cnt = 0
-        batch = list()
-        threads = list()
+        zip_cnt = 0
         with ThreadPoolExecutor() as executor:
             # Assign threads
-            for nodes in nx.connected_components(self):
+            batch = list()
+            threads = list()
+            for i, nodes in enumerate(nx.connected_components(self)):
                 batch.append(nodes)
-                if len(batch) > batch_size:
+                if len(batch) > batch_size or i == n - 1:
                     # Zip batch
-                    zip_path = os.path.join(swc_dir, f"{cnt}.zip")
+                    zip_path = os.path.join(swc_dir, f"{zip_cnt}.zip")
                     threads.append(
                         executor.submit(
                             self.batch_to_zipped_swcs,
                             batch,
                             zip_path,
+                            preserve_radius,
                             sampling_rate
                         )
                     )
 
                     # Reset batch
                     batch = list()
-                    cnt += 1
+                    zip_cnt += 1
 
             # Watch progress
             pbar = tqdm(total=len(threads), desc="Write SWCs")
             for _ in as_completed(threads):
                 pbar.update(1)
 
-    def batch_to_zipped_swcs(self, nodes_list, zip_path, sampling_rate=1):
+    def batch_to_zipped_swcs(
+        self, nodes_list, zip_path, preserve_radius=False, sampling_rate=1
+    ):
         with zipfile.ZipFile(zip_path, "w") as zip_writer:
-            cnt = 0
             for nodes in nodes_list:
                 self.nodes_to_zipped_swc(
-                    zip_writer, nodes, sampling_rate=sampling_rate
+                    zip_writer,
+                    nodes,
+                    preserve_radius=preserve_radius,
+                    sampling_rate=sampling_rate
                 )
-                cnt += 1
-            return cnt
 
     def nodes_to_zipped_swc(
         self,
         zip_writer,
         nodes,
-        color=None,
-        prefix="",
         preserve_radius=False,
         sampling_rate=1,
     ):
         with StringIO() as text_buffer:
             # Preamble
-            n_entries = 0
-            node_to_idx = dict()
-            if color:
-                text_buffer.write("# COLOR " + color)
             text_buffer.write("# id, type, x, y, z, r, pid")
 
             # Write entries
+            n_entries = 0
+            node_to_idx = dict()
             for i, j in nx.dfs_edges(self.subgraph(nodes)):
                 # Root entry
-                if n_entries == 0:
+                if len(node_to_idx) == 0:
                     # Get attributes
                     x, y, z = tuple(self.nodes[i]["xyz"])
                     if preserve_radius:
                         r = self.nodes[i]["radius"]
                     else:
-                        r = 5 if self.nodes[i]["radius"] == 5.3141592 else 2
+                        r = 6 if self.nodes[i]["radius"] == 5.3141592 else 2
 
                     # Write entry
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
@@ -1004,14 +1024,13 @@ class FragmentsGraph(nx.Graph):
                     i,
                     j,
                     parent,
-                    color,
                     preserve_radius=preserve_radius,
                     sampling_rate=sampling_rate
                 )
                 node_to_idx[j] = n_entries
 
             # Write SWC file
-            filename = prefix + self.nodes[i]["swc_id"]
+            filename = self.nodes[i]["swc_id"]
             filename = util.set_zip_path(zip_writer, filename, ".swc")
             zip_writer.writestr(filename, text_buffer.getvalue())
 
@@ -1022,7 +1041,6 @@ class FragmentsGraph(nx.Graph):
         i,
         j,
         parent,
-        color,
         preserve_radius=False,
         sampling_rate=1,
     ):
@@ -1036,7 +1054,7 @@ class FragmentsGraph(nx.Graph):
             if preserve_radius:
                 r = branch_radius[k]
             else:
-                r = 5 if branch_radius[k] == 5.3141592 else 2
+                r = 6 if branch_radius[k] == 5.3141592 else 2
 
             # Write entry
             text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
