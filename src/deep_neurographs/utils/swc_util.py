@@ -309,7 +309,7 @@ class Reader:
             for path in zip_paths:
                 zip_content = bucket.blob(path).download_as_bytes()
                 processes.append(
-                    executor.submit(self.read_from_cloud_zip, zip_content)
+                    executor.submit(self.read_from_gcs_zip, zip_content)
                 )
 
             # Store results
@@ -319,7 +319,7 @@ class Reader:
                 pbar.update(1)
         return swc_dicts
 
-    def read_from_cloud_zip(self, zip_content):
+    def read_from_gcs_zip(self, zip_content):
         """
         Reads SWC files stored in a ZIP archive downloaded from a cloud
         bucket.

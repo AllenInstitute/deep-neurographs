@@ -28,7 +28,7 @@ import shutil
 from deep_neurographs.utils import graph_util as gutil
 
 
-# --- OS Utils ---
+# --- OS utils ---
 def mkdir(path, delete=False):
     """
     Creates a directory at "path".
@@ -241,7 +241,6 @@ def combine_zips(zip_paths, output_zip_path):
                         out_zip.writestr(item, zip_in.read(item.filename))
 
 
-# -- GCS Utils --
 def list_files_in_zip(zip_content):
     """
     Lists all files in a zip file stored in a GCS bucket.
@@ -319,7 +318,7 @@ def list_gcs_subdirectories(bucket_name, prefix):
     return subdirs
 
 
-# --- io utils ---
+# --- IO utils ---
 def read_json(path):
     """
     Reads JSON file located at the given path.
@@ -583,6 +582,49 @@ def find_best(my_dict, maximize=True):
             best_key = key
             best_vote_cnt = vote_cnt
     return best_key
+
+
+# --- SmartSheet utils ---
+def find_row_id(brain_id, sheet):
+    for row in sheet.rows:
+        for cell in row.cells:
+            if cell.display_value == brain_id:
+                return row.id
+    raise Exception(f"Row not found for brain_id={brain_id}")
+
+
+def find_sheet_id(access_token, sheet_name):
+    smartsheet_client = smartsheet.Smartsheet(access_token)
+    response = smartsheet_client.Sheets.list_sheets()
+    for sheet in response.data:
+        if sheet.name == sheet_name:
+            return sheet.id
+
+
+def update_smartsheet(access_token, brain_id):
+    # Open smartsheet
+    sheet_id = find_sheet_id(access_token, "ExM Dataset Summary")
+    smartsheet_client = smartsheet.Smartsheet(access_token)
+    sheet = smartsheet_client.Sheets.get_sheet(sheet_id)
+    column_map = {col.title: col.id for col in sheet.columns}
+    today = datetime.today()
+
+    # Updated row object
+    updated_row = smartsheet.models.Row()
+    updated_row.id = find_row_id(brain_id, sheet)
+    updated_row.cells.append({
+        'column_id': column_map.get('Split Correction'),
+        'value': True,
+        'strict': False
+    })
+    updated_row.cells.append({
+        'column_id': column_map.get('Split Correction Date'),
+        'value': today.strftime("%m/%d/%Y"),
+        'strict': False
+    })
+
+    # Send the update
+    smartsheet_client.Sheets.update_rows(sheet_id, [updated_row])
 
 
 # --- miscellaneous ---
