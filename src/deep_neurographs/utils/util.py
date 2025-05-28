@@ -9,6 +9,8 @@ Miscellaneous helper routines.
 
 """
 
+from botocore import UNSIGNED
+from botocore.config import Config
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from google.cloud import storage
@@ -442,7 +444,70 @@ def write_list(path, my_list):
             file.write(f"{item}\n")
 
 
-def dir_to_s3(dir_path, bucket_name, prefix):
+# --- S3 utils ---
+def find_soma_result_prefix(brain_id):
+    # Find soma results for brain_id
+    bucket_name = 'aind-msma-morphology-data'
+    soma_prefix = f"exaspim_soma_detection/{brain_id}"
+    prefix_list = list_s3_prefixes(bucket_name, soma_prefix)
+
+    # Find most recent result
+    if prefix_list:
+        dirname = find_most_recent_dirname(prefix_list)
+        return os.path.join(soma_prefix, dirname, f"somas-{brain_id}.txt")
+    else:
+        return None
+
+    
+def find_most_recent_dirname(results_prefix_list):
+    dates = list()
+    for prefix in results_prefix_list:
+        dirname = prefix.split("/")[-2]
+        dates.append(dirname.replace("results_", ""))
+    return "results_" + sorted(dates)[-1]
+
+
+def list_s3_prefixes(bucket_name, prefix):
+    """
+    Lists all immediate subdirectories of a given S3 path (prefix).
+
+    Parameters
+    -----------
+    bucket_name : str
+        Name of the S3 bucket to search.
+    prefix : str
+        S3 prefix to search within.
+
+    Returns:
+    --------
+    List[str]
+        List of immediate subdirectories under the specified prefix.
+
+    """
+    # Check prefix is valid
+    if not prefix.endswith("/"):
+        prefix += "/"
+
+    # Call the list_objects_v2 API
+    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+    response = s3.list_objects_v2(
+        Bucket=bucket_name, Prefix=prefix, Delimiter="/"
+    )
+    if "CommonPrefixes" in response:
+        return [cp["Prefix"] for cp in response["CommonPrefixes"]]
+    else:
+        return list()
+
+
+def read_s3_txt_file(s3_dict):
+    bucket_name = s3_dict["bucket_name"]
+    file_path = s3_dict["prefix"]
+    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+    response = s3.get_object(Bucket=bucket_name, Key=file_path)
+    return response['Body'].read().decode('utf-8').splitlines()
+
+
+def upload_dir_to_s3(dir_path, bucket_name, prefix):
     """
     Writes a directory on the local machine to an S3 bucket.
 
@@ -462,23 +527,25 @@ def dir_to_s3(dir_path, bucket_name, prefix):
     """
     with ThreadPoolExecutor() as executor:
         for name in os.listdir(dir_path):
-            local_path = os.path.join(dir_path, name)
-            s3_path = os.path.join(prefix, name)
-            executor.submit(file_to_s3, local_path, bucket_name, s3_path)
+            source_path = os.path.join(dir_path, name)
+            destination_path = os.path.join(prefix, name)
+            executor.submit(
+                upload_file_to_s3, source_path, bucket_name, destination_path
+            )
 
 
-def file_to_s3(local_path, bucket_name, prefix):
+def upload_file_to_s3(source_path, bucket_name, destination_path):
     """
     Writes a single file on the local machine to an S3 bucket.
 
     Parameters
     ----------
-    local_path : str
+    source_path : str
         Path to file to be written to S3.
     bucket_name : str
         Name of S3 bucket.
-    prefix : str
-        Path within S3 bucket.
+    destination_path : str
+        Path within S3 bucket that source file is to be written to.
 
     Returns
     -------
@@ -486,7 +553,7 @@ def file_to_s3(local_path, bucket_name, prefix):
 
     """
     s3 = boto3.client('s3')
-    s3.upload_file(local_path, bucket_name, prefix)
+    s3.upload_file(source_path, bucket_name, destination_path)
 
 
 # --- math utils ---
