@@ -393,14 +393,13 @@ class InferencePipeline:
         """
         bucket_name = self.s3_dict["bucket_name"]
         for name in os.listdir(self.output_dir):
-            if os.path.isdir(os.path.join(self.output_dir, name)):
-                dir_path = os.path.join(self.output_dir, name)
+            object_path = os.path.join(self.output_dir, name)
+            if os.path.isdir(object_path):
                 prefix = os.path.join(self.s3_dict["prefix"], name)
-                util.dir_to_s3(dir_path, bucket_name, prefix)
+                util.upload_dir_to_s3(object_path, bucket_name, prefix)
             else:
-                local_path = os.path.join(self.output_dir, name)
                 s3_path = os.path.join(self.s3_dict["prefix"], name)
-                util.file_to_s3(local_path, bucket_name, s3_path)
+                util.upload_file_to_s3(object_path, bucket_name, s3_path)
         results_prefix = self.s3_dict["prefix"] + "/corrected-swcs/"
         print("Results at", f"{bucket_name}/{results_prefix}")
 

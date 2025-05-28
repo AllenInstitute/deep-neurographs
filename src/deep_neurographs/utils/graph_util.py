@@ -135,13 +135,20 @@ class GraphLoader:
         None
 
         """
+        # Read soma locations txt file
+        if isinstance(somas_path, str):
+            xyz_list = util.read_txt(somas_path)
+        elif isinstance(somas_path, dict):
+            xyz_list = util.read_s3_txt_file(somas_path)
+        else:
+            raise Exception(f"Invalid format - somas_path={somas_path}")
+
         # Process soma locations
         reader = img_util.TensorStoreReader(segmentation_path)
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
-            for xyz_str in util.read_txt(somas_path):
-                xyz = ast.literal_eval(xyz_str)
+            for xyz in map(ast.literal_eval, xyz_list):
                 voxel = img_util.to_voxels(xyz, (0.748, 0.748, 1.0))
                 threads.append(executor.submit(reader.read_voxel, voxel, xyz))
 
