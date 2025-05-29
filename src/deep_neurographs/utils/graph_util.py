@@ -135,15 +135,8 @@ class GraphLoader:
         None
 
         """
-        # Read soma locations txt file
-        if isinstance(somas_path, str):
-            xyz_list = util.read_txt(somas_path)
-        elif isinstance(somas_path, dict):
-            xyz_list = util.read_s3_txt_file(somas_path)
-        else:
-            raise Exception(f"Invalid format - somas_path={somas_path}")
-
         # Process soma locations
+        xyz_list = util.load_soma_locations(somas_path)
         reader = img_util.TensorStoreReader(segmentation_path)
         with ThreadPoolExecutor() as executor:
             # Assign threads

@@ -229,10 +229,14 @@ class InferencePipeline:
             )
 
     def connect_soma_fragments(self):
+        # Initializations
         self.graph.init_kdtree()
+        xyz_list = util.load_soma_locations(self.somas_path)
+
+        # Parse locations
         nodes_list = list()
         merge_cnt, soma_cnt = 0, 0
-        for soma_xyz in map(ast.literal_eval, util.read_txt(self.somas_path)):
+        for soma_xyz in map(ast.literal_eval, xyz_list):
             hits = self.graph.find_fragments_near_xyz(soma_xyz, 20)
             if len(hits) > 1:
                 # Determine new swc id
