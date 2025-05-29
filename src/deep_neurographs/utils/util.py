@@ -769,6 +769,15 @@ def get_swc_id(path):
     return name
 
 
+def load_soma_locations(pointer):
+    if isinstance(pointer, str):
+        return read_txt(pointer)
+    elif isinstance(pointer, dict):
+        return read_s3_txt_file(pointer)
+    else:
+        raise Exception(f"Invalid soma path format - {pointer}")
+    
+
 def numpy_to_hashable(arr):
     """
     Converts a numpy array to a hashable data structure.

@@ -144,6 +144,7 @@ class GraphLoader:
             raise Exception(f"Invalid format - somas_path={somas_path}")
 
         # Process soma locations
+        xyz_list = util.load_soma_locations(somas_path)
         reader = img_util.TensorStoreReader(segmentation_path)
         with ThreadPoolExecutor() as executor:
             # Assign threads
