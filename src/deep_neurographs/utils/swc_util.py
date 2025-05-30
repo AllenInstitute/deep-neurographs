@@ -297,29 +297,15 @@ class Reader:
             names and values from an SWC file.
 
         """
-        # Initializations
-        bucket = storage.Client().bucket(gcs_dict["bucket_name"])
-        zip_paths = util.list_gcs_filenames(bucket, gcs_dict["path"], ".zip")
-        pbar = tqdm(total=len(zip_paths), desc="Download SWCs")
-
-        # Main
-        with ProcessPoolExecutor() as executor:
-            # Assign processes
-            processes = list()
-            for path in zip_paths:
-                zip_content = bucket.blob(path).download_as_bytes()
-                processes.append(
-                    executor.submit(self.read_from_gcs_zip, zip_content)
-                )
-
-            # Store results
-            swc_dicts = deque()
-            for process in as_completed(processes):
-                swc_dicts.extend(process.result())
-                pbar.update(1)
+        swc_dicts = deque()
+        zip_paths = util.list_gcs_filenames(gcs_dict, ".zip")
+        for zip_path in tqdm(zip_paths, desc="Download SWCs"):
+            swc_dicts.extend(
+                self.read_from_gcs_zip(gcs_dict["bucket_name"], zip_path)
+            )
         return swc_dicts
 
-    def read_from_gcs_zip(self, zip_content):
+    def read_from_gcs_zip(self, bucket_name, path):
         """
         Reads SWC files stored in a ZIP archive downloaded from a cloud
         bucket.
@@ -337,19 +323,25 @@ class Reader:
 
 
         """
-        with ZipFile(BytesIO(zip_content)) as zip_file:
+        # Initialize cloud reader
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+
+        # Parse Zip
+        swc_dicts = deque()
+        zip_content = bucket.blob(path).download_as_bytes()
+        with ZipFile(BytesIO(zip_content), "r") as zip_file:
             with ThreadPoolExecutor() as executor:
                 # Assign threads
                 threads = list()
-                for f in util.list_files_in_zip(zip_content):
+                for filename in zip_file.namelist():
                     threads.append(
                         executor.submit(
-                            self.read_from_zipped_file, zip_file, f
+                            self.read_from_zipped_file, zip_file, filename
                         )
                     )
 
                 # Process results
-                swc_dicts = deque()
                 for thread in as_completed(threads):
                     result = thread.result()
                     if result:

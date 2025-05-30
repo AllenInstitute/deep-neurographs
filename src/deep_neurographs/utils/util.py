@@ -264,16 +264,14 @@ def list_files_in_zip(zip_content):
         return zip_file.namelist()
 
 
-def list_gcs_filenames(bucket, prefix, extension):
+def list_gcs_filenames(gcs_dict, extension):
     """
     Lists all files in a GCS bucket with the given extension.
 
     Parameters
     ----------
-    bucket : google.cloud.client
-        Name of bucket to be read from.
-    prefix : str
-        Path to directory in "bucket".
+    gcs_dict : dict
+        ...
     extension : str
         File extension of filenames to be listed.
 
@@ -283,7 +281,8 @@ def list_gcs_filenames(bucket, prefix, extension):
         Filenames stored at "cloud" path with the given extension.
 
     """
-    blobs = bucket.list_blobs(prefix=prefix)
+    bucket = storage.Client().bucket(gcs_dict["bucket_name"])
+    blobs = bucket.list_blobs(prefix=gcs_dict["path"])
     return [blob.name for blob in blobs if extension in blob.name]
 
 
