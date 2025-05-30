@@ -42,7 +42,7 @@ import os
 
 from deep_neurographs.utils import geometry_util, img_util, swc_util, util
 
-os.environ["OPENBLAS_NUM_THREADS"] = "32"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
 
 class GraphLoader:
