@@ -147,12 +147,11 @@ class GraphLoader:
             raise Exception(f"Invalid format - somas_path={somas_path}")
 
         # Process soma locations
-        xyz_list = util.load_soma_locations(somas_path)
         reader = img_util.TensorStoreReader(segmentation_path)
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
-            for xyz in map(ast.literal_eval, xyz_list):
+            for xyz in  util.load_soma_locations(somas_path):
                 voxel = img_util.to_voxels(xyz, (0.748, 0.748, 1.0))
                 threads.append(executor.submit(reader.read_voxel, voxel, xyz))
 
