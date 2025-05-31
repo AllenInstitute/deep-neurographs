@@ -19,6 +19,7 @@ from random import sample
 from tqdm import tqdm
 from zipfile import ZipFile
 
+import ast
 import boto3
 import json
 import math
@@ -769,13 +770,12 @@ def get_swc_id(path):
 
 
 def load_soma_locations(pointer):
-    if isinstance(pointer, str):
-        return read_txt(pointer)
-    elif isinstance(pointer, dict):
-        return read_s3_txt_file(pointer)
-    else:
-        raise Exception(f"Invalid soma path format - {pointer}")
-    
+    soma_locations = list()
+    read = read_s3_txt_file if isinstance(pointer, dict) else read_txt
+    for xyz in map(ast.literal_eval, read(pointer)):
+        soma_locations.append(xyz)
+    return soma_locations
+
 
 def numpy_to_hashable(arr):
     """
