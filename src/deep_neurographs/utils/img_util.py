@@ -84,16 +84,12 @@ class ImageReader(ABC):
 
         """
         s, e = get_start_end(voxel, shape, from_center=from_center)
-        try:
-            if len(self.shape()) == 3:
-                return self.img[s[0]: e[0], s[1]: e[1], s[2]: e[2]]
-            elif len(self.shape()) == 5:
-                return self.img[0, 0, s[0]: e[0], s[1]: e[1], s[2]: e[2]]
-            else:
-                raise ValueError(f"Unsupported image shape: {self.shape()}")
-        except Exception:
-            print(f"Unable to read from bounding box {s, e}!")
-            return np.ones(shape)
+        if len(self.shape()) == 3:
+            return self.img[s[0]: e[0], s[1]: e[1], s[2]: e[2]]
+        elif len(self.shape()) == 5:
+            return self.img[0, 0, s[0]: e[0], s[1]: e[1], s[2]: e[2]]
+        else:
+            raise ValueError(f"Unsupported image shape: {self.shape()}")
 
     def read_with_bbox(self, bbox):
         """
@@ -282,8 +278,12 @@ class TensorStoreReader(ImageReader):
             Image patch.
 
         """
-        img_patch = super().read(voxel, shape, from_center)
-        return img_patch.read().result()
+        try:
+            img_patch = super().read(voxel, shape, from_center)
+            return img_patch.read().result()
+        except Exception:
+            print(f"Unable to read from image patch at{voxel}!")
+            return np.ones(shape)
 
     def read_voxel(self, voxel, thread_id):
         """
