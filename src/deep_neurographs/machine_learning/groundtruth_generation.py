@@ -18,13 +18,6 @@ be accepted or rejected based on comparing fragments to ground truth tracings.
             gt_accepts.add(proposals[idx])
     return gt_accepts
 
-        result = is_connected_aligned(
-            gt_graph.edges[hat_edge_i]["xyz"],
-            gt_graph.edges[hat_edge_j]["xyz"],
-            pred_graph.nodes[i]["xyz"],
-            pred_graph.nodes[j]["xyz"],
-        )
-
 """
 
 from collections import defaultdict
@@ -157,7 +150,7 @@ def is_component_aligned(gt_graph, pred_graph, nodes, kdtree):
 
     intersects = True if percent_aligned > 0.5 else False
     aligned_score = np.mean(dists[dists < np.percentile(dists, 80)])
-
+    
     # Deterine whether aligned
     if (aligned_score < ALIGNED_THRESHOLD and hat_swc_id) and intersects:
         return True, hat_swc_id
@@ -201,7 +194,23 @@ def is_valid(gt_graph, pred_graph, kdtree, gt_id, proposal):
 
     # Check if edges are adjacent
     if is_connected(hat_edge_i, hat_edge_j):
-        return True
+        # Orient ground truth edges
+        hat_edge_xyz_i, hat_edge_xyz_j = orient_edges(
+            gt_graph.edges[hat_edge_i]["xyz"], 
+            gt_graph.edges[hat_edge_j]["xyz"]
+        )
+
+        # Find index of closest points on ground truth edges
+        xyz_i = pred_graph.nodes[i]["xyz"]
+        xyz_j = pred_graph.nodes[i]["xyz"]
+        idx_i = find_closest_point(hat_edge_xyz_i, xyz_i)
+        idx_j = find_closest_point(hat_edge_xyz_j, xyz_j)
+
+        len_1 = length_to_idx(hat_edge_xyz_i, idx_i)
+        len_2 = length_to_idx(hat_edge_xyz_j, idx_j)
+        gt_dist = len_1 + len_2
+        proposal_dist = pred_graph.proposal_length(proposal)
+        return abs(proposal_dist - gt_dist) < 40
     return False
 
 
@@ -236,7 +245,7 @@ def project_region(gt_graph, pred_graph, kdtree, gt_id, i, depth=16):
         for xyz in edge_xyz_list:
             hat_xyz = geometry_util.kdtree_query(kdtree, xyz)
             hat_edge = gt_graph.xyz_to_edge[hat_xyz]
-            if gt_graph.edges[hat_edge]["swc_id"] == gt_id:
+            if gt_graph.nodes[hat_edge[0]]["swc_id"] == gt_id:
                 hits[hat_edge].append(hat_xyz)
     return util.find_best(hits)
 
@@ -262,9 +271,37 @@ def is_connected(edge_i, edge_j):
     return True if set(edge_i).intersection(set(edge_j)) else False
 
 
-def is_connected_aligned(hat_edge_xyz_i, hat_edge_xyz_j, xyz_i, xyz_j):
-    hat_xyz_i = geometry_util.nearest_neighbor(hat_edge_xyz_i, xyz_i)
-    hat_xyz_j = geometry_util.nearest_neighbor(hat_edge_xyz_j, xyz_j)
-    hat_dist = geometry_util.dist(hat_xyz_i, hat_xyz_j)
-    dist = geometry_util.dist(xyz_i, xyz_j)
-    return True if 2 * dist / (dist + hat_dist) > 0.5 else False
+def orient_edges(xyz_edge_i, xyz_edge_j):
+    # Compute distances
+    dist_1 = geometry_util.dist(xyz_edge_i[0], xyz_edge_j[0])
+    dist_2 = geometry_util.dist(xyz_edge_i[0], xyz_edge_j[-1])
+    dist_3 = geometry_util.dist(xyz_edge_i[-1], xyz_edge_j[0])
+    dist_4 = geometry_util.dist(xyz_edge_i[-1], xyz_edge_j[-1])
+
+    # Orient coordinates to match at 0-th index
+    min_dist = np.min([dist_1, dist_2, dist_3, dist_4])
+    if dist_2 == min_dist or dist_4 == min_dist:
+        xyz_edge_j = np.flip(xyz_edge_j, axis=0)
+    if dist_3 == min_dist or dist_4 == min_dist:
+        xyz_edge_i = np.flip(xyz_edge_i, axis=0)
+    return xyz_edge_i, xyz_edge_j
+
+
+def find_closest_point(xyz_list, query_xyz):
+    best_dist = np.inf
+    best_idx = np.inf
+    for idx, xyz in enumerate(xyz_list):
+        dist = geometry_util.dist(query_xyz, xyz)
+        if dist < best_dist:
+            best_dist = dist
+            best_idx = idx
+    return best_idx
+
+
+def length_to_idx(xyz_list, idx):
+    length = 0
+    for i in range(0, idx):
+        length += geometry_util.dist(xyz_list[i], xyz_list[i + 1])
+    return length
+    
+        
