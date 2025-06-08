@@ -16,6 +16,8 @@
    <b> Figure: </b>Neuron fragments corrected by using GraphTrace.
 </p>
 
+## Overview
+
 Briefly describe inference pipeline, to do...
 
 - Graph Construction: Reads neuron fragments stored as swc files and loads them into a Networkx graph.
