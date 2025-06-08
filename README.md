@@ -13,7 +13,7 @@
 <p>
   <img src="imgs/result.png" width="900" alt="">
   <br>
-   <b> Figure: </b>Neuron fragments corrected by using GraphTrace.
+   <b> Figure: </b>GraphTrace reconnects fragmented neuron segments into coherent traces.
 </p>
 
 ## Overview
