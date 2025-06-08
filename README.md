@@ -18,13 +18,14 @@
 
 ## Overview
 
-Briefly describe inference pipeline, to do...
+The neuron fragment split correction pipeline consists of three main steps:
 
-- Graph Construction: Reads neuron fragments stored as swc files and loads them into a Networkx graph.
-- Proposals: Generates potential connections between nearby fragments to correct false splits in the segmentation
-- Feature Generation: Extracts geometric and image-based features from the graph to be utilized by a machine learning model that classifies the proposals.
-- Graph Neural Network (GNN) Inference: Predicts whether to accept or reject proposals based on the generated features and graphical structure.
-- Graph Update: Integrates inference results by merging fragments corresponding to an accepted proposal.
+<blockquote>
+  <p>a. <strong>Graph Construction</strong>: Reads neuron fragments stored as SWC files and loads them into a Networkx graph.</p>
+  <p>b. <strong>Proposal Generation</strong>: Generates potential connections between nearby fragments.</p>
+  <p>c. <strong>GNN-Based Inference</strong>: Predicts whether to accept or reject proposals based on the geometric and image-based features.</p>
+</blockquote>
+<br>
 
 <p align="center">
   <img src="imgs/pipeline.png" width="800" alt="pipeline">
@@ -32,9 +33,6 @@ Briefly describe inference pipeline, to do...
   <b> Figure: </b>Visualization of split correction pipeline, see Inference section for description of each step.
 </p>
 
-## Usage
-
-To do...
 
 ## Inference
 
@@ -55,6 +53,10 @@ To use the software, in the root directory, run
 ```bash
 pip install -e .
 ```
+
+## Usage
+
+To do...
 
 ## Contact Information
 For any inquiries, feedback, or contributions, please do not hesitate to contact us. You can reach us via email at anna.grim@alleninstitute.org or connect on [LinkedIn](https://www.linkedin.com/in/anna-m-grim/).
