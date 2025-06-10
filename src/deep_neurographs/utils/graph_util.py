@@ -34,8 +34,6 @@ from random import sample
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
-import ast
-import multiprocessing
 import networkx as nx
 import numpy as np
 import os
@@ -61,7 +59,7 @@ class GraphLoader:
         remove_high_risk_merges=False,
         segmentation_path=None,
         smooth_bool=True,
-        somas_path=None,
+        soma_centroids=None,
         verbose=False,
     ):
         """
@@ -90,9 +88,8 @@ class GraphLoader:
         smooth_bool : bool, optional
             Indication of whether to smooth xyz coordinates from SWC files.
             The default is True.
-        somas_path : str, optional
-            Path to a txt file containing xyz coordinates of detected somas.
-            The default is None.
+        soma_centroids : List[Tuple[float]] or None, optional
+            Physcial coordinates of soma centroids. The default is None.
         verbose : bool, optional
             Indication of whether to display a progress bar while building
             FragmentsGraph. The default is True.
@@ -108,65 +105,54 @@ class GraphLoader:
         self.node_spacing = node_spacing
         self.prune_depth = prune_depth
         self.smooth_bool = smooth_bool
-        self.soma_kdtree = None
+        self.soma_centroids = soma_centroids
         self.verbose = verbose
 
         # Set irreducibles extracter
-        if somas_path and remove_high_risk_merges:
+        if soma_centroids and remove_high_risk_merges:
             self.extracter = self.break_and_extract
         else:
             self.extracter = self.extract
 
         # Load somas
-        if segmentation_path and somas_path:
-            self.load_somas(segmentation_path, somas_path)
+        if segmentation_path and soma_centroids:
+            self.soma_kdtree = KDTree(self.soma_centroids)
+            self.ingest_somas(segmentation_path)
+        else:
+            self.soma_kdtree = None
 
-    def load_somas(self, segmentation_path, somas_path):
+    def ingest_somas(self, segmentation_path):
         """
-        Loads soma locations from a specified file and detects merges in a
-        segmentation.
+        Loads soma locations from a specified file and search for interestions
+        between soma locations and objects in segmentation mask.
 
         Parameters
         ----------
         segmentation_path : str
-            Path to segmentation stored in GCS bucket. The default is None.
-        somas_path : str
-            Path to a txt file containing xyz coordinates of detected somas.
+            Path to segmentation stored in GCS bucket.
 
         Returns
         -------
         None
 
         """
-        # Read soma locations txt file
-        if isinstance(somas_path, str):
-            xyz_list = util.read_txt(somas_path)
-        elif isinstance(somas_path, dict):
-            xyz_list = util.read_s3_txt_file(somas_path)
-        else:
-            raise Exception(f"Invalid format - somas_path={somas_path}")
-
-        # Process soma locations
         reader = img_util.TensorStoreReader(segmentation_path)
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
-            for xyz in  util.load_soma_locations(somas_path):
+            for xyz in self.soma_centroids:
                 voxel = img_util.to_voxels(xyz, (0.748, 0.748, 1.0))
                 threads.append(executor.submit(reader.read_voxel, voxel, xyz))
 
             # Store results
-            soma_xyz_list = list()
             for thread in as_completed(threads):
                 xyz, seg_id = thread.result()
                 if seg_id != 0:
                     self.id_to_soma[str(seg_id)].append(xyz)
-                    soma_xyz_list.append(xyz)
-        self.soma_kdtree = KDTree(soma_xyz_list)
 
         # Report results
         if self.verbose:
-            print("# Somas:", len(soma_xyz_list))
+            print("# Somas:", len(self.soma_centroids))
             print("# Soma-Fragment Intersections:", len(self.id_to_soma))
 
     # --- Irreducibles Extraction ---
@@ -198,7 +184,6 @@ class GraphLoader:
         high_risk_cnt = 0
         desc = "Extract Graphs"
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
-        multiprocessing.set_start_method('spawn', force=True)
         with ProcessPoolExecutor() as executor:
             processes = list()
             while swc_dicts:

@@ -26,6 +26,7 @@ import math
 import networkx as nx
 import numpy as np
 import os
+import pandas as pd
 import psutil
 import shutil
 import smartsheet
@@ -157,7 +158,7 @@ def list_paths(directory, extension=None):
     return paths
 
 
-def set_path(dir_name, filename, extension):
+def set_path(dirname, filename, extension):
     """
     Sets the path for a file in a directory. If a file with the same name
     already exists, then this routine finds a suffix to append to the
@@ -165,7 +166,7 @@ def set_path(dir_name, filename, extension):
 
     Parameters
     ----------
-    dir_name : str
+    dirname : str
         Name of directory that path will be generated to point to.
     filename : str
         Name of file that path will contain.
@@ -181,9 +182,9 @@ def set_path(dir_name, filename, extension):
     """
     cnt = 0
     extension = extension.replace(".", "")
-    path = os.path.join(dir_name, f"{filename}.{extension}")
+    path = os.path.join(dirname, f"{filename}.{extension}")
     while os.path.exists(path):
-        path = os.path.join(dir_name, f"{filename}.{cnt}.{extension}")
+        path = os.path.join(dirname, f"{filename}.{cnt}.{extension}")
         cnt += 1
     return path
 
@@ -445,20 +446,6 @@ def write_list(path, my_list):
 
 
 # --- S3 utils ---
-def find_soma_result_prefix(brain_id):
-    # Find soma results for brain_id
-    bucket_name = 'aind-msma-morphology-data'
-    soma_prefix = f"exaspim_soma_detection/{brain_id}"
-    prefix_list = list_s3_prefixes(bucket_name, soma_prefix)
-
-    # Find most recent result
-    if prefix_list:
-        dirname = find_most_recent_dirname(prefix_list)
-        return os.path.join(soma_prefix, dirname, f"somas-{brain_id}.txt")
-    else:
-        return None
-
-    
 def find_most_recent_dirname(results_prefix_list):
     dates = list()
     for prefix in results_prefix_list:
@@ -499,12 +486,19 @@ def list_s3_prefixes(bucket_name, prefix):
         return list()
 
 
-def read_s3_txt_file(s3_dict):
-    bucket_name = s3_dict["bucket_name"]
-    file_path = s3_dict["prefix"]
-    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
-    response = s3.get_object(Bucket=bucket_name, Key=file_path)
-    return response['Body'].read().decode('utf-8').splitlines()
+def load_somas_from_s3(brain_id):
+    # Find soma results for brain_id
+    bucket_name = 'aind-msma-morphology-data'
+    prefix = f"exaspim_soma_detection/{brain_id}"
+    prefix_list = list_s3_prefixes(bucket_name, prefix)
+
+    # Find most recent result
+    if prefix_list:
+        dirname = find_most_recent_dirname(prefix_list)
+        path = f"s3://{bucket_name}/{prefix}/{dirname}/somas-{brain_id}.csv"
+        return list(pd.read_csv(path)["xyz"].apply(ast.literal_eval))
+    else:
+        return None
 
 
 def upload_dir_to_s3(dir_path, bucket_name, prefix):
@@ -719,36 +713,6 @@ def count_fragments(fragments_pointer, min_size=0):
     print("# Edges:", graph.number_of_edges())
 
 
-def time_writer(t, unit="seconds"):
-    """
-    Converts a runtime "t" to a larger unit of time if applicable.
-
-    Parameters
-    ----------
-    t : float
-        Runtime.
-    unit : str, optional
-        Unit of time that "t" is expressed in.
-
-    Returns
-    -------
-    float
-        Runtime
-    str
-        Unit of time.
-
-    """
-    assert unit in ["seconds", "minutes", "hours"]
-    upd_unit = {"seconds": "minutes", "minutes": "hours"}
-    if t < 60 or unit == "hours":
-        return t, unit
-    else:
-        t /= 60
-        unit = upd_unit[unit]
-        t, unit = time_writer(t, unit=unit)
-    return t, unit
-
-
 def get_swc_id(path):
     """
     Gets segment id of the swc file at "path".
@@ -769,12 +733,21 @@ def get_swc_id(path):
     return name
 
 
-def load_soma_locations(pointer):
-    soma_locations = list()
-    read = read_s3_txt_file if isinstance(pointer, dict) else read_txt
-    for xyz in map(ast.literal_eval, read(pointer)):
-        soma_locations.append(xyz)
-    return soma_locations
+def get_memory_usage():
+    """
+    Gets the current memory usage in gigabytes.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    float
+        Current memory usage in gigabytes.
+
+    """
+    return psutil.virtual_memory().used / 1e9
 
 
 def numpy_to_hashable(arr):
@@ -813,40 +786,6 @@ def reformat_number(number):
     return f"{number:,}"
 
 
-def get_memory_usage():
-    """
-    Gets the current memory usage in gigabytes.
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    float
-        Current memory usage in gigabytes.
-
-    """
-    return psutil.virtual_memory().used / 1e9
-
-
-def get_memory_available():
-    """
-    Gets the available memory in gigabytes.
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    float
-        Available memory usage in gigabytes.
-
-    """
-    return psutil.virtual_memory().available / 1e9
-
-
 def spaced_idxs(arr_length, k):
     """
     Generates an array of indices based on a specified step size and ensures
@@ -871,3 +810,33 @@ def spaced_idxs(arr_length, k):
     if idxs[-1] != arr_length - 1:
         idxs = np.append(idxs, arr_length - 1)
     return idxs
+
+
+def time_writer(t, unit="seconds"):
+    """
+    Converts a runtime "t" to a larger unit of time if applicable.
+
+    Parameters
+    ----------
+    t : float
+        Runtime.
+    unit : str, optional
+        Unit of time that "t" is expressed in.
+
+    Returns
+    -------
+    float
+        Runtime
+    str
+        Unit of time.
+
+    """
+    assert unit in ["seconds", "minutes", "hours"]
+    upd_unit = {"seconds": "minutes", "minutes": "hours"}
+    if t < 60 or unit == "hours":
+        return t, unit
+    else:
+        t /= 60
+        unit = upd_unit[unit]
+        t, unit = time_writer(t, unit=unit)
+    return t, unit

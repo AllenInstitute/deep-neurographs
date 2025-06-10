@@ -71,7 +71,7 @@ class FragmentsGraph(nx.Graph):
         remove_high_risk_merges=False,
         segmentation_path=None,
         smooth_bool=True,
-        somas_path=None,
+        soma_centroids=None,
         verbose=False,
     ):
         """
@@ -99,9 +99,8 @@ class FragmentsGraph(nx.Graph):
         smooth_bool : bool, optional
             Indication of whether to smooth xyz coordinates from SWC files.
             The default is True.
-        somas_path : str, optional
-            Path to a txt file containing xyz coordinates of detected somas.
-            The default is None.
+        soma_centroids : List[Tuple[float]] or None, optional
+            Physcial coordinates of soma centroids. The default is None.
         verbose : bool, optional
             Indication of whether to display a progress bar while building
             FragmentsGraph. The default is True.
@@ -123,7 +122,7 @@ class FragmentsGraph(nx.Graph):
             remove_high_risk_merges=remove_high_risk_merges,
             segmentation_path=segmentation_path,
             smooth_bool=smooth_bool,
-            somas_path=somas_path,
+            soma_centroids=soma_centroids,
             verbose=verbose,
         )
         self.swc_reader = swc_util.Reader(anisotropy, min_size)
