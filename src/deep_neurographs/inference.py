@@ -36,7 +36,6 @@ from time import time
 from torch.nn.functional import sigmoid
 from tqdm import tqdm
 
-import ast
 import networkx as nx
 import numpy as np
 import os
@@ -68,7 +67,7 @@ class InferencePipeline:
         output_dir,
         config,
         segmentation_path=None,
-        somas_path=None,
+        soma_centroids=None,
         s3_dict=None,
     ):
         """
@@ -92,9 +91,8 @@ class InferencePipeline:
             for the inference pipeline.
         segmentation_path : str, optional
             Path to segmentation stored in GCS bucket. The default is None.
-        somas_path : str, optional
-            Path to a txt file containing xyz coordinates of detected somas.
-            The default is None.
+        soma_centroids : List[Tuple[float]] or None, optional
+            Physcial coordinates of soma centroids. The default is None.
         s3_dict : dict, optional
             ...
 
@@ -110,7 +108,7 @@ class InferencePipeline:
         self.brain_id = brain_id
         self.segmentation_id = segmentation_id
         self.segmentation_path = segmentation_path
-        self.somas_path = somas_path
+        self.soma_centroids = soma_centroids
         self.s3_dict = s3_dict
 
         # Extract config settings
@@ -148,14 +146,14 @@ class InferencePipeline:
 
         # Main
         self.build_graph(fragments_pointer)
-        self.connect_soma_fragments() if self.somas_path else None
+        self.connect_soma_fragments() if self.soma_centroids else None
         self.generate_proposals(self.graph_config.search_radius)
         self.classify_proposals(self.ml_config.threshold)
 
         # Finish
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nFinal")
-        self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
+        self.report(f"Total Runtime: {t:.2f} {unit}\n")
         self.save_results()
 
     def run_schedule(
@@ -177,7 +175,7 @@ class InferencePipeline:
         # Finish
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nFinal")
-        self.report(f"Total Runtime: {round(t, 4)} {unit}\n")
+        self.report(f"Total Runtime: {t:.2f} {unit}\n")
         self.save_results()
 
     def build_graph(self, fragments_pointer):
@@ -207,7 +205,7 @@ class InferencePipeline:
             remove_high_risk_merges=self.graph_config.remove_high_risk_merges,
             segmentation_path=self.segmentation_path,
             smooth_bool=self.graph_config.smooth_bool,
-            somas_path=self.somas_path,
+            soma_centroids=self.soma_centroids,
             verbose=True,
         )
         self.graph.load_fragments(fragments_pointer)
@@ -219,7 +217,7 @@ class InferencePipeline:
 
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nInitial")
-        self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
+        self.report(f"Module Runtime: {t:.2f} {unit}\n")
 
     def filter_fragments(self):
         self.graph = fragment_filtering.remove_curvy(self.graph, 200)
@@ -235,7 +233,7 @@ class InferencePipeline:
         # Parse locations
         nodes_list = list()
         merge_cnt, soma_cnt = 0, 0
-        for soma_xyz in util.load_soma_locations(self.somas_path):
+        for soma_xyz in self.soma_centroids:
             hits = self.graph.find_fragments_near_xyz(soma_xyz, 20)
             if len(hits) > 1:
                 # Determine new swc id
@@ -295,13 +293,13 @@ class InferencePipeline:
             proposals_per_leaf=self.graph_config.proposals_per_leaf,
             trim_endpoints_bool=self.graph_config.trim_endpoints_bool,
         )
-        n_proposals = util.reformat_number(self.graph.n_proposals())
+        n_proposals = format(self.graph.n_proposals(), ",")
 
         # Report results
         t, unit = util.time_writer(time() - t0)
         self.report(f"# Proposals: {n_proposals}")
         self.report(f"# Proposals Blocked: {self.graph.n_proposals_blocked}")
-        self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
+        self.report(f"Module Runtime: {t:.2f} {unit}\n")
 
     def classify_proposals(self, accept_threshold):
         """
@@ -341,9 +339,9 @@ class InferencePipeline:
         # Report results
         t, unit = util.time_writer(time() - t0)
         self.report(f"# Merges Blocked: {self.graph.n_merges_blocked}")
-        self.report(f"# Accepted: {util.reformat_number(len(accepts))}")
-        self.report(f"% Accepted: {round(len(accepts) / n_proposals, 4)}")
-        self.report(f"Module Runtime: {round(t, 4)} {unit}\n")
+        self.report(f"# Accepted: {format(len(accepts), ',')}")
+        self.report(f"% Accepted: {len(accepts) / n_proposals:.4f}")
+        self.report(f"Module Runtime: {t:.4f} {unit}\n")
 
     def save_results(self):
         """
@@ -447,7 +445,7 @@ class InferencePipeline:
             "min_fragment_size": f"{self.graph_config.min_size}um",
             "node_spacing": self.graph_config.node_spacing,
             "remove_doubles": self.graph_config.remove_doubles,
-            "use_somas": self.segmentation_path and self.somas_path,
+            "use_somas": len(self.soma_centroids) > 0,
             "complex_proposals": self.graph_config.complex_bool,
             "long_range_bool": self.graph_config.long_range_bool,
             "proposals_per_leaf": self.graph_config.proposals_per_leaf,
@@ -486,17 +484,16 @@ class InferencePipeline:
         """
         # Compute values
         n_components = nx.number_connected_components(self.graph)
-        n_components = util.reformat_number(n_components)
-        n_nodes = util.reformat_number(self.graph.number_of_nodes())
-        n_edges = util.reformat_number(self.graph.number_of_edges())
-        usage = round(util.get_memory_usage(), 2)
+        n_components = format(n_components, ",")
+        n_nodes = format(self.graph.number_of_nodes(), ",")
+        n_edges = format(self.graph.number_of_edges(), ",")
 
         # Report
         self.report(f"{prefix} Graph")
         self.report(f"# Connected Components: {n_components}")
         self.report(f"# Nodes: {n_nodes}")
         self.report(f"# Edges: {n_edges}")
-        self.report(f"Memory Consumption: {usage} GBs")
+        self.report(f"Memory Consumption: {util.get_memory_usage():.2f} GBs")
 
 
 class InferenceEngine:

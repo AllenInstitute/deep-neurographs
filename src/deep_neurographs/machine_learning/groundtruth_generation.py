@@ -102,7 +102,7 @@ def find_alignments(gt_graph, pred_graph, kdtree):
         )
         if aligned:
             i = util.sample_once(nodes)
-            pred_id = pred_graph.nodes[i]["swc_id"]            
+            pred_id = pred_graph.nodes[i]["swc_id"]
             valid_ids.add(pred_id)
             pred_to_target[pred_id] = target_id
     return pred_to_target
@@ -150,7 +150,7 @@ def is_component_aligned(gt_graph, pred_graph, nodes, kdtree):
 
     intersects = True if percent_aligned > 0.5 else False
     aligned_score = np.mean(dists[dists < np.percentile(dists, 80)])
-    
+
     # Deterine whether aligned
     if (aligned_score < ALIGNED_THRESHOLD and hat_swc_id) and intersects:
         return True, hat_swc_id
@@ -196,7 +196,7 @@ def is_valid(gt_graph, pred_graph, kdtree, gt_id, proposal):
     if is_connected(hat_edge_i, hat_edge_j):
         # Orient ground truth edges
         hat_edge_xyz_i, hat_edge_xyz_j = orient_edges(
-            gt_graph.edges[hat_edge_i]["xyz"], 
+            gt_graph.edges[hat_edge_i]["xyz"],
             gt_graph.edges[hat_edge_j]["xyz"]
         )
 
@@ -303,5 +303,3 @@ def length_to_idx(xyz_list, idx):
     for i in range(0, idx):
         length += geometry_util.dist(xyz_list[i], xyz_list[i + 1])
     return length
-    
-        
