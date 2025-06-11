@@ -367,7 +367,7 @@ class FeatureGenerator:
 
         """
         profile = self.img_reader.read_profile(self.get_spec(xyz_path))
-        profile.extend(list(util.get_avg_std(profile)))
+        profile.extend([np.mean(profile), np.std(profile)])
         return {profile_id: profile}
 
     def get_spec(self, xyz_path):
@@ -390,10 +390,10 @@ class FeatureGenerator:
         center, patch_shape = self.compute_bbox(xyz_path)
         shape = self.img_reader.shape()
         shape = shape[2:] if len(shape) == 5 else shape
-        iterator = zip(center, patch_shape, shape)
+        iterator = list(zip(center, patch_shape, shape))
         bbox = {
-            "min": [max(0, c - s // 2) for c, s in zip(center, patch_shape)],
-            "max": [min(c + s // 2, s - 1) for c, ps, s in iterator],
+            "min": [max(0, c - ps // 2) for c, ps, _ in iterator],
+            "max": [min(c + ps // 2, s - 1) for c, ps, s in iterator],
         }
 
         # Shift voxel profile path

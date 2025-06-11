@@ -691,10 +691,9 @@ def set_radius(graph, i):
 
     """
     try:
-        radius = graph[i]["radius"]
+        return graph[i]["radius"]
     except ValueError:
-        radius = 1.0
-    return radius
+        return 1.0
 
 
 # --- Miscellaneous ---
@@ -712,7 +711,7 @@ def to_graph(swc_dict, set_attrs=False):
 
     Returns
     -------
-    networkx.Graph
+    graph : networkx.Graph
         Graph generated from "swc_dict".
 
     """
