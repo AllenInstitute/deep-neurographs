@@ -41,13 +41,12 @@ import numpy as np
 import os
 import torch
 
-from deep_neurographs import fragment_filtering
 from deep_neurographs.fragments_graph import FragmentsGraph
 from deep_neurographs.machine_learning import datasets
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator,
 )
-from deep_neurographs.utils import ml_util, util
+from deep_neurographs.utils import geometry_util, ml_util, util
 
 
 class InferencePipeline:
@@ -209,7 +208,11 @@ class InferencePipeline:
             verbose=True,
         )
         self.graph.load_fragments(fragments_pointer)
-        self.filter_fragments()
+
+        # Filter fragments
+        geometry_util.remove_curvy(self.graph, 200)
+        if self.graph_config.remove_doubles:
+            geometry_util.remove_doubles(self.graph, 200)
 
         # Report results
         self.graph.save_labels(f"{self.output_dir}/segment_ids.txt")
@@ -218,13 +221,6 @@ class InferencePipeline:
         t, unit = util.time_writer(time() - t0)
         self.report_graph(prefix="\nInitial")
         self.report(f"Module Runtime: {t:.2f} {unit}\n")
-
-    def filter_fragments(self):
-        self.graph = fragment_filtering.remove_curvy(self.graph, 200)
-        if self.graph_config.remove_doubles:
-            self.graph = fragment_filtering.remove_doubles(
-                self.graph, 200, self.graph_config.node_spacing
-            )
 
     def connect_soma_fragments(self):
         # Initializations

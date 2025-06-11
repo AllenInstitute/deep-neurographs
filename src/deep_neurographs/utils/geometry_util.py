@@ -6,12 +6,15 @@ Created on Sat Nov 15 9:00:00 2023
 
 """
 
-import numpy as np
+from collections import defaultdict
 from scipy.interpolate import UnivariateSpline
 from scipy.linalg import svd
 from scipy.spatial import distance
+from tqdm import tqdm
 
-from deep_neurographs.utils import img_util
+import numpy as np
+
+from deep_neurographs.utils import graph_util as gutil, img_util
 
 
 # --- Directionals ---
@@ -28,15 +31,14 @@ def get_directional(branches, origin, depth):
         The origin point xyz relative to which the directional vector is
         computed.
     depth : numpy.ndarry
-        The size of the window in microns around the branch or bifurcation to
+        Size of the window in microns around the branch or bifurcation to
         consider for computing the directional vector.
 
     Returns
     -------
     numpy.ndarray
-        The directional vector of the branch or bifurcation relative to the
-        specified origin.
-
+        Directional vector of the branch or bifurcation relative to specified
+        origin.
     """
     branches = [shift_path(b, origin) for b in branches]
     if len(branches) == 1:
@@ -293,7 +295,7 @@ def fit_spline(xyz, k=2, s=None):
     return spline_x, spline_y, spline_z
 
 
-# --- kd-tree utils ---
+# --- KDTree utils ---
 def query_ball(kdtree, xyz, radius):
     """
     Queries a KD-tree for points within a given radius from a target point.
@@ -477,6 +479,146 @@ def align(neurograph, img, branch_1, branch_2, depth):
                 best_d1 = d1
                 best_d2 = d2
     return best_d1, best_d2, best_score
+
+
+# --- Fragment Filtering ---
+def remove_curvy(graph, max_length, ratio=0.5):
+    """
+    Removes connected components with 2 nodes from "graph" that are "curvy",
+    based on a specified ratio of endpoint distance to edge length and a
+    maximum length threshold.
+
+    Parameters
+    ----------
+    graph : FragmentsGraph
+        Graph generated from fragments of a predicted segmentation.
+    max_length : float
+        The maximum allowable length (in microns) for an edge to be considered
+        for removal.
+    ratio : float, optional
+        Threshold ratio of endpoint distance to edge length. Components with a
+        ratio below this value are considered "curvy" and are removed. The
+        default is 0.5.
+
+    Returns
+    -------
+    None
+
+    """
+    for nodes in gutil.get_line_components(graph):
+        i, j = tuple(nodes)
+        length = graph.edge_length((i, j))
+        endpoint_dist = graph.dist(i, j)
+        if endpoint_dist / length < ratio and length < max_length:
+            graph.delete_fragment(i, j)
+
+
+def remove_doubles(graph, max_length):
+    """
+    Removes connected components from "graph" that are likely to be a double,
+    which is caused by ghosting in the image.
+
+    Parameters
+    ----------
+    graph : FragmentsGraph
+        Graph to be searched for doubles.
+    max_length : int
+        Maximum size of connected components to be searched.
+
+    Returns
+    -------
+    None
+
+    """
+    # Initializations
+    components = gutil.get_line_components(graph)
+    kdtree = graph.get_kdtree()
+
+    # Main
+    desc = "Filter Doubled Fragments"
+    for idx in tqdm(np.argsort([len(c) for c in components]), desc=desc):
+        i, j = tuple(components[idx])
+        swc_id = graph.nodes[i]["swc_id"]
+        if swc_id in graph.swc_ids:
+            if graph.edge_length((i, j)) < max_length:
+                # Check doubles criteria
+                n_points = len(graph.edges[i, j]["xyz"])
+                hits = compute_projections(graph, kdtree, (i, j))
+                if is_double(hits, n_points):
+                    graph.remove_line_fragment(i, j)
+
+
+def compute_projections(graph, kdtree, edge):
+    """
+    Given a fragment defined by "edge", this routine iterates of every xyz in
+    the fragment and projects it onto the closest fragment. For each detected
+    fragment, the fragment id and projection distance are stored in a
+    dictionary called "hits".
+
+    Parameters
+    ----------
+    graph : FragmentsGraph
+        Graph that contains "edge".
+    kdtree : KDTree
+        KD-Tree that contains all xyz coordinates of every fragment in
+        "graph".
+    edge : tuple
+        Pair of leaf nodes that define a fragment.
+
+    Returns
+    -------
+    dict
+        Dictionary that stores all fragments that were detected and the
+        projection distances.
+
+    """
+    hits = defaultdict(list)
+    query_id = graph.nodes[edge[0]]["swc_id"]
+    for i, xyz in enumerate(graph.edges[edge]["xyz"]):
+        # Compute projections
+        best_id = None
+        best_dist = np.inf
+        for hit_xyz in query_ball(kdtree, xyz, 15):
+            hit_id = graph.xyz_to_id(hit_xyz)
+            if hit_id is not None and hit_id != query_id:
+                if dist(hit_xyz, xyz) < best_dist:
+                    best_dist = dist(hit_xyz, xyz)
+                    best_id = hit_id
+
+        # Store best
+        if best_id:
+            hits[best_id].append(best_dist)
+        elif i == 15 and len(hits) == 0:
+            return hits
+    return hits
+
+
+def is_double(hits, n_points):
+    """
+    Determines whether the connected component corresponding to "root" is a
+    double of another connected component.
+
+    Paramters
+    ---------
+    hits : dict
+        ...
+    n_points : int
+        Number of nodes that comprise the component being checked.
+
+    Returns
+    -------
+    bool
+        Indication of whether component is a double.
+
+    """
+    for dists in hits.values():
+        if len(dists) > 10:
+            percent_hit = len(dists) / n_points
+            if percent_hit > 0.5 and np.std(dists) < 2:
+                return True
+            elif percent_hit > 0.75 and np.std(dists) < 2.5:
+                return True
+    return False
 
 
 # --- Miscellaneous ---

@@ -32,7 +32,6 @@ information into the graph structure.
 from concurrent.futures import as_completed, ThreadPoolExecutor
 from copy import deepcopy
 from io import StringIO
-from numpy import concatenate
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
@@ -254,36 +253,31 @@ class FragmentsGraph(nx.Graph):
         self.add_edge(i, j, radius=attrs["radius"], xyz=attrs["xyz"])
         self.xyz_to_edge.update({tuple(xyz): edge for xyz in attrs["xyz"]})
 
-    def absorb_reducibles(self):
+    def remove_line_fragment(self, i, j):
         """
-        Absorbs reducible nodes (i.e. nodes with degree 2) in the graph by
-        merging them into their neighboring nodes.
+        Deletes nodes "i" and "j" from "graph", where these nodes form a connected
+        component.
 
         Parameters
         ----------
-        None
+        i : int
+            Node to be removed.
+        j : int
+            Node to be removed.
 
         Returns
         -------
         None
-
         """
-        # NOT USED AND OUTDATED
-        nodes = deepcopy(self.nodes)
-        for i in tqdm(nodes):
-            nbs = list(self.neighbors(i))
-            if len(nbs) == 2 and len(self.nodes[i]["proposals"]) == 0:
-                # Concatenate attributes
-                xyz = self.edge_attr(i, key="xyz")
-                radius = self.edge_attr(i, key="radius")
-                attrs = {
-                    "radius": concatenate([np.flip(radius[0]), radius[1]]),
-                    "xyz": concatenate([np.flip(xyz[0], axis=0), xyz[1]]),
-                }
+        # Remove xyz entries
+        self.xyz_to_edge.pop(tuple(self.nodes[i]["xyz"]), None)
+        self.xyz_to_edge.pop(tuple(self.nodes[j]["xyz"]), None)
+        for xyz in self.edges[i, j]["xyz"]:
+            self.xyz_to_edge.pop(tuple(xyz), None)
 
-                # Update graph
-                self.__add_edge(nbs, attrs, self.nodes[i]["swc_id"])
-                self.remove_node(i)
+        # Remove nodes
+        self.swc_ids.discard(self.nodes[i]["swc_id"])
+        self.remove_nodes_from([i, j])
 
     def split_edge(self, edge, attrs, idx):
         """
@@ -303,7 +297,6 @@ class FragmentsGraph(nx.Graph):
         -------
         int
             Node ID of node that was created.
-
         """
         # Remove old edge
         (i, j) = edge

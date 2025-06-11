@@ -916,6 +916,26 @@ def get_component(graph, root):
     return visited
 
 
+def get_line_components(graph):
+    """
+    Identifies and returns all line components in the given graph. A line
+    component is defined as a connected component with exactly two nodes.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Input graph in which line components are to be identified.
+
+    Returns
+    -------
+    List[set]
+        List of sets, where each set contains two nodes representing a
+        connected component with exactly two nodes.
+
+    """
+    return [c for c in nx.connected_components(graph) if len(c) == 2]
+
+
 def get_leafs(graph):
     """
     Gets leaf nodes of "graph".
