@@ -107,8 +107,8 @@ class ImageReader(ABC):
             Image patch.
 
         """
+        shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
         try:
-            shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
             return self.read(bbox["min"], shape, from_center=False)
         except Exception:
             return np.ones(shape)
@@ -394,7 +394,7 @@ def get_profile(img_reader, spec, profile_id):
 
 
 # --- Coordinate Conversions ---
-def to_physical(voxel, anisotropy, shift=[0, 0, 0]):
+def to_physical(voxel, anisotropy, shift=(0, 0, 0)):
     """
     Converts a voxel coordinate to a physical coordinate by applying the
     anisotropy scaling factors.
@@ -406,8 +406,8 @@ def to_physical(voxel, anisotropy, shift=[0, 0, 0]):
     anisotropy : ArrayLike
         Image to physical coordinates scaling factors to account for the
         anisotropy of the microscope.
-    shift : ArrayLike, optional
-        Shift to be applied to "voxel". The default is [0, 0, 0].
+    shift : Tuple[int], optional
+        Shift to be applied to "voxel". The default is (0, 0, 0).
 
     Returns
     -------

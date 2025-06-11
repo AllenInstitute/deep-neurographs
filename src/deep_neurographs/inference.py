@@ -108,7 +108,7 @@ class InferencePipeline:
         self.brain_id = brain_id
         self.segmentation_id = segmentation_id
         self.segmentation_path = segmentation_path
-        self.soma_centroids = soma_centroids
+        self.soma_centroids = soma_centroids or list()
         self.s3_dict = s3_dict
 
         # Extract config settings
