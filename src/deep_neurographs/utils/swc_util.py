@@ -24,7 +24,6 @@ Note: Each uncommented line in an SWC file corresponds to a node and contains
 from collections import deque
 from concurrent.futures import (
     ProcessPoolExecutor,
-    ThreadPoolExecutor,
     as_completed,
 )
 from google.cloud import storage
@@ -289,7 +288,7 @@ class Reader:
         # Initializations
         batch_size = 1000
         zip_paths = util.list_gcs_filenames(gcs_dict, ".zip")
-        pbar = tqdm(total=len(zip_paths), desc=f"Download SWCs")
+        pbar = tqdm(total=len(zip_paths), desc="Download SWCs")
 
         # Main
         swc_dicts = deque()
