@@ -286,24 +286,30 @@ class Reader:
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
-        with ProcessPoolExecutor() as executor:
-            # Assign processes
-            processes = list()
-            for zip_path in util.list_gcs_filenames(gcs_dict, ".zip"):
-                processes.append(
-                    executor.submit(
-                        self.read_from_gcs_zip,
-                        gcs_dict["bucket_name"],
-                        zip_path
-                    )
-                )
+        # Initializations
+        batch_size = 1000
+        zip_paths = util.list_gcs_filenames(gcs_dict, ".zip")
+        pbar = tqdm(total=len(zip_paths), desc=f"Download SWCs")
 
-            # Store results
-            swc_dicts = deque()
-            pbar = tqdm(total=len(processes), desc="Download SWCs")
-            for process in as_completed(processes):
-                swc_dicts.extend(process.result())
-                pbar.update(1)
+        # Main
+        swc_dicts = deque()
+        with ProcessPoolExecutor() as executor:
+            for i in range(0, len(zip_paths), batch_size):
+                # Assign processes
+                processes = list()
+                for zip_path in zip_paths[i:i+batch_size]:
+                    processes.append(
+                        executor.submit(
+                            self.read_from_gcs_zip,
+                            gcs_dict["bucket_name"],
+                            zip_path
+                        )
+                    )
+
+                # Store results
+                for process in as_completed(processes):
+                    swc_dicts.extend(process.result())
+                    pbar.update(1)
         return swc_dicts
 
     def read_from_gcs_zip(self, bucket_name, path):
