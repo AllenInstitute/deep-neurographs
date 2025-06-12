@@ -493,7 +493,7 @@ def remove_curvy(graph, max_length, ratio=0.5):
         length = graph.edge_length((i, j))
         endpoint_dist = graph.dist(i, j)
         if endpoint_dist / length < ratio and length < max_length:
-            graph.delete_fragment(i, j)
+            graph.remove_line_fragment(i, j)
 
 
 def remove_doubles(graph, max_length):
