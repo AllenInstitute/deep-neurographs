@@ -328,29 +328,18 @@ class Reader:
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
-        # Initialize cloud reader
+        # Download zip
         client = storage.Client()
         bucket = client.bucket(bucket_name)
-
-        # Parse Zip
-        swc_dicts = deque()
         zip_content = bucket.blob(path).download_as_bytes()
-        with ZipFile(BytesIO(zip_content), "r") as zip_file:
-            with ThreadPoolExecutor(max_workers=32) as executor:
-                # Assign threads
-                threads = list()
-                for filename in zip_file.namelist():
-                    threads.append(
-                        executor.submit(
-                            self.read_from_zipped_file, zip_file, filename
-                        )
-                    )
 
-                # Process results
-                for thread in as_completed(threads):
-                    result = thread.result()
-                    if result:
-                        swc_dicts.append(result)
+        # Process files
+        swc_dicts = deque()
+        with ZipFile(BytesIO(zip_content), "r") as zip_file:
+            for filename in zip_file.namelist():
+                result = self.read_from_zipped_file(zip_file, filename)
+                if result:
+                    swc_dicts.append(result)
         return swc_dicts
 
     # --- Process content ---
