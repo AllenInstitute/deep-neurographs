@@ -185,7 +185,7 @@ class GraphLoader:
             while swc_dicts:
                 swc_dict = swc_dicts.pop()
                 processes.append(executor.submit(self.extracter, swc_dict))
-                if len(processes) > 1000 or not swc_dicts:
+                if len(processes) > 500 or not swc_dicts:
                     # Store results
                     for process in as_completed(processes):
                         pbar.update(1) if self.verbose else None
@@ -218,14 +218,10 @@ class GraphLoader:
         dict
             Dictionary containing the components of an irreducible subgraph.
         """
-        try:
-            graph = self.to_graph(swc_dict)
-            if self.satifies_path_length_condition(graph):
-                return self.extract_from_graph(graph)
-            else:
-                return None, 0
-        except:
-            print("Fail!")
+        graph = self.to_graph(swc_dict)
+        if path_length(graph) > self.min_size:
+            return self.extract_from_graph(graph)
+        else:
             return None, 0
 
     def break_and_extract(self, swc_dict):
@@ -245,34 +241,44 @@ class GraphLoader:
             Dictionary that each contains the components of an irreducible
             subgraph.
         """
-        graph = self.to_graph(swc_dict)
-        irreducibles = list()
-        soma_nodes = graph.graph["soma_nodes"]
-        if self.satifies_path_length_condition(graph):
-            # Check whether to remove high risk merges
-            if not soma_nodes:
-                high_risk_cnt = self.remove_high_risk_merges(graph)
+        try:
+            # Initializations
+            graph = self.to_graph(swc_dict)
+            soma_nodes = graph.graph["soma_nodes"]
+            length = path_length(graph)
+            if length > 5 * 10**6:
+                print(f"Large component detected with path_length={length}")
+
+            # Main
+            irreducibles = list()
+            if length > self.min_size:
+                # Check whether to remove high risk merges
+                if not soma_nodes and length < 5 * 10**6:
+                    high_risk_cnt = self.remove_high_risk_merges(graph)
+                else:
+                    high_risk_cnt = 0
+    
+                # Iterate over connected components
+                swc_id = graph.graph["swc_id"]
+                proxy_dist = 15 * self.node_spacing
+                for i, nodes in enumerate(nx.connected_components(graph)):
+                    # Extract subgraph
+                    if len(nodes) > proxy_dist:
+                        subgraph_soma_nodes = nodes.intersection(soma_nodes)
+                        subgraph = graph.subgraph(nodes)
+                        subgraph.graph["swc_id"] = deepcopy(swc_id) + f".{i}"
+                        subgraph.graph["soma_nodes"] = subgraph_soma_nodes
+    
+                        # Extract irreducibles
+                        result, _ = self.extract_from_graph(subgraph)
+                        if result is not None:
+                            irreducibles.append(result)
+                return irreducibles, high_risk_cnt
             else:
-                high_risk_cnt = 0
-
-            # Iterate over connected components
-            swc_id = graph.graph["swc_id"]
-            proxy_dist = 15 * self.node_spacing
-            for i, nodes in enumerate(nx.connected_components(graph)):
-                # Extract subgraph
-                if len(nodes) > proxy_dist:
-                    subgraph_soma_nodes = nodes.intersection(soma_nodes)
-                    subgraph = graph.subgraph(nodes)
-                    subgraph.graph["swc_id"] = deepcopy(swc_id) + f".{i}"
-                    subgraph.graph["soma_nodes"] = subgraph_soma_nodes
-
-                    # Extract irreducibles
-                    result, _ = self.extract_from_graph(subgraph)
-                    if result is not None:
-                        irreducibles.append(result)
-            return irreducibles, high_risk_cnt
-        else:
-            return None, 0
+                return None, 0
+        except Exception as e:
+            print(f"[ERROR] Voxel {voxel} failed with error: {e}")
+            
 
     def extract_from_graph(self, graph):
         """
@@ -468,24 +474,6 @@ class GraphLoader:
             location.
         """
         return self.soma_kdtree.query(xyz)[0] if self.soma_kdtree else np.inf
-
-    def satifies_path_length_condition(self, graph):
-        """
-        Determines whether the total path length of the given graph is greater
-        than "self.min_size".
-
-        Parameters
-        ----------
-        xyz : ArrayLike
-            Physical coordinate to be queried.
-
-        Returns
-        -------
-        bool
-            Indication of whether the total path length of the given graph is
-            greater than "self.min_size".
-        """
-        return path_length(graph, self.min_size) > self.min_size
 
     def to_graph(self, swc_dict, check_soma=True):
         """
@@ -958,12 +946,12 @@ def path_length(graph, max_length=np.inf):
     float
         Path length of graph.
     """
-    path_length = 0
+    pl = 0
     for i, j in nx.dfs_edges(graph):
-        path_length += dist(graph, i, j)
-        if path_length > max_length:
+        pl += dist(graph, i, j)
+        if pl > max_length:
             break
-    return path_length
+    return pl
 
 
 def prune_branches(graph, depth):
