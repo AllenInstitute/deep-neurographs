@@ -1,4 +1,3 @@
-
 """
 Created on Wed June 5 16:00:00 2023
 
@@ -287,12 +286,24 @@ class Reader:
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
-        swc_dicts = deque()
-        zip_paths = util.list_gcs_filenames(gcs_dict, ".zip")
-        for zip_path in tqdm(zip_paths, desc="Download SWCs"):
-            swc_dicts.extend(
-                self.read_from_gcs_zip(gcs_dict["bucket_name"], zip_path)
-            )
+        with ProcessPoolExecutor() as executor:
+            # Assign processes
+            processes = list()
+            for zip_path in util.list_gcs_filenames(gcs_dict, ".zip"):
+                processes.append(
+                    executor.submit(
+                        self.read_from_gcs_zip,
+                        gcs_dict["bucket_name"],
+                        zip_path
+                    )
+                )
+
+            # Store results
+            swc_dicts = deque()
+            pbar = tqdm(total=len(processes), desc="Download SWCs")
+            for process in as_completed(processes):
+                swc_dicts.extend(process.result())
+                pbar.update(1)
         return swc_dicts
 
     def read_from_gcs_zip(self, bucket_name, path):
@@ -398,34 +409,31 @@ class Reader:
         List[float]
             Offset used to shift coordinates.
         """
-        offset = [0.0, 0.0, 0.0]
+        offset = (0, 0, 0)
         for i, line in enumerate(content):
             if line.startswith("# OFFSET"):
                 offset = self.read_xyz(line.split()[2:5])
             if not line.startswith("#"):
                 return content[i:], offset
 
-    def read_xyz(self, xyz_str, offset=[0.0, 0.0, 0.0]):
+    def read_xyz(self, xyz_str, offset=(0, 0, 0)):
         """
-        Reads a 3D coordinate from a string and transforms it (if applicable).
+        Reads a 3D coordinate from a string and transforms it.
 
         Parameters
         ----------
         xyz_str : str
             Coordinate stored as a str.
         offset : List[float], optional
-            Offset used to shift coordinates if provided in the SWC file. The
-            default is [0.0, 0.0, 0.0].
+            Shift applied to coordinate. Default is (0, 0, 0).
 
         Returns
         -------
         numpy.ndarray
-            Coordinate of a node from an SWC file.
+            Coordinate of node from an SWC file.
         """
-        xyz = np.zeros((3))
-        for i in range(3):
-            xyz[i] = self.anisotropy[i] * (float(xyz_str[i]) + offset[i])
-        return xyz
+        iterator = zip(self.anisotropy, xyz_str, offset)
+        return [a * (float(s) + o) for a, s, o in iterator]
 
 
 # --- Helpers ---

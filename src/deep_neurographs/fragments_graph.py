@@ -1053,11 +1053,6 @@ class FragmentsGraph(nx.Graph):
             n_entries += 1
         return text_buffer, n_entries
 
-    def save_labels(self, path):
-        with open(path, "w") as f:
-            for swc_id in self.swc_ids:
-                f.write(f"{swc_id}\n")
-
 
 # -- Helpers --
 def avg_radius(radii_list):

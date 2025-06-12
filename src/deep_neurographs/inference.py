@@ -215,7 +215,8 @@ class InferencePipeline:
             geometry_util.remove_doubles(self.graph, 200)
 
         # Report results
-        self.graph.save_labels(f"{self.output_dir}/segment_ids.txt")
+        path = f"{self.output_dir}/segment_ids.txt"
+        util.write_list(path, self.graph.swc_ids)
         print("# Soma Fragments:", len(self.graph.soma_ids))
 
         t, unit = util.time_writer(time() - t0)
