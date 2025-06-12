@@ -34,6 +34,7 @@ from random import sample
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
+import multiprocessing
 import networkx as nx
 import numpy as np
 import os
@@ -180,12 +181,13 @@ class GraphLoader:
         high_risk_cnt = 0
         desc = "Extract Graphs"
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
+        multiprocessing.set_start_method('spawn', force=True)
         with ProcessPoolExecutor() as executor:
             processes = list()
             while swc_dicts:
                 swc_dict = swc_dicts.pop()
                 processes.append(executor.submit(self.extracter, swc_dict))
-                if len(processes) > 500 or not swc_dicts:
+                if len(processes) > 200 or not swc_dicts:
                     # Store results
                     for process in as_completed(processes):
                         pbar.update(1) if self.verbose else None
@@ -257,7 +259,7 @@ class GraphLoader:
                     high_risk_cnt = self.remove_high_risk_merges(graph)
                 else:
                     high_risk_cnt = 0
-    
+
                 # Iterate over connected components
                 swc_id = graph.graph["swc_id"]
                 proxy_dist = 15 * self.node_spacing
@@ -268,7 +270,7 @@ class GraphLoader:
                         subgraph = graph.subgraph(nodes)
                         subgraph.graph["swc_id"] = deepcopy(swc_id) + f".{i}"
                         subgraph.graph["soma_nodes"] = subgraph_soma_nodes
-    
+
                         # Extract irreducibles
                         result, _ = self.extract_from_graph(subgraph)
                         if result is not None:
@@ -278,7 +280,6 @@ class GraphLoader:
                 return None, 0
         except Exception as e:
             print(f"[ERROR] {swc_dict['swc_id']}.swc failed with error: {e}")
-            
 
     def extract_from_graph(self, graph):
         """
