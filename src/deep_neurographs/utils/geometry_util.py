@@ -70,7 +70,6 @@ def compute_svd(xyz):
     numpy.ndarray
         Unitary matrix having right singular vectors as rows. Of shape (D, D)
         or (K, D) depending on full_matrices.
-
     """
     xyz = xyz - np.mean(xyz, axis=0)
     return svd(xyz)
@@ -91,7 +90,6 @@ def tangent(xyz_arr):
     -------
     numpy.ndarray
         Tangent vector at the specified point or along the curve.
-
     """
     if len(xyz_arr) == 2:
         d = max(dist(xyz_arr[1], xyz_arr[0]), 0.1)
@@ -119,7 +117,6 @@ def midpoint(xyz_1, xyz_2):
     -------
     numpy.ndarray
         Midpoint of "xyz_1" and "xyz_2".
-
     """
     return np.mean([xyz_1, xyz_2], axis=0)
 
@@ -140,7 +137,6 @@ def sample_path(xyz_path, n_points):
     -------
     numpy.ndarray
         Resampled points along curve.
-
     """
     k = 1 if len(xyz_path) <= 3 else 3
     t = np.linspace(0, 1, n_points)
@@ -164,7 +160,6 @@ def truncate_path(xyz_path, depth):
     -------
     numpy.ndarray
         Sub-path of a specified depth from a given input path.
-
     """
     length = 0
     for i in range(1, len(xyz_path)):
@@ -189,7 +184,6 @@ def shift_path(xyz_path, offset):
     -------
     numpy.ndarray
         Voxels shifted by min coordinate in "bbox".
-
     """
     offset = np.array(offset)
     return [tuple(xyz - offset) for xyz in map(np.array, xyz_path)]
@@ -213,7 +207,6 @@ def fill_path(img, path, val=-1):
     -------
     numpy.ndarray
         The modified image array with the path filled with the specified value.
-
     """
     for xyz in path:
         x, y, z = tuple(np.floor(xyz).astype(int))
@@ -234,7 +227,6 @@ def path_length(path):
     -------
     float
         Path length of "path".
-
     """
     return np.sum([dist(path[i], path[i - 1]) for i in range(1, len(path))])
 
@@ -257,7 +249,6 @@ def smooth_branch(xyz, s=None):
     -------
     numpy.ndarray
         Smoothed points.
-
     """
     if xyz.shape[0] > 8:
         t = np.linspace(0, 1, xyz.shape[0])
@@ -285,7 +276,6 @@ def fit_spline(xyz, k=2, s=None):
         Spline fit to the y-coordinates of "xyz".
     UnivariateSpline
         Spline fit to the z-coordinates of "xyz".
-
     """
     s = xyz.shape[0] / 10 if not s else xyz.shape[0] / s
     t = np.linspace(0, 1, xyz.shape[0])
@@ -314,7 +304,6 @@ def query_ball(kdtree, xyz, radius):
     numpy.ndarray
         An array containing the points within the specified radius from the
         target coordinate.
-
     """
     idxs = kdtree.query_ball_point(xyz, radius)
     return kdtree.data[idxs]
@@ -333,7 +322,6 @@ def kdtree_query(kdtree, xyz):
     -------
     tuple
         xyz coordinate of the nearest neighbor of "xyz".
-
     """
     _, idx = kdtree.query(xyz)
     return tuple(kdtree.data[idx])
@@ -361,7 +349,6 @@ def optimize_alignment(neurograph, img, edge, depth=15):
     -------
     numpy.ndarray, numpy.ndarray
         xyz coordinates of aligned edge proposal.
-
     """
     if neurograph.is_simple(edge):
         return optimize_simple_alignment(neurograph, img, edge, depth=depth)
@@ -389,7 +376,6 @@ def optimize_simple_alignment(neurograph, img, edge, depth=15):
     -------
     numpy.ndarray, numpy.ndarray
         xyz coordinates of aligned edge proposal.
-
     """
     i, j = tuple(edge)
     branch_i = neurograph.get_branches(i, ignore_reducibles=True)[0]
@@ -418,7 +404,6 @@ def optimize_complex_alignment(neurograph, img, edge, depth=15):
     -------
     numpy.ndarray, numpy.ndarray
         xyz coordinates of aligned edge proposal.
-
     """
     i, j = tuple(edge)
     branch = neurograph.branches(i if neurograph.is_leaf(i) else j)[0]
@@ -463,7 +448,6 @@ def align(neurograph, img, branch_1, branch_2, depth):
     float
         Average brightness of voxels sampled along line between "best_xyz_1"
         and "best_xyz_2".
-
     """
     best_d1 = None
     best_d2 = None
@@ -503,7 +487,6 @@ def remove_curvy(graph, max_length, ratio=0.5):
     Returns
     -------
     None
-
     """
     for nodes in gutil.get_line_components(graph):
         i, j = tuple(nodes)
@@ -528,7 +511,6 @@ def remove_doubles(graph, max_length):
     Returns
     -------
     None
-
     """
     # Initializations
     components = gutil.get_line_components(graph)
@@ -570,7 +552,6 @@ def compute_projections(graph, kdtree, edge):
     dict
         Dictionary that stores all fragments that were detected and the
         projection distances.
-
     """
     hits = defaultdict(list)
     query_id = graph.nodes[edge[0]]["swc_id"]
@@ -609,7 +590,6 @@ def is_double(hits, n_points):
     -------
     bool
         Indication of whether component is a double.
-
     """
     for dists in hits.values():
         if len(dists) > 10:
@@ -637,7 +617,6 @@ def dist(v_1, v_2, metric="l2"):
     -------
     float
         Distance between "v_1" and "v_2".
-
     """
     if metric == "l1":
         return np.sum(v_1 - v_2)
@@ -664,7 +643,6 @@ def make_line(xyz_1, xyz_2, n_steps):
     numpy.ndarray
         An array of shape (n_steps, 3) containing the interpolated 3D
         coordinates representing the straight line between xyz_1 and xyz_2.
-
     """
     xyz_1 = np.array(xyz_1)
     xyz_2 = np.array(xyz_2)
@@ -686,9 +664,7 @@ def normalize(vector, norm="l2"):
     Returns
     -------
     numpy.ndarray
-        The normalized vector with unit length with respect to the specified
-        norm.
-
+        Normalized vector.
     """
     return vector / abs(dist(np.zeros((3)), vector, metric=norm))
 
@@ -707,11 +683,10 @@ def nearest_neighbor(xyz_arr, xyz):
 
     Returns
     -------
-    tuple[int, float]
+    Tuple[int, float]
         A tuple containing the index of the nearest neighbor in "xyz_arr" and
         the distance between the target coordinate `xyz` and its nearest
         neighbor.
-
     """
     best_dist = np.inf
     best_xyz = None

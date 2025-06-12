@@ -47,7 +47,6 @@ class GraphLoader:
     """
     Class that loads SWC files and constructs a FragmentsGraph instance from
     the data.
-
     """
 
     def __init__(
@@ -97,7 +96,6 @@ class GraphLoader:
         Returns
         -------
         None
-
         """
         # Instance attributes
         self.id_to_soma = defaultdict(list)
@@ -134,7 +132,6 @@ class GraphLoader:
         Returns
         -------
         None
-
         """
         reader = img_util.TensorStoreReader(segmentation_path)
         with ThreadPoolExecutor() as executor:
@@ -172,9 +169,8 @@ class GraphLoader:
         Returns
         -------
         List[dict]
-            List of dictionaries such that each contains the components of the
-            irreducible subgraph extracted from each SWC dictionary.
-
+            Dictionaries that contain components of the irreducible subgraph
+            extracted from each SWC dictionary.
         """
         # Break fragments that intersect with multiple somas
         swc_dicts = self.remove_soma_merges(swc_dicts)
@@ -220,9 +216,7 @@ class GraphLoader:
         Returns
         -------
         dict
-            Dictionary that each contains the components of an irreducible
-            subgraph.
-
+            Dictionary containing the components of an irreducible subgraph.
         """
         try:
             graph = self.to_graph(swc_dict)
@@ -250,7 +244,6 @@ class GraphLoader:
         dict
             Dictionary that each contains the components of an irreducible
             subgraph.
-
         """
         graph = self.to_graph(swc_dict)
         irreducibles = list()
@@ -296,7 +289,6 @@ class GraphLoader:
         dict
             Dictionary that each contains the components of an irreducible
             subgraph.
-
         """
         # Irreducibles
         leafs, branchings = get_irreducible_nodes(graph)
@@ -330,7 +322,6 @@ class GraphLoader:
         List[dict]
             Updated list of "swc_dicts", where fragments with merges have been
             broken down into smaller fragments.
-
         """
         # Detect merges
         merges_dict = {k: v for k, v in self.id_to_soma.items() if len(v) > 1}
@@ -375,7 +366,6 @@ class GraphLoader:
         Returns
         -------
         None
-
         """
         high_risk_cnt = 0
         nodes = set()
@@ -431,7 +421,6 @@ class GraphLoader:
         List[dicts]
             Updated SWC dictionaries, where each dictionary represents a
             subgraph that was disconnected.
-
         """
         graph = self.to_graph(swc_dict, check_soma=False)
         if len(somas_xyz) <= 10:
@@ -477,7 +466,6 @@ class GraphLoader:
         float
             Distance between a given physical coordinate and the nearest soma
             location.
-
         """
         return self.soma_kdtree.query(xyz)[0] if self.soma_kdtree else np.inf
 
@@ -496,7 +484,6 @@ class GraphLoader:
         bool
             Indication of whether the total path length of the given graph is
             greater than "self.min_size".
-
         """
         return path_length(graph, self.min_size) > self.min_size
 
@@ -514,7 +501,6 @@ class GraphLoader:
         -------
         networkx.Graph
             Graph generated from "swc_dict".
-
         """
         # Get graph
         if swc_dict is None:
@@ -553,7 +539,6 @@ def find_somas_path(graph, somas_xyz):
     -------
     Set[int]
         Nodes along the shortest paths between somas.
-
     """
     # Break merges between somas
     path = set()
@@ -592,7 +577,6 @@ def remove_nodes(graph, roots, max_dist=5.0):
     Returns
     -------
     None
-
     """
     nodes = set()
     while len(roots) > 0:
@@ -629,7 +613,6 @@ def get_irreducible_nodes(graph):
     -------
     Tuple[set]
         Sets of leaf and branching nodes.
-
     """
     leafs = set()
     branchings = set()
@@ -657,7 +640,6 @@ def set_node_attrs(graph, nodes):
     dict
         Dictionary where the keys are node ids and values are dictionaries
         containing the "radius" and "xyz" attributes of the nodes.
-
     """
     attrs = dict()
     for i in nodes:
@@ -689,7 +671,6 @@ def get_irreducible_edges(graph, leafs, branchings, smooth_bool):
     dict
         Dictionary where the keys are tuples representing the irreducible
         edges and values are attributes associated with those edges.
-
     """
     edges = dict()
     root = None
@@ -729,7 +710,6 @@ def init_edge_attrs(graph, i):
     -------
     dict
         Edge attribute dictionary.
-
     """
     attrs = {
         "radius": [graph.nodes[i]["radius"]],
@@ -758,7 +738,6 @@ def upd_edge_attrs(graph, attrs, i, j):
     -------
     dict
         Edge attribute dictionary.
-
     """
     attrs["radius"].append(graph.nodes[i]["radius"])
     attrs["xyz"].append(graph.nodes[i]["xyz"])
@@ -784,7 +763,6 @@ def set_edge_attrs(graph, attrs, node_spacing):
     -------
     dict
         Updated edge attribute dictionary.
-
     """
     for e in attrs:
         # Update endpoints
@@ -800,24 +778,6 @@ def set_edge_attrs(graph, attrs, node_spacing):
 
 
 # --- Miscellaneous ---
-def count_components(graph):
-    """
-    Counts the number of connected components in a graph.
-
-    Paramters
-    ---------
-    graph : networkx.Graph
-        Graph to be searched.
-
-    Returns
-    -------
-    int
-        Number of connected components.
-
-    """
-    return nx.number_connected_components(graph)
-
-
 def cycle_exists(graph):
     """
     Checks if the given graph has a cycle.
@@ -831,7 +791,6 @@ def cycle_exists(graph):
     -------
     bool
         Indication of whether graph has a cycle.
-
     """
     try:
         nx.find_cycle(graph)
@@ -857,7 +816,6 @@ def dist(graph, i, j):
     -------
     float
         Euclidean distance between nodes i and j.
-
     """
     return geometry_util.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
 
@@ -877,7 +835,6 @@ def find_closest_node(graph, xyz):
     -------
     int
         Node in the graph that is closest to the given "xyz" coordinate.
-
     """
     best_dist = np.inf
     best_node = None
@@ -904,7 +861,6 @@ def get_component(graph, root):
     -------
     Set[int]
         Nodes in the connected component corresponding to "root".
-
     """
     queue = [root]
     visited = set()
@@ -931,7 +887,6 @@ def get_line_components(graph):
     List[set]
         List of sets, where each set contains two nodes representing a
         connected component with exactly two nodes.
-
     """
     return [c for c in nx.connected_components(graph) if len(c) == 2]
 
@@ -949,7 +904,6 @@ def get_leafs(graph):
     -------
     List[int]
         Leaf nodes of "graph".
-
     """
     return [i for i in graph.nodes if graph.degree[i] == 1]
 
@@ -970,7 +924,6 @@ def largest_components(graph, k):
     List[int]
         List where each entry is a random node from one of the k largest
         connected components.
-
     """
     component_cardinalities = k * [-1]
     node_ids = k * [-1]
@@ -1004,7 +957,6 @@ def path_length(graph, max_length=np.inf):
     -------
     float
         Path length of graph.
-
     """
     path_length = 0
     for i, j in nx.dfs_edges(graph):
@@ -1029,7 +981,6 @@ def prune_branches(graph, depth):
     -------
     networkx.Graph
         Graph with short branches pruned.
-
     """
     deleted_nodes = list()
     n_passes = 0
@@ -1068,7 +1019,6 @@ def sample_node(graph):
     -------
     int
         Node ID.
-
     """
     nodes = list(graph.nodes)
     return sample(nodes, 1)[0]
@@ -1093,7 +1043,6 @@ def smooth_branch(graph, attrs, i, j):
     Returns
     -------
     None
-
     """
     attrs["xyz"] = geometry_util.smooth_branch(attrs["xyz"], s=2)
     graph.nodes[i]["xyz"] = attrs["xyz"][0]
@@ -1113,7 +1062,6 @@ def to_numpy(attrs):
     -------
     dict
         Updated edge attribute dictionary.
-
     """
     attrs["xyz"] = np.array(attrs["xyz"], dtype=np.float32)
     attrs["radius"] = np.array(attrs["radius"], dtype=np.float16)
