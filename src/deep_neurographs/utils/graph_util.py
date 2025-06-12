@@ -277,7 +277,7 @@ class GraphLoader:
             else:
                 return None, 0
         except Exception as e:
-            print(f"[ERROR] Voxel {voxel} failed with error: {e}")
+            print(f"[ERROR] {swc_dict['swc_id']}.swc failed with error: {e}")
             
 
     def extract_from_graph(self, graph):
