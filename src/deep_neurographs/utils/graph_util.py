@@ -221,7 +221,7 @@ class GraphLoader:
             Dictionary containing the components of an irreducible subgraph.
         """
         graph = self.to_graph(swc_dict)
-        if path_length(graph) > self.min_size:
+        if self.satifies_path_length_condition(graph):
             return self.extract_from_graph(graph)
         else:
             return None, 0
@@ -247,20 +247,15 @@ class GraphLoader:
             # Initializations
             graph = self.to_graph(swc_dict)
             soma_nodes = graph.graph["soma_nodes"]
-            length = path_length(graph)
-            if length > 5 * 10**6:
-                print(f"Large component detected with path_length={length}")
-
-            # Main
-            irreducibles = list()
-            if length > self.min_size:
+            if self.satifies_path_length_condition(graph):
                 # Check whether to remove high risk merges
-                if not soma_nodes and length < 5 * 10**6:
+                if not soma_nodes:
                     high_risk_cnt = self.remove_high_risk_merges(graph)
                 else:
                     high_risk_cnt = 0
 
                 # Iterate over connected components
+                irreducibles = list()
                 swc_id = graph.graph["swc_id"]
                 proxy_dist = 15 * self.node_spacing
                 for i, nodes in enumerate(nx.connected_components(graph)):
@@ -475,6 +470,25 @@ class GraphLoader:
             location.
         """
         return self.soma_kdtree.query(xyz)[0] if self.soma_kdtree else np.inf
+
+    def satifies_path_length_condition(self, graph):
+        """
+        Determines whether the total path length of the given graph is greater
+        than "self.min_size".
+
+        Parameters
+        ----------
+        xyz : ArrayLike
+            Physical coordinate to be queried.
+
+        Returns
+        -------
+        bool
+            Indication of whether the total path length of the given graph is
+            greater than "self.min_size".
+
+        """
+        return path_length(graph, self.min_size) > self.min_size
 
     def to_graph(self, swc_dict, check_soma=True):
         """
@@ -947,12 +961,12 @@ def path_length(graph, max_length=np.inf):
     float
         Path length of graph.
     """
-    pl = 0
+    l = 0
     for i, j in nx.dfs_edges(graph):
-        pl += dist(graph, i, j)
-        if pl > max_length:
+        l += dist(graph, i, j)
+        if l > max_length:
             break
-    return pl
+    return l
 
 
 def prune_branches(graph, depth):
