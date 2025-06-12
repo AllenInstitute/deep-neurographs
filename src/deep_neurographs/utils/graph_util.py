@@ -11,13 +11,12 @@ constructs a custom graph object called a "FragmentsGraph".
     Graph Loading Algorithm:
         1. Load Soma Locations (Optional)
 
-        2. Break Soma Merges (Optional)
-
-        3. Extract Irreducibles from SWC files
+        2. Extract Irreducibles from SWC files
             a. Build graph from SWC file
-            b. Break high risk merges (optional)
-            c. Find irreducible nodes
-            d. Find irreducible edges
+            b. Break soma merges (optional)
+            c. Break high risk merges (optional)
+            d. Find irreducible nodes
+            e. Find irreducible edges
 
 
 Note: We use the term "branch" to refer to a path in a graph from a branching
