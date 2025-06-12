@@ -622,21 +622,21 @@ def update_smartsheet(access_token, brain_id):
 
 
 # --- Miscellaneous ---
-def get_swc_id(path):
+def get_swc_name(path):
     """
-    Gets segment id of the swc file at "path".
+    Gets name of the SWC file at "path".
 
     Parameters
     ----------
     path : str
-        Path to swc file.
+        Path to SWC file.
 
     Returns
     -------
     str
-        Segment id.
+        SWC filename.
     """
-    filename = path.split("/")[-1]
+    filename = os.path.basename(path)
     name, ext = os.path.splitext(filename)
     return name
 

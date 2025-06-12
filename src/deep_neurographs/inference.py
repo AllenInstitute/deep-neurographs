@@ -228,7 +228,6 @@ class InferencePipeline:
         self.graph.init_kdtree()
 
         # Parse locations
-        nodes_list = list()
         merge_cnt, soma_cnt = 0, 0
         for soma_xyz in self.soma_centroids:
             hits = self.graph.find_fragments_near_xyz(soma_xyz, 20)
