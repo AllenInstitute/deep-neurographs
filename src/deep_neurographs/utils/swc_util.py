@@ -88,10 +88,10 @@ class Reader:
             following items:
                 - "id": unique identifier of each node in an SWC file.
                 - "pid": parent ID of each node.
-                - "swc_id": name of swc file, minus the ".swc".
                 - "radius": radius value corresponding to each node.
                 - "xyz": coordinate corresponding to each node.
                 - "soma_nodes": nodes with soma type.
+                - "swc_name": name of SWC file, minus the ".swc".
         """
         # Dictionary with GCS specs
         if isinstance(swc_pointer, dict):
@@ -141,7 +141,7 @@ class Reader:
 
         Returns
         -------
-        Dequeue[dict]
+        swc_dicts : Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
@@ -172,15 +172,15 @@ class Reader:
 
         Returns
         -------
-        dict
+        swc_dict : dict
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
         content = util.read_txt(path)
         if len(content) > self.min_size - 10:
-            result = self.parse(content)
-            result["swc_id"] = util.get_swc_id(path)
-            return result
+            swc_dict = self.parse(content)
+            swc_dict["swc_name"] = util.get_swc_name(path)
+            return swc_dict
         else:
             return False
 
@@ -195,7 +195,7 @@ class Reader:
 
         Returns
         -------
-        Deque[dict]
+        swc_dicts : Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
@@ -231,7 +231,7 @@ class Reader:
 
         Returns
         -------
-        Dequeue[dict]
+        swc_dicts : Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
@@ -239,9 +239,9 @@ class Reader:
             swc_dicts = deque()
             swc_files = [f for f in zip_file.namelist() if f.endswith(".swc")]
             for f in swc_files:
-                result = self.read_from_zipped_file(zip_file, f)
-                if result:
-                    swc_dicts.append(result)
+                swc_dict = self.read_from_zipped_file(zip_file, f)
+                if swc_dict:
+                    swc_dicts.append(swc_dict)
         return swc_dicts
 
     def read_from_zipped_file(self, zip_file, path):
@@ -257,15 +257,15 @@ class Reader:
 
         Returns
         -------
-        dict
+        swc_dict : dict
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
         content = util.read_zip(zip_file, path).splitlines()
         if len(content) > self.min_size - 10:
-            result = self.parse(content)
-            result["swc_id"] = util.get_swc_id(path)
-            return result
+            swc_dict = self.parse(content)
+            swc_dict["swc_name"] = util.get_swc_name(path)
+            return swc_dict
         else:
             return False
 
@@ -281,7 +281,7 @@ class Reader:
 
         Returns
         -------
-        Dequeue[dict]
+        swc_dicts : Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
@@ -323,7 +323,7 @@ class Reader:
 
         Returns
         -------
-        Dequeue[dict]
+        swc_dicts : Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
@@ -355,7 +355,7 @@ class Reader:
 
         Returns
         -------
-        dict
+        swc_dict : dict
             Dictionaries whose keys and values are the attribute names
             and values from an SWC file.
         """
@@ -397,10 +397,10 @@ class Reader:
 
         Returns
         -------
-        List[str]
+        content : List[str]
             A list of strings representing the lines of text starting from the
             line immediately after the last commented line.
-        List[float]
+        offset : List[float]
             Offset used to shift coordinates.
         """
         offset = (0, 0, 0)
@@ -423,7 +423,7 @@ class Reader:
 
         Returns
         -------
-        numpy.ndarray
+        List[float]
             Coordinate of node from an SWC file.
         """
         iterator = zip(self.anisotropy, xyz_str, offset)
@@ -448,7 +448,7 @@ def to_graph(swc_dict, set_attrs=False):
     graph : networkx.Graph
         Graph generated from "swc_dict".
     """
-    graph = nx.Graph(swc_id=swc_dict["swc_id"])
+    graph = nx.Graph(swc_name=swc_dict["swc_name"])
     graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
     if set_attrs:
         __add_attributes(swc_dict, graph)
