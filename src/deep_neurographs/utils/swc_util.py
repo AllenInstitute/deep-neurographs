@@ -330,7 +330,7 @@ class Reader:
         swc_dicts = deque()
         zip_content = bucket.blob(path).download_as_bytes()
         with ZipFile(BytesIO(zip_content), "r") as zip_file:
-            with ThreadPoolExecutor() as executor:
+            with ThreadPoolExecutor(max_workers=32) as executor:
                 # Assign threads
                 threads = list()
                 for filename in zip_file.namelist():
