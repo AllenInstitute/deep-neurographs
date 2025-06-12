@@ -48,7 +48,6 @@ def listdir(path, extension=None):
     List[str]
         Filenames in directory with extension "extension" if provided.
         Otherwise, list of all files in directory.
-
     """
     if extension is None:
         return [f for f in os.listdir(path)]
@@ -58,18 +57,17 @@ def listdir(path, extension=None):
 
 def list_files_in_zip(zip_content):
     """
-    Lists all files in a zip file stored in a GCS bucket.
+    Lists files in a ZIP archive.
 
     Parameters
     ----------
     zip_content : str
-        Content stored in a zip file in the form of a string of bytes.
+        Content stored in a ZIP archive in the form of a string of bytes.
 
     Returns
     -------
-    list[str]
-        List of filenames in a zip file.
-
+    List[str]
+        Filenames in ZIP archive.
     """
     with ZipFile(BytesIO(zip_content), "r") as zip_file:
         return zip_file.namelist()
@@ -89,9 +87,8 @@ def list_paths(directory, extension=None):
 
     Returns
     -------
-    list[str]
+    List[str]
         List of all paths within "directory".
-
     """
     paths = list()
     for f in listdir(directory, extension=extension):
@@ -117,9 +114,8 @@ def list_subdirs(path, keyword=None, return_paths=False):
 
     Returns
     -------
-    list
+    List[str]
         List of all subdirectories at "path".
-
     """
     subdirs = list()
     for subdir in os.listdir(path):
@@ -147,7 +143,6 @@ def mkdir(path, delete=False):
     Returns
     -------
     None
-
     """
     if delete:
         rmdir(path)
@@ -167,7 +162,6 @@ def rmdir(path):
     Returns
     -------
     None
-
     """
     if os.path.exists(path):
         shutil.rmtree(path)
@@ -193,7 +187,6 @@ def set_path(dirname, filename, extension):
     str
         Path to file in "dirname" with the name "filename" and possibly some
         suffix.
-
     """
     cnt = 0
     extension = extension.replace(".", "")
@@ -224,7 +217,6 @@ def set_zip_path(zip_writer, filename, extension):
     str
         Path to file in "dirname" with the name "filename" and possibly some
         suffix.
-
     """
     cnt = 0
     existing_files = zip_writer.namelist()
@@ -251,7 +243,6 @@ def combine_zips(zip_paths, output_zip_path):
     Returns
     -------
     None
-
     """
     seen_files = set()
     with ZipFile(output_zip_path, 'w') as out_zip:
@@ -276,7 +267,6 @@ def read_json(path):
     -------
     dict
         Contents of JSON file.
-
     """
     with open(path, "r") as f:
         return json.load(f)
@@ -295,7 +285,6 @@ def read_txt(path):
     -------
     str
         Contents of txt file.
-
     """
     with open(path, "r") as f:
         return f.read().splitlines()
@@ -315,8 +304,7 @@ def read_zip(zip_file, path):
     Returns
     -------
     str
-        Contents of txt file.
-
+        Contents of text file in ZIP archive.
     """
     with zip_file.open(path) as f:
         return f.read().decode("utf-8")
@@ -336,7 +324,6 @@ def write_json(path, contents):
     Returns
     -------
     None
-
     """
     with open(path, "w") as f:
         json.dump(contents, f)
@@ -350,13 +337,12 @@ def write_list(path, my_list):
     ----------
     path : str
         Path where text file is to be written.
-    my_list
+    my_list : list
         The list of items to write to the file.
 
     Returns
     -------
     None
-
     """
     with open(path, "w") as file:
         for item in my_list:
@@ -377,7 +363,6 @@ def write_txt(path, contents):
     Returns
     -------
     None
-
     """
     f = open(path, "w")
     f.write(contents)
@@ -398,9 +383,8 @@ def list_gcs_filenames(gcs_dict, extension):
 
     Returns
     -------
-    list
+    List[str]
         Filenames stored at "cloud" path with the given extension.
-
     """
     bucket = storage.Client().bucket(gcs_dict["bucket_name"])
     blobs = bucket.list_blobs(prefix=gcs_dict["path"])
@@ -422,7 +406,6 @@ def list_gcs_subdirectories(bucket_name, prefix):
     -------
     List[str]
          List of direct subdirectories.
-
     """
     # Load blobs
     storage_client = storage.Client()
@@ -465,8 +448,7 @@ def list_s3_prefixes(bucket_name, prefix):
     Returns:
     --------
     List[str]
-        List of immediate subdirectories under the specified prefix.
-
+        Immediate subdirectories under the specified prefix.
     """
     # Check prefix is valid
     if not prefix.endswith("/"):
@@ -514,7 +496,6 @@ def upload_dir_to_s3(dir_path, bucket_name, prefix):
     Returns
     -------
     None
-
     """
     with ThreadPoolExecutor() as executor:
         for name in os.listdir(dir_path):
@@ -541,7 +522,6 @@ def upload_file_to_s3(source_path, bucket_name, destination_path):
     Returns
     -------
     None
-
     """
     s3 = boto3.client('s3')
     s3.upload_file(source_path, bucket_name, destination_path)
@@ -564,7 +544,6 @@ def find_best(my_dict, maximize=True):
     -------
     hashable data type
         Key associated with the longest list or largest integer in "my_dict".
-
     """
     best_key = None
     best_vote_cnt = 0 if maximize else np.inf
@@ -595,7 +574,6 @@ def remove_items(my_dict, keys):
     -------
     dict
         Updated dictionary.
-
     """
     return {k: v for k, v in my_dict.items() if k not in keys}
 
@@ -657,7 +635,6 @@ def get_swc_id(path):
     -------
     str
         Segment id.
-
     """
     filename = path.split("/")[-1]
     name, ext = os.path.splitext(filename)
@@ -676,7 +653,6 @@ def get_memory_usage():
     -------
     float
         Current memory usage in gigabytes.
-
     """
     return psutil.virtual_memory().used / 1e9
 
@@ -694,7 +670,6 @@ def numpy_to_hashable(arr):
     -------
     list
         Hashable items from "arr".
-
     """
     return [tuple(item) for item in arr.tolist()]
 
@@ -710,8 +685,7 @@ def sample_once(my_container):
 
     Returns
     -------
-    sample
-
+    object
     """
     return sample(my_container, 1)[0]
 
@@ -734,7 +708,6 @@ def spaced_idxs(arr_length, k):
         Array of indices starting from 0 up to (but not including) the length
         of "container" spaced by "k". The last index before the length of
         "container" is guaranteed to be included in the output.
-
     """
     idxs = np.arange(0, arr_length + k, k)[:-1]
     if idxs[-1] != arr_length - 1:
@@ -759,7 +732,6 @@ def time_writer(t, unit="seconds"):
         Runtime
     str
         Unit of time.
-
     """
     assert unit in ["seconds", "minutes", "hours"]
     upd_unit = {"seconds": "minutes", "minutes": "hours"}

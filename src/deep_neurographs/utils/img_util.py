@@ -24,7 +24,6 @@ from deep_neurographs.utils import util
 class ImageReader(ABC):
     """
     Abstract class to create image readers classes.
-
     """
 
     def __init__(self, img_path):
@@ -39,7 +38,6 @@ class ImageReader(ABC):
         Returns
         -------
         None
-
         """
         self.img = None
         self.img_path = img_path
@@ -58,7 +56,6 @@ class ImageReader(ABC):
         Returns
         -------
         None
-
         """
         pass
 
@@ -75,13 +72,12 @@ class ImageReader(ABC):
             Shape of the image patch to be read.
         from_center : bool, optional
             Indication of whether "voxel" is the center or top-left-front
-            corner of the image patch to be read. The default is True.
+            corner of the image patch to be read. Default is True.
 
         Returns
         -------
         numpy.ndarray
             Image patch.
-
         """
         s, e = get_start_end(voxel, shape, from_center=from_center)
         if len(self.shape()) == 3:
@@ -105,7 +101,6 @@ class ImageReader(ABC):
         -------
         numpy.ndarray
             Image patch.
-
         """
         shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
         try:
@@ -122,13 +117,12 @@ class ImageReader(ABC):
         voxel : Tuple[int]
             Voxel to be read.
         thread_id : Any
-            Identifier associated with output. The default is Any.
+            Identifier associated with output. Default is None.
 
         Returns
         -------
         int
             Intensity value at voxel.
-
         """
         return thread_id, self.img[voxel]
 
@@ -146,7 +140,6 @@ class ImageReader(ABC):
         -------
         List[float]
             Image profile.
-
         """
         img_patch = normalize(self.read_with_bbox(spec["bbox"]))
         return [img_patch[v] for v in map(tuple, spec["profile_path"])]
@@ -163,7 +156,6 @@ class ImageReader(ABC):
         -------
         Tuple[int]
             Shape of image.
-
         """
         return self.img.shape
 
@@ -186,7 +178,6 @@ class TensorStoreReader(ImageReader):
         Returns
         -------
         None
-
         """
         self.driver = self.init_driver(img_path)
         super().__init__(img_path)
@@ -203,7 +194,6 @@ class TensorStoreReader(ImageReader):
         -------
         str
             Storage driver needed to read the image.
-
         """
         if ".zarr" in img_path:
             return "zarr"
@@ -223,7 +213,6 @@ class TensorStoreReader(ImageReader):
         Returns
         -------
         None
-
         """
         self.img = ts.open(
             {
@@ -262,13 +251,12 @@ class TensorStoreReader(ImageReader):
             Shape of the image patch to be read.
         from_center : bool, optional
             Indication of whether "voxel" is the center or top-left-front
-            corner of the image patch to be read. The default is True.
+            corner of the image patch to be read. Default is True.
 
         Returns
         -------
         numpy.ndarray
             Image patch.
-
         """
         try:
             img_patch = super().read(voxel, shape, from_center)
@@ -286,13 +274,12 @@ class TensorStoreReader(ImageReader):
         voxel : Tuple[int]
             Voxel to be read.
         thread_id : Any
-            Identifier associated with output. The default is Any.
+            Identifier associated with output.
 
         Returns
         -------
         int
             Intensity value at voxel.
-
         """
         return thread_id, int(self.img[voxel].read().result())
 
@@ -315,7 +302,6 @@ class ZarrReader(ImageReader):
         Returns
         -------
         None
-
         """
         super().__init__(img_path)
 
@@ -330,7 +316,6 @@ class ZarrReader(ImageReader):
         Returns
         -------
         None
-
         """
         store = s3fs.S3Map(root=self.img_path, s3=s3fs.S3FileSystem(anon=True))
         self.img = zarr.open(store, mode="r")
@@ -349,13 +334,12 @@ def get_start_end(voxel, shape, from_center=True):
         Shape of the image patch to be read.
     from_center : bool, optional
         Indication of whether "voxel" is the center or top-left-front corner
-        of the image patch to be read. The default is True.
+        of the image patch to be read. Default is True.
 
     Return
     ------
     Tuple[List[int]]
         Start and end indices of the image patch to be read.
-
     """
     if from_center:
         start = [voxel[i] - shape[i] // 2 for i in range(3)]
@@ -385,7 +369,6 @@ def get_profile(img_reader, spec, profile_id):
     dict
         Dictionary that maps an id (e.g. node, edge, or proposal) to its image
         profile.
-
     """
     profile = img_reader.read_profile(spec)
     avg, std = util.get_avg_std(profile)
@@ -407,13 +390,12 @@ def to_physical(voxel, anisotropy, shift=(0, 0, 0)):
         Image to physical coordinates scaling factors to account for the
         anisotropy of the microscope.
     shift : Tuple[int], optional
-        Shift to be applied to "voxel". The default is (0, 0, 0).
+        Shift to be applied to "voxel". Default is (0, 0, 0).
 
     Returns
     -------
     Tuple[float]
         Physical coordinate.
-
     """
     voxel = voxel[::-1]
     return tuple([voxel[i] * anisotropy[i] - shift[i] for i in range(3)])
@@ -432,13 +414,12 @@ def to_voxels(xyz, anisotropy, multiscale=0):
         anisotropy of the microscope.
     multiscale : int, optional
         Level in the image pyramid that the voxel coordinate must index into.
-        The default is 0.
+        Default is 0.
 
     Returns
     -------
     Tuple[int]
         Voxel coordinate.
-
     """
     scaling_factor = 1.0 / 2 ** multiscale
     voxel = [int(scaling_factor * xyz[i] / anisotropy[i]) for i in range(3)]
@@ -465,7 +446,6 @@ def find_img_path(bucket_name, root_dir, dataset_name):
     -------
     str
         Path of the found dataset subdirectory within the specified GCS bucket.
-
     """
     for subdir in util.list_gcs_subdirectories(bucket_name, root_dir):
         if dataset_name in subdir:
@@ -483,13 +463,12 @@ def get_minimal_bbox(voxels, buffer=0):
         Array containing voxel coordinates.
     buffer : int, optional
         Constant value added/subtracted from the max/min coordinates of the
-        bounding box. The default is 0.
+        bounding box. Default is 0.
 
     Returns
     -------
     dict
         Bounding box.
-
     """
     bbox = {
         "min": np.floor(np.min(voxels, axis=0) - buffer).astype(int),
@@ -507,13 +486,12 @@ def get_mip(img, axis=0):
     img : numpy.ndarray
         Image to compute MIP of.
     axis : int, optional
-        Projection axis. The default is 0.
+        Projection axis. Default is 0.
 
     Returns
     -------
     numpy.ndarray
         MIP of "img".
-
     """
     return np.max(img, axis=axis)
 
@@ -529,17 +507,15 @@ def get_labels_mip(img, axis=0):
     img : numpy.ndarray
         Image to compute MIP of.
     axis : int, optional
-        Projection axis. The default is 0.
+        Projection axis. Default is 0.
 
     Returns
     -------
     numpy.ndarray
         MIP of "img".
-
     """
     mip = get_mip(img, axis=axis)
-    mip = label2rgb(mip)
-    return (255 * mip).astype(np.uint8)
+    return (255 * label2rgb(mip)).astype(np.uint8)
 
 
 def get_neighbors(voxel, shape):
@@ -557,7 +533,6 @@ def get_neighbors(voxel, shape):
     -------
     List[Tuple[int]]
          Voxel coordinates of the 26 neighbors of the given voxel.
-
     """
     # Initializations
     x, y, z = voxel
@@ -600,7 +575,6 @@ def is_contained(bbox, voxel):
     bool
         Inidcation of whether "voxel" is contained within the given image
         bounding box.
-
     """
     above = any([v >= bbox_max for v, bbox_max in zip(voxel, bbox["max"])])
     below = any([v < bbox_min for v, bbox_min in zip(voxel, bbox["min"])])
@@ -625,7 +599,6 @@ def is_list_contained(bbox, voxels):
     bool
         Indication of whether every element in "voxels" is contained in
         "bbox".
-
     """
     return all([is_contained(bbox, voxel) for voxel in voxels])
 
@@ -644,7 +617,6 @@ def normalize(img):
     -------
     numpy.ndarray
         Normalized image.
-
     """
     img -= np.min(img)
     return img / max(1, np.max(img))
