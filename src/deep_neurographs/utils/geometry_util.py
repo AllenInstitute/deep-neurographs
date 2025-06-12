@@ -216,7 +216,7 @@ def fill_path(img, path, val=-1):
 
 def path_length(path):
     """
-    Computes the path length of "path".
+    Computes the path length of list of xyz coordinates that form a path.
 
     Parameters
     ----------
