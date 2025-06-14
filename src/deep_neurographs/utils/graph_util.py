@@ -350,8 +350,8 @@ class GraphLoader:
                 branchings.add(j)
 
             # Update edge attributes
-            attrs["radius"].append(graph.graph["radius"][i])
-            attrs["xyz"].append(graph.graph["xyz"][i])
+            attrs["radius"].append(graph.nodes[i]["radius"])
+            attrs["xyz"].append(graph.nodes[i]["xyz"])
 
             # Check for end of irreducible edge
             if j in leafs or j in branchings:
@@ -396,7 +396,7 @@ class GraphLoader:
             visited = set({root})
 
             # Check if close to soma
-            soma_dist = self.dist_from_soma(graph.graph["xyz"][root])
+            soma_dist = self.dist_from_soma(graph.nodes[root]["xyz"])
             if graph.graph["soma_nodes"] and soma_dist < 300:
                 continue
 
@@ -552,8 +552,8 @@ def init_edge_attrs(graph, i):
         Edge attribute dictionary.
     """
     attrs = {
-        "radius": [graph.graph["radius"][i]],
-        "xyz": [graph.graph["xyz"][i]],
+        "radius": [graph.nodes[i]["radius"]],
+        "xyz": [graph.nodes[i]["xyz"]],
     }
     return attrs
 
@@ -582,8 +582,8 @@ def set_edge_attrs(graph, attrs, node_spacing):
     for e in attrs:
         # Update endpoints
         i, j = tuple(e)
-        attrs[e]["xyz"][0] = graph.graph["xyz"][i]
-        attrs[e]["xyz"][-1] = graph.graph["xyz"][j]
+        attrs[e]["xyz"][0] = graph.nodes[i]["xyz"]
+        attrs[e]["xyz"][-1] = graph.nodes[j]["xyz"]
 
         # Resample points
         idxs = util.spaced_idxs(len(attrs[e]["xyz"]), node_spacing)
@@ -612,7 +612,7 @@ def set_node_attrs(graph, nodes):
     attrs = dict()
     for i in nodes:
         attrs[i] = {
-            "radius": graph.graph["radius"][i], "xyz": graph.graph["xyz"][i]
+            "radius": graph.nodes[i]["radius"], "xyz": graph.nodes[i]["xyz"]
         }
     return attrs
 
@@ -657,7 +657,7 @@ def dist(graph, i, j):
     float
         Euclidean distance between nodes i and j.
     """
-    return geometry_util.dist(graph.graph["xyz"][i], graph.graph["xyz"][j])
+    return geometry_util.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
 
 
 def find_closest_node(graph, xyz):
@@ -679,7 +679,7 @@ def find_closest_node(graph, xyz):
     best_dist = np.inf
     best_node = None
     for i in graph.nodes:
-        cur_dist = geometry_util.dist(xyz, graph.graph["xyz"][i])
+        cur_dist = geometry_util.dist(xyz, graph.nodes[i]["xyz"])
         if cur_dist < best_dist:
             best_dist = cur_dist
             best_node = i
@@ -987,8 +987,8 @@ def smooth_branch(graph, attrs, i, j):
     None
     """
     attrs["xyz"] = geometry_util.smooth_branch(attrs["xyz"], s=2)
-    graph.graph["xyz"][i] = attrs["xyz"][0]
-    graph.graph["xyz"][j] = attrs["xyz"][-1]
+    graph.nodes[i]["xyz"] = attrs["xyz"][0]
+    graph.nodes[j]["xyz"] = attrs["xyz"][-1]
 
 
 def to_numpy(attrs):
