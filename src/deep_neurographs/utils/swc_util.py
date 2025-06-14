@@ -31,6 +31,7 @@ from io import BytesIO
 from tqdm import tqdm
 from zipfile import ZipFile
 
+import ast
 import networkx as nx
 import numpy as np
 import os
@@ -263,7 +264,7 @@ class Reader:
         content = util.read_zip(zip_file, path).splitlines()
         if len(content) > self.min_size - 10:
             swc_dict = self.parse(content)
-            swc_dict["swc_name"] = util.get_swc_name(path)
+            swc_dict["swc_name"] = get_swc_name(path)
             return swc_dict
         else:
             return False
@@ -430,56 +431,49 @@ class Reader:
 
 
 # --- Helpers ---
+def get_segment_id(swc_name):
+    return ast.literal_eval(swc_name.split(".")[0])
+
+
+def get_swc_name(path):
+    """
+    Gets name of the SWC file at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path to SWC file.
+
+    Returns
+    -------
+    str
+        SWC filename.
+    """
+    filename = os.path.basename(path)
+    name, ext = os.path.splitext(filename)
+    return name
+
+
 def to_graph(swc_dict, set_attrs=False):
     """
-    Converts a dictionary containing swc attributes to a graph.
-
-    Parameters
-    ----------
-    swc_dict : dict
-        Dictionaries whose keys and values are the attribute name and values
-        from an swc file.
-    set_attrs : bool, optional
-        Indication of whether to set attributes. The default is False.
-
-    Returns
-    -------
-    graph : networkx.Graph
-        Graph generated from "swc_dict".
+    Converts SWC dict to an array-backed NetworkX graph with reindexed nodes.
     """
+    # Reindex nodes: map swc ids to 0..N-1
+    swc_ids = np.asarray(swc_dict["id"])
+    id_map = {old_id: new_id for new_id, old_id in enumerate(swc_ids)}
+    pids = np.asarray(swc_dict["pid"])
+    edges = [
+        (id_map[child], id_map[parent]) 
+        for child, parent in zip(swc_ids[1:], pids[1:])
+        if parent in id_map
+    ]
+
+    # Build graph with reindexed edges
     graph = nx.Graph(swc_name=swc_dict["swc_name"])
-    graph.add_edges_from(zip(swc_dict["id"][1:], swc_dict["pid"][1:]))
+    graph.add_edges_from(edges)
+
+    # Store attributes at graph level
     if set_attrs:
-        __add_attributes(swc_dict, graph)
+        graph.graph["xyz"] = np.asarray(swc_dict["xyz"])
+        graph.graph["radius"] = np.asarray(swc_dict["radius"])
     return graph
-
-
-def __add_attributes(swc_dict, graph):
-    """
-    Adds node attributes to a NetworkX graph based on information from
-    "swc_dict".
-
-    Parameters
-    ----------
-    swc_dict : dict
-        A dictionary containing SWC data. It must have the following keys:
-        - "id": A list of node identifiers (unique for each node).
-        - "xyz": A list of 3D coordinates (x, y, z) for each node.
-        - "radius": A list of radii for each node.
-
-    graph : networkx.Graph
-        A NetworkX graph object to which the attributes will be added.
-        The graph must contain nodes that correspond to the IDs in
-        "swc_dict["id"]".
-
-    Returns
-    -------
-    None
-    """
-    attrs = dict()
-    for idx, node in enumerate(swc_dict["id"]):
-        attrs[node] = {
-            "xyz": swc_dict["xyz"][idx],
-            "radius": swc_dict["radius"][idx],
-        }
-    nx.set_node_attributes(graph, attrs)

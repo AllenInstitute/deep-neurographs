@@ -622,25 +622,6 @@ def update_smartsheet(access_token, brain_id):
 
 
 # --- Miscellaneous ---
-def get_swc_name(path):
-    """
-    Gets name of the SWC file at "path".
-
-    Parameters
-    ----------
-    path : str
-        Path to SWC file.
-
-    Returns
-    -------
-    str
-        SWC filename.
-    """
-    filename = os.path.basename(path)
-    name, ext = os.path.splitext(filename)
-    return name
-
-
 def get_memory_usage():
     """
     Gets the current memory usage in gigabytes.
