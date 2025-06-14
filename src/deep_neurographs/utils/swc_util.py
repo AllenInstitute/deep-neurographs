@@ -46,7 +46,7 @@ class Reader:
 
     def __init__(self, anisotropy=(1.0, 1.0, 1.0), min_size=0):
         """
-        Initializes a Reader object that loads SWC files.
+        Initializes a Reader object that reads SWC files.
 
         Parameters
         ----------
@@ -64,10 +64,9 @@ class Reader:
         self.anisotropy = anisotropy
         self.min_size = min_size
 
-    def load(self, swc_pointer):
+    def read(self, swc_pointer):
         """
-        Loads data from SWC files located at the path specified by
-        "swc_pointer".
+        Reads SWC files located at the path specified by "swc_pointer".
 
         Parameters
         ----------
@@ -129,7 +128,7 @@ class Reader:
 
         raise Exception(f"SWC Pointer is invalid - {swc_pointer}")
 
-    # --- Load subroutines ---
+    # --- Read subroutines ---
     def read_from_paths(self, swc_paths):
         """
         Reads a list of SWC files stored on the local machine.
@@ -150,7 +149,7 @@ class Reader:
             processes = list()
             for path in swc_paths:
                 processes.append(
-                    executor.submit(self.load, path)
+                    executor.submit(self.read, path)
                 )
 
             # Store results
@@ -186,7 +185,7 @@ class Reader:
 
     def read_from_zips(self, zip_dir):
         """
-        Processes a directory containing ZIP archives with SWC files.
+        Reads a directory containing ZIP archives with SWC files.
 
         Parameters
         ----------

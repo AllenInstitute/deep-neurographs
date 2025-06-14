@@ -158,8 +158,8 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
-        swc_dicts = self.swc_reader.load(fragments_pointer)
-        irreducibles_list = self.graph_loader.extract_irreducibles(swc_dicts)
+        swc_dicts = self.swc_reader.read(fragments_pointer)
+        irreducibles_list = self.graph_loader.run(swc_dicts)
         while irreducibles_list:
             irreducibles = irreducibles_list.pop()
             self.add_irreducibles(irreducibles)
