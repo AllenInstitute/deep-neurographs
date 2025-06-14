@@ -747,7 +747,6 @@ def find_somas_path(graph):
     return path
 
 
-
 def get_component(graph, root):
     """
     Gets the connected component corresponding to "root" from "graph".
