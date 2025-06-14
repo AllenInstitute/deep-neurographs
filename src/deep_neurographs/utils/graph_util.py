@@ -155,7 +155,7 @@ class GraphLoader:
             print("# Soma Merges:", n)
 
     # --- Irreducibles Extraction ---
-    def extract_irreducibles(self, swc_dicts):
+    def run(self, swc_dicts):
         """
         Processes a list of swc dictionaries in parallel and extracts the
         components of the irreducible subgraph from each. Note: this routine
@@ -187,7 +187,7 @@ class GraphLoader:
             while swc_dicts:
                 swc_dict = swc_dicts.pop()
                 processes.append(executor.submit(self.extracter, swc_dict))
-                if len(processes) > 200 or not swc_dicts:
+                if len(processes) > 400 or not swc_dicts:
                     # Store results
                     for process in as_completed(processes):
                         pbar.update(1) if self.verbose else None
@@ -294,10 +294,7 @@ class GraphLoader:
             subgraph.
         """
         # Irreducibles
-        leafs, branchings = get_irreducible_nodes(graph)
-        edges = get_irreducible_edges(
-            graph, leafs, branchings, self.smooth_bool
-        )
+        leafs, branchings, edges = self.get_irreducibles(graph)
 
         # Compile results
         irreducibles = {
@@ -308,6 +305,63 @@ class GraphLoader:
             "is_soma": True if graph.graph["soma_nodes"] else False,
         }
         return irreducibles, 0
+
+    def get_irreducibles(self, graph):
+        """
+        Identifies irreducible nodes and edges in a graph by traversing with a
+        depth-first search.
+    
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be searched.
+        leafs : Set[int]
+            Leaf nodes in the given graph.
+        branchings : Set[int]
+            Branching nodes in the given graph.
+        smooth_bool : bool
+            Indication whether to apply smoothing to the edges.
+    
+        Returns
+        -------
+        dict
+            Dictionary where the keys are tuples representing the irreducible
+            edges and values are attributes associated with those edges.
+        """
+        # Initializations
+        leafs, branchings, edges = set(), set(), dict()
+        leaf = find_leaf(graph)
+        leafs.add(leaf)
+
+        # Main
+        root = None
+        for (i, j) in nx.dfs_edges(graph, source=leaf):
+            # Check for start of irreducible edge
+            if root is None:
+                root = i
+                attrs = init_edge_attrs(graph, root)
+
+            # Check for irreducible node
+            if graph.degree[j] == 1:
+                leafs.add(j)
+            elif graph.degree[j] >= 3:
+                branchings.add(j)
+
+            # Update edge attributes
+            attrs["radius"].append(graph.nodes[i]["radius"])
+            attrs["xyz"].append(graph.nodes[i]["xyz"])
+
+            # Check for end of irreducible edge
+            if j in leafs or j in branchings:
+                # Smooth (if applicable)
+                attrs = to_numpy(attrs)
+                if self.smooth_bool:
+                    smooth_branch(graph, attrs, root, j)
+    
+                # Finish
+                edges[(root, j)] = attrs
+                root = None
+        return leafs, branchings, edges
 
     # --- Merge Removal ---
     def remove_high_risk_merges(self, graph, max_dist=7):
@@ -331,7 +385,7 @@ class GraphLoader:
         """
         high_risk_cnt = 0
         nodes = set()
-        _, branchings = get_irreducible_nodes(graph)
+        branchings = [i for i in graph.nodes if graph.degree[i] >= 3]
         while branchings:
             # Initializations
             root = branchings.pop()
@@ -373,16 +427,12 @@ class GraphLoader:
 
         Parameters
         ----------
-        swc_dict : dict
-            Contents of an SWC file.
-        somas_xyz : List[Tuple[float]]
-            Physical coordinates representing soma locations.
+        graph : networkx.Graph
+            Graph to be searched.
 
         Returns
         -------
-        List[dicts]
-            Updated SWC dictionaries, where each dictionary represents a
-            subgraph that was disconnected.
+        None
         """
         if len(graph.graph["soma_nodes"]) <= 20:
             # Break connecting path
@@ -390,7 +440,7 @@ class GraphLoader:
             for node in find_somas_path(graph):
                 if graph.degree(node) > 2:
                     nodes.add(node)
-            remove_nodes(graph, nodes)
+            remove_nodes_within_radius(graph, nodes)
 
             # Associate each soma to one node
             graph.graph["soma_nodes"] = self.find_soma_nodes(graph)
@@ -481,168 +531,7 @@ class GraphLoader:
         return graph
 
 
-def find_somas_path(graph):
-    """
-    Finds the shortest paths between a list of nodes such that each is closest
-    to an xyz coordinate in "somas_xyz".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-    somas_xyz : List[Tuple[float]]
-        List of xyz coordinates that represent soma locations.
-
-    Returns
-    -------
-    Set[int]
-        Nodes along the shortest paths between somas.
-    """
-    # Break merges between somas
-    path = set()
-    soma_nodes = graph.graph["soma_nodes"]
-    if len(soma_nodes) > 1:
-        for i in range(1, len(soma_nodes)):
-            subpath = nx.shortest_path(
-                graph, source=soma_nodes[0], target=soma_nodes[i]
-            )
-            path = path.union(set(subpath))
-    return path
-
-
-def remove_nodes(graph, roots, max_dist=5.0):
-    """
-    Removes nodes from graph within a given radius from a set of root nodes.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-    roots : List[int]
-        Root nodes.
-    max_dist : float, optional
-        Maximum distance within which nodes are removed. The default is 5.0.
-
-    Returns
-    -------
-    None
-    """
-    nodes = set()
-    while len(roots) > 0:
-        root = roots.pop()
-        queue = [(root, 0)]
-        visited = set()
-        while len(queue) > 0:
-            # Visit node
-            i, dist_i = queue.pop()
-            visited.add(i)
-
-            # Update queue
-            for j in graph.neighbors(i):
-                dist_j = dist_i + dist(graph, i, j)
-                if j not in visited and dist_j <= max_dist:
-                    queue.append((j, dist_j))
-                elif j not in visited and graph.degree(j) > 2:
-                    queue.append((j, dist_i))
-        nodes = nodes.union(visited)
-    graph.remove_nodes_from(nodes)
-
-
-# --- Irreducible Node Extraction ---
-def get_irreducible_nodes(graph):
-    """
-    Gets irreducible nodes (i.e. leafs and branchings) of a graph.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-
-    Returns
-    -------
-    Tuple[set]
-        Sets of leaf and branching nodes.
-    """
-    leafs = set()
-    branchings = set()
-    for i in graph.nodes:
-        if graph.degree[i] == 1:
-            leafs.add(i)
-        elif graph.degree[i] > 2:
-            branchings.add(i)
-    return leafs, branchings
-
-
-def set_node_attrs(graph, nodes):
-    """
-    Extracts attributes for each node in the graph.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph that contains "nodes".
-    nodes : List[int]
-        Nodes whose attributes are to be extracted from the graph.
-
-    Returns
-    -------
-    dict
-        Dictionary where the keys are node ids and values are dictionaries
-        containing the "radius" and "xyz" attributes of the nodes.
-    """
-    attrs = dict()
-    for i in nodes:
-        attrs[i] = {
-            "radius": graph.nodes[i]["radius"], "xyz": graph.nodes[i]["xyz"]
-        }
-    return attrs
-
-
-# --- Irreducible Edge Extraction ---
-def get_irreducible_edges(graph, leafs, branchings, smooth_bool):
-    """
-    Identifies irreducible edges in a graph by traversing with a depth-first
-    search.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-    leafs : Set[int]
-        Leaf nodes in the given graph.
-    branchings : Set[int]
-        Branching nodes in the given graph.
-    smooth_bool : bool
-        Indication whether to apply smoothing to the edges.
-
-    Returns
-    -------
-    dict
-        Dictionary where the keys are tuples representing the irreducible
-        edges and values are attributes associated with those edges.
-    """
-    edges = dict()
-    root = None
-    for (i, j) in nx.dfs_edges(graph, source=util.sample_once(leafs)):
-        # Check for start of irreducible edge
-        if root is None:
-            root = i
-            attrs = init_edge_attrs(graph, root)
-
-        # Check for end of irreducible edge
-        upd_edge_attrs(graph, attrs, i, j)
-        if j in leafs or j in branchings:
-            # Smooth (if applicable)
-            attrs = to_numpy(attrs)
-            if smooth_bool:
-                smooth_branch(graph, attrs, root, j)
-
-            # Finish
-            edges[(root, j)] = attrs
-            root = None
-    return edges
-
-
+# --- Irreducibles Extraction Helpers ---
 def init_edge_attrs(graph, i):
     """
     Initializes an attribute dictionary for a single irreducible edge.
@@ -665,31 +554,6 @@ def init_edge_attrs(graph, i):
         "xyz": [graph.nodes[i]["xyz"]],
     }
     return attrs
-
-
-def upd_edge_attrs(graph, attrs, i, j):
-    """
-    Updates an edge attribute dictionary with attributes of node i.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph containing nodes "i" and "j".
-    attrs : dict
-        Edge attribute dictionary to be updated.
-    i : int
-        Node in the path between irreducible nodes whose attributes will be
-        added to the "attrs" dictionary.
-    j : int
-        Neighbor of node "i" which is also along this path.
-
-    Returns
-    -------
-    dict
-        Edge attribute dictionary.
-    """
-    attrs["radius"].append(graph.nodes[i]["radius"])
-    attrs["xyz"].append(graph.nodes[i]["xyz"])
 
 
 def set_edge_attrs(graph, attrs, node_spacing):
@@ -723,6 +587,31 @@ def set_edge_attrs(graph, attrs, node_spacing):
         idxs = util.spaced_idxs(len(attrs[e]["xyz"]), node_spacing)
         attrs[e]["radius"] = attrs[e]["radius"][idxs]
         attrs[e]["xyz"] = attrs[e]["xyz"][idxs]
+    return attrs
+
+
+def set_node_attrs(graph, nodes):
+    """
+    Extracts attributes for each node in the graph.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph that contains "nodes".
+    nodes : List[int]
+        Nodes whose attributes are to be extracted from the graph.
+
+    Returns
+    -------
+    dict
+        Dictionary where the keys are node ids and values are dictionaries
+        containing the "radius" and "xyz" attributes of the nodes.
+    """
+    attrs = dict()
+    for i in nodes:
+        attrs[i] = {
+            "radius": graph.nodes[i]["radius"], "xyz": graph.nodes[i]["xyz"]
+        }
     return attrs
 
 
@@ -795,6 +684,25 @@ def find_closest_node(graph, xyz):
     return best_node, best_dist
 
 
+def find_leaf(graph):
+    """
+    Finds a single leaf node in the given graph.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+
+    Returns
+    -------
+    int
+        Leaf node.
+    """
+    for i in graph.nodes:
+        if graph.degree[i] == 1:
+            return i
+
+
 def find_nearby_branching_node(graph, root, max_depth=10):
     queue = [(root, 0)]
     visited = set(queue)
@@ -810,6 +718,34 @@ def find_nearby_branching_node(graph, root, max_depth=10):
             if dist_j < max_depth and j not in visited:
                 queue.append((j, dist_j))
     return root
+
+
+def find_somas_path(graph):
+    """
+    Finds the shortest paths between a list of nodes such that each is closest
+    to an xyz coordinate in "somas_xyz".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+
+    Returns
+    -------
+    Set[int]
+        Nodes along the shortest paths between somas.
+    """
+    # Break merges between somas
+    path = set()
+    soma_nodes = graph.graph["soma_nodes"]
+    if len(soma_nodes) > 1:
+        for i in range(1, len(soma_nodes)):
+            subpath = nx.shortest_path(
+                graph, source=soma_nodes[0], target=soma_nodes[i]
+            )
+            path = path.union(set(subpath))
+    return path
+
 
 
 def get_component(graph, root):
@@ -970,6 +906,44 @@ def prune_branches(graph, depth):
                 # Check whether to stop
                 if length > depth:
                     break
+
+
+def remove_nodes_within_radius(graph, roots, max_dist=5.0):
+    """
+    Removes nodes from graph within a given radius from a set of root nodes.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+    roots : List[int]
+        Root nodes.
+    max_dist : float, optional
+        Maximum distance within which nodes are removed. The default is 5.0.
+
+    Returns
+    -------
+    None
+    """
+    nodes = set()
+    while len(roots) > 0:
+        root = roots.pop()
+        queue = [(root, 0)]
+        visited = set(queue)
+        while len(queue) > 0:
+            # Visit node
+            i, dist_i = queue.pop()
+            visited.add(i)
+
+            # Update queue
+            for j in graph.neighbors(i):
+                dist_j = dist_i + dist(graph, i, j)
+                if j not in visited and dist_j <= max_dist:
+                    queue.append((j, dist_j))
+                elif j not in visited and graph.degree(j) > 2:
+                    queue.append((j, dist_i))
+        nodes = nodes.union(visited)
+    graph.remove_nodes_from(nodes)
 
 
 def sample_node(graph):
