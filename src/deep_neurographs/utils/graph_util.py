@@ -155,7 +155,7 @@ class GraphLoader:
             print("# Soma Merges:", n)
 
     # --- Irreducibles Extraction ---
-    def extract_irreducibles(self, swc_dicts):
+    def run(self, swc_dicts):
         """
         Processes a list of swc dictionaries in parallel and extracts the
         components of the irreducible subgraph from each. Note: this routine
@@ -340,7 +340,7 @@ class GraphLoader:
             visited = set({root})
 
             # Check if close to soma
-            soma_dist = self.dist_from_soma(graph.nodes[root]["xyz"])
+            soma_dist = self.dist_from_soma(graph.graph["xyz"][root])
             if graph.graph["soma_nodes"] and soma_dist < 300:
                 continue
 
@@ -593,7 +593,7 @@ def set_node_attrs(graph, nodes):
     attrs = dict()
     for i in nodes:
         attrs[i] = {
-            "radius": graph.nodes[i]["radius"], "xyz": graph.nodes[i]["xyz"]
+            "radius": graph.graph["radius"][i], "xyz": graph.graph["xyz"][i]
         }
     return attrs
 
@@ -661,8 +661,8 @@ def init_edge_attrs(graph, i):
         Edge attribute dictionary.
     """
     attrs = {
-        "radius": [graph.nodes[i]["radius"]],
-        "xyz": [graph.nodes[i]["xyz"]],
+        "radius": [graph.graph["radius"][i]],
+        "xyz": [graph.graph["xyz"][i]],
     }
     return attrs
 
@@ -688,8 +688,8 @@ def upd_edge_attrs(graph, attrs, i, j):
     dict
         Edge attribute dictionary.
     """
-    attrs["radius"].append(graph.nodes[i]["radius"])
-    attrs["xyz"].append(graph.nodes[i]["xyz"])
+    attrs["radius"].append(graph.graph["radius"][i])
+    attrs["xyz"].append(graph.graph["xyz"][i])
 
 
 def set_edge_attrs(graph, attrs, node_spacing):
@@ -716,8 +716,8 @@ def set_edge_attrs(graph, attrs, node_spacing):
     for e in attrs:
         # Update endpoints
         i, j = tuple(e)
-        attrs[e]["xyz"][0] = graph.nodes[i]["xyz"]
-        attrs[e]["xyz"][-1] = graph.nodes[j]["xyz"]
+        attrs[e]["xyz"][0] = graph.graph["xyz"][i]
+        attrs[e]["xyz"][-1] = graph.graph["xyz"][j]
 
         # Resample points
         idxs = util.spaced_idxs(len(attrs[e]["xyz"]), node_spacing)
@@ -766,7 +766,7 @@ def dist(graph, i, j):
     float
         Euclidean distance between nodes i and j.
     """
-    return geometry_util.dist(graph.nodes[i]["xyz"], graph.nodes[j]["xyz"])
+    return geometry_util.dist(graph.graph["xyz"][i], graph.graph["xyz"][j])
 
 
 def find_closest_node(graph, xyz):
@@ -788,7 +788,7 @@ def find_closest_node(graph, xyz):
     best_dist = np.inf
     best_node = None
     for i in graph.nodes:
-        cur_dist = geometry_util.dist(xyz, graph.nodes[i]["xyz"])
+        cur_dist = geometry_util.dist(xyz, graph.graph["xyz"][i])
         if cur_dist < best_dist:
             best_dist = cur_dist
             best_node = i
@@ -1011,8 +1011,8 @@ def smooth_branch(graph, attrs, i, j):
     None
     """
     attrs["xyz"] = geometry_util.smooth_branch(attrs["xyz"], s=2)
-    graph.nodes[i]["xyz"] = attrs["xyz"][0]
-    graph.nodes[j]["xyz"] = attrs["xyz"][-1]
+    graph.graph["xyz"][i] = attrs["xyz"][0]
+    graph.graph["xyz"][j] = attrs["xyz"][-1]
 
 
 def to_numpy(attrs):
