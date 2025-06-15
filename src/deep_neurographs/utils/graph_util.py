@@ -182,7 +182,7 @@ class GraphLoader:
             while swc_dicts:
                 swc_dict = swc_dicts.pop()
                 processes.append(executor.submit(self.extract, swc_dict))
-                if len(processes) > 200 or not swc_dicts:
+                if len(processes) > 400 or not swc_dicts:
                     # Store results
                     for process in as_completed(processes):
                         pbar.update(1) if self.verbose else None
