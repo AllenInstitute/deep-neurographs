@@ -31,6 +31,7 @@ from concurrent.futures import (
 from random import sample
 from scipy.spatial import KDTree
 from tqdm import tqdm
+from time import time
 
 import multiprocessing
 import networkx as nx
@@ -237,7 +238,7 @@ class GraphLoader:
 
                 # Extract irreducible edges
                 cnt = 0
-                soma_nodes = set(graph.graph["soma_nodes"])
+                soma_nodes = graph.graph["soma_nodes"]
                 while leafs_to_visit:
                     source = util.sample_once(leafs_to_visit)
                     sub_edges, nodes = get_irreducible_edges(
@@ -340,17 +341,17 @@ class GraphLoader:
             Updated SWC dictionaries, where each dictionary represents a
             subgraph that was disconnected.
         """
-        if len(graph.graph["soma_nodes"]) <= 20:
+        soma_nodes = graph.graph["soma_nodes"]
+        if len(soma_nodes) <= 20:
             # Break connecting path
             nodes = set()
-            soma_nodes = graph.graph["soma_nodes"]
-            for node in find_connecting_path(graph, soma_nodes):
+            for node in find_connecting_path(graph, list(soma_nodes)):
                 if graph.degree(node) > 2:
                     nodes.add(node)
             remove_nearby_nodes(graph, nodes)
 
             # Associate each soma to one node
-            graph.graph["soma_nodes"] = self.find_soma_nodes(graph)
+            graph.graph["soma_nodes"] = soma_nodes.intersection(graph.nodes)
 
     # --- Helpers ---
     def dist_from_soma(self, xyz):
@@ -385,11 +386,11 @@ class GraphLoader:
         List[int]
             Node IDs that correspond to soma locations.
         """
-        soma_nodes = list()
+        soma_nodes = set()
         for xyz in self.id_to_soma[graph.graph["segment_id"]]:
             node, dist = find_closest_node(graph, xyz)
             if dist < 20:
-                soma_nodes.append(find_nearby_branching_node(graph, node, 20))
+                soma_nodes.add(find_nearby_branching_node(graph, node, 20))
         return soma_nodes
 
     def satifies_path_length_condition(self, graph):
@@ -434,11 +435,11 @@ class GraphLoader:
         if graph.graph["segment_id"] in self.id_to_soma:
             graph.graph["soma_nodes"] = self.find_soma_nodes(graph)
         else:
-            graph.graph["soma_nodes"] = list()
+            graph.graph["soma_nodes"] = set()
         return graph
 
 
-# --- Irreducible Node Extraction ---
+# --- Irreducibles Extraction ---
 def get_irreducible_nodes(graph):
     """
     Gets irreducible nodes (i.e. leafs and branchings) of a graph.
@@ -642,15 +643,14 @@ def find_closest_node(graph, xyz):
 
 def find_connecting_path(graph, nodes):
     """
-    Finds the shortest paths between a list of nodes such that each is closest
-    to an xyz coordinate in "somas_xyz".
+    Finds path that connects a set of nodes.
 
     Parameters
     ----------
     graph : networkx.Graph
         Graph to be searched.
-    somas_xyz : List[Tuple[float]]
-        List of xyz coordinates that represent soma locations.
+    nodes : List[int]
+        List of nodes to be connected.
 
     Returns
     -------
@@ -701,6 +701,7 @@ def find_nearby_branching_node(graph, root, max_depth=10):
             dist_j = dist_i + dist(graph, i, j)
             if dist_j < max_depth and j not in visited:
                 queue.append((j, dist_j))
+                visited.add(j)
     return root
 
 
