@@ -643,14 +643,14 @@ def find_closest_node(graph, xyz):
 
 def find_connecting_path(graph, nodes):
     """
-    Finds a paths that connects a set of nodes.
+    Finds path that connects a set of nodes.
 
     Parameters
     ----------
     graph : networkx.Graph
         Graph to be searched.
     nodes : List[int]
-        List of nodes that must be in path.
+        List of nodes to be connected.
 
     Returns
     -------
@@ -941,7 +941,7 @@ def smooth_branch(graph, attrs, i, j):
     -------
     None
     """
-    attrs["xyz"] = geometry_util.smooth_branch(attrs["xyz"], s=2)
+    attrs["xyz"] = geometry_util.smooth_branch_fast(attrs["xyz"], s=2)
     graph.graph["xyz"][i] = attrs["xyz"][0]
     graph.graph["xyz"][j] = attrs["xyz"][-1]
 
