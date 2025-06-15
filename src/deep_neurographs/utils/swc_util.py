@@ -463,7 +463,7 @@ def to_graph(swc_dict, set_attrs=False):
     id_map = {old_id: new_id for new_id, old_id in enumerate(swc_ids)}
     pids = np.asarray(swc_dict["pid"])
     edges = [
-        (id_map[child], id_map[parent]) 
+        (id_map[child], id_map[parent])
         for child, parent in zip(swc_ids[1:], pids[1:])
         if parent in id_map
     ]
