@@ -179,7 +179,7 @@ class Reader:
         content = util.read_txt(path)
         if len(content) > self.min_size - 10:
             swc_dict = self.parse(content)
-            swc_dict["swc_name"] = util.get_swc_name(path)
+            swc_dict["swc_name"] = get_swc_name(path)
             return swc_dict
         else:
             return False

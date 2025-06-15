@@ -7,6 +7,7 @@ Created on Sat Nov 15 9:00:00 2023
 """
 
 from collections import defaultdict
+from scipy.interpolate import splprep, splev
 from scipy.interpolate import UnivariateSpline
 from scipy.linalg import svd
 from scipy.spatial import distance
@@ -231,6 +232,21 @@ def path_length(path):
     return np.sum([dist(path[i], path[i - 1]) for i in range(1, len(path))])
 
 
+def smooth_branch_fast(xyz, s=None):
+    if len(xyz) > 10:
+        tck = fit_spline_fast(xyz, s=s)
+        u_fine = np.linspace(0, 1, len(xyz))
+        smoothed_xyz = np.array(splev(u_fine, tck)).T
+        return smoothed_xyz.astype(np.float32)
+    return xyz
+
+
+def fit_spline_fast(xyz, s=None, k=2):
+    s = len(xyz) / 10 if not s else len(xyz) / s
+    tck, u = splprep(xyz.T, k=k, s=s)
+    return tck
+
+
 def smooth_branch(xyz, s=None):
     """
     Smooths a Nx3 array of points by fitting a cubic spline. The points are
@@ -250,8 +266,8 @@ def smooth_branch(xyz, s=None):
     numpy.ndarray
         Smoothed points.
     """
-    if xyz.shape[0] > 8:
-        t = np.linspace(0, 1, xyz.shape[0])
+    if len(xyz) > 10:
+        t = np.linspace(0, 1, len(xyz))
         spline_x, spline_y, spline_z = fit_spline(xyz, s=s)
         xyz = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
     return xyz.astype(np.float32)
