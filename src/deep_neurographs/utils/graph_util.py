@@ -215,8 +215,9 @@ class GraphLoader:
             Dictionary that each contains the components of an irreducible
             subgraph.
         """
-        # Initializations
         graph = self.to_graph(swc_dict)
+        irreducibles = list()
+        high_risk_cnt = 0
         if self.satifies_path_length_condition(graph):
             # Check for soma merges
             if len(graph.graph["soma_nodes"]) > 1:
@@ -225,12 +226,9 @@ class GraphLoader:
             # Check for high risk merges
             if self.remove_high_risk_merges_bool:
                 high_risk_cnt = self.remove_high_risk_merges(graph)
-            else:
-                high_risk_cnt = 0
 
             # Extract irreducibles
             cnt = 0
-            irreducibles = list()
             leafs_to_visit = set(get_leafs(graph))
             while leafs_to_visit:
                 # Extract for connected component
