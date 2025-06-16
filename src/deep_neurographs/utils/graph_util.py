@@ -38,7 +38,8 @@ import networkx as nx
 import numpy as np
 import os
 
-from deep_neurographs.utils import geometry_util, img_util, swc_util, util
+from deep_neurographs.utils import geometry_util as geometry
+from deep_neurographs.utils import img_util, swc_util, util
 
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
@@ -182,16 +183,13 @@ class GraphLoader:
             while swc_dicts:
                 swc_dict = swc_dicts.pop()
                 processes.append(executor.submit(self.extract, swc_dict))
-                if len(processes) > 400 or not swc_dicts:
+                if len(processes) > 2000 or not swc_dicts:
                     # Store results
                     for process in as_completed(processes):
                         pbar.update(1) if self.verbose else None
                         result, cnt = process.result()
                         high_risk_cnt += cnt
-                        if isinstance(result, list):
-                            irreducibles.extend(result)
-                        elif isinstance(result, dict):
-                            irreducibles.append(result)
+                        irreducibles.extend(result)
 
                     # Reset processes
                     processes = list()
@@ -217,54 +215,106 @@ class GraphLoader:
             Dictionary that each contains the components of an irreducible
             subgraph.
         """
-        try:
-            # Initializations
-            graph = self.to_graph(swc_dict)
-            if self.satifies_path_length_condition(graph):
-                # Check for soma merges
-                if len(graph.graph["soma_nodes"]) > 1:
-                    self.remove_soma_merges(graph)
+        # Initializations
+        graph = self.to_graph(swc_dict)
+        if self.satifies_path_length_condition(graph):
+            # Check for soma merges
+            if len(graph.graph["soma_nodes"]) > 1:
+                self.remove_soma_merges(graph)
 
-                # Check for high risk merges
-                if self.remove_high_risk_merges_bool:
-                    high_risk_cnt = self.remove_high_risk_merges(graph)
-                else:
-                    high_risk_cnt = 0
-
-                # Extract irreducibles nodes
-                irreducibles = list()
-                leafs, branchings = get_irreducible_nodes(graph)
-                leafs_to_visit = set(leafs)
-
-                # Extract irreducible edges
-                cnt = 0
-                soma_nodes = graph.graph["soma_nodes"]
-                while leafs_to_visit:
-                    source = util.sample_once(leafs_to_visit)
-                    sub_edges, nodes = get_irreducible_edges(
-                        graph, self.smooth_bool, self.node_spacing, source
-                    )
-                    leafs_to_visit = leafs_to_visit - nodes
-                    if len(nodes) > 15 * self.node_spacing:
-                        sub_leafs = leafs.intersection(nodes)
-                        sub_branchings = branchings.intersection(nodes)
-                        sub_soma_nodes = soma_nodes.intersection(nodes)
-
-                        # Extract irreducibles
-                        irreducibles.append({
-                            "leaf": set_node_attrs(graph, sub_leafs),
-                            "branching": set_node_attrs(graph, sub_branchings),
-                            "edge": set_edge_attrs(graph, sub_edges),
-                            "swc_id": f"{graph.graph['segment_id']}.{cnt}",
-                            "is_soma": True if sub_soma_nodes else False,
-                        })
-                    cnt += 1
-                return irreducibles, high_risk_cnt
+            # Check for high risk merges
+            if self.remove_high_risk_merges_bool:
+                high_risk_cnt = self.remove_high_risk_merges(graph)
             else:
-                return None, 0
-        except Exception as e:
-            segment_id = graph.graph["segment_id"]
-            print(f"[ERROR] {segment_id}.swc failed with error: {e}")
+                high_risk_cnt = 0
+
+            # Extract irreducibles
+            cnt = 0
+            irreducibles = list()
+            leafs_to_visit = set(get_leafs(graph))
+            while leafs_to_visit:
+                # Extract for connected component
+                leaf = util.sample_once(leafs_to_visit)
+                irr, leafs = self.get_irreducibles(graph, leaf)
+
+                # Store results
+                leafs_to_visit = leafs_to_visit - leafs
+                if irr is not None:
+                    irr["swc_id"] = f"{graph.graph['segment_id']}.{cnt}"
+                    irreducibles.append(irr)
+                    cnt += 1
+        return irreducibles, high_risk_cnt
+
+    def get_irreducibles(self, graph, source):
+        """
+        Identifies irreducible edges in a graph by traversing with a DFS.
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be searched.
+        source : Set[int]
+            Leaf nodes in the given graph.
+
+        Returns
+        -------
+        dict
+            Dictionary where the keys are tuples representing the irreducible
+            edges and values are attributes associated with those edges.
+        """
+        def dist(i, j):
+            return geometry.dist(graph.graph["xyz"][i], graph.graph["xyz"][j])
+
+        is_soma = source in graph.graph["soma_nodes"]
+        path_length = 0
+        root = None
+        leafs, branchings, edges = set({source}), set(), dict()
+        for (i, j) in nx.dfs_edges(graph, source=source):
+            # Check for start of irreducible edge
+            path_length += dist(i, j)
+            is_soma = is_soma or j in graph.graph["soma_nodes"]
+            if root is None:
+                root, cnt = i, 0
+                attrs = {
+                    "radius": [graph.graph["radius"][i]],
+                    "xyz": [graph.graph["xyz"][i]],
+                }
+
+            # Update edge attribute
+            if cnt == self.node_spacing - 1 or graph.degree[j] != 2:
+                attrs["radius"].append(graph.graph["radius"][j])
+                attrs["xyz"].append(graph.graph["xyz"][j])
+                cnt = 0
+            else:
+                cnt += 1
+
+            # Check for irreducible nodes
+            if graph.degree[j] == 1:
+                leafs.add(j)
+            elif graph.degree[j] > 2:
+                branchings.add(j)
+
+            # Check for end of irreducible edge
+            if graph.degree[j] != 2:
+                attrs = to_numpy(attrs)
+                if self.smooth_bool:
+                    smooth_branch(graph, attrs, root, j)
+
+                # Finish
+                edges[(root, j)] = attrs
+                root = None
+
+        # Store results
+        if path_length > self.min_size - 10:
+            irreducibles = {
+                "leaf": set_node_attrs(graph, leafs),
+                "branching": set_node_attrs(graph, branchings),
+                "edge": set_edge_attrs(graph, edges),
+                "is_soma": is_soma,
+            }
+        else:
+            irreducibles = None
+        return irreducibles, leafs
 
     # --- Merge Removal ---
     def remove_high_risk_merges(self, graph, max_dist=7):
@@ -288,7 +338,7 @@ class GraphLoader:
         """
         high_risk_cnt = 0
         nodes = set()
-        _, branchings = get_irreducible_nodes(graph)
+        branchings = [i for i in graph.nodes if graph.degree[i] > 2]
         while branchings:
             # Initializations
             root = branchings.pop()
@@ -438,90 +488,7 @@ class GraphLoader:
             graph.graph["soma_nodes"] = set()
         return graph
 
-
-# --- Irreducibles Extraction ---
-def get_irreducible_nodes(graph):
-    """
-    Gets irreducible nodes (i.e. leafs and branchings) of a graph.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-
-    Returns
-    -------
-    Tuple[set]
-        Sets of leaf and branching nodes.
-    """
-    leafs, branchings = set(), set()
-    for i in graph.nodes:
-        if graph.degree[i] == 1:
-            leafs.add(i)
-        elif graph.degree[i] > 2:
-            branchings.add(i)
-    return leafs, branchings
-
-
-def get_irreducible_edges(
-    graph, smooth_bool, node_spacing, source=None
-):
-    """
-    Identifies irreducible edges in a graph by traversing with a depth-first
-    search.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-    leafs : Set[int]
-        Leaf nodes in the given graph.
-    smooth_bool : bool
-        Indication whether to apply smoothing to the edges.
-
-    Returns
-    -------
-    dict
-        Dictionary where the keys are tuples representing the irreducible
-        edges and values are attributes associated with those edges.
-    """
-    # Initializations
-    edges = dict()
-    root = None
-    source = source or find_leaf(graph)
-    visited = set({source})
-    for (i, j) in nx.dfs_edges(graph, source=source):
-        # Check for start of irreducible edge
-        visited.add(j)
-        if root is None:
-            root = i
-            cnt = 0
-            attrs = {
-                "radius": [graph.graph["radius"][i]],
-                "xyz": [graph.graph["xyz"][i]],
-            }
-
-        # Update edge attribute
-        is_irreducible = graph.degree[j] != 2
-        if cnt == node_spacing - 1 or is_irreducible:
-            attrs["radius"].append(graph.graph["radius"][j])
-            attrs["xyz"].append(graph.graph["xyz"][j])
-            cnt = 0
-        else:
-            cnt += 1
-
-        # Check for end of irreducible edge
-        if is_irreducible:
-            attrs = to_numpy(attrs)
-            if smooth_bool:
-                smooth_branch(graph, attrs, root, j)
-
-            # Finish
-            edges[(root, j)] = attrs
-            root = None
-    return edges, visited
-
-
+# --- Helpers ---
 def set_node_attrs(graph, nodes):
     """
     Extracts attributes for each node in the graph.
@@ -612,7 +579,7 @@ def dist(graph, i, j):
     float
         Euclidean distance between nodes i and j.
     """
-    return geometry_util.dist(graph.graph["xyz"][i], graph.graph["xyz"][j])
+    return geometry.dist(graph.graph["xyz"][i], graph.graph["xyz"][j])
 
 
 def find_closest_node(graph, xyz):
@@ -634,7 +601,7 @@ def find_closest_node(graph, xyz):
     best_dist = np.inf
     best_node = None
     for i in graph.nodes:
-        cur_dist = geometry_util.dist(xyz, graph.graph["xyz"][i])
+        cur_dist = geometry.dist(xyz, graph.graph["xyz"][i])
         if cur_dist < best_dist:
             best_dist = cur_dist
             best_node = i
@@ -841,28 +808,21 @@ def prune_branches(graph, depth):
     networkx.Graph
         Graph with short branches pruned.
     """
-    deleted_nodes = list()
-    n_passes = 0
-    while len(deleted_nodes) > 0 or n_passes < 2:
-        # Visit leafs
-        n_passes += 1
-        deleted_nodes = list()
-        for leaf in get_leafs(graph):
-            branch = [leaf]
-            length = 0
-            for (i, j) in nx.dfs_edges(graph, source=leaf):
-                # Visit edge
-                length += dist(graph, i, j)
-                if graph.degree(j) == 2:
-                    branch.append(j)
-                elif graph.degree(j) > 2:
-                    deleted_nodes.extend(branch)
-                    graph.remove_nodes_from(branch)
-                    break
+    for leaf in get_leafs(graph):
+        branch = [leaf]
+        length = 0
+        for (i, j) in nx.dfs_edges(graph, source=leaf):
+            # Visit edge
+            length += dist(graph, i, j)
+            if length > depth:
+                break
 
-                # Check whether to stop
-                if length > depth:
-                    break
+            # Check whether to continue search
+            if graph.degree(j) == 2:
+                branch.append(j)
+            elif graph.degree(j) > 2:
+                graph.remove_nodes_from(branch)
+                break
 
 
 def remove_nearby_nodes(graph, roots, max_dist=5.0):
@@ -941,7 +901,7 @@ def smooth_branch(graph, attrs, i, j):
     -------
     None
     """
-    attrs["xyz"] = geometry_util.smooth_branch_fast(attrs["xyz"], s=2)
+    attrs["xyz"] = geometry.smooth_branch(attrs["xyz"], s=2)
     graph.graph["xyz"][i] = attrs["xyz"][0]
     graph.graph["xyz"][j] = attrs["xyz"][-1]
 
