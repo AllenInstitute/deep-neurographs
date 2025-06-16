@@ -31,6 +31,7 @@ from concurrent.futures import (
 from random import sample
 from scipy.spatial import KDTree
 from tqdm import tqdm
+from time import time
 
 import multiprocessing
 import networkx as nx
@@ -486,7 +487,6 @@ class GraphLoader:
         else:
             graph.graph["soma_nodes"] = set()
         return graph
-
 
 # --- Helpers ---
 def set_node_attrs(graph, nodes):
