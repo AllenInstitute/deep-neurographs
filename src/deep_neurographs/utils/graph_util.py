@@ -610,14 +610,14 @@ def find_closest_node(graph, xyz):
 
 def find_connecting_path(graph, nodes):
     """
-    Finds a paths that connects a set of nodes.
+    Finds path that connects a set of nodes.
 
     Parameters
     ----------
     graph : networkx.Graph
         Graph to be searched.
     nodes : List[int]
-        List of nodes that must be in path.
+        List of nodes to be connected.
 
     Returns
     -------
