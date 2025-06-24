@@ -166,12 +166,12 @@ class FeatureGenerator:
 
     def run_on_proposals(self, proposals, radius):
         """
-        Generates feature vectors for every proposal in "neurograph".
+        Generates feature vectors for every proposal in graph.
 
         Parameters
         ----------
-        proposals : list[frozenset]
-            List of proposals for which features will be generated.
+        proposals : List[Frozenset[int]
+            Proposals for which features will be generated.
         radius : float
             Search radius used to generate proposals.
 
@@ -179,7 +179,6 @@ class FeatureGenerator:
         -------
         dict
             Dictionary that maps a proposal id to a feature vector.
-
         """
         # Generate features
         skel_features = self.proposal_skeletal(proposals, radius)
@@ -211,8 +210,7 @@ class FeatureGenerator:
         Returns
         -------
         dict
-            Dictionary that maps a node id to a feature vector.
-
+            Dictionary that maps a node id to its feature vector.
         """
         skeletal_features = dict()
         for i in computation_graph.nodes:
@@ -238,8 +236,7 @@ class FeatureGenerator:
         Returns
         -------
         dict
-            Dictionary that maps an edge id to a feature vector.
-
+            Dictionary that maps an edge id to its feature vector.
         """
         skeletal_features = dict()
         for edge in computation_graph.edges:
@@ -259,15 +256,14 @@ class FeatureGenerator:
         Parameters
         ----------
         proposals : List[Frozenset[int]]
-            List of proposals for which features will be generated.
+            Proposals for which features will be generated.
         radius : float
             Search radius used to generate proposals.
 
         Returns
         -------
         dict
-            Dictionary that maps a node id to a feature vector.
-
+            Dictionary that maps a node id to its feature vector.
         """
         skeletal_features = dict()
         for proposal in proposals:
@@ -293,7 +289,7 @@ class FeatureGenerator:
         Parameters
         ----------
         proposals : List[Frozenset[int]]
-            List of proposals for which features will be generated.
+            Proposals for which features will be generated.
 
         Returns
         -------
@@ -305,11 +301,8 @@ class FeatureGenerator:
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
-            for p in proposals:
-                n_points = self.get_n_profile_points()
-                xyz_1, xyz_2 = self.graph.proposal_attr(p, "xyz")
-                xyz_path = geometry_util.make_line(xyz_1, xyz_2, n_points)
-                threads.append(executor.submit(self.get_profile, xyz_path, p))
+            for proposal in proposals:
+                threads.append(executor.submit(self.get_profile, proposal))
 
             # Store results
             profiles = dict()
@@ -347,28 +340,39 @@ class FeatureGenerator:
                 profiles[proposal] = profile_i
         return patches, profiles
 
-    def get_profile(self, xyz_path, profile_id):
+    def get_profile(self, proposal):
         """
         Gets the image intensity profile given xyz coordinates that form a
         path.
 
         Parameters
         ----------
-        xyz_path : numpy.ndarray
-            xyz coordinates of a profile path.
-        profile_id : hashable
+        proposal : Frozenset[int]
             Identifier of profile.
 
         Returns
         -------
         dict
-            Dictionary that maps an ID (e.g. node, edge, or proposal) to its
-            profile.
-
+            Dictionary that maps a proposal ID to its profile.
         """
-        profile = self.img_reader.read_profile(self.get_spec(xyz_path))
+        # Compute bounding box
+        xyz_pts = self.graph.proposal_attr(proposal, "xyz")
+        center, shape = self.compute_bbox(xyz_pts)
+
+        # Read image patch
+        patch = self.img_reader.read(center, shape)
+        intensity = np.percentile(patch, 99.9)
+        patch = np.minimum(patch / intensity, 1)
+
+        # Get image profile
+        profile = list()
+        for voxel in self.get_profile_line(center, shape, proposal):
+            try:
+                profile.append(patch[tuple(voxel)])
+            except:
+                profile.append(0)
         profile.extend([np.mean(profile), np.std(profile)])
-        return {profile_id: profile}
+        return {proposal: profile}
 
     def get_spec(self, xyz_path):
         """
