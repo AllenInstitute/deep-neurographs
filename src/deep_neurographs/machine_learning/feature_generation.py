@@ -365,12 +365,13 @@ class FeatureGenerator:
         patch = np.minimum(patch / intensity, 1)
 
         # Get image profile
-        profile_path = self.get_profile_line(center, shape, proposal)
-        try:
-            profile = [patch[tuple(voxel)] for voxel in profile_path]
-            profile.extend([np.mean(profile), np.std(profile)])
-        except:
-            profile = np.zeros((len(profile_path) + 2))
+        profile = list()
+        for voxel in self.get_profile_line(center, shape, proposal):
+            try:
+                profile.append(patch[tuple(voxel)])
+            except:
+                profile.append(0)
+        profile.extend([np.mean(profile), np.std(profile)])
         return {proposal: profile}
 
     def get_spec(self, xyz_path):
