@@ -432,7 +432,10 @@ class Reader:
 
 # --- Helpers ---
 def get_segment_id(swc_name):
-    return ast.literal_eval(swc_name.split(".")[0])
+    try:
+        return ast.literal_eval(swc_name.split(".")[0])
+    except:
+        return None
 
 
 def get_swc_name(path):

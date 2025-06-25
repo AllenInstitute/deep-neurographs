@@ -272,19 +272,15 @@ class GraphLoader:
             path_length += dist(i, j)
             is_soma = is_soma or j in graph.graph["soma_nodes"]
             if root is None:
-                root, cnt = i, 0
+                root = i
                 attrs = {
                     "radius": [graph.graph["radius"][i]],
                     "xyz": [graph.graph["xyz"][i]],
                 }
 
             # Update edge attribute
-            if cnt == self.node_spacing - 1 or graph.degree[j] != 2:
-                attrs["radius"].append(graph.graph["radius"][j])
-                attrs["xyz"].append(graph.graph["xyz"][j])
-                cnt = 0
-            else:
-                cnt += 1
+            attrs["radius"].append(graph.graph["radius"][j])
+            attrs["xyz"].append(graph.graph["xyz"][j])
 
             # Check for irreducible nodes
             if graph.degree[j] == 1:
@@ -294,12 +290,14 @@ class GraphLoader:
 
             # Check for end of irreducible edge
             if graph.degree[j] != 2:
+                edge_id = (root, j)
                 attrs = to_numpy(attrs)
                 if self.smooth_bool:
-                    smooth_branch(graph, attrs, root, j)
+                    n_pts = int(path_length / self.node_spacing)
+                    self.smooth_curve_3d(graph, attrs, edge_id, n_pts)
 
                 # Finish
-                edges[(root, j)] = attrs
+                edges[edge_id] = attrs
                 root = None
 
         # Store results
@@ -459,6 +457,12 @@ class GraphLoader:
         """
         return path_length(graph, self.min_size) > self.min_size
 
+    def smooth_curve_3d(self, graph, attrs, edge, n_pts):
+        attrs["xyz"] = geometry.smooth_curve_3d(attrs["xyz"], n_pts=n_pts)
+        attrs["radius"] = geometry.smooth_curve_1d(attrs["radius"], n_pts)
+        graph.graph["xyz"][edge[0]] = attrs["xyz"][0]
+        graph.graph["xyz"][edge[1]] = attrs["xyz"][-1]
+
     def to_graph(self, swc_dict):
         """
         Converts a dictionary containing swc attributes to a graph.
@@ -479,12 +483,13 @@ class GraphLoader:
         prune_branches(graph, self.prune_depth)
 
         # Check if original segment intersects with soma
-        graph.graph["segment_id"] = int(swc_dict["swc_name"].split(".")[0])
+        graph.graph["segment_id"] = swc_util.get_segment_id(swc_dict["swc_name"])
         if graph.graph["segment_id"] in self.id_to_soma:
             graph.graph["soma_nodes"] = self.find_soma_nodes(graph)
         else:
             graph.graph["soma_nodes"] = set()
         return graph
+
 
 # --- Helpers ---
 def set_node_attrs(graph, nodes):
@@ -877,31 +882,6 @@ def sample_node(graph):
     """
     nodes = list(graph.nodes)
     return sample(nodes, 1)[0]
-
-
-def smooth_branch(graph, attrs, i, j):
-    """
-    Smoothes branch then updates "graph" and "attrs" with the new xyz
-    coordinates.
-
-    Parameters
-    ----------
-    graph : dict
-        Graph containing branch to be smoothed.
-    attrs : dict
-        Edge attributes dictionary.
-    i : int
-        End point of branch to be smoothed.
-    j : int
-        End point of branch to be smoothed.
-
-    Returns
-    -------
-    None
-    """
-    attrs["xyz"] = geometry.smooth_branch(attrs["xyz"], s=2)
-    graph.graph["xyz"][i] = attrs["xyz"][0]
-    graph.graph["xyz"][j] = attrs["xyz"][-1]
 
 
 def to_numpy(attrs):

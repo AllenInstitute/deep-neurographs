@@ -51,7 +51,7 @@ def visualize_connected_components(
             subgraph = graph.subgraph(component)
             color = colors[len(data) % len(colors)]
             data.extend(
-                plot_edges(
+                get_edge_traces(
                     graph, subgraph.edges, color=color, width=width
                 )
             )
@@ -81,8 +81,8 @@ def visualize_graph(graph, title=""):
     None
 
     """
-    data = plot_edges(graph, graph.edges)
-    data.append(plot_nodes(graph))
+    data = get_edge_traces(graph, graph.edges)
+    data.append(get_node_traces(graph))
     plot(data, title)
 
 
@@ -179,14 +179,14 @@ def visualize_subset(
 
     """
     # Plot graph
-    data = plot_edges(graph, graph.edges, color="black")
-    data.append(plot_nodes(graph))
+    data = get_edge_traces(graph, graph.edges, color="black")
+    data.append(get_node_traces(graph))
     if proposal_subset:
         data.extend(
-            plot_proposals(graph, subset, color=color, width=width)
+            get_proposal_traces(graph, subset, color=color, width=width)
         )
     else:
-        data.extend(plot_edges(graph, subset, width=width))
+        data.extend(get_edge_traces(graph, subset, width=width))
 
     # Add target graph (if applicable)
     if groundtruth_graph:
@@ -199,7 +199,7 @@ def visualize_subset(
 
 
 # utils
-def plot_nodes(graph):
+def get_node_traces(graph):
     xyz = nx.get_node_attributes(graph, "xyz")
     xyz = np.array(list(xyz.values()))
     trace = go.Scatter3d(
@@ -213,7 +213,7 @@ def plot_nodes(graph):
     return trace
 
 
-def plot_proposals(graph, proposals, color=None, width=5):
+def get_proposal_traces(graph, proposals, color=None, width=5):
     # Set preferences
     if color is None:
         line = dict(width=width)
@@ -236,7 +236,7 @@ def plot_proposals(graph, proposals, color=None, width=5):
     return traces
 
 
-def plot_edges(graph, edges, color=None, width=3):
+def get_edge_traces(graph, edges, color=None, width=3):
     traces = []
     line = (
         dict(width=5) if color is None else dict(color=color, width=width)

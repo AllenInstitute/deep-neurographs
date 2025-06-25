@@ -427,6 +427,31 @@ def to_voxels(xyz, anisotropy, multiscale=0):
 
 
 # --- Helpers ---
+def fill_path(img, path, val=-1):
+    """
+    Fills a given path in a 3D image array with a specified value.
+
+    Parameters
+    ----------
+    img : numpy.ndarray
+        The 3D image array to fill the path in.
+    path : iterable
+        A list or iterable containing 3D coordinates (x, y, z) representing
+        the path.
+    val : int, optional
+        The value to fill the path with. Default is -1.
+
+    Returns
+    -------
+    numpy.ndarray
+        The modified image array with the path filled with the specified value.
+    """
+    for xyz in path:
+        x, y, z = tuple(np.floor(xyz).astype(int))
+        img[x - 2: x + 3, y - 2: y + 3, z - 2: z + 3] = val
+    return img
+
+
 def find_img_path(bucket_name, root_dir, dataset_name):
     """
     Finds the path to an image in a GCS bucket for the dataset given by

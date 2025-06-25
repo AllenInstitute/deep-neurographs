@@ -428,7 +428,7 @@ class FragmentsGraph(nx.Graph):
         complex_bool : bool, optional
             Indication of whether to generate complex proposals. The default
             is False.
-        groundtruth_graph : networkx.Graph, optional
+        gt_graph : networkx.Graph, optional
             Ground truth graph. The default is None.
         long_range_bool : bool, optional
             Indication of whether to generate long range proposals. The
@@ -444,16 +444,22 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
-        # Main
+        # Initializations
         self.reset_proposals()
         self.set_proposals_per_leaf(proposals_per_leaf)
+
+        # Generate proposals
+        augmented_search_radius = search_radius * 1.5
         proposal_generation.run(
             self,
-            search_radius,
+            augmented_search_radius if trim_endpoints_bool else search_radius,
             complex_bool=complex_bool,
             long_range_bool=long_range_bool,
-            trim_endpoints_bool=trim_endpoints_bool,
         )
+
+        # Trim endpoints between proposals
+        if trim_endpoints_bool:
+            proposal_generation.run_endpoint_trimming(self, search_radius)
 
         # Set groundtruth
         if groundtruth_graph:
@@ -823,10 +829,10 @@ class FragmentsGraph(nx.Graph):
             Key specifying the type of edge attribute to retrieve. The default
             is "xyz".
         ignore : bool, optional
-            If False, the method will follow add the edge attributes along the
+            If True, it will only consider direct neighbors of node "i". If
+            False, the method will follow add the edge attributes along the
             path of chain-like connections from node "i" to its neighbors,
-            provided that the neighbor nodes have degree 2. If True, it will
-            only consider direct neighbors of node "i".
+            provided that the neighbor nodes have degree 2.
 
         Returns
         -------
