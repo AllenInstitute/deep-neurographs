@@ -7,7 +7,6 @@ Created on Sat Nov 15 9:00:00 2023
 """
 
 from collections import defaultdict
-from scipy.interpolate import splprep, splev
 from scipy.interpolate import UnivariateSpline
 from scipy.linalg import svd
 from scipy.spatial import distance
@@ -76,14 +75,14 @@ def compute_svd(xyz):
     return svd(xyz)
 
 
-def tangent(xyz_arr):
+def tangent(pts):
     """
     Computes the tangent vector at a given point or along a curve defined by
     an array of points.
 
     Parameters
     ----------
-    xyz_arr : numpy.ndarray
+    pts : numpy.ndarray
         Array containing either two xyz coordinates or an arbitrary number of
         defining a curve.
 
@@ -92,13 +91,13 @@ def tangent(xyz_arr):
     numpy.ndarray
         Tangent vector at the specified point or along the curve.
     """
-    if len(xyz_arr) == 2:
-        d = max(dist(xyz_arr[1], xyz_arr[0]), 0.1)
-        tangent_vec = (xyz_arr[1] - xyz_arr[0]) / d
+    if len(pts) == 2:
+        d = max(dist(pts[1], pts[0]), 0.1)
+        tangent_vec = (pts[1] - pts[0]) / d
     else:
-        _, _, VT = compute_svd(xyz_arr)
+        _, _, VT = compute_svd(pts)
         tangent_vec = VT[0]
-        if np.dot(tangent_vec, tangent([xyz_arr[0], xyz_arr[-1]])) < 0:
+        if np.dot(tangent_vec, tangent([pts[0], pts[-1]])) < 0:
             tangent_vec *= -1
     return tangent_vec / np.linalg.norm(tangent_vec)
 
@@ -122,16 +121,68 @@ def midpoint(xyz_1, xyz_2):
     return np.mean([xyz_1, xyz_2], axis=0)
 
 
-# --- Path utils ---
-def sample_path(xyz_path, n_points):
+# --- 3D Curve utils ---
+def fit_spline_3d(pts, k=3, s=None):
+    """
+    Fits a cubic spline to an array containing xyz coordinates.
+
+    Parameters
+    ----------
+    pts : numpy.ndarray
+        Array of xyz coordinates to be smoothed.
+    k : int, optional
+        Degree of the spline. Default is 3.
+    s : float, optional
+        A parameter that controls the smoothness of the spline. Default is
+        None
+
+    Returns
+    -------
+    UnivariateSpline
+        Spline fit to x-coordinates of "pts".
+    UnivariateSpline
+        Spline fit to the y-coordinates of "pts".
+    UnivariateSpline
+        Spline fit to the z-coordinates of "pts".
+    """
+    spline_x = fit_spline_1d(pts[:, 0], k=k, s=s)
+    spline_y = fit_spline_1d(pts[:, 1], k=k, s=s)
+    spline_z = fit_spline_1d(pts[:, 2], k=k, s=s)
+    return spline_x, spline_y, spline_z
+
+
+def fit_spline_1d(pts, k=3, s=None):
+    t = np.linspace(0, 1, len(pts))
+    s = len(pts) / s if s else len(pts) / 10
+    return UnivariateSpline(t, pts, k=k, s=s)
+
+
+def path_length(path):
+    """
+    Computes the path length of list of xyz coordinates that form a path.
+
+    Parameters
+    ----------
+    path : list
+        xyz coordinates that form a path.
+
+    Returns
+    -------
+    float
+        Path length of "path".
+    """
+    return np.sum([dist(path[i], path[i - 1]) for i in range(1, len(path))])
+
+
+def resample_path(pts, n_pts):
     """
     Uniformly samples points from a curve represented as an array.
 
     Parameters
     ----------
-    xyz_arr : np.ndarray
+    pts : np.ndarray
         xyz coordinates that form a continuous path.
-    n_points : int
+    n_pts : int
         Number of points to be sampled.
 
     Returns
@@ -139,11 +190,73 @@ def sample_path(xyz_path, n_points):
     numpy.ndarray
         Resampled points along curve.
     """
-    k = 1 if len(xyz_path) <= 3 else 3
-    t = np.linspace(0, 1, n_points)
-    spline_x, spline_y, spline_z = fit_spline(xyz_path, k=k, s=0)
-    xyz_path = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
-    return xyz_path.astype(int)
+    k = 1 if len(pts) <= 3 else 3
+    t = np.linspace(0, 1, n_pts)
+    spline_x, spline_y, spline_z = fit_spline_3d(pts, k=k, s=0)
+    pts = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
+    return pts.astype(int)
+
+
+def shift_path(pts, offset):
+    """
+    Shifts "voxels" by subtracting the min coordinate in "bbox".
+
+    Parameters
+    ----------
+    pts : ArrayLike
+        Coordinates to be shifted.
+    offset : ArrayLike
+        ...
+
+    Returns
+    -------
+    numpy.ndarray
+        Voxels shifted by min coordinate in "bbox".
+    """
+    offset = np.array(offset)
+    return [tuple(xyz - offset) for xyz in map(np.array, pts)]
+
+
+def smooth_curve_1d(pts, n_pts=None, s=None):
+    # Fit spline
+    dt = max(n_pts or len(pts), 5)
+    k = min(3, len(pts) - 1)
+
+    # Resample points
+    t = np.linspace(0, 1, dt)
+    spline = fit_spline_1d(pts, k=k, s=s)
+    return spline(t)
+
+
+def smooth_curve_3d(pts, n_pts=None, s=None):
+    """
+    Smooths an Nx3 array of points by fitting a spline. Points are assumed
+    to form a continuous curve that does not have any ßbranching points.
+
+    Parameters
+    ----------
+    pts: numpy.ndarray
+        Array of xyz coordinates to be smoothed.
+    n_pts : int
+        Number of points sampled from spline. Default is None.
+    s : float
+        A parameter that controls the smoothness of the spline, where
+        "s" in [0, N]. Note that the larger "s", the smoother the spline.
+
+    Returns
+    -------
+    numpy.ndarray
+        Smoothed points.
+    """
+    # Fit spline
+    dt = max(n_pts or len(pts), 5)
+    k = min(3, len(pts) - 1)
+    spline_x, spline_y, spline_z = fit_spline_3d(pts, k=k, s=s)
+
+    # Resample points
+    t = np.linspace(0, 1, dt)
+    pts = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
+    return pts.astype(np.float32)
 
 
 def truncate_path(xyz_path, depth):
@@ -168,137 +281,6 @@ def truncate_path(xyz_path, depth):
         if length > depth:
             return np.array(xyz_path[0:i])
     return np.array(xyz_path)
-
-
-def shift_path(xyz_path, offset):
-    """
-    Shifts "voxels" by subtracting the min coordinate in "bbox".
-
-    Parameters
-    ----------
-    voxels : ArrayLike
-        Voxel coordinates to be shifted.
-    offset : ArrayLike
-        ...
-
-    Returns
-    -------
-    numpy.ndarray
-        Voxels shifted by min coordinate in "bbox".
-    """
-    offset = np.array(offset)
-    return [tuple(xyz - offset) for xyz in map(np.array, xyz_path)]
-
-
-def fill_path(img, path, val=-1):
-    """
-    Fills a given path in a 3D image array with a specified value.
-
-    Parameters
-    ----------
-    img : numpy.ndarray
-        The 3D image array to fill the path in.
-    path : iterable
-        A list or iterable containing 3D coordinates (x, y, z) representing
-        the path.
-    val : int, optional
-        The value to fill the path with. Default is -1.
-
-    Returns
-    -------
-    numpy.ndarray
-        The modified image array with the path filled with the specified value.
-    """
-    for xyz in path:
-        x, y, z = tuple(np.floor(xyz).astype(int))
-        img[x - 2: x + 3, y - 2: y + 3, z - 2: z + 3] = val
-    return img
-
-
-def path_length(path):
-    """
-    Computes the path length of list of xyz coordinates that form a path.
-
-    Parameters
-    ----------
-    path : list
-        xyz coordinates that form a path.
-
-    Returns
-    -------
-    float
-        Path length of "path".
-    """
-    return np.sum([dist(path[i], path[i - 1]) for i in range(1, len(path))])
-
-
-def smooth_branch_fast(xyz, s=None):
-    if len(xyz) > 10:
-        tck = fit_spline_fast(xyz, s=s)
-        u_fine = np.linspace(0, 1, len(xyz))
-        smoothed_xyz = np.array(splev(u_fine, tck)).T
-        return smoothed_xyz.astype(np.float32)
-    return xyz
-
-
-def fit_spline_fast(xyz, s=None, k=2):
-    s = len(xyz) / 10 if not s else len(xyz) / s
-    tck, u = splprep(xyz.T, k=k, s=s)
-    return tck
-
-
-def smooth_branch(xyz, s=None):
-    """
-    Smooths a Nx3 array of points by fitting a cubic spline. The points are
-    assumed to be continuous and the curve that they form does not have any
-    branching points.
-
-    Parameters
-    ----------
-    xyz : numpy.ndarray
-        Array of xyz coordinates to be smoothed.
-    s : float
-        A parameter that controls the smoothness of the spline, where
-        "s" in [0, N]. Note that the larger "s", the smoother the spline.
-
-    Returns
-    -------
-    numpy.ndarray
-        Smoothed points.
-    """
-    if len(xyz) > 10:
-        t = np.linspace(0, 1, len(xyz))
-        spline_x, spline_y, spline_z = fit_spline(xyz, s=s)
-        xyz = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
-    return xyz.astype(np.float32)
-
-
-def fit_spline(xyz, k=2, s=None):
-    """
-    Fits a cubic spline to an array containing xyz coordinates.
-
-    Parameters
-    ----------
-    xyz : numpy.ndarray
-        Array of xyz coordinates to be smoothed.
-    s : float, optional
-        A parameter that controls the smoothness of the spline.
-
-    Returns
-    -------
-    UnivariateSpline
-        Spline fit to x-coordinates of "xyz".
-    UnivariateSpline
-        Spline fit to the y-coordinates of "xyz".
-    UnivariateSpline
-        Spline fit to the z-coordinates of "xyz".
-    """
-    s = xyz.shape[0] / 10 if not s else xyz.shape[0] / s
-    t = np.linspace(0, 1, xyz.shape[0])
-    spline_x = UnivariateSpline(t, xyz[:, 0], k=k, s=s)
-    spline_y = UnivariateSpline(t, xyz[:, 1], k=k, s=s)
-    spline_z = UnivariateSpline(t, xyz[:, 2], k=k, s=s)
-    return spline_x, spline_y, spline_z
 
 
 # --- KDTree utils ---
@@ -540,9 +522,9 @@ def remove_doubles(graph, max_length):
         if swc_id in graph.swc_ids:
             if graph.edge_length((i, j)) < max_length:
                 # Check doubles criteria
-                n_points = len(graph.edges[i, j]["xyz"])
+                n_pts = len(graph.edges[i, j]["xyz"])
                 hits = compute_projections(graph, kdtree, (i, j))
-                if is_double(hits, n_points):
+                if is_double(hits, n_pts):
                     graph.remove_line_fragment(i, j)
 
 
@@ -590,7 +572,7 @@ def compute_projections(graph, kdtree, edge):
     return hits
 
 
-def is_double(hits, n_points):
+def is_double(hits, n_pts):
     """
     Determines whether the connected component corresponding to "root" is a
     double of another connected component.
@@ -599,7 +581,7 @@ def is_double(hits, n_points):
     ---------
     hits : dict
         ...
-    n_points : int
+    n_pts : int
         Number of nodes that comprise the component being checked.
 
     Returns
@@ -609,7 +591,7 @@ def is_double(hits, n_points):
     """
     for dists in hits.values():
         if len(dists) > 10:
-            percent_hit = len(dists) / n_points
+            percent_hit = len(dists) / n_pts
             if percent_hit > 0.5 and np.std(dists) < 2:
                 return True
             elif percent_hit > 0.75 and np.std(dists) < 2.5:
@@ -685,14 +667,14 @@ def normalize(vector, norm="l2"):
     return vector / abs(dist(np.zeros((3)), vector, metric=norm))
 
 
-def nearest_neighbor(xyz_arr, xyz):
+def nearest_neighbor(pts, xyz):
     """
     Finds the nearest neighbor in a list of 3D coordinates to a given target
     coordinate.
 
     Parameters
     ----------
-    xyz_arr : numpy.ndarray
+    pts : numpy.ndarray
         Array of 3D coordinates to search for the nearest neighbor.
     xyz : numpy.ndarray
         The target 3D coordinate xyz to find the nearest neighbor to.
@@ -700,13 +682,13 @@ def nearest_neighbor(xyz_arr, xyz):
     Returns
     -------
     Tuple[int, float]
-        A tuple containing the index of the nearest neighbor in "xyz_arr" and
+        A tuple containing the index of the nearest neighbor in "pts" and
         the distance between the target coordinate `xyz` and its nearest
         neighbor.
     """
     best_dist = np.inf
     best_xyz = None
-    for i, xyz_i in enumerate(xyz_arr):
+    for i, xyz_i in enumerate(pts):
         if dist(xyz, xyz_i) < best_dist:
             best_dist = dist(xyz, xyz_i)
             best_xyz = xyz_i

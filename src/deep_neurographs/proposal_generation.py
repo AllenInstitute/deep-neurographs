@@ -5,13 +5,11 @@ Created on Sat July 15 9:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 
-Code that generate edge proposals for a given fragments graph.
-
-    Proposal Generation Algorithm:
+Code that generates edge proposals for a given fragments graph.
 
 """
 
-from copy import deepcopy
+from collections import deque
 
 import numpy as np
 from tqdm import tqdm
@@ -19,16 +17,12 @@ from tqdm import tqdm
 from deep_neurographs.utils import geometry_util as geometry
 
 DOT_THRESHOLD = -0.3
-RADIUS_SCALING_FACTOR = 1.5
+SEARCH_SCALING_FACTOR = 1.5
 TRIM_SEARCH_DIST = 15
 
 
 def run(
-    fragments_graph,
-    radius,
-    complex_bool=False,
-    long_range_bool=True,
-    trim_endpoints_bool=True,
+    fragments_graph, search_radius, complex_bool=False, long_range_bool=True,
 ):
     """
     Generates proposals for fragments graph.
@@ -37,7 +31,7 @@ def run(
     ----------
     fragments_graph : FragmentsGraph
         Graph that proposals will be generated for.
-    radius : float
+    search_radius : float
         Maximum Euclidean distance between endpoints of proposal.
     complex_bool : bool, optional
         Indication of whether to generate complex proposals, meaning proposals
@@ -45,10 +39,7 @@ def run(
     long_range_bool : bool, optional
         Indication of whether to generate simple proposals within distance of
         "LONG_RANGE_FACTOR" * radius of leaf from leaf without any proposals.
-        The default is False.
-    trim_endpoints_bool : bool, optional
-        Indication of whether to endpoints of branches with exactly one
-        proposal. The default is True.
+        The default is True.
 
     Returns
     -------
@@ -58,7 +49,6 @@ def run(
     # Initializations
     connections = dict()
     kdtree = init_kdtree(fragments_graph, complex_bool)
-    radius *= RADIUS_SCALING_FACTOR if trim_endpoints_bool else 1.0
     if fragments_graph.verbose:
         iterable = tqdm(fragments_graph.get_leafs(), desc="Proposals")
     else:
@@ -71,7 +61,7 @@ def run(
             fragments_graph,
             leaf,
             kdtree,
-            radius,
+            search_radius,
             fragments_graph.proposals_per_leaf,
             complex_bool,
         )
@@ -82,7 +72,7 @@ def run(
                 fragments_graph,
                 leaf,
                 kdtree,
-                radius * RADIUS_SCALING_FACTOR,
+                search_radius * SEARCH_SCALING_FACTOR,
                 -1,
                 True,
             )
@@ -104,16 +94,6 @@ def run(
             # Add proposal
             fragments_graph.add_proposal(leaf, i)
             connections[pair_id] = frozenset({leaf, i})
-
-    # Trim endpoints (if applicable)
-    n_trimmed = 0
-    if trim_endpoints_bool:
-        radius /= RADIUS_SCALING_FACTOR
-        long_range, in_range = partition_proposals(fragments_graph, radius)
-        cnt_1 = run_trimming(fragments_graph, long_range, radius)
-        cnt_2 = run_trimming(fragments_graph, in_range, radius)
-        n_trimmed = cnt_1 + cnt_2
-    return n_trimmed
 
 
 def init_kdtree(fragments_graph, complex_bool):
@@ -295,108 +275,74 @@ def get_closer_endpoint(fragments_graph, edge, xyz):
     return i if d_i < d_j else j
 
 
-def partition_proposals(fragments_graph, radius):
-    """
-    Partitions proposals in "fragments_graph" into long-range and in-range
-    categories based on a specified length threshold.
-
-    Parameters
-    ----------
-    fragments_graph : FragmentsGraph
-        Graph with proposals to be partitioned.
-    radius : float
-        Length threshold used to partition proposals. Proposals with length
-        greater than "radius" are said to be long-range; otherwise, in-range.
-
-    Returns
-    -------
-    list, list
-        Lists of long-range and in-range proposals.
-
-    """
-    long_range_proposals = list()
-    in_range_proposals = list()
-    for p in fragments_graph.proposals:
-        if fragments_graph.proposal_length(p) > radius:
-            long_range_proposals.append(p)
-        else:
-            in_range_proposals.append(p)
-    return long_range_proposals, in_range_proposals
-
-
 # --- Trim Endpoints ---
-def run_trimming(fragments_graph, proposals, radius):
-    n_trimmed = 0
-    long_radius = radius * RADIUS_SCALING_FACTOR
-    for p in deepcopy(proposals):
+def run_endpoint_trimming(fragments_graph, search_radius):
+    # Initializations
+    augmented_search_radius = search_radius * SEARCH_SCALING_FACTOR
+    long_range, in_range = deque(), deque()
+    for p in fragments_graph.proposals:
+        if fragments_graph.proposal_length(p) < augmented_search_radius:
+            in_range.append(p)
+        else:
+            long_range.append(p)
+
+    # Trim endpoints by proposal type
+    trim_proposal_endpoints(fragments_graph, in_range, search_radius)
+    trim_proposal_endpoints(
+        fragments_graph, long_range, augmented_search_radius
+    )
+
+
+def trim_proposal_endpoints(fragments_graph, proposals, max_length):
+    while proposals:
+        p = proposals.pop()
         is_simple = fragments_graph.is_simple(p)
         is_single = fragments_graph.is_single_proposal(p)
-        trim_bool = False
         if is_simple and is_single:
-            trim_bool = trim_endpoints(fragments_graph, p, long_radius)
-        elif fragments_graph.proposal_length(p) > radius:
+            trim_endpoints_at_proposal(fragments_graph, p, max_length)
+        elif fragments_graph.proposal_length(p) > max_length:
             fragments_graph.remove_proposal(p)
-        n_trimmed += 1 if trim_bool else 0
-    return n_trimmed
 
 
-def trim_endpoints(fragments_graph, proposal, radius):
-    # Initializations
+def trim_endpoints_at_proposal(fragments_graph, proposal, max_length):
+    # Find closest points between proposal branches
     i, j = tuple(proposal)
-    edge_xyz_i = fragments_graph.edge_attr(i, ignore=True)[0]
-    edge_xyz_j = fragments_graph.edge_attr(j, ignore=True)[0]
-
-    # Check both orderings
-    idx_i, idx_j = trim_endpoints_ordered(edge_xyz_i, edge_xyz_j)
-    idx_jj, idx_ii = trim_endpoints_ordered(edge_xyz_j, edge_xyz_i)
-    d1 = geometry.dist(edge_xyz_i[idx_i], edge_xyz_j[idx_j])
-    d2 = geometry.dist(edge_xyz_i[idx_ii], edge_xyz_j[idx_jj])
-    if d2 < d1:
-        idx_i = idx_ii
-        idx_j = idx_jj
+    pts_i = fragments_graph.edge_attr(i, ignore=True)[0]
+    pts_j = fragments_graph.edge_attr(j, ignore=True)[0]
+    dist_ij, (idx_i, idx_j) = find_closest_pair(pts_i, pts_j)
 
     # Update branches (if applicable)
-    if min(d1, d2) > radius:
+    if dist_ij > max_length:
         fragments_graph.remove_proposal(frozenset((i, j)))
-        return False
-    elif min(d1, d2) + 2 < geometry.dist(edge_xyz_i[0], edge_xyz_j[0]):
-        if compute_dot(edge_xyz_i, edge_xyz_j, idx_i, idx_j) < DOT_THRESHOLD:
-            fragments_graph = trim_to_idx(fragments_graph, i, idx_i)
-            fragments_graph = trim_to_idx(fragments_graph, j, idx_j)
-            return True
-    return False
+    elif dist_ij + 2 < geometry.dist(pts_i[0], pts_j[0]):
+        if compute_dot(pts_i, pts_j, idx_i, idx_j) < DOT_THRESHOLD:
+            trim_to_idx(fragments_graph, i, idx_i)
+            trim_to_idx(fragments_graph, j, idx_j)
 
 
-def trim_endpoints_ordered(xyz_list_1, xyz_list_2):
-    idx_1 = trim_endpoint(xyz_list_1, xyz_list_2)
-    idx_2 = trim_endpoint(xyz_list_2, xyz_list_1[idx_1::])
-    return idx_1, idx_2
+def find_closest_pair(pts_1, pts_2):
+    best_dist, best_idxs = np.inf, (0, 0)
+    length_1 = 0
+    for i, _ in enumerate(pts_1):
+        # Determine whether to continue search
+        length_1 += geometry.dist(pts_1[i], pts_1[i - 1]) if i > 0 else 0
+        if length_1 > TRIM_SEARCH_DIST:
+            break
 
-
-def trim_endpoint(xyz_list_1, xyz_list_2):
-    idx = 0
-    path_length = 0
-    best_dist = geometry.dist(xyz_list_1[0], xyz_list_2[0])
-    best_idx = None
-    best_upd = False
-    while idx + 1 < len(xyz_list_1):
-        idx += 1
-        path_length += geometry.dist(xyz_list_1[idx - 1], xyz_list_1[idx])
-        if geometry.dist(xyz_list_1[idx], xyz_list_2[0]) < best_dist:
-            best_idx = idx
-            best_dist = geometry.dist(xyz_list_1[idx], xyz_list_2[0])
-            best_upd = True
-
-        # Determine whether to continue trimming
-        if path_length > TRIM_SEARCH_DIST:
-            if best_idx is None:
+        # Search other point curve
+        length_2 = 0
+        for j, _ in enumerate(pts_2):
+            # Determine whether to continue search
+            length_2 += geometry.dist(pts_2[j], pts_2[j - 1]) if j > 0 else 0
+            if length_2 > TRIM_SEARCH_DIST:
                 break
-            elif not best_upd:
-                break
-            else:
-                best_upd = False
-                path_length = 0
-    return 0 if best_idx is None else best_idx
+
+            # Check distance between points
+            dist = geometry.dist(pts_1[i], pts_2[j])
+            if dist < best_dist:
+                best_dist = dist
+                best_idxs = (i, j)
+    return best_dist, best_idxs
 
 
 def trim_to_idx(fragments_graph, i, idx):
@@ -432,10 +378,9 @@ def trim_to_idx(fragments_graph, i, idx):
             del fragments_graph.xyz_to_edge[tuple(edge_xyz[k])]
         except KeyError:
             pass
-    return fragments_graph
 
 
-# --- utils ---
+# --- Helpers ---
 def list_candidates_xyz(candidates):
     """
     Lists the xyz coordinates of candidates.
