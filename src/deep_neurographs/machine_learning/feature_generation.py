@@ -29,7 +29,6 @@ class FeatureGenerator:
     """
     Class that generates features vectors that are used by a graph neural
     network (GNN) to classify proposals.
-
     """
     # Class attributes
     n_profile_points = 16
@@ -75,11 +74,10 @@ class FeatureGenerator:
         Returns
         -------
         None
-
         """
         # Sanity check
         if is_multimodal and not segmentation_path:
-            raise ValueError("Must provide segmentation_path for multimodal!")
+            print("Segmentation path not provided for inference!")
 
         # Instance attributes
         self.anisotropy = anisotropy
@@ -93,6 +91,8 @@ class FeatureGenerator:
         self.img_reader = self.init_img_reader(img_path)
         if segmentation_path is not None:
             self.labels_reader = self.init_img_reader(segmentation_path)
+        else:
+            self.labels_reader = None
 
     @classmethod
     def get_n_profile_points(cls):
@@ -107,7 +107,6 @@ class FeatureGenerator:
         -------
         int
             Number of points on an image profile.
-
         """
         return cls.n_profile_points
 
@@ -124,7 +123,6 @@ class FeatureGenerator:
         -------
         ImageReader
             Image reader.
-
         """
         if "s3" in img_path:
             return ZarrReader(img_path)
@@ -150,7 +148,6 @@ class FeatureGenerator:
         dict
             Dictionary that contains different types of feature vectors for
             nodes, edges, and proposals.
-
         """
         # Initializations
         if self.graph.leaf_kdtree is None:
@@ -179,7 +176,6 @@ class FeatureGenerator:
         -------
         dict
             Dictionary that maps a proposal id to a feature vector.
-
         """
         # Generate features
         skel_features = self.proposal_skeletal(proposals, radius)
@@ -212,7 +208,6 @@ class FeatureGenerator:
         -------
         dict
             Dictionary that maps a node id to a feature vector.
-
         """
         skeletal_features = dict()
         for i in computation_graph.nodes:
@@ -239,7 +234,6 @@ class FeatureGenerator:
         -------
         dict
             Dictionary that maps an edge id to a feature vector.
-
         """
         skeletal_features = dict()
         for edge in computation_graph.edges:
@@ -267,7 +261,6 @@ class FeatureGenerator:
         -------
         dict
             Dictionary that maps a node id to a feature vector.
-
         """
         skeletal_features = dict()
         for proposal in proposals:
@@ -300,7 +293,6 @@ class FeatureGenerator:
         dict
             Dictonary such that each item is a proposal id and image
             intensity profile.
-
         """
         with ThreadPoolExecutor() as executor:
             # Assign threads
@@ -331,7 +323,6 @@ class FeatureGenerator:
         dict
             Dictonary such that each pair is the proposal id and image
             intensity profile.
-
         """
         with ThreadPoolExecutor() as executor:
             # Assign threads
@@ -364,7 +355,6 @@ class FeatureGenerator:
         dict
             Dictionary that maps an ID (e.g. node, edge, or proposal) to its
             profile.
-
         """
         profile = self.img_reader.read_profile(self.get_spec(xyz_path))
         profile.extend([np.mean(profile), np.std(profile)])
@@ -384,7 +374,6 @@ class FeatureGenerator:
         -------
         dict
             Specifications needed to read image patch and generate profile.
-
         """
         # Compute bounding box
         center, patch_shape = self.compute_bbox(xyz_path)
@@ -430,7 +419,10 @@ class FeatureGenerator:
 
     def get_label_patch(self, center, shape, proposal):
         # Read label patch
-        patch = self.labels_reader.read(center, shape)
+        if self.labels_reader:
+            patch = self.labels_reader.read(center, shape)
+        else:
+            patch = np.zeros(shape)
 
         # Annotate label patch
         i, j = tuple(proposal)
@@ -442,13 +434,13 @@ class FeatureGenerator:
 
     def annotate_proposal(self, patch, center, shape, proposal):
         profile_path = self.get_profile_line(center, shape, proposal, False)
-        return geometry_util.fill_path(patch, profile_path, val=3)
+        return img_util.fill_path(patch, profile_path, val=3)
 
     def annotate_edge(self, patch, center, shape, i):
         edge_xyz = np.vstack(self.graph.edge_attr(i, "xyz"))
         voxels = self.get_local_coordinates(center, shape, edge_xyz)
         voxels = get_inbounds(voxels, patch.shape)
-        return geometry_util.fill_path(patch, voxels, val=2)
+        return img_util.fill_path(patch, voxels, val=2)
 
     # --- Helpers ---
     def compute_bbox(self, xyz_pts):
@@ -519,7 +511,6 @@ def init_idx_mapping(idx_to_id):
     -------
     dict
         Updated dictionary.
-
     """
     idx_mapping = {
         "idx_to_id": idx_to_id,
@@ -551,7 +542,6 @@ def get_node_dict():
     -------
     dict
         A dictionary containing the number of features for each node type
-
     """
     return {"branch": 2, "proposal": 34}
 
@@ -568,7 +558,6 @@ def get_edge_dict():
     -------
     dict
         A dictionary containing the number of features for each edge type
-
     """
     edge_dict = {
         ("proposal", "edge", "proposal"): 3,
