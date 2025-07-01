@@ -425,7 +425,7 @@ class FeatureGenerator:
             print("Except:", e)
             print("center:", center)
             print("shape:", shape)
-            print("img.shape:", shape)
+            print("img.shape:", self.img_reader.shape)
             patch = np.zeros(shape)
 
         # Get image profile
