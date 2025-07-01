@@ -417,9 +417,16 @@ class FeatureGenerator:
 
     def get_img_patch(self, center, shape, proposal):
         # Get image patch
-        patch = self.img_reader.read(center, shape)
-        intensity = np.percentile(patch, 99.9)
-        patch = np.minimum(patch / intensity, 1)
+        try:
+            patch = self.img_reader.read(center, shape)
+            intensity = np.percentile(patch, 99.9)
+            patch = np.minimum(patch / intensity, 1)
+        except Exception as e:
+            print("Except:", e)
+            print("center:", center)
+            print("shape:", shape)
+            print("img.shape:", shape)
+            patch = np.zeros(shape)
 
         # Get image profile
         profile_path = self.get_profile_line(center, shape, proposal)
