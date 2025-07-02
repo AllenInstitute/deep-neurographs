@@ -113,7 +113,7 @@ class FragmentsGraph(nx.Graph):
         super(FragmentsGraph, self).__init__()
 
         # Loaders
-        self.graph_loader = gutil.GraphLoader(
+        self.graph_loader = gutil.FragmentsGraphLoader(
             anisotropy=anisotropy,
             min_size=min_size,
             node_spacing=node_spacing,
@@ -130,7 +130,6 @@ class FragmentsGraph(nx.Graph):
         self.leaf_kdtree = None
         self.n_merges_blocked = 0
         self.n_proposals_blocked = 0
-        self.node_cnt = 0
         self.soma_ids = set()
         self.swc_ids = set()
         self.verbose = verbose
@@ -157,10 +156,9 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
-        irreducibles_list = self.graph_loader.run(fragments_pointer)
-        while irreducibles_list:
-            irreducibles = irreducibles_list.pop()
-            self.add_irreducibles(irreducibles)
+        irreducibles = self.graph_loader.run(fragments_pointer)
+        while irreducibles:
+            self.add_irreducibles(irreducibles.pop())
 
     # --- Update Structure ---
     def add_irreducibles(self, irreducibles):
@@ -179,57 +177,54 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
-        # Nodes
-        ids = self.__add_nodes(irreducibles, "leaf", dict())
-        ids = self.__add_nodes(irreducibles, "branching", ids)
-
-        # Edges
-        swc_id = irreducibles["swc_id"]
-        for (i, j), attrs in irreducibles["edge"].items():
-            edge = (ids[i], ids[j])
-            self.__add_edge(edge, attrs, swc_id)
-
         # SWC ID
+        swc_id = irreducibles["swc_id"]
         self.swc_ids.add(swc_id)
         if irreducibles["is_soma"]:
             self.soma_ids.add(swc_id)
 
-    def __add_nodes(self, irreducibles, node_type, node_ids):
+        # Irreducible components
+        node_id_mapping = self._add_nodes(irreducibles["nodes"], swc_id)
+        for (i, j), attrs in irreducibles["edges"].items():
+            edge_id = (node_id_mapping[i], node_id_mapping[j])
+            self._add_edge(edge_id, attrs, swc_id)
+
+    def _add_nodes(self, node_dict, swc_id):
         """
-        Adds a set of nodes from "irreducibles" to "self".
+        Adds nodes to the graph from a dictionary of node attributes and 
+        returns a mapping from original node IDs to the new graph node IDs.
 
         Parameters
         ----------
-        irreducibles : dict
-            Dictionary containing the irreducibles of some connected component
-            being added to "self".
-        node_type : str
-            Type of node being added to "self". Note: value must be either
-            'leaf' or 'branching'.
-        node_ids : dict
-            Dictionary containing conversion from a node id in "irreducibles"
-            to the corresponding node id in "self".
+        node_dict : dict
+            Dictionary mapping original node IDs (e.g., from an SWC file) to
+            their attributes. Each value must be a dictionary containing:
+                - "radius" : float
+                - "xyz"    : array-like of shape (3,)
+        swc_id : str
+            Identifier of the SWC file the nodes belong to. Stored as an
+            attribute on each node.
 
         Returns
         -------
         dict
-            Updated with corresponding node ids that were added in for loop.
-
+            Dictionary mapping the original node IDs from "node_dict" to the
+            new node IDs assigned in the graph.
         """
-        for i in irreducibles[node_type].keys():
-            node_id = self.node_cnt + 1
+        node_id_mapping = dict()
+        for node_id, attrs in node_dict.items():
+            new_id = self.number_of_nodes()
             self.add_node(
-                node_id,
+                new_id,
                 proposals=set(),
-                radius=irreducibles[node_type][i]["radius"],
-                swc_id=irreducibles["swc_id"],
-                xyz=irreducibles[node_type][i]["xyz"],
+                radius=attrs["radius"],
+                swc_id=swc_id,
+                xyz=attrs["xyz"],
             )
-            self.node_cnt += 1
-            node_ids[i] = node_id
-        return node_ids
+            node_id_mapping[node_id] = new_id
+        return node_id_mapping
 
-    def __add_edge(self, edge, attrs, swc_id):
+    def _add_edge(self, edge, attrs, swc_id):
         """
         Adds an edge to "self".
 
@@ -315,8 +310,8 @@ class FragmentsGraph(nx.Graph):
         n = len(attrs["xyz"])
         attrs_1 = {k: v[np.arange(idx + 1)] for k, v in attrs.items()}
         attrs_2 = {k: v[np.arange(idx, n)] for k, v in attrs.items()}
-        self.__add_edge((i, node_id), attrs_1, attrs["swc_id"])
-        self.__add_edge((node_id, j), attrs_2, attrs["swc_id"])
+        self._add_edge((i, node_id), attrs_1, attrs["swc_id"])
+        self._add_edge((node_id, j), attrs_2, attrs["swc_id"])
         return node_id
 
     def copy_graph(self, add_attrs=False):
@@ -736,7 +731,7 @@ class FragmentsGraph(nx.Graph):
             # Update graph
             self.merged_ids.add((swc_id_i, swc_id_j))
             self.upd_ids(swc_id, j if swc_id == swc_id_i else i)
-            self.__add_edge((i, j), attrs, swc_id)
+            self._add_edge((i, j), attrs, swc_id)
             self.proposals.remove(proposal)
         else:
             self.n_merges_blocked += 1
