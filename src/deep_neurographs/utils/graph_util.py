@@ -199,7 +199,7 @@ class FragmentsGraphLoader:
                     processes = list()
 
         if self.verbose and high_risk_cnt > 0:
-            print("# High Risk Merges Detected:", high_risk_cnt, flush=True)
+            print("# High Risk Merges Detected:", high_risk_cnt)
         return irreducibles
 
     def extract(self, swc_dict):
