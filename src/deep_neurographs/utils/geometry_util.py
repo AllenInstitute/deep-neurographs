@@ -255,8 +255,12 @@ def smooth_curve_3d(pts, n_pts=None, s=None):
 
     # Resample points
     t = np.linspace(0, 1, dt)
-    pts = np.column_stack((spline_x(t), spline_y(t), spline_z(t)))
-    return pts.astype(np.float32)
+    pts = np.column_stack((
+        spline_x(t).astype(np.float32),
+        spline_y(t).astype(np.float32),
+        spline_z(t).astype(np.float32)
+    ))
+    return pts
 
 
 def truncate_path(xyz_path, depth):
