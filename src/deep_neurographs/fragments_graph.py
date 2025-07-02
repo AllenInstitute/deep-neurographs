@@ -156,7 +156,13 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
+        # Extract irreducible components from SWC files
         irreducibles = self.graph_loader.run(fragments_pointer)
+        n = np.sum([len(irr["nodes"]) for irr in irreducibles])
+
+        # Add irreducibles to graph
+        self.node_xyz = np.zeros((n, 3), dtype=np.float32)
+        self.node_radius = np.zeros((n), dtype=np.float16)
         while irreducibles:
             self.add_irreducibles(irreducibles.pop())
 
@@ -214,12 +220,12 @@ class FragmentsGraph(nx.Graph):
         node_id_mapping = dict()
         for node_id, attrs in node_dict.items():
             new_id = self.number_of_nodes()
+            self.node_xyz[new_id] = attrs["xyz"]
+            self.node_radius[new_id] = attrs["radius"]
             self.add_node(
                 new_id,
                 proposals=set(),
-                radius=attrs["radius"],
                 swc_id=swc_id,
-                xyz=attrs["xyz"],
             )
             node_id_mapping[node_id] = new_id
         return node_id_mapping
@@ -263,68 +269,14 @@ class FragmentsGraph(nx.Graph):
         None
         """
         # Remove xyz entries
-        self.xyz_to_edge.pop(tuple(self.nodes[i]["xyz"]), None)
-        self.xyz_to_edge.pop(tuple(self.nodes[j]["xyz"]), None)
+        self.xyz_to_edge.pop(tuple(self.node_xyz[i]), None)
+        self.xyz_to_edge.pop(tuple(self.node_xyz[j]), None)
         for xyz in self.edges[i, j]["xyz"]:
             self.xyz_to_edge.pop(tuple(xyz), None)
 
         # Remove nodes
         self.swc_ids.discard(self.nodes[i]["swc_id"])
         self.remove_nodes_from([i, j])
-
-    def split_edge(self, edge, attrs, idx):
-        """
-        Splits "edge" into two distinct edges by making the subnode at "idx" a
-        new node in "self".
-
-        Parameters
-        ----------
-        edge : tuple
-            Edge to be split.
-        attrs : dict
-            Attributes of "edge".
-        idx : int
-            Index of subnode that will become a new node in "self".
-
-        Returns
-        -------
-        int
-            Node ID of node that was created.
-        """
-        # Remove old edge
-        (i, j) = edge
-        self.remove_edge(i, j)
-
-        # Create node
-        node_id = self.node_cnt + 1
-        self.add_node(
-            node_id,
-            proposals=set(),
-            radius=attrs["radius"][idx],
-            swc_id=attrs["swc_id"],
-            xyz=tuple(attrs["xyz"][idx]),
-        )
-        self.node_cnt += 1
-
-        # Create edges
-        n = len(attrs["xyz"])
-        attrs_1 = {k: v[np.arange(idx + 1)] for k, v in attrs.items()}
-        attrs_2 = {k: v[np.arange(idx, n)] for k, v in attrs.items()}
-        self._add_edge((i, node_id), attrs_1, attrs["swc_id"])
-        self._add_edge((node_id, j), attrs_2, attrs["swc_id"])
-        return node_id
-
-    def copy_graph(self, add_attrs=False):
-        graph = nx.Graph()
-        nodes = deepcopy(self.nodes(data=add_attrs))
-        graph.add_nodes_from(nodes)
-        if add_attrs:
-            for edge in self.edges:
-                i, j = tuple(edge)
-                graph.add_edge(i, j, **self.get_edge_data(i, j))
-        else:
-            graph.add_edges_from(deepcopy(self.edges))
-        return graph
 
     # -- KDTree --
     def init_kdtree(self, node_type=None):
@@ -366,17 +318,16 @@ class FragmentsGraph(nx.Graph):
         """
         # Get xyz coordinates
         if node_type == "leaf":
-            xyz_list = [self.nodes[i]["xyz"] for i in self.get_leafs()]
+            leafs = np.array(self.get_leafs())
+            return KDTree(self.node_xyz[leafs])
         elif node_type == "proposal":
             xyz_set = set()
             for p in self.proposals:
                 xyz_i, xyz_j = self.proposal_attr(p, attr="xyz")
-                xyz_set.add(tuple(xyz_i))
-                xyz_set.add(tuple(xyz_j))
-            xyz_list = list(xyz_set)
+                xyz_set = xyz_set.union({tuple(xyz_i), tuple(xyz_j)})
+            return KDTree(list(xyz_set))
         else:
-            xyz_list = list(self.xyz_to_edge.keys())
-        return KDTree(xyz_list)
+            return KDTree(list(self.xyz_to_edge.keys()))
 
     def query_kdtree(self, xyz, d, node_type=None):
         """
@@ -649,7 +600,7 @@ class FragmentsGraph(nx.Graph):
 
     def proposal_midpoint(self, proposal):
         i, j = tuple(proposal)
-        return geometry.midpoint(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
+        return geometry.midpoint(self.node_xyz[i], self.node_xyz[j])
 
     def proposal_attr(self, proposal, key):
         """
@@ -673,8 +624,10 @@ class FragmentsGraph(nx.Graph):
             swc_id_i = reformat(self.nodes[i][key])
             swc_id_j = reformat(self.nodes[j][key])
             return [swc_id_i, swc_id_j]
-        else:
-            return np.array([self.nodes[i][key], self.nodes[j][key]])
+        elif key == "xyz":
+            return np.array([self.node_xyz[i], self.node_xyz[j]])
+        elif key == "radius":
+            return np.array([self.node_radius[i], self.node_radius[j]])
 
     def proposal_avg_radii(self, proposal):
         i, j = tuple(proposal)
@@ -716,12 +669,12 @@ class FragmentsGraph(nx.Graph):
         i, j = tuple(proposal)
         if self.is_mergeable(i, j):
             # Dense attributes
-            attrs = dict()
-            self.nodes[i]["radius"] = 5.3141592
-            self.nodes[j]["radius"] = 5.3141592
-            for k in ["xyz", "radius"]:
-                combine = np.vstack if k == "xyz" else np.array
-                attrs[k] = combine([self.nodes[i][k], self.nodes[j][k]])
+            attrs = {
+                "radius": self.node_radius[np.array([i, j], dtype=int)],
+                "xyz": self.node_xyz[np.array([i, j], dtype=int)]
+            }
+            self.node_radius[i] = 5.3141592
+            self.node_radius[j] = 5.3141592
 
             # Sparse attributes
             swc_id_i = self.nodes[i]["swc_id"]
@@ -807,7 +760,15 @@ class FragmentsGraph(nx.Graph):
             Euclidean distance between nodes "i" and "j".
 
         """
-        return geometry.dist(self.nodes[i]["xyz"], self.nodes[j]["xyz"])
+        return geometry.dist(self.node_xyz[i], self.node_xyz[j])
+
+    def node_attr(self, i, key):
+        if key == "xyz":
+            return self.node_xyz[i]
+        elif key == "radius":
+            return self.node_radius[i]
+        else:
+            return self.nodes[i][key]
 
     def edge_attr(self, i, key="xyz", ignore=False):
         """
@@ -863,8 +824,8 @@ class FragmentsGraph(nx.Graph):
         hits = dict()
         for xyz in self.query_kdtree(query_xyz, max_dist):
             i, j = self.xyz_to_edge[tuple(xyz)]
-            dist_i = geometry.dist(self.nodes[i]["xyz"], query_xyz)
-            dist_j = geometry.dist(self.nodes[j]["xyz"], query_xyz)
+            dist_i = geometry.dist(self.node_xyz[i], query_xyz)
+            dist_j = geometry.dist(self.node_xyz[j], query_xyz)
             hits[self.nodes[i]["swc_id"]] = i if dist_i < dist_j else j
         return hits
 
@@ -916,7 +877,8 @@ class FragmentsGraph(nx.Graph):
         return node_or_swc in self.soma_ids
 
     def orient_edge_attr(self, edge, i, key="xyz"):
-        if (self.edges[edge][key][0] == self.nodes[i][key]).all():
+        node_attr = self.node_attr(i, key)
+        if (self.edges[edge][key][0] == node_attr).all():
             return self.edges[edge][key]
         else:
             return np.flip(self.edges[edge][key], axis=0)
@@ -996,7 +958,7 @@ class FragmentsGraph(nx.Graph):
                 # Root entry
                 if len(node_to_idx) == 0:
                     # Get attributes
-                    x, y, z = tuple(self.nodes[i]["xyz"])
+                    x, y, z = tuple(self.node_xyz[i])
                     if preserve_radius:
                         r = self.nodes[i]["radius"]
                     else:

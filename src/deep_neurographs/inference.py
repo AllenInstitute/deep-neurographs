@@ -210,7 +210,6 @@ class InferencePipeline:
         self.graph.load_fragments(fragments_pointer)
 
         # Filter fragments
-        geometry_util.remove_curvy(self.graph, 200)
         if self.graph_config.remove_doubles:
             geometry_util.remove_doubles(self.graph, 200)
 

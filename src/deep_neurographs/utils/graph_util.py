@@ -199,7 +199,7 @@ class FragmentsGraphLoader:
                     processes = list()
 
         if self.verbose and high_risk_cnt > 0:
-            print("# High Risk Merges Detected:", high_risk_cnt)
+            print("# High Risk Merges Detected:", high_risk_cnt, flush=True)
         return irreducibles
 
     def extract(self, swc_dict):
@@ -286,13 +286,13 @@ class FragmentsGraphLoader:
 
             # Visit node
             edge_length += dist(i, j)
-            path_length += dist(i, j)
             is_soma = is_soma or j in graph.graph["soma_nodes"]
             attrs["radius"].append(graph.graph["radius"][j])
             attrs["xyz"].append(graph.graph["xyz"][j])
 
             # Check for end of irreducible edge
             if graph.degree[j] != 2:
+                path_length += edge_length
                 irreducible_nodes.add(j)
                 edge_id = (root, j)
                 attrs = to_numpy(attrs)
@@ -305,6 +305,12 @@ class FragmentsGraphLoader:
                 # Finish
                 irreducible_edges[edge_id] = attrs
                 root = None
+
+        # Check for curvy line fragment
+        if len(irreducible_nodes) == 2:
+            endpoint_dist = dist(*tuple(irreducible_nodes))
+            if endpoint_dist / path_length < 0.5:
+                return None, leafs
 
         # Store results
         if path_length > self.min_size - 10:
@@ -704,25 +710,6 @@ def get_component(graph, root):
         for j in [j for j in graph.neighbors(i) if j not in visited]:
             queue.append(j)
     return visited
-
-
-def get_line_components(graph):
-    """
-    Identifies and returns all line components in the given graph. A line
-    component is defined as a connected component with exactly two nodes.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Input graph in which line components are to be identified.
-
-    Returns
-    -------
-    List[set]
-        List of sets, where each set contains two nodes representing a
-        connected component with exactly two nodes.
-    """
-    return [c for c in nx.connected_components(graph) if len(c) == 2]
 
 
 def get_leafs(graph):

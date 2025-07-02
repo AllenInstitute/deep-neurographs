@@ -12,6 +12,7 @@ from scipy.linalg import svd
 from scipy.spatial import distance
 from tqdm import tqdm
 
+import networkx as nx
 import numpy as np
 
 from deep_neurographs.utils import graph_util as gutil, img_util
@@ -468,36 +469,6 @@ def align(neurograph, img, branch_1, branch_2, depth):
 
 
 # --- Fragment Filtering ---
-def remove_curvy(graph, max_length, ratio=0.5):
-    """
-    Removes connected components with 2 nodes from "graph" that are "curvy",
-    based on a specified ratio of endpoint distance to edge length and a
-    maximum length threshold.
-
-    Parameters
-    ----------
-    graph : FragmentsGraph
-        Graph generated from fragments of a predicted segmentation.
-    max_length : float
-        The maximum allowable length (in microns) for an edge to be considered
-        for removal.
-    ratio : float, optional
-        Threshold ratio of endpoint distance to edge length. Components with a
-        ratio below this value are considered "curvy" and are removed. The
-        default is 0.5.
-
-    Returns
-    -------
-    None
-    """
-    for nodes in gutil.get_line_components(graph):
-        i, j = tuple(nodes)
-        length = graph.edge_length((i, j))
-        endpoint_dist = graph.dist(i, j)
-        if endpoint_dist / length < ratio and length < max_length:
-            graph.remove_line_fragment(i, j)
-
-
 def remove_doubles(graph, max_length):
     """
     Removes connected components from "graph" that are likely to be a double,
@@ -515,7 +486,7 @@ def remove_doubles(graph, max_length):
     None
     """
     # Initializations
-    components = gutil.get_line_components(graph)
+    components = [c for c in nx.connected_components(graph) if len(c) == 2]
     kdtree = graph.get_kdtree()
 
     # Main

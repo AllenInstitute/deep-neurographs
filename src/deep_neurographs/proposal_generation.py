@@ -163,7 +163,7 @@ def search_kdtree(fragments_graph, leaf, kdtree, radius, max_proposals):
     """
     # Generate candidates
     candidates = dict()
-    leaf_xyz = fragments_graph.nodes[leaf]["xyz"]
+    leaf_xyz = fragments_graph.node_xyz[leaf]
     for xyz in geometry.query_ball(kdtree, leaf_xyz, radius):
         swc_id = fragments_graph.xyz_to_id(xyz)
         if swc_id != fragments_graph.nodes[leaf]["swc_id"]:
@@ -265,8 +265,8 @@ def get_closer_endpoint(fragments_graph, edge, xyz):
         Node closer to "xyz".
     """
     i, j = tuple(edge)
-    d_i = geometry.dist(fragments_graph.nodes[i]["xyz"], xyz)
-    d_j = geometry.dist(fragments_graph.nodes[j]["xyz"], xyz)
+    d_i = geometry.dist(fragments_graph.node_xyz[i], xyz)
+    d_j = geometry.dist(fragments_graph.node_xyz[j], xyz)
     return i if d_i < d_j else j
 
 
@@ -355,8 +355,8 @@ def trim_to_idx(fragments_graph, i, idx):
     # Update node
     edge_xyz = fragments_graph.edge_attr(i, key="xyz", ignore=True)[0]
     edge_radii = fragments_graph.edge_attr(i, key="radius", ignore=True)[0]
-    fragments_graph.nodes[i]["xyz"] = edge_xyz[idx]
-    fragments_graph.nodes[i]["radius"] = edge_radii[idx]
+    fragments_graph.node_xyz[i] = edge_xyz[idx]
+    fragments_graph.node_radius[i] = edge_radii[idx]
 
     # Update edge
     nb = list(fragments_graph.neighbors(i))[0]
