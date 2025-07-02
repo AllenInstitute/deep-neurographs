@@ -200,12 +200,10 @@ def visualize_subset(
 
 # utils
 def get_node_traces(graph):
-    xyz = nx.get_node_attributes(graph, "xyz")
-    xyz = np.array(list(xyz.values()))
     trace = go.Scatter3d(
-        x=xyz[:, 0],
-        y=xyz[:, 1],
-        z=xyz[:, 2],
+        x=graph.node_xyz[:, 0],
+        y=graph.node_xyz[:, 1],
+        z=graph.node_xyz[:, 2],
         mode="markers",
         name="Nodes",
         marker=dict(size=2, color="red"),

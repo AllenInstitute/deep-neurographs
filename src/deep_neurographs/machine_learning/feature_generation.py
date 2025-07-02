@@ -214,7 +214,7 @@ class FeatureGenerator:
             skeletal_features[i] = np.concatenate(
                 (
                     self.graph.degree[i],
-                    self.graph.nodes[i]["radius"],
+                    self.graph.node_radius[i],
                     len(self.graph.nodes[i]["proposals"]),
                 ),
                 axis=None,

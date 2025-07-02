@@ -44,7 +44,7 @@ from deep_neurographs.utils import img_util, swc_util, util
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
 
-class GraphLoader:
+class FragmentsGraphLoader:
     """
     Class that loads SWC files and constructs a FragmentsGraph instance from
     the data.
@@ -184,9 +184,10 @@ class GraphLoader:
             irreducibles = deque()
             processes = list()
             while swc_dicts:
-                swc_dict = swc_dicts.pop()
-                processes.append(executor.submit(self.extract, swc_dict))
-                if len(processes) > 2000 or not swc_dicts:
+                processes.append(
+                    executor.submit(self.extract, swc_dicts.pop())
+                )
+                if len(processes) > 4000 or not swc_dicts:
                     # Store results
                     for process in as_completed(processes):
                         pbar.update(1) if self.verbose else None
@@ -219,7 +220,7 @@ class GraphLoader:
             subgraph.
         """
         graph = self.to_graph(swc_dict)
-        irreducibles = list()
+        irreducibles = deque()
         high_risk_cnt = 0
         if self.satifies_path_length_condition(graph):
             # Check for soma merges
@@ -231,19 +232,19 @@ class GraphLoader:
                 high_risk_cnt = self.remove_high_risk_merges(graph)
 
             # Extract irreducibles
-            cnt = 0
-            leafs_to_visit = set(get_leafs(graph))
-            while leafs_to_visit:
+            i = 0
+            leafs = set(get_leafs(graph))
+            while leafs:
                 # Extract for connected component
-                leaf = util.sample_once(leafs_to_visit)
-                irr, leafs = self.get_irreducibles(graph, leaf)
+                leaf = util.sample_once(leafs)
+                irreducibles_i, visited = self.get_irreducibles(graph, leaf)
+                leafs -= visited
 
                 # Store results
-                leafs_to_visit = leafs_to_visit - leafs
-                if irr is not None:
-                    irr["swc_id"] = f"{graph.graph['segment_id']}.{cnt}"
-                    irreducibles.append(irr)
-                    cnt += 1
+                if irreducibles_i:
+                    irreducibles_i["swc_id"] = f"{graph.graph['segment_id']}.{i}"
+                    irreducibles.append(irreducibles_i)
+                    i += 1
         return irreducibles, high_risk_cnt
 
     def get_irreducibles(self, graph, source):
@@ -266,48 +267,56 @@ class GraphLoader:
         def dist(i, j):
             return geometry.dist(graph.graph["xyz"][i], graph.graph["xyz"][j])
 
+        # Initializations
+        irreducible_nodes = set({source})
+        irreducible_edges = dict()
         is_soma = source in graph.graph["soma_nodes"]
+        leafs = set({source})
+
+        # Main
         root, path_length = None, 0
-        leafs, branchings, edges = set({source}), set(), dict()
         for (i, j) in nx.dfs_edges(graph, source=source):
             # Check for start of irreducible edge
-            path_length += dist(i, j)
-            is_soma = is_soma or j in graph.graph["soma_nodes"]
             if root is None:
-                root, path_length = i, 0
+                root, edge_length = i, 0
                 attrs = {
                     "radius": [graph.graph["radius"][i]],
                     "xyz": [graph.graph["xyz"][i]],
                 }
 
-            # Update edge attribute
+            # Visit node
+            edge_length += dist(i, j)
+            is_soma = is_soma or j in graph.graph["soma_nodes"]
             attrs["radius"].append(graph.graph["radius"][j])
             attrs["xyz"].append(graph.graph["xyz"][j])
 
-            # Check for irreducible nodes
-            if graph.degree[j] == 1:
-                leafs.add(j)
-            elif graph.degree[j] > 2:
-                branchings.add(j)
-
             # Check for end of irreducible edge
             if graph.degree[j] != 2:
+                path_length += edge_length
+                irreducible_nodes.add(j)
                 edge_id = (root, j)
                 attrs = to_numpy(attrs)
                 if self.smooth_bool:
-                    n_pts = int(path_length / self.node_spacing)
+                    n_pts = int(edge_length / self.node_spacing)
                     self.smooth_curve_3d(graph, attrs, edge_id, n_pts)
+                if graph.degree[j] == 1:
+                    leafs.add(j)
 
                 # Finish
-                edges[edge_id] = attrs
+                irreducible_edges[edge_id] = attrs
                 root = None
+
+        # Check for curvy line fragment
+        if len(irreducible_nodes) == 2:
+            endpoint_dist = dist(*tuple(irreducible_nodes))
+            if endpoint_dist / path_length < 0.5:
+                return None, leafs
 
         # Store results
         if path_length > self.min_size - 10:
             irreducibles = {
-                "leaf": set_node_attrs(graph, leafs),
-                "branching": set_node_attrs(graph, branchings),
-                "edge": set_edge_attrs(graph, edges),
+                "nodes": set_node_attrs(graph, irreducible_nodes),
+                "edges": set_edge_attrs(graph, irreducible_edges),
                 "is_soma": is_soma,
             }
         else:
@@ -701,25 +710,6 @@ def get_component(graph, root):
         for j in [j for j in graph.neighbors(i) if j not in visited]:
             queue.append(j)
     return visited
-
-
-def get_line_components(graph):
-    """
-    Identifies and returns all line components in the given graph. A line
-    component is defined as a connected component with exactly two nodes.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Input graph in which line components are to be identified.
-
-    Returns
-    -------
-    List[set]
-        List of sets, where each set contains two nodes representing a
-        connected component with exactly two nodes.
-    """
-    return [c for c in nx.connected_components(graph) if len(c) == 2]
 
 
 def get_leafs(graph):
