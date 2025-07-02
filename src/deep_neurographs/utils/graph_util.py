@@ -108,6 +108,9 @@ class GraphLoader:
         self.soma_centroids = soma_centroids
         self.verbose = verbose
 
+        # SWC reader
+        self.swc_reader = swc_util.Reader(anisotropy, min_size)
+
         # Load somas
         if segmentation_path and soma_centroids:
             self.soma_kdtree = KDTree(self.soma_centroids)
@@ -151,7 +154,7 @@ class GraphLoader:
             print("# Soma Merges:", n)
 
     # --- Irreducibles Extraction ---
-    def run(self, swc_dicts):
+    def run(self, fragments_pointer):
         """
         Processes a list of swc dictionaries in parallel and extracts the
         components of the irreducible subgraph from each. Note: this routine
@@ -160,9 +163,8 @@ class GraphLoader:
 
         Parameters
         ----------
-        swc_dicts : List[dict]
-            List of dictionaries such that each contains the contents of an
-            SWC file.
+        fragments_pointer : Any
+            Object that points to SWC files to be read.
 
         Returns
         -------
@@ -170,15 +172,16 @@ class GraphLoader:
             Dictionaries that contain components of the irreducible subgraph
             extracted from each SWC dictionary.
         """
-        # Initializations
+        # Read SWC files
+        swc_dicts = self.swc_reader.read(fragments_pointer)
+
+        # Load graphs
         desc = "Extract Graphs"
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         multiprocessing.set_start_method('spawn', force=True)
-
-        # Main
-        irreducibles = deque()
         high_risk_cnt = 0
         with ProcessPoolExecutor() as executor:
+            irreducibles = deque()
             processes = list()
             while swc_dicts:
                 swc_dict = swc_dicts.pop()
@@ -194,7 +197,7 @@ class GraphLoader:
                     # Reset processes
                     processes = list()
 
-        if self.verbose:
+        if self.verbose and high_risk_cnt > 0:
             print("# High Risk Merges Detected:", high_risk_cnt)
         return irreducibles
 
@@ -264,15 +267,14 @@ class GraphLoader:
             return geometry.dist(graph.graph["xyz"][i], graph.graph["xyz"][j])
 
         is_soma = source in graph.graph["soma_nodes"]
-        path_length = 0
-        root = None
+        root, path_length = None, 0
         leafs, branchings, edges = set({source}), set(), dict()
         for (i, j) in nx.dfs_edges(graph, source=source):
             # Check for start of irreducible edge
             path_length += dist(i, j)
             is_soma = is_soma or j in graph.graph["soma_nodes"]
             if root is None:
-                root = i
+                root, path_length = i, 0
                 attrs = {
                     "radius": [graph.graph["radius"][i]],
                     "xyz": [graph.graph["xyz"][i]],

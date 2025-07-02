@@ -44,7 +44,6 @@ def run(
     Returns
     -------
     None
-
     """
     # Initializations
     connections = dict()
@@ -159,9 +158,8 @@ def search_kdtree(fragments_graph, leaf, kdtree, radius, max_proposals):
 
     Returns
     -------
-    list[tuple]
+    List[Tuple[float]]
         xyz coordinates of candidates.
-
     """
     # Generate candidates
     candidates = dict()
@@ -198,9 +196,8 @@ def get_best(candidates, max_proposals):
 
     Returns
     -------
-    list[tuple]
+    List[Tuple[float]]
         xyz coordinates of candidates.
-
     """
     while len(candidates) > max_proposals:
         worst_key = None
@@ -230,7 +227,6 @@ def get_connecting_node(fragments_graph, leaf, xyz, radius, complex_bool):
     -------
     int
         Node id that proposal will connect to.
-
     """
     # Check if edge exists
     try:
@@ -267,7 +263,6 @@ def get_closer_endpoint(fragments_graph, edge, xyz):
     -------
     int
         Node closer to "xyz".
-
     """
     i, j = tuple(edge)
     d_i = geometry.dist(fragments_graph.nodes[i]["xyz"], xyz)
@@ -307,8 +302,8 @@ def trim_proposal_endpoints(fragments_graph, proposals, max_length):
 def trim_endpoints_at_proposal(fragments_graph, proposal, max_length):
     # Find closest points between proposal branches
     i, j = tuple(proposal)
-    pts_i = fragments_graph.edge_attr(i, ignore=True)[0]
-    pts_j = fragments_graph.edge_attr(j, ignore=True)[0]
+    pts_i = fragments_graph.edge_attr(i, key="xyz", ignore=True)[0]
+    pts_j = fragments_graph.edge_attr(j, key="xyz", ignore=True)[0]
     dist_ij, (idx_i, idx_j) = find_closest_pair(pts_i, pts_j)
 
     # Update branches (if applicable)
@@ -319,26 +314,21 @@ def trim_endpoints_at_proposal(fragments_graph, proposal, max_length):
             trim_to_idx(fragments_graph, i, idx_i)
             trim_to_idx(fragments_graph, j, idx_j)
 
-
-def find_closest_pair(pts_1, pts_2):
+def find_closest_pair(pts1, pts2):
     best_dist, best_idxs = np.inf, (0, 0)
-    length_1 = 0
-    for i, _ in enumerate(pts_1):
-        # Determine whether to continue search
-        length_1 += geometry.dist(pts_1[i], pts_1[i - 1]) if i > 0 else 0
-        if length_1 > TRIM_SEARCH_DIST:
-            break
+    i, length1 = -1, 0
+    while length1 < TRIM_SEARCH_DIST and i < len(pts1) - 1:
+        i += 1
+        length1 += geometry.dist(pts1[i], pts1[i - 1]) if i > 0 else 0
 
-        # Search other point curve
-        length_2 = 0
-        for j, _ in enumerate(pts_2):
-            # Determine whether to continue search
-            length_2 += geometry.dist(pts_2[j], pts_2[j - 1]) if j > 0 else 0
-            if length_2 > TRIM_SEARCH_DIST:
-                break
+        # Search other branch
+        j, length2 = -1, 0
+        while length2 < TRIM_SEARCH_DIST and j < len(pts2) - 1:
+            j += 1
+            length2 += geometry.dist(pts2[j], pts2[j - 1]) if j > 0 else 0
 
             # Check distance between points
-            dist = geometry.dist(pts_1[i], pts_2[j])
+            dist = geometry.dist(pts1[i], pts2[j])
             if dist < best_dist:
                 best_dist = dist
                 best_idxs = (i, j)
@@ -354,14 +344,13 @@ def trim_to_idx(fragments_graph, i, idx):
     fragments_graph : FragmentsGraph
         Graph containing node "i"
     i : int
-        Leaf node.
+        Leaf node ID.
     idx : int
         Branch is trimmed to the index "idx".
 
     Returns
     -------
     None
-
     """
     # Update node
     edge_xyz = fragments_graph.edge_attr(i, key="xyz", ignore=True)[0]
@@ -370,9 +359,9 @@ def trim_to_idx(fragments_graph, i, idx):
     fragments_graph.nodes[i]["radius"] = edge_radii[idx]
 
     # Update edge
-    j = list(fragments_graph.neighbors(i))[0]
-    fragments_graph.edges[i, j]["xyz"] = edge_xyz[idx::]
-    fragments_graph.edges[i, j]["radius"] = edge_radii[idx::]
+    nb = list(fragments_graph.neighbors(i))[0]
+    fragments_graph.edges[i, nb]["xyz"] = edge_xyz[idx:]
+    fragments_graph.edges[i, nb]["radius"] = edge_radii[idx:]
     for k in range(idx):
         try:
             del fragments_graph.xyz_to_edge[tuple(edge_xyz[k])]
@@ -393,46 +382,45 @@ def list_candidates_xyz(candidates):
 
     Returns
     -------
-    list
+    List[Tuple[int]]
         xyz coordinates of candidates.
-
     """
     return [candidates[key]["xyz"] for key in candidates.keys()]
 
 
-def compute_dot(branch_1, branch_2, idx_1, idx_2):
+def compute_dot(branch1, branch2, idx1, idx2):
     """
-    Computes dot product between principal components of "branch_1" and
+    Computes dot product between principal components of "branch1" and
     "branch_2".
 
     Parameters
     ----------
-    branch_1 : numpy.ndarray
+    branch1 : numpy.ndarray
         xyz coordinates of some branch from a graph.
     branch_2 : numpy.ndarray
         xyz coordinates of some branch from a graph.
-    idx_1 : int
-        Index that "branch_1" would be trimmed to (i.e. xyz coordinates from 0
-        to "idx_1" would be deleted from "branch_1").
-    idx_2 : int
+    idx1 : int
+        Index that "branch1" would be trimmed to (i.e. xyz coordinates from 0
+        to "idx1" would be deleted from "branch1").
+    idx2 : int
         Index that "branch_2" would be trimmed to (i.e. xyz coordinates from 0
-        to "idx_2" would be deleted from "branch_2").
+        to "idx2" would be deleted from "branch_2").
 
     Returns
     -------
     float
-        Dot product between principal components of "branch_1" and "branch_2".
-
+        Dot product between principal components of "branch1" and "branch_2".
     """
     # Initializations
-    b1 = branch_1 - geometry.midpoint(branch_1[idx_1], branch_2[idx_2])
-    b2 = branch_2 - geometry.midpoint(branch_1[idx_1], branch_2[idx_2])
+    midpoint = geometry.midpoint(branch1[idx1], branch2[idx2])
+    b1 = branch1 - midpoint 
+    b2 = branch2 - midpoint
 
     # Main
-    dot_5 = np.dot(tangent(b1, idx_1, 5), tangent(b2, idx_2, 5))
-    dot_10 = np.dot(tangent(b1, idx_1, 10), tangent(b2, idx_2, 10))
-    dot_20 = np.dot(tangent(b1, idx_1, 20), tangent(b2, idx_2, 20))
-    return min(dot_5, min(dot_10, dot_20))
+    dot5 = np.dot(tangent(b1, idx1, 5), tangent(b2, idx2, 5))
+    dot10 = np.dot(tangent(b1, idx1, 10), tangent(b2, idx2, 10))
+    dot20 = np.dot(tangent(b1, idx1, 20), tangent(b2, idx2, 20))
+    return min(dot5, min(dot10, dot20))
 
 
 def tangent(branch, idx, depth):
@@ -450,7 +438,6 @@ def tangent(branch, idx, depth):
     -------
     numpy.ndarray
         Tangent vector of "branch".
-
     """
     end = min(idx + depth, len(branch))
     return geometry.tangent(branch[idx:end])

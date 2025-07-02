@@ -459,24 +459,32 @@ def get_swc_name(path):
 
 def to_graph(swc_dict, set_attrs=False):
     """
-    Converts SWC dict to an array-backed NetworkX graph with reindexed nodes.
+    Converts an SWC dict to a NetworkX graph with reindexed nodes.
+
+    Parameters
+    ----------
+    swc_dict : dict
+        Contents of an SWC file.
+    set_attrs : bool, optional
+        Indication of whether to set "xyz" and "radius" as graph-level
+        attributes.
+
+    Returns
+    -------
+    networkx.Graph
+        Graph built from an SWC file.
     """
-    # Reindex nodes: map swc ids to 0..N-1
-    swc_ids = np.asarray(swc_dict["id"])
-    id_map = {old_id: new_id for new_id, old_id in enumerate(swc_ids)}
-    pids = np.asarray(swc_dict["pid"])
+    # Reindex nodes: map swc ids to 0...N-1
+    id_map = {old_id: new_id for new_id, old_id in enumerate(swc_dict["id"])}
     edges = [
         (id_map[child], id_map[parent])
-        for child, parent in zip(swc_ids[1:], pids[1:])
-        if parent in id_map
+        for child, parent in zip(swc_dict["id"][1:], swc_dict["pid"][1:])
     ]
 
     # Build graph with reindexed edges
     graph = nx.Graph(swc_name=swc_dict["swc_name"])
     graph.add_edges_from(edges)
-
-    # Store attributes at graph level
     if set_attrs:
-        graph.graph["xyz"] = np.asarray(swc_dict["xyz"])
-        graph.graph["radius"] = np.asarray(swc_dict["radius"])
+        graph.graph["xyz"] = swc_dict["xyz"]
+        graph.graph["radius"] = swc_dict["radius"]
     return graph

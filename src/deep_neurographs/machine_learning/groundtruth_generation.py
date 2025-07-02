@@ -7,17 +7,6 @@ Created on Sat March 2 16:00:00 2024
 Generates ground truth for proposals by determining whether a proposal should
 be accepted or rejected based on comparing fragments to ground truth tracings.
 
-    # Add best simple edges -- prevents loops at branching points
-    gt_accepts = set()
-    graph = pred_graph.copy_graph()
-    lengths = [pred_graph.proposal_length(p) for p in proposals]
-    for idx in np.argsort(lengths):
-        i, j = tuple(proposals[idx])
-        if not nx.has_path(graph, i, j):
-            graph.add_edge(i, j)
-            gt_accepts.add(proposals[idx])
-    return gt_accepts
-
 """
 
 from collections import defaultdict
@@ -36,16 +25,15 @@ def run(pred_graph, gt_graph):
 
     Parameters
     ----------
-    gt_graph : NeuroGraph
+    gt_graph : FragmentsGraph
         Graph built from ground truth swc files.
-    pred_graph : NeuroGraph
+    pred_graph : FragmentsGraph
         Graph build from predicted swc files.
 
     Returns
     -------
     set
         Proposals that machine learning model learns to accept.
-
     """
     # Find connected components in prediction aligned to ground truth
     gt_kdtree = gt_graph.get_kdtree()
@@ -80,9 +68,9 @@ def find_alignments(gt_graph, pred_graph, kdtree):
 
     Parameters
     ----------
-    gt_graph : NeuroGraph
+    gt_graph : FragmentsGraph
         Graph built from ground truth swc files.
-    pred_graph : NeuroGraph
+    pred_graph : FragmentsGraph
         Graph build from predicted swc files.
 
     Returns
@@ -92,7 +80,6 @@ def find_alignments(gt_graph, pred_graph, kdtree):
         are aligned to some connected component in "gt_graph".
     node_to_target : dict
         Mapping between nodes and target ids.
-
     """
     valid_ids = set()
     pred_to_target = dict()
@@ -118,9 +105,9 @@ def is_component_aligned(gt_graph, pred_graph, nodes, kdtree):
 
     Parameters
     ----------
-    gt_graph : NeuroGraph
+    gt_graph : FragmentsGraph
         Graph built from ground truth swc files.
-    pred_graph : NeuroGraph
+    pred_graph : FragmentsGraph
         Graph build from predicted swc files.
     nodes : Set[int]
         Nodes from a connected component in "pred_graph".
@@ -130,7 +117,6 @@ def is_component_aligned(gt_graph, pred_graph, nodes, kdtree):
     bool
         Indication of whether connected component "nodes" is aligned to a
         connected component in "gt_graph".
-
     """
     # Compute distances
     dists = defaultdict(list)
@@ -168,7 +154,7 @@ def is_valid(gt_graph, pred_graph, kdtree, gt_id, proposal):
     ----------
     gt_graph : FragmentsGraph
         Graph built from ground truth swc files.
-    pred_graph : NeuroGraph
+    pred_graph : FragmentsGraph
         Graph build from predicted swc files.
     proposal : frozenset
         Proposal to be checked.
@@ -177,14 +163,11 @@ def is_valid(gt_graph, pred_graph, kdtree, gt_id, proposal):
     -------
     bool
         Indication of whether proposal is consistent.
-
     """
     # Find edges in gt_graph closest to edges connected to proposal
     i, j = tuple(proposal)
     hat_edge_i = find_closest_gt_edge(gt_graph, pred_graph, kdtree, gt_id, i)
     hat_edge_j = find_closest_gt_edge(gt_graph, pred_graph, kdtree, gt_id, j)
-
-    # Check if edge was found
     if hat_edge_i is None or hat_edge_j is None:
         return False
 
@@ -193,7 +176,7 @@ def is_valid(gt_graph, pred_graph, kdtree, gt_id, proposal):
         return True
 
     # Check if edges are adjacent
-    if is_connected(hat_edge_i, hat_edge_j):
+    if set(hat_edge_i).intersection(set(hat_edge_j)):
         # Orient ground truth edges
         hat_edge_xyz_i, hat_edge_xyz_j = orient_edges(
             gt_graph.edges[hat_edge_i]["xyz"],
@@ -248,27 +231,6 @@ def project_region(gt_graph, pred_graph, kdtree, gt_id, i, depth=16):
             if gt_graph.nodes[hat_edge[0]]["swc_id"] == gt_id:
                 hits[hat_edge].append(hat_xyz)
     return util.find_best(hits)
-
-
-def is_connected(edge_i, edge_j):
-    """
-    Determines whether "edge_i" and "edge_j" are adjacent, meaning there
-    exists a nodes in "edge_i" and "edge_j" which are neighbors.
-
-    Parameters
-    ----------
-    edge_i : tuple
-        Edge to be checked.
-    edge_j : tuple
-        Edge to be checked.
-
-    Returns
-    -------
-    bool
-        Indication of whether "edge_i" and "edge_j" are connected.
-
-    """
-    return True if set(edge_i).intersection(set(edge_j)) else False
 
 
 def orient_edges(xyz_edge_i, xyz_edge_j):
