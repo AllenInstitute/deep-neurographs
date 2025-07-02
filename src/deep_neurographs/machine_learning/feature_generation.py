@@ -387,9 +387,9 @@ class FeatureGenerator:
         """
         # Compute bounding box
         center, patch_shape = self.compute_bbox(xyz_path)
-        shape = self.img_reader.shape()
-        shape = shape[2:] if len(shape) == 5 else shape
-        iterator = list(zip(center, patch_shape, shape))
+        img_shape = self.img_reader.shape()
+        img_shape = img_shape[2:] if len(img_shape) == 5 else img_shape
+        iterator = list(zip(center, patch_shape, img_shape))
         bbox = {
             "min": [max(0, c - ps // 2) for c, ps, _ in iterator],
             "max": [min(c + ps // 2, s - 1) for c, ps, s in iterator],
@@ -398,7 +398,7 @@ class FeatureGenerator:
         # Shift voxel profile path
         voxel_path = [self.to_voxels(xyz) for xyz in xyz_path]
         voxel_path = geometry_util.shift_path(voxel_path, bbox["min"])
-        voxel_path = get_inbounds(voxel_path, shape)
+        voxel_path = get_inbounds(voxel_path, img_shape)
         return {"bbox": bbox, "profile_path": voxel_path}
 
     def get_patches(self, proposal):
@@ -423,9 +423,10 @@ class FeatureGenerator:
             patch = np.minimum(patch / intensity, 1)
         except Exception as e:
             print("Except:", e)
+            print("proposal length:", self.graph.proposal_length(proposal))
             print("center:", center)
             print("shape:", shape)
-            print("img.shape:", self.img_reader.shape)
+            print("img.shape:", self.img_reader.shape())
             patch = np.zeros(shape)
 
         # Get image profile

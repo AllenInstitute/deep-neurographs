@@ -9,7 +9,6 @@ Routines for training machine learning models that classify proposals.
 
 To do: explain how the train pipeline is organized. how is the data organized?
 
-
 """
 
 from collections import defaultdict
@@ -43,8 +42,8 @@ from deep_neurographs.utils import ml_util, util
 # --- Custom Trainer ---
 class Trainer:
     """
-    Custom class that trains graph neural networks.
-
+    Custom class for a training graph neural network to correct split mistakes
+    by classifying edge proposals.
     """
 
     def __init__(
@@ -56,7 +55,7 @@ class Trainer:
         n_epochs=1000,
     ):
         """
-        Constructs a GraphTrainer object.
+        Instantiates a Trainer object.
 
         Parameters
         ----------
@@ -83,7 +82,7 @@ class Trainer:
         self.exp_dir = exp_dir
         self.writer = SummaryWriter(log_dir=exp_dir)
 
-    def run(self, model, train_dataset, validate_dataset):
+    def run(self, model, train_dataset, val_dataset):
         """
         Trains a graph neural network in the case where "datasets" is a
         dictionary of datasets such that each corresponds to a distinct graph.
@@ -97,7 +96,6 @@ class Trainer:
         torch.nn.Module
             Graph neural network that has been fit onto the given graph
             dataset.
-
         """
         # Initializations
         model.to(self.device)
@@ -108,10 +106,9 @@ class Trainer:
 
         # Dataloaders
         train_dataloader = GraphDataLoader(train_dataset, self.batch_size)
-        validate_dataloader = GraphDataLoader(validate_dataset, 200)
+        val_dataloader = GraphDataLoader(val_dataset, 200)
 
         # Main
-        print("\nTraining...")
         print("Experiment:", self.exp_name)
         best_f1, n_upds = 0, 0
         for epoch in range(self.n_epochs):
@@ -126,7 +123,6 @@ class Trainer:
                 # Backward pass
                 optimizer.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
                 # Store prediction
@@ -138,8 +134,8 @@ class Trainer:
                 # Check whether to validate model
                 if n_upds % 100 == 0:
                     train_f1 = self.compute_metrics(y, hat_y, "train", epoch)
-                    best_f1 = self.validate_model(
-                        validate_dataloader, model, epoch, best_f1, train_f1
+                    best_f1 = self.validate_step(
+                        val_dataloader, model, epoch, best_f1, train_f1
                     )
 
             self.writer.add_scalar("loss", np.mean(losses), epoch)
@@ -161,7 +157,6 @@ class Trainer:
             Ground truth.
         torch.Tensor
             Prediction.
-
         """
         x, edge_index, edge_attr = ml_util.get_inputs(data, self.device)
         hat_y = model(x, edge_index, edge_attr)
@@ -173,10 +168,9 @@ class Trainer:
             for key in x:
                 if torch.isnan(x[key]).any():
                     print(f"x[{key}]: {x[key]}")
-            stop
         return truncate(hat_y, y), y
 
-    def validate_model(self, dataloader, model, epoch, best_f1, train_f1):
+    def validate_step(self, dataloader, model, epoch, best_f1, train_f1):
         # Generate predictions
         with torch.no_grad():
             model.eval()
@@ -213,7 +207,6 @@ class Trainer:
         -------
         float
             F1 score.
-
         """
         # Initializations
         y = np.array(y, dtype=int).tolist()
@@ -241,12 +234,12 @@ class Trainer:
         torch.save(model.state_dict(), path)
 
 
-# --- Custom Datasets ---
+# --- Custom Dataset ---
 class GraphDataset:
     """
-    Custom dataset for storing a list of graphs to be used to train a graph
-    neural network. Graph are stored in the "self.graphs" attribute, which is
-    a dictionary containing the followin items:
+    Dataset for storing graphs used to train a graph neural network to perform
+    split correction. Graphs are stored in the "self.graphs" attribute, which
+    is a dictionary containing the followin items:
         - Key: (brain_id, segmentation_id, example_id)
         - Value: graph that is an instance of FragmentsGraph
 
@@ -259,7 +252,6 @@ class GraphDataset:
         (4) segmentation_path: Path to whole-brain segmentation stored on GCS.
 
     Note: This dataset supports graphs from multiple whole-brain datasets.
-
     """
 
     def __init__(self, config, transform=False):
@@ -288,7 +280,6 @@ class GraphDataset:
         -------
         int
             Number of graphs.
-
         """
         return len(self.graphs)
 
@@ -304,7 +295,6 @@ class GraphDataset:
         -------
         int
             Number of proposals.
-
         """
         return np.sum([graph.n_proposals() for graph in self.graphs.values()])
 
@@ -321,7 +311,6 @@ class GraphDataset:
         -------
         int
             Number of accepted proposals in the ground truth.
-
         """
         cnts = [len(graph.gt_accepts) for graph in self.graphs.values()]
         return np.sum(cnts)
@@ -338,7 +327,6 @@ class GraphDataset:
         -------
         float
             Percentage of accepted proposals in ground truth.
-
         """
         return self.n_accepts() / self.n_proposals()
 
@@ -387,7 +375,6 @@ class GraphDataset:
         -------
         FragmentsGraph
             Graph constructed from SWC files.
-
         """
         graph = FragmentsGraph(
             min_size=self.graph_config.min_size,
@@ -436,7 +423,7 @@ class GraphDataset:
         return self.graphs[key], features
 
 
-# --- Custom Dataloaders ---
+# --- Custom Dataloader ---
 class GraphDataLoader:
 
     def __init__(self, graph_dataset, batch_size=32, shuffle=True):
@@ -461,7 +448,6 @@ class GraphDataLoader:
         Returns
         -------
         ...
-
         """
         # Initializations
         if self.shuffle:
@@ -521,6 +507,5 @@ def truncate(hat_y, y):
     -------
     torch.Tensor
         Truncated "hat_y".
-
     """
     return hat_y[: y.size(0), 0]

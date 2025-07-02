@@ -124,7 +124,6 @@ class FragmentsGraph(nx.Graph):
             soma_centroids=soma_centroids,
             verbose=verbose,
         )
-        self.swc_reader = swc_util.Reader(anisotropy, min_size)
 
         # Instance attributes - Graph
         self.anisotropy = anisotropy
@@ -158,8 +157,7 @@ class FragmentsGraph(nx.Graph):
         None
 
         """
-        swc_dicts = self.swc_reader.read(fragments_pointer)
-        irreducibles_list = self.graph_loader.run(swc_dicts)
+        irreducibles_list = self.graph_loader.run(fragments_pointer)
         while irreducibles_list:
             irreducibles = irreducibles_list.pop()
             self.add_irreducibles(irreducibles)
@@ -219,16 +217,16 @@ class FragmentsGraph(nx.Graph):
 
         """
         for i in irreducibles[node_type].keys():
-            cur_id = self.node_cnt + 1
+            node_id = self.node_cnt + 1
             self.add_node(
-                cur_id,
+                node_id,
                 proposals=set(),
                 radius=irreducibles[node_type][i]["radius"],
                 swc_id=irreducibles["swc_id"],
                 xyz=irreducibles[node_type][i]["xyz"],
             )
             self.node_cnt += 1
-            node_ids[i] = cur_id
+            node_ids[i] = node_id
         return node_ids
 
     def __add_edge(self, edge, attrs, swc_id):
