@@ -78,9 +78,9 @@ def run(
 
         # Determine which potential proposals to keep
         for i in candidates:
-            leaf_swc_id = fragments_graph.nodes[leaf]["swc_id"]
-            node_swc_id = fragments_graph.nodes[i]["swc_id"]
-            pair_id = frozenset((leaf_swc_id, node_swc_id))
+            leaf_component_id = fragments_graph.node_component_id[leaf]
+            node_component_id = fragments_graph.node_component_id[i]
+            pair_id = frozenset((leaf_component_id, node_component_id))
             if pair_id in connections.keys():
                 cur_proposal = connections[pair_id]
                 cur_dist = fragments_graph.proposal_length(cur_proposal)
@@ -165,14 +165,13 @@ def search_kdtree(fragments_graph, leaf, kdtree, radius, max_proposals):
     candidates = dict()
     leaf_xyz = fragments_graph.node_xyz[leaf]
     for xyz in geometry.query_ball(kdtree, leaf_xyz, radius):
-        swc_id = fragments_graph.xyz_to_id(xyz)
-        if swc_id != fragments_graph.nodes[leaf]["swc_id"]:
-            d = geometry.dist(leaf_xyz, xyz)
-            if swc_id not in candidates.keys():
-                candidates[swc_id] = {"dist": d, "xyz": tuple(xyz)}
-            elif geometry.dist(leaf_xyz, xyz) < candidates[swc_id]["dist"]:
-                d = geometry.dist(leaf_xyz, xyz)
-                candidates[swc_id] = {"dist": d, "xyz": tuple(xyz)}
+        component_id = fragments_graph.xyz_to_component_id(xyz)
+        if component_id != fragments_graph.node_component_id[leaf]:
+            dist = geometry.dist(leaf_xyz, xyz)
+            if component_id not in candidates.keys():
+                candidates[component_id] = {"dist": dist, "xyz": tuple(xyz)}
+            elif dist < candidates[component_id]["dist"]:
+                candidates[component_id] = {"dist": dist, "xyz": tuple(xyz)}
 
     # Check whether to filter
     if max_proposals < 0:
