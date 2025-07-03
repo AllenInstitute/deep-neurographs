@@ -26,7 +26,7 @@ Note: We use the term "branch" to refer to a path in a graph from a branching
 
 from collections import defaultdict, deque
 from concurrent.futures import (
-    as_completed, ProcessPoolExecutor, ThreadPoolExecutor,
+    as_completed, ProcessPoolExecutor, ThreadPoolExecutor
 )
 from random import sample
 from scipy.spatial import KDTree
@@ -187,7 +187,7 @@ class FragmentsGraphLoader:
                 processes.append(
                     executor.submit(self.extract, swc_dicts.pop())
                 )
-                if len(processes) > 1000 or not swc_dicts:
+                if len(processes) > 2000 or not swc_dicts:
                     # Store results
                     for process in as_completed(processes):
                         result, cnt = process.result()
@@ -219,32 +219,36 @@ class FragmentsGraphLoader:
             Dictionary that each contains the components of an irreducible
             subgraph.
         """
-        graph = self.to_graph(swc_dict)
-        irreducibles = deque()
-        high_risk_cnt = 0
-        if self.satifies_path_length_condition(graph):
-            # Check for soma merges
-            if len(graph.graph["soma_nodes"]) > 1:
-                self.remove_soma_merges(graph)
+        try:
+            graph = self.to_graph(swc_dict)
+            irreducibles = deque()
+            high_risk_cnt = 0
+            if self.satifies_path_length_condition(graph):
+                # Check for soma merges
+                if len(graph.graph["soma_nodes"]) > 1:
+                    self.remove_soma_merges(graph)
 
-            # Check for high risk merges
-            if self.remove_high_risk_merges_bool:
-                high_risk_cnt = self.remove_high_risk_merges(graph)
+                # Check for high risk merges
+                if self.remove_high_risk_merges_bool:
+                    high_risk_cnt = self.remove_high_risk_merges(graph)
 
-            # Extract irreducibles
-            i = 0
-            leafs = set(get_leafs(graph))
-            while leafs:
-                # Extract for connected component
-                leaf = util.sample_once(leafs)
-                irreducibles_i, visited = self.get_irreducibles(graph, leaf)
-                leafs -= visited
+                # Extract irreducibles
+                i = 0
+                leafs = set(get_leafs(graph))
+                while leafs:
+                    # Extract for connected component
+                    leaf = util.sample_once(leafs)
+                    irreducibles_i, visited = self.get_irreducibles(graph, leaf)
+                    leafs -= visited
 
-                # Store results
-                if irreducibles_i:
-                    irreducibles_i["swc_id"] = f"{graph.graph['segment_id']}.{i}"
-                    irreducibles.append(irreducibles_i)
-                    i += 1
+                    # Store results
+                    if irreducibles_i:
+                        swc_id = f"{graph.graph['segment_id']}.{i}"
+                        irreducibles_i["swc_id"] = swc_id
+                        irreducibles.append(irreducibles_i)
+                        i += 1
+        except Exception as e:
+            print("Exception:", e)
         return irreducibles, high_risk_cnt
 
     def get_irreducibles(self, graph, source):
@@ -345,13 +349,13 @@ class FragmentsGraphLoader:
         """
         high_risk_cnt = 0
         nodes = set()
-        branchings = [i for i in graph.nodes if graph.degree[i] > 2]
+        branchings = set([i for i in graph.nodes if graph.degree[i] > 2])
         while branchings:
             # Initializations
             root = branchings.pop()
-            hit_branching = False
+            hit_branchings = set()
             queue = [(root, 0)]
-            visited = set({root})
+            visited = set(queue)
 
             # Check if close to soma
             soma_dist = self.dist_from_soma(graph.graph["xyz"][root])
@@ -363,7 +367,7 @@ class FragmentsGraphLoader:
                 # Visit node
                 i, dist_i = queue.pop()
                 if graph.degree[i] > 2 and i != root:
-                    hit_branching = True
+                    hit_branchings.add(i)
 
                 # Update queue
                 for j in graph.neighbors(i):
@@ -373,10 +377,10 @@ class FragmentsGraphLoader:
                         visited.add(j)
 
             # Determine whether to remove visited nodes
-            if hit_branching or graph.degree(root) > 3:
+            if hit_branchings or graph.degree(root) > 3:
                 nodes = nodes.union(visited)
-                high_risk_cnt += 0.5
-
+                high_risk_cnt += 1
+                branchings -= hit_branchings
         graph.remove_nodes_from(nodes)
         return high_risk_cnt
 
