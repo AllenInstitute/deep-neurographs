@@ -187,7 +187,7 @@ class FragmentsGraphLoader:
                 processes.append(
                     executor.submit(self.extract, swc_dicts.pop())
                 )
-                if len(processes) > 4000 or not swc_dicts:
+                if len(processes) > 2000 or not swc_dicts:
                     # Store results
                     for process in as_completed(processes):
                         pbar.update(1) if self.verbose else None
