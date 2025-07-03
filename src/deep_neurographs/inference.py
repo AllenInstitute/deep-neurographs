@@ -207,7 +207,7 @@ class InferencePipeline:
             soma_centroids=self.soma_centroids,
             verbose=True,
         )
-        self.graph.load_fragments(fragments_pointer)
+        self.graph.load(fragments_pointer)
 
         # Filter fragments
         if self.graph_config.remove_doubles:
