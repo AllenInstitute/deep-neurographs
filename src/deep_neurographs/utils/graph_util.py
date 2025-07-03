@@ -219,32 +219,35 @@ class FragmentsGraphLoader:
             Dictionary that each contains the components of an irreducible
             subgraph.
         """
-        graph = self.to_graph(swc_dict)
-        irreducibles = deque()
-        high_risk_cnt = 0
-        if self.satifies_path_length_condition(graph):
-            # Check for soma merges
-            if len(graph.graph["soma_nodes"]) > 1:
-                self.remove_soma_merges(graph)
-
-            # Check for high risk merges
-            if self.remove_high_risk_merges_bool:
-                high_risk_cnt = self.remove_high_risk_merges(graph)
-
-            # Extract irreducibles
-            i = 0
-            leafs = set(get_leafs(graph))
-            while leafs:
-                # Extract for connected component
-                leaf = util.sample_once(leafs)
-                irreducibles_i, visited = self.get_irreducibles(graph, leaf)
-                leafs -= visited
-
-                # Store results
-                if irreducibles_i:
-                    irreducibles_i["swc_id"] = f"{graph.graph['segment_id']}.{i}"
-                    irreducibles.append(irreducibles_i)
-                    i += 1
+        try:
+            graph = self.to_graph(swc_dict)
+            irreducibles = deque()
+            high_risk_cnt = 0
+            if self.satifies_path_length_condition(graph):
+                # Check for soma merges
+                if len(graph.graph["soma_nodes"]) > 1:
+                    self.remove_soma_merges(graph)
+    
+                # Check for high risk merges
+                if self.remove_high_risk_merges_bool:
+                    high_risk_cnt = self.remove_high_risk_merges(graph)
+    
+                # Extract irreducibles
+                i = 0
+                leafs = set(get_leafs(graph))
+                while leafs:
+                    # Extract for connected component
+                    leaf = util.sample_once(leafs)
+                    irreducibles_i, visited = self.get_irreducibles(graph, leaf)
+                    leafs -= visited
+    
+                    # Store results
+                    if irreducibles_i:
+                        irreducibles_i["swc_id"] = f"{graph.graph['segment_id']}.{i}"
+                        irreducibles.append(irreducibles_i)
+                        i += 1
+        except Exception as e:
+            print("Exception:", e)
         return irreducibles, high_risk_cnt
 
     def get_irreducibles(self, graph, source):
