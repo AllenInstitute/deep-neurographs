@@ -184,8 +184,8 @@ def is_valid(gt_graph, pred_graph, kdtree, gt_id, proposal):
         )
 
         # Find index of closest points on ground truth edges
-        xyz_i = pred_graph.nodes[i]["xyz"]
-        xyz_j = pred_graph.nodes[i]["xyz"]
+        xyz_i = pred_graph.node_xyz[i]
+        xyz_j = pred_graph.node_xyz[j]
         idx_i = find_closest_point(hat_edge_xyz_i, xyz_i)
         idx_j = find_closest_point(hat_edge_xyz_j, xyz_j)
 

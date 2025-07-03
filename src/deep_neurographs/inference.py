@@ -215,7 +215,8 @@ class InferencePipeline:
 
         # Report results
         path = f"{self.output_dir}/segment_ids.txt"
-        util.write_list(path, self.graph.swc_ids)
+        swc_ids = list(self.graph.component_id_to_swc_id.values())
+        util.write_list(path, swc_ids)
         print("# Soma Fragments:", len(self.graph.soma_ids))
 
         t, unit = util.time_writer(time() - t0)

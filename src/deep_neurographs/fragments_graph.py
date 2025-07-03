@@ -30,7 +30,6 @@ information into the graph structure.
 """
 
 from concurrent.futures import as_completed, ThreadPoolExecutor
-from copy import deepcopy
 from io import StringIO
 from scipy.spatial import KDTree
 from tqdm import tqdm
@@ -127,17 +126,17 @@ class FragmentsGraph(nx.Graph):
 
         # Instance attributes - Graph
         self.anisotropy = anisotropy
+        self.component_id_to_swc_id = dict()
         self.leaf_kdtree = None
-        self.n_merges_blocked = 0
-        self.n_proposals_blocked = 0
         self.soma_ids = set()
-        self.swc_ids = set()
         self.verbose = verbose
         self.xyz_to_edge = dict()
 
         # Instance attributes - Proposals
         self.merged_ids = set()
         self.proposals = set()
+        self.n_merges_blocked = 0
+        self.n_proposals_blocked = 0
 
     def load_fragments(self, fragments_pointer):
         """
@@ -160,14 +159,19 @@ class FragmentsGraph(nx.Graph):
         irreducibles = self.graph_loader.run(fragments_pointer)
         n = np.sum([len(irr["nodes"]) for irr in irreducibles])
 
-        # Add irreducibles to graph
-        self.node_xyz = np.zeros((n, 3), dtype=np.float32)
+        # Initialize node attribute data structures
+        self.node_component_id = np.zeros((n), dtype=int)
         self.node_radius = np.zeros((n), dtype=np.float16)
+        self.node_xyz = np.zeros((n, 3), dtype=np.float32)
+
+        # Add irreducibles to graph
+        component_id = 0
         while irreducibles:
-            self.add_irreducibles(irreducibles.pop())
+            self.add_irreducibles(irreducibles.pop(), component_id)
+            component_id += 1
 
     # --- Update Structure ---
-    def add_irreducibles(self, irreducibles):
+    def add_irreducibles(self, irreducibles, component_id):
         """
         Adds the irreducibles from a single connected component to "self".
 
@@ -175,8 +179,11 @@ class FragmentsGraph(nx.Graph):
         ----------
         irreducibles : dict
             Dictionary containing the irreducibles of a connected component to
-            be added to "self". This dictionary must contain the keys: "leaf",
-            "branching", "edge", "swc_id", and "is_soma".
+            add to "self". This dictionary must contain the keys: "nodes",
+            "edges", "swc_id", and "is_soma".
+        component_id : int
+            Connected component ID used to map node IDs back to SWC IDs via
+            "self.component_id_to_swc_id".
 
         Returns
         -------
@@ -184,18 +191,17 @@ class FragmentsGraph(nx.Graph):
 
         """
         # SWC ID
-        swc_id = irreducibles["swc_id"]
-        self.swc_ids.add(swc_id)
+        self.component_id_to_swc_id[component_id] = irreducibles["swc_id"]
         if irreducibles["is_soma"]:
-            self.soma_ids.add(swc_id)
+            self.soma_ids.add(component_id)
 
         # Irreducible components
-        node_id_mapping = self._add_nodes(irreducibles["nodes"], swc_id)
+        node_id_mapping = self._add_nodes(irreducibles["nodes"], component_id)
         for (i, j), attrs in irreducibles["edges"].items():
             edge_id = (node_id_mapping[i], node_id_mapping[j])
-            self._add_edge(edge_id, attrs, swc_id)
+            self._add_edge(edge_id, attrs)
 
-    def _add_nodes(self, node_dict, swc_id):
+    def _add_nodes(self, node_dict, component_id):
         """
         Adds nodes to the graph from a dictionary of node attributes and 
         returns a mapping from original node IDs to the new graph node IDs.
@@ -207,9 +213,9 @@ class FragmentsGraph(nx.Graph):
             their attributes. Each value must be a dictionary containing:
                 - "radius" : float
                 - "xyz"    : array-like of shape (3,)
-        swc_id : str
-            Identifier of the SWC file the nodes belong to. Stored as an
-            attribute on each node.
+        component_id : str
+            Connected component ID used to map node IDs back to SWC IDs via
+            "self.component_id_to_swc_id".
 
         Returns
         -------
@@ -222,15 +228,12 @@ class FragmentsGraph(nx.Graph):
             new_id = self.number_of_nodes()
             self.node_xyz[new_id] = attrs["xyz"]
             self.node_radius[new_id] = attrs["radius"]
-            self.add_node(
-                new_id,
-                proposals=set(),
-                swc_id=swc_id,
-            )
+            self.node_component_id[new_id] = component_id
+            self.add_node(new_id, proposals=set())
             node_id_mapping[node_id] = new_id
         return node_id_mapping
 
-    def _add_edge(self, edge, attrs, swc_id):
+    def _add_edge(self, edge, attrs):
         """
         Adds an edge to "self".
 
@@ -240,8 +243,6 @@ class FragmentsGraph(nx.Graph):
             Edge to be added.
         attrs : dict
             Dictionary of attributes of "edge" obtained from an swc file.
-        swc_id : str
-            SWC ID corresponding to edge.
 
         Returns
         -------
@@ -275,7 +276,7 @@ class FragmentsGraph(nx.Graph):
             self.xyz_to_edge.pop(tuple(xyz), None)
 
         # Remove nodes
-        self.swc_ids.discard(self.nodes[i]["swc_id"])
+        self.component_id_to_swc_id.discard(self.node_component_id[i])
         self.remove_nodes_from([i, j])
 
     # -- KDTree --
@@ -620,11 +621,7 @@ class FragmentsGraph(nx.Graph):
 
         """
         i, j = tuple(proposal)
-        if key == "swc_id":
-            swc_id_i = reformat(self.nodes[i][key])
-            swc_id_j = reformat(self.nodes[j][key])
-            return [swc_id_i, swc_id_j]
-        elif key == "xyz":
+        if key == "xyz":
             return np.array([self.node_xyz[i], self.node_xyz[j]])
         elif key == "radius":
             return np.array([self.node_radius[i], self.node_radius[j]])
@@ -668,7 +665,7 @@ class FragmentsGraph(nx.Graph):
     def merge_proposal(self, proposal):
         i, j = tuple(proposal)
         if self.is_mergeable(i, j):
-            # Dense attributes
+            # Update attributes
             attrs = {
                 "radius": self.node_radius[np.array([i, j], dtype=int)],
                 "xyz": self.node_xyz[np.array([i, j], dtype=int)]
@@ -676,15 +673,17 @@ class FragmentsGraph(nx.Graph):
             self.node_radius[i] = 5.3141592
             self.node_radius[j] = 5.3141592
 
-            # Sparse attributes
-            swc_id_i = self.nodes[i]["swc_id"]
-            swc_id_j = self.nodes[j]["swc_id"]
-            swc_id = swc_id_i if self.is_soma(i) else swc_id_j
+            # Update component_ids
+            if self.is_soma(i):
+                component_id = self.node_component_id[i]
+                self.update_component_ids(component_id, j)
+            else:
+                component_id = self.node_component_id[j]
+                self.update_component_ids(component_id, i)
 
             # Update graph
-            self.merged_ids.add((swc_id_i, swc_id_j))
-            self.upd_ids(swc_id, j if swc_id == swc_id_i else i)
-            self._add_edge((i, j), attrs, swc_id)
+            self._add_edge((i, j), attrs)
+            self.merged_ids.add((self.get_swc_id(i), self.get_swc_id(j)))
             self.proposals.remove(proposal)
         else:
             self.n_merges_blocked += 1
@@ -695,27 +694,26 @@ class FragmentsGraph(nx.Graph):
         somas_check = not (self.is_soma(i) and self.is_soma(j))
         return somas_check and (one_leaf and not branching)
 
-    def upd_ids(self, swc_id, r):
+    def update_component_ids(self, component_id, root):
         """
-        Updates the swc_id of all nodes connected to "r".
+        Updates the component_id of all nodes connected to "root".
 
         Parameters
         ----------
-        swc_id : str
-            Segment id.
-        r : int
+        component_id : str
+            Connected component id.
+        root : int
             Node ID
 
         Returns
         -------
         None
-
         """
-        queue = [r]
-        visited = set()
+        queue = [root]
+        visited = set(queue)
         while len(queue) > 0:
             i = queue.pop()
-            self.nodes[i]["swc_id"] = swc_id
+            self.node_component_id[i] = component_id
             visited.add(i)
             for j in [j for j in self.neighbors(i) if j not in visited]:
                 queue.append(j)
@@ -761,6 +759,10 @@ class FragmentsGraph(nx.Graph):
 
         """
         return geometry.dist(self.node_xyz[i], self.node_xyz[j])
+
+    def get_swc_id(self, i):
+        component_id = self.node_component_id[i]
+        return self.component_id_to_swc_id[component_id]
 
     def node_attr(self, i, key):
         if key == "xyz":
@@ -826,7 +828,7 @@ class FragmentsGraph(nx.Graph):
             i, j = self.xyz_to_edge[tuple(xyz)]
             dist_i = geometry.dist(self.node_xyz[i], query_xyz)
             dist_j = geometry.dist(self.node_xyz[j], query_xyz)
-            hits[self.nodes[i]["swc_id"]] = i if dist_i < dist_j else j
+            hits[self.node_component_id[i]] = i if dist_i < dist_j else j
         return hits
 
     def get_connected_nodes(self, root):
@@ -856,9 +858,9 @@ class FragmentsGraph(nx.Graph):
         """
         return [i for i in self.nodes if self.degree[i] == 1]
 
-    def is_soma(self, node_or_swc):
+    def is_soma(self, i):
         """
-        Determines whether "node_or_swc" corresponds to a soma.
+        Check whether a node belongs to a component containing a soma.
 
         Parameters
         ----------
@@ -868,13 +870,10 @@ class FragmentsGraph(nx.Graph):
         Returns
         -------
         bool
-            Indication of whether "node_or_swc" corresponds to a soma.
-
+            True if the node belongs to a connected component with a soma;
+            False otherwise.
         """
-        assert type(node_or_swc) in [int, str], "Type error!"
-        if isinstance(node_or_swc, int):
-            node_or_swc = self.nodes[node_or_swc]["swc_id"]
-        return node_or_swc in self.soma_ids
+        return self.node_component_id[i] in self.soma_ids
 
     def orient_edge_attr(self, edge, i, key="xyz"):
         node_attr = self.node_attr(i, key)
@@ -883,11 +882,10 @@ class FragmentsGraph(nx.Graph):
         else:
             return np.flip(self.edges[edge][key], axis=0)
 
-    def xyz_to_id(self, xyz, return_node=False):
+    def xyz_to_component_id(self, xyz, return_node=False):
         if tuple(xyz) in self.xyz_to_edge.keys():
             edge = self.xyz_to_edge[tuple(xyz)]
-            i, j = tuple(edge)
-            return self.nodes[i]["swc_id"]
+            return self.node_component_id[edge[0]]
         else:
             return None
 
@@ -983,7 +981,7 @@ class FragmentsGraph(nx.Graph):
                 node_to_idx[j] = n_entries
 
             # Write SWC file
-            filename = self.nodes[i]["swc_id"]
+            filename = self.get_swc_id(i)
             filename = util.set_zip_path(zip_writer, filename, ".swc")
             zip_writer.writestr(filename, text_buffer.getvalue())
 
