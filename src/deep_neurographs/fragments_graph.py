@@ -104,10 +104,10 @@ class FragmentsGraph(nx.Graph):
         None
         """
         # Call parent class
-        super(FragmentsGraph, self).__init__()
+        super().__init__()
 
-        # Loaders
-        self.graph_loader = gutil.FragmentsGraphLoader(
+        # Fragment Loader
+        self.graph_loader = gutil.GraphLoader(
             anisotropy=anisotropy,
             min_size=min_size,
             node_spacing=node_spacing,
@@ -161,11 +161,11 @@ class FragmentsGraph(nx.Graph):
         # Add irreducibles to graph
         component_id = 0
         while irreducibles:
-            self.add_irreducibles(irreducibles.pop(), component_id)
+            self.add_connected_component(irreducibles.pop(), component_id)
             component_id += 1
 
     # --- Update Structure ---
-    def add_irreducibles(self, irreducibles, component_id):
+    def add_connected_component(self, irreducibles, component_id):
         """
         Adds the irreducibles from a single connected component to "self".
 
