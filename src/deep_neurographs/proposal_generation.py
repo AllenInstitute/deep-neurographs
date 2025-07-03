@@ -313,6 +313,7 @@ def trim_endpoints_at_proposal(fragments_graph, proposal, max_length):
             trim_to_idx(fragments_graph, i, idx_i)
             trim_to_idx(fragments_graph, j, idx_j)
 
+
 def find_closest_pair(pts1, pts2):
     best_dist, best_idxs = np.inf, (0, 0)
     i, length1 = -1, 0
@@ -412,7 +413,7 @@ def compute_dot(branch1, branch2, idx1, idx2):
     """
     # Initializations
     midpoint = geometry.midpoint(branch1[idx1], branch2[idx2])
-    b1 = branch1 - midpoint 
+    b1 = branch1 - midpoint
     b2 = branch2 - midpoint
 
     # Main

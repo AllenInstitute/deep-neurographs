@@ -15,7 +15,7 @@ from tqdm import tqdm
 import networkx as nx
 import numpy as np
 
-from deep_neurographs.utils import graph_util as gutil, img_util
+from deep_neurographs.utils import img_util
 
 
 # --- Directionals ---

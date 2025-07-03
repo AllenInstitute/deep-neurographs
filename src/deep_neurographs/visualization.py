@@ -11,7 +11,6 @@ Code for visualizing FragmentsGraph.
 from plotly.subplots import make_subplots
 
 import networkx as nx
-import numpy as np
 import plotly.colors as plc
 import plotly.graph_objects as go
 

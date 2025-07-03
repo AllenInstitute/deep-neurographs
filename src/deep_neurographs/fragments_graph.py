@@ -26,7 +26,6 @@ information into the graph structure.
 
         3. Add Irreducibles
             to do...
-
 """
 
 from concurrent.futures import as_completed, ThreadPoolExecutor
@@ -41,10 +40,7 @@ import zipfile
 
 from deep_neurographs import proposal_generation
 from deep_neurographs.utils import (
-    geometry_util as geometry,
-    graph_util as gutil,
-    swc_util,
-    util,
+    geometry_util as geometry, graph_util as gutil, util,
 )
 from deep_neurographs.machine_learning import groundtruth_generation
 
@@ -106,7 +102,6 @@ class FragmentsGraph(nx.Graph):
         Returns
         -------
         None
-
         """
         # Call parent class
         super(FragmentsGraph, self).__init__()
@@ -153,7 +148,6 @@ class FragmentsGraph(nx.Graph):
         Returns
         -------
         None
-
         """
         # Extract irreducible components from SWC files
         irreducibles = self.graph_loader.run(fragments_pointer)
@@ -188,7 +182,6 @@ class FragmentsGraph(nx.Graph):
         Returns
         -------
         None
-
         """
         # SWC ID
         self.component_id_to_swc_id[component_id] = irreducibles["swc_id"]
@@ -203,7 +196,7 @@ class FragmentsGraph(nx.Graph):
 
     def _add_nodes(self, node_dict, component_id):
         """
-        Adds nodes to the graph from a dictionary of node attributes and 
+        Adds nodes to the graph from a dictionary of node attributes and
         returns a mapping from original node IDs to the new graph node IDs.
 
         Parameters
@@ -247,7 +240,6 @@ class FragmentsGraph(nx.Graph):
         Returns
         -------
         None
-
         """
         i, j = tuple(edge)
         self.add_edge(i, j, radius=attrs["radius"], xyz=attrs["xyz"])
@@ -293,7 +285,6 @@ class FragmentsGraph(nx.Graph):
         Returns
         -------
         None
-
         """
         if node_type == "leaf":
             self.leaf_kdtree = self.get_kdtree(node_type=node_type)
@@ -315,7 +306,6 @@ class FragmentsGraph(nx.Graph):
         -------
         KDTree
             KD-Tree generated from xyz coordinates across all nodes and edges.
-
         """
         # Get xyz coordinates
         if node_type == "leaf":
@@ -344,7 +334,6 @@ class FragmentsGraph(nx.Graph):
         generator[tuple]
             Generator that generates the xyz coordinates cooresponding to all
             nodes within a distance of "d" from "xyz".
-
         """
         if node_type == "leaf":
             return geometry.query_ball(self.leaf_kdtree, xyz, d)
@@ -387,7 +376,6 @@ class FragmentsGraph(nx.Graph):
         Returns
         -------
         None
-
         """
         # Initializations
         self.reset_proposals()
@@ -425,7 +413,6 @@ class FragmentsGraph(nx.Graph):
         Returns
         -------
         None
-
         """
         self.proposals = set()
         for i in self.nodes:
@@ -461,7 +448,6 @@ class FragmentsGraph(nx.Graph):
         Returns
         -------
         None
-
         """
         proposal = frozenset({i, j})
         self.nodes[i]["proposals"].add(j)
@@ -475,12 +461,11 @@ class FragmentsGraph(nx.Graph):
         Parameters
         ----------
         proposal : Frozenset[int]
-            Pair of node ids corresponding to a proposal.
+            Pair of node IDs corresponding to a proposal.
 
         Returns
         -------
         None
-
         """
         i, j = tuple(proposal)
         self.nodes[i]["proposals"].remove(j)
@@ -495,14 +480,13 @@ class FragmentsGraph(nx.Graph):
         Parameters
         ----------
         proposal : Frozenset[int]
-            Pair of node ids corresponding to a proposal.
+            Pair of node IDs corresponding to a proposal.
 
         Returns
         -------
         bool
             Indiciation of "proposal" is the only proposal generated for the
-        corresponding nodes.
-
+            corresponding nodes.
         """
         i, j = tuple(proposal)
         single_i = len(self.nodes[i]["proposals"]) == 1
@@ -529,7 +513,6 @@ class FragmentsGraph(nx.Graph):
         -------
         bool
             Indication of whether proposal is valid.
-
         """
         if i is not None:
             skip_soma = self.is_soma(i) and self.is_soma(leaf)
@@ -549,9 +532,8 @@ class FragmentsGraph(nx.Graph):
 
         Returns
         -------
-        list
+        List[Frozenset[int]]
             Proposals.
-
         """
         return list(self.proposals)
 
@@ -568,13 +550,12 @@ class FragmentsGraph(nx.Graph):
         -------
         int
             Number of proposals in the graph.
-
         """
         return len(self.proposals)
 
     def is_simple(self, proposal):
         """
-        Determines whether both nodes in a proposal are leafs.
+        Checks if both nodes in a proposal are leafs.
 
         Parameters
         ----------
@@ -585,7 +566,6 @@ class FragmentsGraph(nx.Graph):
         -------
         bool
             Indication of whether both nodes in a proposal are leafs.
-
         """
         i, j = tuple(proposal)
         return True if self.degree[i] == 1 and self.degree[j] == 1 else False
@@ -618,7 +598,6 @@ class FragmentsGraph(nx.Graph):
         -------
         numpy.ndarray
             Attributes of nodes in "proposal".
-
         """
         i, j = tuple(proposal)
         if key == "xyz":
@@ -735,7 +714,6 @@ class FragmentsGraph(nx.Graph):
         int
             Number of nearby leaf nodes within a specified radius from
             a proposal.
-
         """
         xyz = self.proposal_midpoint(proposal)
         return len(self.query_kdtree(xyz, radius, "leaf")) - 1
@@ -756,7 +734,6 @@ class FragmentsGraph(nx.Graph):
         -------
         float
             Euclidean distance between nodes "i" and "j".
-
         """
         return geometry.dist(self.node_xyz[i], self.node_xyz[j])
 
@@ -795,7 +772,6 @@ class FragmentsGraph(nx.Graph):
         List[numpy.ndarray]
             Edge attribute specified by "key" for all edges connected to the
             given node.
-
         """
         attrs = list()
         for j in self.neighbors(i):
@@ -854,7 +830,6 @@ class FragmentsGraph(nx.Graph):
         -------
         List[int]
             Leaf nodes in graph.
-
         """
         return [i for i in self.nodes if self.degree[i] == 1]
 
@@ -864,8 +839,8 @@ class FragmentsGraph(nx.Graph):
 
         Parameters
         ----------
-        node_or_swc : str
-            node or swc id to be checked.
+        i : str
+            Node ID.
 
         Returns
         -------
@@ -1020,7 +995,3 @@ def avg_radius(radii_list):
         end = max(min(16, len(radii) - 1), 1)
         avg += np.mean(radii[0:end]) / len(radii_list)
     return avg
-
-
-def reformat(segment_id):
-    return int(segment_id.split(".")[0])
