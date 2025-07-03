@@ -232,33 +232,29 @@ class InferencePipeline:
         for soma_xyz in self.soma_centroids:
             hits = self.graph.find_fragments_near_xyz(soma_xyz, 20)
             if len(hits) > 1:
-                # Determine new swc id
+                # Find closest node to soma location
                 soma_cnt += 1
-                hit_soma = None
-                for swc_id in hits:
-                    if swc_id in self.graph.soma_ids and hit_soma:
-                        break
-                self.graph.soma_ids.add(swc_id)
-
-                # Add soma node
-                soma_node = self.graph.node_cnt + 1
-                self.graph.add_node(
-                    soma_node,
-                    proposals=set(),
-                    radius=2,
-                    swc_id=swc_id,
-                    xyz=soma_xyz,
-                )
-                self.graph.node_cnt += 1
+                best_dist = np.inf
+                best_node = None
+                for i in hits.values():
+                    dist = geometry_util.dist(soma_xyz, graph.node_xyz[i])
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_node = i
+                soma_component_id = self.node_component_id[best_node]
+                self.graph.soma_ids.add(soma_component_id)
+                del hits[best_node]
 
                 # Merge fragments to soma
-                for swc_id_i, i in hits.items():
-                    radius = np.array([2, 2])
-                    xyz_i = self.graph.nodes[i]["xyz"]
+                soma_xyz = self.graph.node_xyz[best_node]
+                for i in hits.values():
+                    xyz_i = self.graph.node_xyz[i]
                     xyz = np.array([soma_xyz, xyz_i])
-                    self.graph.add_edge(soma_node, i, radius=radius, xyz=xyz)
-                    self.graph.xyz_to_edge[tuple(xyz_i)] = (soma_node, i)
-                    self.graph.upd_ids(swc_id, i)
+                    radius = np.array([2, 2])
+
+                    self.graph.add_edge(best_node, i, radius=radius, xyz=xyz)
+                    self.graph.xyz_to_edge[tuple(xyz_i)] = (best_node, i)
+                    self.graph.update_component_ids(soma_component_id, i)
                     merge_cnt += 1
 
         print("# Somas Connected:", soma_cnt)

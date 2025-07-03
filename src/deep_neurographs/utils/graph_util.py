@@ -44,7 +44,7 @@ from deep_neurographs.utils import img_util, swc_util, util
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
 
-class FragmentsGraphLoader:
+class GraphLoader:
     """
     Class that loads SWC files and constructs a FragmentsGraph instance from
     the data.
@@ -187,7 +187,7 @@ class FragmentsGraphLoader:
                 processes.append(
                     executor.submit(self.extract, swc_dicts.pop())
                 )
-                if len(processes) > 1000 or not swc_dicts:
+                if len(processes) > 4000 or not swc_dicts:
                     # Store results
                     for process in as_completed(processes):
                         result, cnt = process.result()
