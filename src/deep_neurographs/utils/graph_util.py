@@ -187,7 +187,7 @@ class GraphLoader:
                 processes.append(
                     executor.submit(self.extract, swc_dicts.pop())
                 )
-                if len(processes) > 4000 or not swc_dicts:
+                if len(processes) > 5000 or not swc_dicts:
                     # Store results
                     for process in as_completed(processes):
                         result, cnt = process.result()

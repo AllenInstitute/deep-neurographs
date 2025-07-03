@@ -526,7 +526,7 @@ def compute_projections(graph, kdtree, edge):
         projection distances.
     """
     hits = defaultdict(list)
-    query_id = graph.node_component_ids[edge[0]]
+    query_id = graph.node_component_id[edge[0]]
     for i, xyz in enumerate(graph.edges[edge]["xyz"]):
         # Compute projections
         best_id = None
