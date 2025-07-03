@@ -133,7 +133,7 @@ class FragmentsGraph(nx.Graph):
         self.n_merges_blocked = 0
         self.n_proposals_blocked = 0
 
-    def load_fragments(self, fragments_pointer):
+    def load(self, swc_pointer):
         """
         Loads fragments into "self" by reading SWC files stored on either the
         cloud or local machine, then extracts the irreducible components from
@@ -141,7 +141,7 @@ class FragmentsGraph(nx.Graph):
 
         Parameters
         ----------
-        fragments_pointer : Any
+        swc_pointer : Any
             Pointer to SWC files to be loaded, see "swc_util.Reader" for
             documentation.
 
@@ -150,7 +150,7 @@ class FragmentsGraph(nx.Graph):
         None
         """
         # Extract irreducible components from SWC files
-        irreducibles = self.graph_loader.run(fragments_pointer)
+        irreducibles = self.graph_loader.run(swc_pointer)
         n = np.sum([len(irr["nodes"]) for irr in irreducibles])
 
         # Initialize node attribute data structures
@@ -183,12 +183,12 @@ class FragmentsGraph(nx.Graph):
         -------
         None
         """
-        # SWC ID
+        # Component ID
         self.component_id_to_swc_id[component_id] = irreducibles["swc_id"]
         if irreducibles["is_soma"]:
             self.soma_ids.add(component_id)
 
-        # Irreducible components
+        # Add irreducibles
         node_id_mapping = self._add_nodes(irreducibles["nodes"], component_id)
         for (i, j), attrs in irreducibles["edges"].items():
             edge_id = (node_id_mapping[i], node_id_mapping[j])
@@ -226,7 +226,7 @@ class FragmentsGraph(nx.Graph):
             node_id_mapping[node_id] = new_id
         return node_id_mapping
 
-    def _add_edge(self, edge, attrs):
+    def _add_edge(self, edge_id, attrs):
         """
         Adds an edge to "self".
 
@@ -235,15 +235,15 @@ class FragmentsGraph(nx.Graph):
         edge : Tuple[int]
             Edge to be added.
         attrs : dict
-            Dictionary of attributes of "edge" obtained from an swc file.
+            Dictionary of attributes of "edge" obtained from an SWC file.
 
         Returns
         -------
         None
         """
-        i, j = tuple(edge)
+        i, j = tuple(edge_id)
         self.add_edge(i, j, radius=attrs["radius"], xyz=attrs["xyz"])
-        self.xyz_to_edge.update({tuple(xyz): edge for xyz in attrs["xyz"]})
+        self.xyz_to_edge.update({tuple(xyz): edge_id for xyz in attrs["xyz"]})
 
     def remove_line_fragment(self, i, j):
         """
