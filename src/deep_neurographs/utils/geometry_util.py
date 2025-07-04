@@ -532,7 +532,7 @@ def compute_projections(graph, kdtree, edge):
         best_id = None
         best_dist = np.inf
         for hit_xyz in query_ball(kdtree, xyz, 15):
-            hit_id = graph.xyz_to_id(hit_xyz)
+            hit_id = graph.xyz_to_component_id(hit_xyz)
             if hit_id is not None and hit_id != query_id:
                 if dist(hit_xyz, xyz) < best_dist:
                     best_dist = dist(hit_xyz, xyz)
