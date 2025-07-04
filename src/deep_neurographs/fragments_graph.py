@@ -39,13 +39,14 @@ import os
 import zipfile
 
 from deep_neurographs import proposal_generation
+from deep_neurographs.skeleton_graph import SkeletonGraph
+from deep_neurographs.machine_learning import groundtruth_generation
 from deep_neurographs.utils import (
     geometry_util as geometry, graph_util as gutil, util,
 )
-from deep_neurographs.machine_learning import groundtruth_generation
 
 
-class FragmentsGraph(nx.Graph):
+class FragmentsGraph(SkeletonGraph):
     """
     Custom subclass of NetworkX.Graph constructed from neuron fragments. The
     graph's nodes are irreducible, meaning each node has either degree 1
