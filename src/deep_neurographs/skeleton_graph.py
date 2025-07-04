@@ -24,6 +24,7 @@ class SkeletonGraph(nx.Graph):
         anisotropy=(1.0, 1.0, 1.0),
         min_size=0,
         node_spacing=1,
+        prune_depth=20.0,
         smooth_bool=True,
         verbose=False,
     ):
@@ -36,6 +37,7 @@ class SkeletonGraph(nx.Graph):
             min_size=min_size,
             node_spacing=node_spacing,
             smooth_bool=smooth_bool,
+            prune_depth=prune_depth,
             verbose=verbose,
         )
 
@@ -152,4 +154,4 @@ class SkeletonGraph(nx.Graph):
 
             # Store attributes
             self.node_xyz[new_id] = xyz
-            self.node_radius[new_id] = radius  
+            self.node_radius[new_id] = radius

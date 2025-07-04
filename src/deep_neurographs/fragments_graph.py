@@ -107,7 +107,7 @@ class FragmentsGraph(SkeletonGraph):
         # Call parent class
         super().__init__()
 
-        # Fragment Loader
+        # Graph Loader
         self.graph_loader = gutil.GraphLoader(
             anisotropy=anisotropy,
             min_size=min_size,
@@ -269,7 +269,7 @@ class FragmentsGraph(SkeletonGraph):
             self.xyz_to_edge.pop(tuple(xyz), None)
 
         # Remove nodes
-        self.component_id_to_swc_id.discard(self.node_component_id[i])
+        del self.component_id_to_swc_id[self.node_component_id[i]]
         self.remove_nodes_from([i, j])
 
     # -- KDTree --

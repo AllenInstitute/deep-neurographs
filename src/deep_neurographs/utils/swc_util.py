@@ -435,7 +435,7 @@ def get_segment_id(swc_name):
     try:
         return ast.literal_eval(swc_name.split(".")[0])
     except:
-        return None
+        return swc_name
 
 
 def get_swc_name(path):
