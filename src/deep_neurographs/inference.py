@@ -237,7 +237,7 @@ class InferencePipeline:
                 best_dist = np.inf
                 best_node = None
                 for i in hits.values():
-                    dist = geometry_util.dist(soma_xyz, graph.node_xyz[i])
+                    dist = geometry_util.dist(soma_xyz, self.graph.node_xyz[i])
                     if dist < best_dist:
                         best_dist = dist
                         best_node = i
