@@ -298,16 +298,15 @@ class GraphLoader:
             if graph.degree[j] != 2:
                 path_length += edge_length
                 irreducible_nodes.add(j)
-                edge_id = (root, j)
                 attrs = to_numpy(attrs)
                 if self.smooth_bool:
                     n_pts = int(edge_length / self.node_spacing)
-                    self.smooth_curve_3d(graph, attrs, edge_id, n_pts)
+                    self.smooth_curve_3d(graph, attrs, (root, j), n_pts)
                 if graph.degree[j] == 1:
                     leafs.add(j)
 
                 # Finish
-                irreducible_edges[edge_id] = attrs
+                irreducible_edges[(root, j)] = attrs
                 root = None
 
         # Check for curvy line fragment

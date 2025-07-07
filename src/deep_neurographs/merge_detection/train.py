@@ -9,7 +9,6 @@ Routines for training machine learning models that detect merge mistakes.
 """
 
 from deep_neurographs.skeleton_graph import SkeletonGraph
-from deep_neurographs.utils import graph_util as gutil
 
 
 # --- Custom Trainer ---
@@ -29,6 +28,7 @@ class MergeDetectionGraphDataset:
         self.gt_graphs = dict()
         self.merge_graphs = dict()
 
+    # --- Load Data ---
     def init_graph(self, swc_pointer):
         graph = SkeletonGraph(
             anisotropy=self.anisotropy, node_spacing=self.node_spacing
@@ -43,6 +43,10 @@ class MergeDetectionGraphDataset:
     def load_gt_graphs(self, brain_id, img_path, swc_pointer):
         self.imgs[brain_id] = img_path
         self.gt_graphs[brain_id] = self.init_graph(swc_pointer)
+
+    # --- Get Examples ---
+    def __getitem__(self):
+        pass
 
 # --- Custom Dataloader ---
 

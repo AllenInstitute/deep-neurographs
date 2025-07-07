@@ -17,6 +17,7 @@ import numpy as np
 
 from deep_neurographs.utils import geometry_util, graph_util as gutil
 
+
 class SkeletonGraph(nx.Graph):
 
     def __init__(
