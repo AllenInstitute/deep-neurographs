@@ -241,24 +241,23 @@ class InferencePipeline:
                     if dist < best_dist:
                         best_dist = dist
                         best_node = i
-                soma_component_id = self.node_component_id[best_node]
+                soma_component_id = self.graph.node_component_id[best_node]
                 self.graph.soma_ids.add(soma_component_id)
                 del hits[best_node]
 
                 # Merge fragments to soma
                 soma_xyz = self.graph.node_xyz[best_node]
                 for i in hits.values():
-                    xyz_i = self.graph.node_xyz[i]
-                    xyz = np.array([soma_xyz, xyz_i])
-                    radius = np.array([2, 2])
-
-                    self.graph.add_edge(best_node, i, radius=radius, xyz=xyz)
-                    self.graph.xyz_to_edge[tuple(xyz_i)] = (best_node, i)
+                    attrs = {
+                        "radius": np.array([2, 2]),
+                        "xyz": np.array([soma_xyz, self.graph.node_xyz[i]]),
+                    }
+                    self.graph._add_edge((best_node, i), attrs)
                     self.graph.update_component_ids(soma_component_id, i)
                     merge_cnt += 1
 
         print("# Somas Connected:", soma_cnt)
-        print("# Merges:", merge_cnt)
+        print("# Soma Fragment Merges:", merge_cnt)
         del self.graph.kdtree
 
     def generate_proposals(self, radius):
@@ -783,7 +782,7 @@ class GraphDataLoader:
 
             # Update queue
             for i in proposal:
-                for j in self.graph.nodes[i]["proposals"]:
+                for j in self.graph.node_proposals[i]:
                     proposal_ij = frozenset({i, j})
                     if proposal_ij not in visited:
                         queue.append(proposal_ij)
@@ -814,7 +813,7 @@ class GraphDataLoader:
             # Update queue
             for j in self.graph.neighbors(i):
                 if j not in visited:
-                    n_j = len(self.graph.nodes[j]["proposals"])
+                    n_j = len(self.graph.node_proposals[j])
                     d_j = min(d_i + 1, -n_j)
                     if d_j <= self.gnn_depth:
                         queue.append((j, d_j))
@@ -826,7 +825,7 @@ class GraphDataLoader:
 
     def visit_proposals(self, batch, queue, visited, i):
         if not self.is_batch_full(batch):
-            for j in self.graph.nodes[i]["proposals"]:
+            for j in self.graph.node_proposals[i]:
                 # Visit proposal
                 proposal = frozenset({i, j})
                 if proposal in self.proposals:
@@ -914,7 +913,7 @@ class SeededGraphDataLoader(GraphDataLoader):
             # Update queue
             for j in self.graph.neighbors(i):
                 if j not in visited:
-                    n_j = len(self.graph.nodes[j]["proposals"])
+                    n_j = len(self.graph.node_proposals[j])
                     d_j = min(d_i + 1, -n_j)
                     if d_j <= self.gnn_depth:
                         queue.append((j, d_j))
@@ -927,7 +926,7 @@ class SeededGraphDataLoader(GraphDataLoader):
         while queue:
             # Visit node
             i = queue.pop()
-            if self.graph.nodes[i]["proposals"]:
+            if self.graph.node_proposals[i]:
                 seeded_queue.append((i, 0))
 
             # Update queue
@@ -939,7 +938,7 @@ class SeededGraphDataLoader(GraphDataLoader):
 
     def visit_proposals_seeded(self, batch, queue, visited, i):
         if len(batch["proposals"]) < self.batch_size:
-            for j in self.graph.nodes[i]["proposals"]:
+            for j in self.graph.node_proposals[i]:
                 # Visit proposal
                 proposal = frozenset({i, j})
                 if proposal in self.proposals:

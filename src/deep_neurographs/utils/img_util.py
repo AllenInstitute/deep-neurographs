@@ -321,6 +321,26 @@ class ZarrReader(ImageReader):
         self.img = zarr.open(store, mode="r")
 
 
+def init_reader(img_path):
+    """
+    Initializes an image reader based on where image is stored in cloud.
+
+    Parameters
+    ----------
+    img_path : str
+        Path to image.
+
+    Returns
+    -------
+    ImageReader
+        Image reader.
+    """
+    if _is_s3_path(img_path):
+        return ZarrReader(img_path)
+    else:
+        return TensorStoreReader(img_path)
+
+
 def get_start_end(voxel, shape, from_center=True):
     """
     Gets the start and end indices of the chunk to be read.
@@ -374,6 +394,40 @@ def get_profile(img_reader, spec, profile_id):
     avg, std = util.get_avg_std(profile)
     profile.extend([avg, std])
     return {profile_id: profile}
+
+
+def _is_gcs_path(img_path):
+    """
+    Checks whether image is stored in a GCS bucket.
+
+    Parameters
+    ----------
+    img_path : str
+        Path to image.
+
+    Returns
+    -------
+    bool
+        Indication of whether image is stored in a GCS bucket.
+    """
+    return img_path.startswith("gs://")
+
+
+def _is_s3_path(img_path):
+    """
+    Checks whether image is stored in an S3 bucket.
+
+    Parameters
+    ----------
+    img_path : str
+        Path to image.
+
+    Returns
+    -------
+    bool
+        Indication of whether image is stored in an S3 bucket.
+    """
+    return img_path.startswith("s3://")
 
 
 # --- Coordinate Conversions ---

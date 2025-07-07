@@ -28,6 +28,7 @@ information into the graph structure.
             to do...
 """
 
+from collections import defaultdict
 from concurrent.futures import as_completed, ThreadPoolExecutor
 from io import StringIO
 from scipy.spatial import KDTree
@@ -195,38 +196,6 @@ class FragmentsGraph(SkeletonGraph):
             edge_id = (node_id_mapping[i], node_id_mapping[j])
             self._add_edge(edge_id, attrs)
 
-    def _add_nodes(self, node_dict, component_id):
-        """
-        Adds nodes to the graph from a dictionary of node attributes and
-        returns a mapping from original node IDs to the new graph node IDs.
-
-        Parameters
-        ----------
-        node_dict : dict
-            Dictionary mapping original node IDs (e.g., from an SWC file) to
-            their attributes. Each value must be a dictionary containing:
-                - "radius" : float
-                - "xyz"    : array-like of shape (3,)
-        component_id : str
-            Connected component ID used to map node IDs back to SWC IDs via
-            "self.component_id_to_swc_id".
-
-        Returns
-        -------
-        dict
-            Dictionary mapping the original node IDs from "node_dict" to the
-            new node IDs assigned in the graph.
-        """
-        node_id_mapping = dict()
-        for node_id, attrs in node_dict.items():
-            new_id = self.number_of_nodes()
-            self.node_xyz[new_id] = attrs["xyz"]
-            self.node_radius[new_id] = attrs["radius"]
-            self.node_component_id[new_id] = component_id
-            self.add_node(new_id, proposals=set())
-            node_id_mapping[node_id] = new_id
-        return node_id_mapping
-
     def _add_edge(self, edge_id, attrs):
         """
         Adds an edge to "self".
@@ -310,7 +279,7 @@ class FragmentsGraph(SkeletonGraph):
         """
         # Get xyz coordinates
         if node_type == "leaf":
-            leafs = np.array(self.get_leafs())
+            leafs = np.array(self.get_leafs(), dtype=int)
             return KDTree(self.node_xyz[leafs])
         elif node_type == "proposal":
             xyz_set = set()
@@ -379,7 +348,8 @@ class FragmentsGraph(SkeletonGraph):
         None
         """
         # Initializations
-        self.reset_proposals()
+        self.proposals = set()
+        self.node_proposals = defaultdict(set)
         self.set_proposals_per_leaf(proposals_per_leaf)
 
         # Generate proposals
@@ -402,22 +372,6 @@ class FragmentsGraph(SkeletonGraph):
             )
         else:
             self.gt_accepts = set()
-
-    def reset_proposals(self):
-        """
-        Deletes all previously generated proposals.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-        """
-        self.proposals = set()
-        for i in self.nodes:
-            self.nodes[i]["proposals"] = set()
 
     def set_proposals_per_leaf(self, proposals_per_leaf):
         """
@@ -451,8 +405,8 @@ class FragmentsGraph(SkeletonGraph):
         None
         """
         proposal = frozenset({i, j})
-        self.nodes[i]["proposals"].add(j)
-        self.nodes[j]["proposals"].add(i)
+        self.node_proposals[i].add(j)
+        self.node_proposals[j].add(i)
         self.proposals.add(proposal)
 
     def remove_proposal(self, proposal):
@@ -469,8 +423,8 @@ class FragmentsGraph(SkeletonGraph):
         None
         """
         i, j = tuple(proposal)
-        self.nodes[i]["proposals"].remove(j)
-        self.nodes[j]["proposals"].remove(i)
+        self.node_proposals[i].remove(j)
+        self.node_proposals[j].remove(i)
         self.proposals.remove(proposal)
 
     def is_single_proposal(self, proposal):
@@ -490,8 +444,8 @@ class FragmentsGraph(SkeletonGraph):
             corresponding nodes.
         """
         i, j = tuple(proposal)
-        single_i = len(self.nodes[i]["proposals"]) == 1
-        single_j = len(self.nodes[j]["proposals"]) == 1
+        single_i = len(self.node_proposals[i]) == 1
+        single_j = len(self.node_proposals[j]) == 1
         return single_i and single_j
 
     def is_valid_proposal(self, leaf, i, complex_bool):

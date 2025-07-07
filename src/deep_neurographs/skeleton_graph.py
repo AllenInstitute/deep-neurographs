@@ -12,6 +12,8 @@ information into the graph structure.
 
 """
 
+from scipy.spatial import KDTree
+
 import networkx as nx
 import numpy as np
 
@@ -156,3 +158,7 @@ class SkeletonGraph(nx.Graph):
             # Store attributes
             self.node_xyz[new_id] = xyz
             self.node_radius[new_id] = radius
+
+    # --- Helpers ---
+    def init_kdtree(self):
+        self.kdtree = KDTree(self.node_xyz)
