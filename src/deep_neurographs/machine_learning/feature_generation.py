@@ -88,9 +88,9 @@ class FeatureGenerator:
         self.patch_shape = patch_shape
 
         # Readers
-        self.img_reader = self.init_img_reader(img_path)
-        if segmentation_path is not None:
-            self.labels_reader = self.init_img_reader(segmentation_path)
+        self.img_reader = img_util.init_reader(img_path)
+        if segmentation_path:
+            self.labels_reader = img_util.init_reader(segmentation_path)
         else:
             self.labels_reader = None
 
@@ -109,25 +109,6 @@ class FeatureGenerator:
             Number of points on an image profile.
         """
         return cls.n_profile_points
-
-    def init_img_reader(self, img_path):
-        """
-        Initializes an image reader.
-
-        Parameters
-        ----------
-        img_path : str
-            Path to where the image is located.
-
-        Returns
-        -------
-        ImageReader
-            Image reader.
-        """
-        if "s3" in img_path:
-            return ZarrReader(img_path)
-        else:
-            return TensorStoreReader(img_path)
 
     def run(self, batch, radius):
         """
@@ -215,7 +196,7 @@ class FeatureGenerator:
                 (
                     self.graph.degree[i],
                     self.graph.node_radius[i],
-                    len(self.graph.nodes[i]["proposals"]),
+                    len(self.graph.node_proposals[i]),
                 ),
                 axis=None,
             )
