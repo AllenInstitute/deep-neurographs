@@ -11,7 +11,7 @@ Routines for training machine learning models that detect merge mistakes.
 import numpy as np
 
 from deep_neurographs.skeleton_graph import SkeletonGraph
-from deep_neurographs.utils import img_util
+from deep_neurographs.utils import img_util, util
 
 
 # --- Custom Trainer ---
@@ -58,7 +58,7 @@ class MergeDetectionGraphDataset:
         for brain_id, graph in graphs.items():
             graph.init_kdtree()
 
-    def load_fragment_graphs(self, brain_id, segmentation_id, swc_pointer):
+    def load_merge_graphs(self, brain_id, segmentation_id, swc_pointer):
         key = (brain_id, segmentation_id)
         self.merge_graphs[key] = self.init_graph(swc_pointer)
 
@@ -68,26 +68,38 @@ class MergeDetectionGraphDataset:
 
     # --- Get Examples ---
     def __getitem__(self, idx):
-        # Get xyz coordinate of site
-        brain_id = self.merge_sites_df["brain_id"][idx]
-        if np.random.random() > 0.5:
-            is_groundtruth = False
-            xyz = self.merge_sites_df["xyz"][idx]
-        else:
-            is_groundtruth = True
-            n = self.gt_graphs[brain_id].number_of_nodes()
-            node_id = np.random.randint(0, n)
-            xyz = self.gt_graphs[brain_id].node_xyz[node_id]
-
-        # Extract patches and subgraph rooted at site
+        # Extract site
+        brain_id, graph, node_id, is_positive = self.get_site(idx)
+        xyz = graph.node_xyz[node_id]
         voxel = img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
-        img_patch = self.img_reader[brain_id].read(voxel, self.patch_shape)
-        subgraph = self.get_subgraph(brain_id, 
-        # Annotate label patch
-        label_patch = np.zeros(self.patch_shape)
 
-    def get_subgraph(self, brain_id, node_id, is_groundtruth=True):
-        pass
+        # Extract subgraph and image patches centered at site
+        subgraph = self.get_subgraph(graph, node_id)
+        img_patch = self.img_reader[brain_id].read(voxel, self.patch_shape)
+        label_patch = self.get_label_mask(subgraph)
+        patches = np.stack([img_patch, label_patch], axis=0)
+        return patches, subgraph, int(is_positive)
+
+    def get_site(self, idx):
+        brain_id = self.merge_sites_df["brain_id"][idx]
+        is_positive = np.random.random() > 0.5
+        if is_positive:
+            segmentation_id = self.merge_sites_df["segmentation_id"][idx]
+            graph = self.merge_graphs[(brain_id, segmentation_id)]
+        else:
+            if np.random.random() > 0.5:
+                return self.get_random_site()
+            else:
+                graph = self.gt_graphs[brain_id]
+        xyz = self.merge_sites_df["xyz"][idx]
+        node_id = graph.query_node(xyz)
+        return brain_id, graph, node_id, is_positive
+
+    def get_random_site(self):
+        brain_id = util.sample_once(list(self.gt_graphs.keys()))
+        graph = self.gt_graphs[brain_id]
+        node_id = np.random.randint(0, graph.number_of_nodes())
+        return brain_id, graph, node_id, False
 
 
 # --- Custom Dataloader ---
