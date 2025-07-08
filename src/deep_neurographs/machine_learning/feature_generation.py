@@ -22,7 +22,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 
 from deep_neurographs.utils import geometry_util, img_util, util
-from deep_neurographs.utils.img_util import TensorStoreReader, ZarrReader
 
 
 class FeatureGenerator:

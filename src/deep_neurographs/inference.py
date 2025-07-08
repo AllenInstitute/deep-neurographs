@@ -230,24 +230,24 @@ class InferencePipeline:
         # Parse locations
         merge_cnt, soma_cnt = 0, 0
         for soma_xyz in self.soma_centroids:
-            hits = self.graph.find_fragments_near_xyz(soma_xyz, 20)
-            if len(hits) > 1:
+            node_ids = self.graph.find_fragments_near_xyz(soma_xyz, 20)
+            if len(node_ids) > 1:
                 # Find closest node to soma location
                 soma_cnt += 1
                 best_dist = np.inf
                 best_node = None
-                for i in hits.values():
+                for i in node_ids:
                     dist = geometry_util.dist(soma_xyz, self.graph.node_xyz[i])
                     if dist < best_dist:
                         best_dist = dist
                         best_node = i
                 soma_component_id = self.graph.node_component_id[best_node]
                 self.graph.soma_ids.add(soma_component_id)
-                del hits[best_node]
+                node_ids.remove(best_node)
 
                 # Merge fragments to soma
                 soma_xyz = self.graph.node_xyz[best_node]
-                for i in hits.values():
+                for i in node_ids:
                     attrs = {
                         "radius": np.array([2, 2]),
                         "xyz": np.array([soma_xyz, self.graph.node_xyz[i]]),

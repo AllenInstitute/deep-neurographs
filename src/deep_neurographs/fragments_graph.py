@@ -608,6 +608,7 @@ class FragmentsGraph(SkeletonGraph):
             self.node_radius[j] = 5.3141592
 
             # Update component_ids
+            self.merged_ids.add((self.get_swc_id(i), self.get_swc_id(j)))
             if self.is_soma(i):
                 component_id = self.node_component_id[i]
                 self.update_component_ids(component_id, j)
@@ -617,7 +618,6 @@ class FragmentsGraph(SkeletonGraph):
 
             # Update graph
             self._add_edge((i, j), attrs)
-            self.merged_ids.add((self.get_swc_id(i), self.get_swc_id(j)))
             self.proposals.remove(proposal)
         else:
             self.n_merges_blocked += 1
@@ -760,7 +760,7 @@ class FragmentsGraph(SkeletonGraph):
             dist_i = geometry.dist(self.node_xyz[i], query_xyz)
             dist_j = geometry.dist(self.node_xyz[j], query_xyz)
             hits[self.node_component_id[i]] = i if dist_i < dist_j else j
-        return hits
+        return list(hits.values())
 
     def get_connected_nodes(self, root):
         queue = [root]
@@ -823,7 +823,7 @@ class FragmentsGraph(SkeletonGraph):
     def to_zipped_swcs(self, swc_dir, preserve_radius=False, sampling_rate=1):
         # Initializations
         n = nx.number_connected_components(self)
-        batch_size = n / 1000 if n > 10 ** 4 else np.inf
+        batch_size = n / 1000 if n > 10 ** 4 else n
         util.mkdir(swc_dir)
 
         # Main
@@ -832,9 +832,9 @@ class FragmentsGraph(SkeletonGraph):
             # Assign threads
             batch = list()
             threads = list()
-            for i, nodes in enumerate(nx.connected_components(self)):
+            for nodes in nx.connected_components(self):
                 batch.append(nodes)
-                if len(batch) > batch_size or i == n - 1:
+                if len(batch) == batch_size:
                     # Zip batch
                     zip_path = os.path.join(swc_dir, f"{zip_cnt}.zip")
                     threads.append(

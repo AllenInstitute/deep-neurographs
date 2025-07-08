@@ -160,5 +160,13 @@ class SkeletonGraph(nx.Graph):
             self.node_radius[new_id] = radius
 
     # --- Helpers ---
+    def get_rooted_subgraph(self, root, radius):
+        pass
+
     def init_kdtree(self):
         self.kdtree = KDTree(self.node_xyz)
+
+    def query_node(self, xyz):
+        # this breaks if node was deleted after kdtree was built
+        _, idx = self.kdtree.query(xyz)
+        return idx
