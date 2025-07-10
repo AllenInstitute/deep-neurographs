@@ -254,6 +254,17 @@ class SkeletonGraph(nx.Graph):
         return geometry_util.dist(self.node_xyz[i], self.node_xyz[j])
 
     def init_kdtree(self):
+        """
+        Initializes KD-Tree from node xyz coordinates.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
         self.kdtree = KDTree(self.node_xyz)
 
     def query_node(self, xyz):
