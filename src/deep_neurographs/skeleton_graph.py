@@ -183,6 +183,17 @@ class SkeletonGraph(nx.Graph):
         self.node_component_id = self.node_component_id[old_node_ids]
 
     # --- Getters ---
+    def get_connected_nodes(self, root):
+        queue = [root]
+        visited = set({root})
+        while queue:
+            i = queue.pop()
+            for j in self.neighbors(i):
+                if j not in visited:
+                    queue.append(j)
+                    visited.add(j)
+        return visited
+
     def get_leafs(self):
         """
         Gets all leaf nodes in graph.

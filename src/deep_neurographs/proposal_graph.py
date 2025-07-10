@@ -740,17 +740,6 @@ class ProposalGraph(SkeletonGraph):
             hits[self.node_component_id[i]] = i if dist_i < dist_j else j
         return list(hits.values())
 
-    def get_connected_nodes(self, root):
-        queue = [root]
-        visited = set({root})
-        while queue:
-            i = queue.pop()
-            for j in self.neighbors(i):
-                if j not in visited:
-                    queue.append(j)
-                    visited.add(j)
-        return visited
-
     def is_soma(self, i):
         """
         Check whether a node belongs to a component containing a soma.
@@ -786,12 +775,7 @@ class ProposalGraph(SkeletonGraph):
     def to_zipped_swcs(self, swc_dir, preserve_radius=False, sampling_rate=1):
         # Initializations
         n = nx.number_connected_components(self)
-<<<<<<< HEAD:src/deep_neurographs/fragments_graph.py
         batch_size = n / 1000 if n > 10 ** 4 else n
-=======
-        #batch_size = n / 1000 if n > 10 ** 4 else n
-        batch_size = n / 1000 if n > 100 else n
->>>>>>> feat-merge-detection:src/deep_neurographs/proposal_graph.py
         util.mkdir(swc_dir)
 
         # Main
