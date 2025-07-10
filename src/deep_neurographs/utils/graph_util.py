@@ -221,7 +221,7 @@ class GraphLoader:
         """
         try:
             graph = self.to_graph(swc_dict)
-            irreducibles = deque()
+            irreducibles_list = deque()
             high_risk_cnt = 0
             if self.satifies_path_length_condition(graph):
                 # Check for soma merges
@@ -238,18 +238,18 @@ class GraphLoader:
                 while leafs:
                     # Extract for connected component
                     leaf = util.sample_once(leafs)
-                    irreducibles_i, visited = self.get_irreducibles(graph, leaf)
+                    irreducibles, visited = self.get_irreducibles(graph, leaf)
                     leafs -= visited
 
                     # Store results
-                    if irreducibles_i:
+                    if irreducibles:
                         swc_id = f"{graph.graph['segment_id']}.{i}"
-                        irreducibles_i["swc_id"] = swc_id
-                        irreducibles.append(irreducibles_i)
+                        irreducibles["swc_id"] = swc_id
+                        irreducibles_list.append(irreducibles)
                         i += 1
         except Exception as e:
             print("Exception:", e)
-        return irreducibles, high_risk_cnt
+        return irreducibles_list, high_risk_cnt
 
     def get_irreducibles(self, graph, source):
         """

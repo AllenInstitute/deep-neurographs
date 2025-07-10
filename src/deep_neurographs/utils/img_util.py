@@ -11,9 +11,9 @@ Helper routines for reading and processing images.
 
 from abc import ABC, abstractmethod
 from scipy.ndimage import zoom
-from skimage.color import label2rgb
 
 import numpy as np
+import matplotlib.pyplot as plt
 import s3fs
 import tensorstore as ts
 import zarr
@@ -556,45 +556,35 @@ def get_minimal_bbox(voxels, buffer=0):
     return bbox
 
 
-def get_mip(img, axis=0):
+def is_contained(voxel, shape):
+    return all(0 <= v < s for v, s in zip(voxel, shape))
+
+
+def plot_mips(img, vmax=None):
     """
-    Compute the maximum intensity projection (MIP) of "img" along "axis".
+    Plots the Maximum Intensity Projections (MIPs) of a 3D image along the XY,
+    XZ, and YZ axes.
 
     Parameters
     ----------
     img : numpy.ndarray
-        Image to compute MIP of.
-    axis : int, optional
-        Projection axis. Default is 0.
+        Input 3D image to generate MIPs from.
 
     Returns
     -------
-    numpy.ndarray
-        MIP of "img".
+    None
     """
-    return np.max(img, axis=axis)
-
-
-def get_labels_mip(img, axis=0):
-    """
-    Compute the maximum intensity projection (MIP) of a segmentation along
-    "axis". This routine differs from "get_mip" because it retuns an RGB
-    image.
-
-    Parameters
-    ----------
-    img : numpy.ndarray
-        Image to compute MIP of.
-    axis : int, optional
-        Projection axis. Default is 0.
-
-    Returns
-    -------
-    numpy.ndarray
-        MIP of "img".
-    """
-    mip = get_mip(img, axis=axis)
-    return (255 * label2rgb(mip)).astype(np.uint8)
+    vmax = vmax or np.percentile(img, 99.9)
+    fig, axs = plt.subplots(1, 3, figsize=(10, 4))
+    axs_names = ["XY", "XZ", "YZ"]
+    for i in range(3):
+        mip = np.max(img, axis=i)
+        axs[i].imshow(mip, vmax=vmax)
+        axs[i].set_title(axs_names[i], fontsize=16)
+        axs[i].set_xticks([])
+        axs[i].set_yticks([])
+    plt.tight_layout()
+    plt.show()
 
 
 def get_neighbors(voxel, shape):
@@ -634,52 +624,6 @@ def get_neighbors(voxel, shape):
                     neighbors.append((nx, ny, nz))
 
     return neighbors
-
-
-def is_contained(bbox, voxel):
-    """
-    Checks whether a given voxel is contained within the image bounding box
-    specified by "bbox".
-
-    Parameters
-    ----------
-    bbox : dict
-        Dictionary with the keys "min" and "max" which specify a bounding box
-        in an image.
-    voxel : Tuple[int]
-        Voxel coordinate to be checked.
-
-    Returns
-    -------
-    bool
-        Inidcation of whether "voxel" is contained within the given image
-        bounding box.
-    """
-    above = any([v >= bbox_max for v, bbox_max in zip(voxel, bbox["max"])])
-    below = any([v < bbox_min for v, bbox_min in zip(voxel, bbox["min"])])
-    return False if above or below else True
-
-
-def is_list_contained(bbox, voxels):
-    """
-    Checks whether a list of voxels is contained within a given image bounding
-    box.
-
-    Parameters
-    ----------
-    bbox : dict
-        Dictionary with the keys "min" and "max" which specify a bounding box
-        in an image.
-    voxels : List[Tuple[int]]
-        List of voxel coordinates to be checked.
-
-    Returns
-    -------
-    bool
-        Indication of whether every element in "voxels" is contained in
-        "bbox".
-    """
-    return all([is_contained(bbox, voxel) for voxel in voxels])
 
 
 def normalize(img):

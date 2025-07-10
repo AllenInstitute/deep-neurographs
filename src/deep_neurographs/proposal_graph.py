@@ -5,7 +5,7 @@ Created on Sat July 15 9:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 
-Implementation of a custom subclass of Networkx.Graph called "FragmentsGraph".
+Implementation of a custom subclass of Networkx.Graph called "ProposalGraph".
 After initializing an instance of this subclass, the graph is built by reading
 and processing SWC files (i.e. neuron fragments). It then stores the relevant
 information into the graph structure.
@@ -47,7 +47,7 @@ from deep_neurographs.utils import (
 )
 
 
-class FragmentsGraph(SkeletonGraph):
+class ProposalGraph(SkeletonGraph):
     """
     Custom subclass of NetworkX.Graph constructed from neuron fragments. The
     graph's nodes are irreducible, meaning each node has either degree 1
@@ -674,28 +674,6 @@ class FragmentsGraph(SkeletonGraph):
         return len(self.query_kdtree(xyz, radius, "leaf")) - 1
 
     # --- Helpers ---
-    def dist(self, i, j):
-        """
-        Computes the Euclidean distance between nodes "i" and "j".
-
-        Parameters
-        ----------
-        i : int
-            Node ID.
-        j : int
-            Node ID.
-
-        Returns
-        -------
-        float
-            Euclidean distance between nodes "i" and "j".
-        """
-        return geometry.dist(self.node_xyz[i], self.node_xyz[j])
-
-    def get_swc_id(self, i):
-        component_id = self.node_component_id[i]
-        return self.component_id_to_swc_id[component_id]
-
     def node_attr(self, i, key):
         if key == "xyz":
             return self.node_xyz[i]
@@ -773,21 +751,6 @@ class FragmentsGraph(SkeletonGraph):
                     visited.add(j)
         return visited
 
-    def get_leafs(self):
-        """
-        Gets all leaf nodes in graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        List[int]
-            Leaf nodes in graph.
-        """
-        return [i for i in self.nodes if self.degree[i] == 1]
-
     def is_soma(self, i):
         """
         Check whether a node belongs to a component containing a soma.
@@ -823,7 +786,12 @@ class FragmentsGraph(SkeletonGraph):
     def to_zipped_swcs(self, swc_dir, preserve_radius=False, sampling_rate=1):
         # Initializations
         n = nx.number_connected_components(self)
+<<<<<<< HEAD:src/deep_neurographs/fragments_graph.py
         batch_size = n / 1000 if n > 10 ** 4 else n
+=======
+        #batch_size = n / 1000 if n > 10 ** 4 else n
+        batch_size = n / 1000 if n > 100 else n
+>>>>>>> feat-merge-detection:src/deep_neurographs/proposal_graph.py
         util.mkdir(swc_dir)
 
         # Main
