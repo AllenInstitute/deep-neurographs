@@ -30,7 +30,7 @@ import os
 import random
 import torch
 
-from deep_neurographs.fragments_graph import FragmentsGraph
+from deep_neurographs.fragments_graph import ProposalGraph
 from deep_neurographs.machine_learning import datasets
 from deep_neurographs.machine_learning.augmentation import ImageTransforms
 from deep_neurographs.machine_learning.feature_generation import (
@@ -241,7 +241,7 @@ class GraphDataset:
     split correction. Graphs are stored in the "self.graphs" attribute, which
     is a dictionary containing the followin items:
         - Key: (brain_id, segmentation_id, example_id)
-        - Value: graph that is an instance of FragmentsGraph
+        - Value: graph that is an instance of ProposalGraph
 
     This dataset is populated using the "self.add_graph" method, which
     requires the following inputs:
@@ -373,15 +373,15 @@ class GraphDataset:
 
         Returns
         -------
-        FragmentsGraph
+        ProposalGraph
             Graph constructed from SWC files.
         """
-        graph = FragmentsGraph(
+        proposal_graph = ProposalGraph(
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,
         )
-        graph.load_fragments(swc_pointer)
-        return graph
+        proposal_graph.load(swc_pointer)
+        return proposal_graph
 
     def generate_features(self, key, img_path, segmentation_path):
         # Initializations

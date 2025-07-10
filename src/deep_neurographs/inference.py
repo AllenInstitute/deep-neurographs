@@ -41,7 +41,7 @@ import numpy as np
 import os
 import torch
 
-from deep_neurographs.fragments_graph import FragmentsGraph
+from deep_neurographs.proposal_graph import ProposalGraph
 from deep_neurographs.machine_learning import datasets
 from deep_neurographs.machine_learning.feature_generation import (
     FeatureGenerator,
@@ -123,13 +123,13 @@ class InferencePipeline:
         self.log_handle = open(log_path, 'a')
 
     # --- Core ---
-    def run(self, fragments_pointer):
+    def run(self, swc_pointer):
         """
         Executes the full inference pipeline.
 
         Parameters
         ----------
-        fragments_pointer : Any
+        swc_pointer : Any
             Pointer to SWC files used to build an instance of FragmentGraph,
             see "swc_util.Reader" for further documentation.
 
@@ -144,7 +144,7 @@ class InferencePipeline:
         t0 = time()
 
         # Main
-        self.build_graph(fragments_pointer)
+        self.build_graph(swc_pointer)
         self.connect_soma_fragments() if self.soma_centroids else None
         self.generate_proposals(self.graph_config.search_radius)
         self.classify_proposals(self.ml_config.threshold)
@@ -156,7 +156,7 @@ class InferencePipeline:
         self.save_results()
 
     def run_schedule(
-        self, fragments_pointer, radius_schedule, threshold_schedule
+        self, swc_pointer, radius_schedule, threshold_schedule
     ):
         # Initializations
         self.log_experiment()
@@ -164,7 +164,7 @@ class InferencePipeline:
         t0 = time()
 
         # Main
-        self.build_graph(fragments_pointer)
+        self.build_graph(swc_pointer)
         for i, radius in enumerate(radius_schedule):
             self.report(f"\n--- Round {i + 1}:  Radius = {radius} ---")
             self.generate_proposals(radius_schedule[i])
@@ -177,7 +177,7 @@ class InferencePipeline:
         self.report(f"Total Runtime: {t:.2f} {unit}\n")
         self.save_results()
 
-    def build_graph(self, fragments_pointer):
+    def build_graph(self, swc_pointer):
         """
         Builds a graph from the given fragments.
 
@@ -196,7 +196,7 @@ class InferencePipeline:
         t0 = time()
 
         # Initialize graph
-        self.graph = FragmentsGraph(
+        self.graph = ProposalGraph(
             anisotropy=self.graph_config.anisotropy,
             min_size=self.graph_config.min_size,
             node_spacing=self.graph_config.node_spacing,
@@ -207,7 +207,7 @@ class InferencePipeline:
             soma_centroids=self.soma_centroids,
             verbose=True,
         )
-        self.graph.load(fragments_pointer)
+        self.graph.load(swc_pointer)
 
         # Filter fragments
         if self.graph_config.remove_doubles:
@@ -569,14 +569,14 @@ class InferenceEngine:
 
         Parameters
         ----------
-        graph : FragmentsGraph
+        graph : ProposalGraph
             Graph that inference will be performed on.
         proposals : list
             Proposals to be classified as accept or reject.
 
         Returns
         -------
-        FragmentsGraph
+        ProposalGraph
             Updated graph with accepted proposals added as edges.
         list
             Accepted proposals.

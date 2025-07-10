@@ -34,7 +34,7 @@ class SkeletonGraph(nx.Graph):
         # Call parent class
         super().__init__()
 
-        # Skeleton Loader
+        # Graph Loader
         self.graph_loader = gutil.GraphLoader(
             anisotropy=anisotropy,
             min_size=min_size,
@@ -48,6 +48,7 @@ class SkeletonGraph(nx.Graph):
         self.component_id_to_swc_id = dict()
         self.irreducible = nx.Graph()
 
+    # --- Build Graph ---
     def load(self, swc_pointer):
         # Extract irreducible components from SWC files
         irreducibles = self.graph_loader.run(swc_pointer)
@@ -74,12 +75,11 @@ class SkeletonGraph(nx.Graph):
 
         # Add nodes
         node_id_mapping = self._add_nodes(irreducibles["nodes"], component_id)
-        self.irreducible.add_nodes_from(list(node_id_mapping.values()))
 
         # Add edges
         for (i, j), attrs in irreducibles["edges"].items():
             edge_id = (node_id_mapping[i], node_id_mapping[j])
-            self._add_edge(edge_id, attrs, node_id_mapping)
+            self._add_edge(edge_id, attrs, component_id)
             self.irreducible.add_edge(*edge_id)
 
     def _add_nodes(self, node_dict, component_id):
@@ -144,24 +144,114 @@ class SkeletonGraph(nx.Graph):
             end = i
 
         # Populate graph
-        iterator = zip(attrs["radius"][1:-1], attrs["xyz"][1:-1])
+        iterator = zip(attrs["radius"], attrs["xyz"])
         for cnt, (radius, xyz) in enumerate(iterator):
-            # Add edge
-            new_id = self.number_of_nodes()
-            if cnt == 0:
-                self.add_edge(start, new_id)
-            elif cnt == len(attrs["xyz"]) - 2:
-                self.add_edge(new_id, end)
-            else:
-                self.add_edge(new_id, new_id - 1)
+            if cnt > 0 and cnt < len(attrs["xyz"]) - 1:
+                # Add edge
+                new_id = self.number_of_nodes()
+                if cnt == 1:
+                    self.add_edge(start, new_id)
+                else:
+                    self.add_edge(new_id, new_id - 1)
 
-            # Store attributes
-            self.node_xyz[new_id] = xyz
-            self.node_radius[new_id] = radius
+                # Store attributes
+                self.node_xyz[new_id] = xyz
+                self.node_radius[new_id] = radius
+                self.node_component_id[new_id] = component_id
+        self.add_edge(new_id, end)
+
+    def relabel_nodes(self):
+        # Set node ids
+        old_node_ids = np.array(self.nodes, dtype=int)
+        new_node_ids = np.arange(len(old_node_ids))
+
+        # Set edge ids
+        old_to_new = dict(zip(old_node_ids, new_node_ids))
+        old_edge_ids = list(self.edges)
+        old_irr_edge_ids = self.irreducible.edges
+
+        # Reset graph
+        self.clear()
+        for (i, j) in old_edge_ids:
+            self.add_edge(old_to_new[i], old_to_new[j])
+
+        self.irreducible.clear()
+        for (i, j) in old_irr_edge_ids:
+            self.irreducible.add_edge(old_to_new[i], old_to_new[j])
+
+        self.node_xyz = self.node_xyz[old_node_ids]
+        self.node_component_id = self.node_component_id[old_node_ids]
+
+    # --- Getters ---
+    def get_leafs(self):
+        """
+        Gets all leaf nodes in graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        List[int]
+            Leaf nodes in graph.
+        """
+        return [i for i in self.nodes if self.degree[i] == 1]
+
+    def get_nodes_with_component_id(self, component_id):
+        return set(np.where(self.node_component_id == component_id)[0])
+
+    def get_rooted_subgraph(self, root, radius):
+        # Initializations
+        subgraph = SkeletonGraph()
+        node_mapping = {root: 0}
+
+        # Extract graph
+        queue = [(root, 0)]
+        visited = {root}
+        while queue:
+            # Visit node
+            i, dist_i = queue.pop()
+
+            # Populate queue
+            for j in self.neighbors(i):
+                dist_j = dist_i + self.dist(i, j)
+                if j not in visited and dist_j < radius:
+                    node_mapping[j] = subgraph.number_of_nodes()
+                    subgraph.add_edge(node_mapping[i], node_mapping[j])
+                    queue.append((j, dist_j))
+                    visited.add(j)
+
+        # Store coordinates
+        idxs = np.array(list(node_mapping.keys()), dtype=int)
+        subgraph.node_xyz = self.node_xyz[idxs]
+        return subgraph
+
+    def get_swc_id(self, i):
+        component_id = self.node_component_id[i]
+        return self.component_id_to_swc_id[component_id]
+
+    def get_swc_ids(self):
+        return np.unique(list(self.component_id_to_swc_id.values()))
 
     # --- Helpers ---
-    def get_rooted_subgraph(self, root, radius):
-        pass
+    def dist(self, i, j):
+        """
+        Computes the Euclidean distance between nodes "i" and "j".
+
+        Parameters
+        ----------
+        i : int
+            Node ID.
+        j : int
+            Node ID.
+
+        Returns
+        -------
+        float
+            Euclidean distance between nodes "i" and "j".
+        """
+        return geometry_util.dist(self.node_xyz[i], self.node_xyz[j])
 
     def init_kdtree(self):
         self.kdtree = KDTree(self.node_xyz)
