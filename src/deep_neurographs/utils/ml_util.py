@@ -17,7 +17,7 @@ import torch
 
 from deep_neurographs.utils import util
 from deep_neurographs.split_correction import feature_generation
-from deep_neurographs.split_correction.heterograph_models import (
+from deep_neurographs.split_correction.models import (
     HGAT,
     MultiModalHGAT,
 )
@@ -132,7 +132,7 @@ def init_model(is_multimodal, heads_1=2, heads_2=4):
             node_dict, edge_dict, heads_1=heads_1, heads_2=heads_2
         )
     else:
-        model = HGAT(node_dict, edge_dict, heads_1=heads_1, heads_2=heads_2)
+        model = HGAT(node_dict, edge_dict, heads_1=heads_1, heads_2=2)
     return model
 
 
@@ -154,25 +154,6 @@ def line_graph(edges):
     graph = nx.Graph()
     graph.add_edges_from(edges)
     return nx.line_graph(graph)
-
-
-def load_model(path):
-    """
-    Loads the parameters of a machine learning model.
-
-    Parameters
-    ----------
-    path : str
-        Path to the model parameters.
-
-    Returns
-    -------
-    ...
-
-    """
-    model = torch.load(path, weights_only=False)
-    model.eval()
-    return model
 
 
 def toCPU(tensor):

@@ -546,13 +546,12 @@ class InferenceEngine:
         )
 
         # Model
-        if ml_config.is_multimodal:
-            self.model = ml_util.init_model(ml_config.is_multimodal)
-            self.model.load_state_dict(torch.load(model_path))
-        else:
-            self.model = torch.load(model_path, weights_only=False)
-        self.model.to(self.device)
+        self.model = ml_util.init_model(ml_config.is_multimodal)
+        self.model.load_state_dict(torch.load(model_path))
         self.model.eval()
+        if ml_config.is_multimodal:
+            self.model.to(self.device)
+        
 
     def init_dataloader(self):
         if len(self.graph.soma_ids) > 0:
