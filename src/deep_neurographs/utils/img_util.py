@@ -556,8 +556,10 @@ def get_minimal_bbox(voxels, buffer=0):
     return bbox
 
 
-def is_contained(voxel, shape):
-    return all(0 <= v < s for v, s in zip(voxel, shape))
+def is_contained(voxel, shape, buffer=0):
+    contained_above = all(0 <= v + buffer < s for v, s in zip(voxel, shape))
+    contained_below = all(0 <= v - buffer < s for v, s in zip(voxel, shape))
+    return contained_above and contained_below
 
 
 def plot_mips(img, vmax=None):

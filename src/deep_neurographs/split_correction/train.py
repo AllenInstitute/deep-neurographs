@@ -30,10 +30,10 @@ import os
 import random
 import torch
 
-from deep_neurographs.fragments_graph import ProposalGraph
-from deep_neurographs.machine_learning import datasets
-from deep_neurographs.machine_learning.augmentation import ImageTransforms
-from deep_neurographs.machine_learning.feature_generation import (
+from deep_neurographs.proposal_graph import ProposalGraph
+from deep_neurographs.split_correction import datasets
+from deep_neurographs.split_correction.augmentation import ImageTransforms
+from deep_neurographs.split_correction.feature_generation import (
     FeatureGenerator
 )
 from deep_neurographs.utils import ml_util, util

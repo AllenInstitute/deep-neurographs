@@ -16,8 +16,8 @@ import numpy as np
 import torch
 
 from deep_neurographs.utils import util
-from deep_neurographs.machine_learning import feature_generation
-from deep_neurographs.machine_learning.heterograph_models import (
+from deep_neurographs.split_correction import feature_generation
+from deep_neurographs.split_correction.heterograph_models import (
     HGAT,
     MultiModalHGAT,
 )

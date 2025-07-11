@@ -42,8 +42,8 @@ import os
 import torch
 
 from deep_neurographs.proposal_graph import ProposalGraph
-from deep_neurographs.machine_learning import datasets
-from deep_neurographs.machine_learning.feature_generation import (
+from deep_neurographs.split_correction import datasets
+from deep_neurographs.split_correction.feature_generation import (
     FeatureGenerator,
 )
 from deep_neurographs.utils import geometry_util, ml_util, util
