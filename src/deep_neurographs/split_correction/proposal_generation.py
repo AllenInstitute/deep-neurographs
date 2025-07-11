@@ -14,7 +14,7 @@ from collections import deque
 import numpy as np
 from tqdm import tqdm
 
-from deep_neurographs.utils import geometry_util as geometry
+from deep_neurographs.utils import geometry_util
 
 DOT_THRESHOLD = -0.3
 SEARCH_SCALING_FACTOR = 1.5
@@ -164,10 +164,10 @@ def search_kdtree(fragments_graph, leaf, kdtree, radius, max_proposals):
     # Generate candidates
     candidates = dict()
     leaf_xyz = fragments_graph.node_xyz[leaf]
-    for xyz in geometry.query_ball(kdtree, leaf_xyz, radius):
+    for xyz in geometry_util.query_ball(kdtree, leaf_xyz, radius):
         component_id = fragments_graph.xyz_to_component_id(xyz)
         if component_id != fragments_graph.node_component_id[leaf]:
-            dist = geometry.dist(leaf_xyz, xyz)
+            dist = geometry_util.dist(leaf_xyz, xyz)
             if component_id not in candidates.keys():
                 candidates[component_id] = {"dist": dist, "xyz": tuple(xyz)}
             elif dist < candidates[component_id]["dist"]:
@@ -264,8 +264,8 @@ def get_closer_endpoint(fragments_graph, edge, xyz):
         Node closer to "xyz".
     """
     i, j = tuple(edge)
-    d_i = geometry.dist(fragments_graph.node_xyz[i], xyz)
-    d_j = geometry.dist(fragments_graph.node_xyz[j], xyz)
+    d_i = geometry_util.dist(fragments_graph.node_xyz[i], xyz)
+    d_j = geometry_util.dist(fragments_graph.node_xyz[j], xyz)
     return i if d_i < d_j else j
 
 
@@ -308,7 +308,7 @@ def trim_endpoints_at_proposal(fragments_graph, proposal, max_length):
     # Update branches (if applicable)
     if dist_ij > max_length:
         fragments_graph.remove_proposal(frozenset((i, j)))
-    elif dist_ij + 2 < geometry.dist(pts_i[0], pts_j[0]):
+    elif dist_ij + 2 < geometry_util.dist(pts_i[0], pts_j[0]):
         if compute_dot(pts_i, pts_j, idx_i, idx_j) < DOT_THRESHOLD:
             trim_to_idx(fragments_graph, i, idx_i)
             trim_to_idx(fragments_graph, j, idx_j)
@@ -319,16 +319,16 @@ def find_closest_pair(pts1, pts2):
     i, length1 = -1, 0
     while length1 < TRIM_SEARCH_DIST and i < len(pts1) - 1:
         i += 1
-        length1 += geometry.dist(pts1[i], pts1[i - 1]) if i > 0 else 0
+        length1 += geometry_util.dist(pts1[i], pts1[i - 1]) if i > 0 else 0
 
         # Search other branch
         j, length2 = -1, 0
         while length2 < TRIM_SEARCH_DIST and j < len(pts2) - 1:
             j += 1
-            length2 += geometry.dist(pts2[j], pts2[j - 1]) if j > 0 else 0
+            length2 += geometry_util.dist(pts2[j], pts2[j - 1]) if j > 0 else 0
 
             # Check distance between points
-            dist = geometry.dist(pts1[i], pts2[j])
+            dist = geometry_util.dist(pts1[i], pts2[j])
             if dist < best_dist:
                 best_dist = dist
                 best_idxs = (i, j)
@@ -412,7 +412,7 @@ def compute_dot(branch1, branch2, idx1, idx2):
         Dot product between principal components of "branch1" and "branch_2".
     """
     # Initializations
-    midpoint = geometry.midpoint(branch1[idx1], branch2[idx2])
+    midpoint = geometry_util.midpoint(branch1[idx1], branch2[idx2])
     b1 = branch1 - midpoint
     b2 = branch2 - midpoint
 
@@ -440,4 +440,4 @@ def tangent(branch, idx, depth):
         Tangent vector of "branch".
     """
     end = min(idx + depth, len(branch))
-    return geometry.tangent(branch[idx:end])
+    return geometry_util.tangent(branch[idx:end])

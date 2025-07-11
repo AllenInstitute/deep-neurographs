@@ -38,8 +38,9 @@ import networkx as nx
 import numpy as np
 import os
 
-from deep_neurographs.utils import geometry_util as geometry
-from deep_neurographs.utils import img_util, swc_util, util
+from deep_neurographs.utils import (
+    geometry_util as geometry, img_util, swc_util, util
+)
 
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 

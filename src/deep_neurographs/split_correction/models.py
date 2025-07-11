@@ -33,7 +33,7 @@ class HGAT(torch.nn.Module):
         self,
         node_dict,
         edge_dict,
-        hidden_dim=96,
+        hidden_dim=64,
         dropout=0.2,
         heads_1=2,
         heads_2=2,
@@ -52,9 +52,9 @@ class HGAT(torch.nn.Module):
         for key, d in node_dict.items():
             self.input_nodes[key] = nn.Linear(d, hidden_dim)
 
-        self.input_edges = nn.ModuleDict()
+        self.input_edges = dict()
         for key, d in edge_dict.items():
-            self.input_edges[str(key)] = nn.Linear(d, hidden_dim)
+            self.input_edges[key] = nn.Linear(d, hidden_dim)
 
         # Layer dimensions
         hidden_dim_1 = hidden_dim
