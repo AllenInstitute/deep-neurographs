@@ -8,7 +8,10 @@ Routines for training machine learning models that detect merge mistakes.
 
 """
 
+from concurrent.futures import as_completed, ThreadPoolExecutor
+
 import numpy as np
+import torch
 
 from deep_neurographs.skeleton_graph import SkeletonGraph
 from deep_neurographs.utils import img_util, swc_util, util
@@ -127,8 +130,9 @@ class MergeDetectionGraphDataset:
             xyz = subgraph.node_xyz[i]
             voxel = img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
             voxel = shift_voxel(voxel, center, self.patch_shape)
-            if img_util.is_contained(voxel, self.patch_shape):
-                label_mask[voxel] = 1
+            if img_util.is_contained(voxel, self.patch_shape, buffer=3):
+                i, j, k = voxel
+                label_mask[i-3:i+3, j-3:j+3, k-3:k+3] = 1
         return label_mask
 
     # --- Helpers ---
@@ -137,6 +141,42 @@ class MergeDetectionGraphDataset:
 
 
 # --- Dataloader ---
+class MergeDetectionGraphDataloader:
+    """
+    DataLoader that uses multithreading to fetch image patches from the cloud
+    to form batches.
+    """
+
+    def __init__(self, dataset, batch_size=32):
+        # Instance attributes
+        self.batch_size = batch_size
+        self.dataset = dataset
+
+    def __iter__(self):
+        for idx in range(0, len(self.dataset), self.batch_size):
+            yield self._load_batch(idx)
+
+    def _load_batch(self, start_idx):
+        # Compute batch size
+        n_remaining_examples = len(self.dataset) - start_idx
+        batch_size = min(self.batch_size, n_remaining_examples)
+
+        # Generate batch
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            threads = list()
+            for idx_shift in range(batch_size):
+                idx = start_idx + idx_shift
+                threads.append(executor.submit(self.dataset.__getitem__, idx))
+
+            # Process results
+            patches = np.zeros((batch_size, 2,) + self.dataset.patch_shape)
+            labels = np.zeros((batch_size))
+            for i, thread in enumerate(as_completed(threads)):
+                patch, _, label = thread.result()
+                patches[i] = patch
+                labels[i] = label
+        return to_tensor(patches), to_tensor(labels)
 
 
 # -- Helpers --
@@ -150,3 +190,21 @@ def find_key(my_dict, target_value):
 def shift_voxel(voxel, center, patch_shape):
     voxel = [v - c + s // 2 for v, c, s in zip(voxel, center, patch_shape)]
     return tuple(voxel)
+
+
+def to_tensor(arr):
+    """
+    Converts a numpy array to a tensor.
+
+    Parameters
+    ----------
+    arr : numpy.ndarray
+        Array to be converted.
+
+    Returns
+    -------
+    torch.Tensor
+        Array converted to tensor.
+
+    """
+    return torch.tensor(arr, dtype=torch.float)

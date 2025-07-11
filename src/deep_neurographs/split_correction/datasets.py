@@ -17,7 +17,7 @@ import numpy as np
 import torch
 from torch_geometric.data import HeteroData as HeteroGraphData
 
-from deep_neurographs.machine_learning.feature_generation import (
+from deep_neurographs.split_correction.feature_generation import (
     get_matrix,
     get_patches_matrix,
 )

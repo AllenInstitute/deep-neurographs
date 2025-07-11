@@ -39,9 +39,10 @@ import numpy as np
 import os
 import zipfile
 
-from deep_neurographs import proposal_generation
 from deep_neurographs.skeleton_graph import SkeletonGraph
-from deep_neurographs.machine_learning import groundtruth_generation
+from deep_neurographs.split_correction import (
+    groundtruth_generation, proposal_generation
+)
 from deep_neurographs.utils import (
     geometry_util as geometry, graph_util as gutil, util,
 )
