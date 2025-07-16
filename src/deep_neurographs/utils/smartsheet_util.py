@@ -16,12 +16,13 @@ import smartsheet
 
 
 class SmartSheetClient:
-    def __init__(self, access_token, sheet_name):
+    def __init__(self, access_token, sheet_name, workspace_name=None):
         # Instance attributes
         self.client = smartsheet.Smartsheet(access_token)
         self.sheet_name = sheet_name
         self.sheet_id = self.find_sheet_id()
         self.sheet = self.client.Sheets.get_sheet(self.sheet_id)
+        print(self.sheet)
 
         # Lookups
         self.column_name_to_id = {c.title: c.id for c in self.sheet.columns}
@@ -92,12 +93,12 @@ class SmartSheetClient:
 def extract_merge_sites(smartsheet_client):
     children_map = smartsheet_client.get_children_map()
     merge_site_dfs = list()
-    n_merge_sites, n_sites = 0, 0
+    n_merge_sites, n_reviewed_sites = 0, 0
     for parent_idx, child_idxs in children_map.items():
         # Extract information
         sample_name = smartsheet_client.get_value(parent_idx, "Sample")
         brain_id, segmentation_id = sample_name.split("_", 1)
-        sites = find_confirmed_merge_sites(smartsheet_client, child_idxs)
+        sites, n = find_confirmed_merge_sites(smartsheet_client, child_idxs)
 
         # Compile results
         if len(sites["xyz"]) > 0:
@@ -108,18 +109,19 @@ def extract_merge_sites(smartsheet_client):
             results.update(sites)
             merge_site_dfs.append(pd.DataFrame(results))
 
-            n_sites += len(child_idxs)
+            n_reviewed_sites += n
             n_merge_sites += len(sites["xyz"])
-            success_rate = len(sites["xyz"]) / len(child_idxs)
+            success_rate = len(sites["xyz"]) / n
             print(f"{brain_id} - Success Rate:", success_rate)
 
-    print("\nOverall Success Rate:", n_merge_sites / n_sites)
+    print("\nOverall Success Rate:", n_merge_sites / n_reviewed_sites)
     print("# Confirmed Merge Sites:", n_merge_sites)
     return pd.concat(merge_site_dfs, ignore_index=True)
 
 
 def find_confirmed_merge_sites(smartsheet_client, idxs):
     sites = {"segment_id": [], "groundtruth_id": [], "xyz": []}
+    n_reviewed_sites = 0
     for i in idxs:
         is_merge = smartsheet_client.get_value(i, "Merge Confirmation")
         is_reviewed = smartsheet_client.get_value(i, "Reviewed?")
@@ -133,7 +135,9 @@ def find_confirmed_merge_sites(smartsheet_client, idxs):
             sites["xyz"].append(
                 read_xyz(smartsheet_client.get_value(i, "World Coordinates"))
             )
-    return sites
+        if is_reviewed:
+            n_reviewed_sites += 1
+    return sites, n_reviewed_sites
 
 
 def read_xyz(xyz_str):

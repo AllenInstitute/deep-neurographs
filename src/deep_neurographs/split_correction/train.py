@@ -76,7 +76,6 @@ class Trainer:
         self.batch_size = batch_size
         self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
         self.device = device
-        self.exp_name = exp_name
         self.lr = lr
         self.n_epochs = n_epochs
         self.exp_dir = exp_dir
@@ -109,7 +108,6 @@ class Trainer:
         val_dataloader = GraphDataLoader(val_dataset, 200)
 
         # Main
-        print("Experiment:", self.exp_name)
         best_f1, n_upds = 0, 0
         for epoch in range(self.n_epochs):
             y, hat_y, losses = list(), list(), list()
