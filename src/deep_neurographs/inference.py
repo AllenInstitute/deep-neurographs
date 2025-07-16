@@ -551,7 +551,6 @@ class InferenceEngine:
         self.model.eval()
         if ml_config.is_multimodal:
             self.model.to(self.device)
-        
 
     def init_dataloader(self):
         if len(self.graph.soma_ids) > 0:

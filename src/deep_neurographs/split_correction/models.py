@@ -481,7 +481,7 @@ class ConvNet(nn.Module):
         x = self.pool4(x)
 
         # Output layer
-        x = self.output(vectorize(x))
+        x = self.output(x.view(x.size(0), -1))
         return x
 
 
@@ -536,21 +536,3 @@ def reformat_edge_key(key):
         return tuple([re.sub(r'\W+', '', s) for s in key.split(",")])
     else:
         return key
-
-
-def vectorize(tensor):
-    """
-    Transforms a tensor into a vector.
-
-    Parameters
-    ----------
-    tensor : torch.Tensor
-        Tensor to be transformed.
-
-    Returns
-    -------
-    torch.Tensor
-        Vectorized input tensor.
-
-    """
-    return tensor.view(tensor.size(0), -1)

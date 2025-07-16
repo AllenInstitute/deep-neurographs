@@ -643,8 +643,8 @@ def normalize(img):
     numpy.ndarray
         Normalized image.
     """
-    img -= np.min(img)
-    return img / max(1, np.max(img))
+    mn, mx = np.percentile(img, 5), np.percentile(img, 99.9)
+    return (img - mn) / np.maximum(mx, 1)
 
 
 def resize(img, new_shape):
