@@ -415,7 +415,7 @@ class MergeDetectionDataset:
             if img_util.is_contained(voxel, self.patch_shape, buffer=3):
                 i, j, k = voxel
                 label_mask[i-3:i+3, j-3:j+3, k-3:k+3] = 1
-        return label_mask
+        return img_util.resize(label_mask, (64, 64, 64)).astype(int)
 
     # --- Helpers ---
     def __len__(self):

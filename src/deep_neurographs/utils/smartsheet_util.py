@@ -27,6 +27,7 @@ class SmartSheetClient:
         else:
             self.sheet_id = self.find_sheet_id()
         self.sheet = self.client.Sheets.get_sheet(self.sheet_id)
+        print(self.sheet)
 
         # Lookups
         self.column_name_to_id = {c.title: c.id for c in self.sheet.columns}
