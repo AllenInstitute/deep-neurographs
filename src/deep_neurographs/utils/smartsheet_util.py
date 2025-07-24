@@ -16,11 +16,16 @@ import smartsheet
 
 
 class SmartSheetClient:
-    def __init__(self, access_token, sheet_name, workspace_name=None):
+    def __init__(self, access_token, sheet_name, is_workspace_sheet=False):
         # Instance attributes
         self.client = smartsheet.Smartsheet(access_token)
         self.sheet_name = sheet_name
-        self.sheet_id = self.find_sheet_id()
+
+        # Open sheet
+        if is_workspace_sheet:
+            self.sheet_id = self.find_workspace_sheet_id()
+        else:
+            self.sheet_id = self.find_sheet_id()
         self.sheet = self.client.Sheets.get_sheet(self.sheet_id)
         print(self.sheet)
 
@@ -28,6 +33,14 @@ class SmartSheetClient:
         self.column_name_to_id = {c.title: c.id for c in self.sheet.columns}
 
     # --- Lookup Routines ---
+    def find_workspace_sheet_id(self):
+        for ws in client.Workspaces.list_workspaces().data:
+            workspace = client.Workspaces.get_workspace(ws.id)
+            for sheet in workspace.sheets:
+                if sheet.name == self.sheet_name:
+                    return sheet.id
+        raise Exception(f"Sheet Not Found - sheet_name={self.sheet_name}")
+
     def find_sheet_id(self):
         response = self.client.Sheets.list_sheets()
         for sheet in response.data:
