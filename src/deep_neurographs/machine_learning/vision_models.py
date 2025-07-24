@@ -23,7 +23,7 @@ class CNN3D(nn.Module):
 
     """
 
-    def __init__(self, output_dim):
+    def __init__(self, patch_shape, output_dim):
         """
         Constructs a ConvNet object.
 
@@ -40,24 +40,27 @@ class CNN3D(nn.Module):
         nn.Module.__init__(self)
 
         # Layer 1
-        self.conv1a = self._init_conv_layer(2, 32, 3)
-        self.conv1b = self._init_conv_layer(32, 32, 3)
-        self.pool1 = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.conv1a = self._init_conv_layer(2, 16, 3)
+        self.conv1b = self._init_conv_layer(16, 16, 3)
 
         # Layer 2
-        self.conv2 = self._init_conv_layer(32, 64, 3)
-        self.pool2 = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.conv2a = self._init_conv_layer(16, 32, 3)
+        self.conv2b = self._init_conv_layer(32, 32, 3)
 
         # Layer 3
-        self.conv3 = self._init_conv_layer(64, 128, 3)
-        self.pool3 = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.conv3a = self._init_conv_layer(32, 64, 3)
+        self.conv3b = self._init_conv_layer(64, 64, 3)
 
         # Layer 4
-        self.conv4 = self._init_conv_layer(128, 256, 3)
-        self.pool4 = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.conv4 = self._init_conv_layer(64, 128, 3)
+
+        # Layer 5
+        self.conv5 = self._init_conv_layer(128, 256, 3)
 
         # Output layer
-        self.output = init_mlp(16384, output_dim)
+        self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+        flattened_size = self._get_flattened_size(patch_shape)
+        self.output = init_mlp(flattened_size, output_dim)
 
         # Initialize weights
         self.apply(self.init_weights)
@@ -91,9 +94,20 @@ class CNN3D(nn.Module):
             ),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(),
-            nn.Dropout(p=0.25),
+            nn.Dropout(p=0.1),
         )
         return conv_layer
+
+    def _get_flattened_size(self, patch_shape):
+        # For internal use during init
+        with torch.no_grad():
+            x = torch.zeros(1, 2, *patch_shape)
+            x = self.pool(self.conv1b(self.conv1a(x)))
+            x = self.pool(self.conv2b(self.conv2a(x)))
+            x = self.pool(self.conv3b(self.conv3a(x)))
+            x = self.pool(self.conv4(x))
+            x = self.pool(self.conv5(x))
+            return x.view(1, -1).size(1)
 
     @staticmethod
     def init_weights(m):
@@ -139,22 +153,12 @@ class CNN3D(nn.Module):
             Output of neural network.
 
         """
-        # Layer 1
-        x = self.conv1a(x)
-        x = self.conv1b(x)
-        x = self.pool1(x)
-
-        # Layer 2
-        x = self.conv2(x)
-        x = self.pool2(x)
-
-        # Layer 3
-        x = self.conv3(x)
-        x = self.pool3(x)
-
-        # Layer 4
-        x = self.conv4(x)
-        x = self.pool4(x)
+        # Convolutional layers
+        x = self.pool(self.conv1b(self.conv1a(x)))
+        x = self.pool(self.conv2b(self.conv2a(x)))
+        x = self.pool(self.conv3b(self.conv3a(x)))
+        x = self.pool(self.conv4(x))
+        x = self.pool(self.conv5(x))
 
         # Output layer
         x = x.view(x.size(0), -1)
@@ -283,9 +287,12 @@ def init_mlp(input_dim, output_dim):
 
     """
     mlp = nn.Sequential(
-        nn.Linear(input_dim, 2 * output_dim),
+        nn.Linear(input_dim, 4 * output_dim),
         nn.LeakyReLU(),
-        nn.Dropout(p=0.25),
+        nn.Dropout(p=0.1),
+        nn.Linear(4 * output_dim, 2 * output_dim),
+        nn.LeakyReLU(),
+        nn.Dropout(p=0.1),
         nn.Linear(2 * output_dim, output_dim),
     )
     return mlp

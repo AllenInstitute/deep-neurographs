@@ -10,7 +10,7 @@ Routines for training machine learning models that detect merge mistakes.
 
 from concurrent.futures import as_completed, ThreadPoolExecutor
 from datetime import datetime
-from sklearn.metrics import precision_score, recall_score
+from sklearn.metrics import precision_score, recall_score, accuracy_score
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 
@@ -73,10 +73,10 @@ class MergeDetectionTrainer:
         exp_name = os.path.basename(os.path.normpath(self.log_dir))
         print("\nExperiment:", exp_name)
 
-        train_dataloader = MergeDetectionGraphDataloader(
+        train_dataloader = MergeDetectionDataloader(
             train_dataset, batch_size=self.batch_size
         )
-        val_dataloader = MergeDetectionGraphDataloader(
+        val_dataloader = MergeDetectionDataloader(
             val_dataset, batch_size=self.batch_size
         )
 
@@ -110,23 +110,25 @@ class MergeDetectionTrainer:
         dict
             Dictionary of aggregated training metrics.
         """
-        stats = {"f1": None, "precision": [], "recall": [], "loss": []}
         self.model.train()
-        for x, y in train_dataloader:
+        loss, y, hat_y = list(), list(), list()
+        for x_i, y_i in train_dataloader:
             # Forward pass
-            hat_y, loss = self.forward_pass(x, y)
+            hat_y_i, loss_i = self.forward_pass(x_i, y_i)
 
             # Backward pass
             self.optimizer.zero_grad()
-            loss.backward()
+            loss_i.backward()
             self.optimizer.step()
 
-            # Store stats for tensorboard
-            stats["loss"].append(float(to_cpu(loss)))
-            for key, value in self.compute_stats(y, hat_y).items():
-                stats[key].extend(value)
+            # Store results
+            y.extend(to_cpu(y_i, True).flatten().tolist())
+            hat_y.extend(to_cpu(hat_y_i, True).flatten().tolist())
+            loss.append(float(to_cpu(loss_i)))
 
         # Write stats to tensorboard
+        stats = self.compute_stats(y, hat_y)
+        stats["loss"] = np.mean(loss)
         self.update_tensorboard(stats, epoch, "train_")
         return stats
 
@@ -149,19 +151,21 @@ class MergeDetectionTrainer:
             is_best : bool
                 True if the current F1 score is the best so far.
         """
-        stats = {"f1": None, "precision": [], "recall": [], "loss": []}
+        loss, y, hat_y = list(), list(), list()
         with torch.no_grad():
             self.model.eval()
-            for x, y in val_dataloader:
+            for x_i, y_i in val_dataloader:
                 # Run model
-                hat_y, loss = self.forward_pass(x, y)
+                hat_y_i, loss_i = self.forward_pass(x_i, y_i)
 
-                # Store stats for tensorboard
-                stats["loss"].append(float(to_cpu(loss)))
-                for key, value in self.compute_stats(y, hat_y).items():
-                    stats[key].extend(value)
+                # Store results
+                y.extend(to_cpu(y_i, True).flatten().tolist())
+                hat_y.extend(to_cpu(hat_y_i, True).flatten().tolist())
+                loss.append(float(to_cpu(loss_i)))
 
         # Write stats to tensorboard
+        stats = self.compute_stats(y, hat_y)
+        stats["loss"] = np.mean(loss)
         self.update_tensorboard(stats, epoch, "val_")
 
         # Check for new best
@@ -214,16 +218,21 @@ class MergeDetectionTrainer:
         dict
             Dictionary containing lists of per-sample metrics.
         """
-        y, hat_y = to_cpu(y, True), to_cpu(hat_y, True)
-        stats = {"precision": list(), "recall": list()}
-        for i in range(y.shape[0]):
-            # Ensure binary format
-            gt = (y[i, 0, ...] > 0).astype(np.uint8).flatten()
-            pred = (hat_y[i, 0, ...] > 0).astype(np.uint8).flatten()
+        # Reformat predictions
+        hat_y = (np.array(hat_y) > 0).astype(int)
+        y = np.array(y, dtype=int)
 
-            # Compute metrics
-            stats["precision"].append(precision_score(gt, pred, zero_division=np.nan))
-            stats["recall"].append(recall_score(gt, pred, zero_division=np.nan))
+        # Compute stats
+        avg_prec = precision_score(y, hat_y, zero_division=np.nan)
+        avg_recall = recall_score(y, hat_y, zero_division=np.nan)
+        avg_f1 = 2 * avg_prec * avg_recall / max((avg_prec + avg_recall), 1)
+        avg_acc = accuracy_score(y, hat_y)
+        stats = {
+            "f1": avg_f1,
+            "precision": avg_prec,
+            "recall": avg_recall,
+            "accuracy": avg_acc
+        }
         return stats
 
     def report_stats(self, stats, is_train=True):
@@ -282,19 +291,12 @@ class MergeDetectionTrainer:
         -------
         None
         """
-        # Compute avg f1 score
-        avg_prec = np.nanmean(stats["precision"])
-        avg_recall = np.nanmean(stats["recall"])
-        stats["f1"] = [2 * avg_prec * avg_recall / (avg_prec + avg_recall)]
-
-        # Write to tensorboard
         for key, value in stats.items():
-            stats[key] = np.nanmean(value)
             self.writer.add_scalar(prefix + key, stats[key], epoch)
 
 
 # --- Dataset ---
-class MergeDetectionGraphDataset:
+class MergeDetectionDataset:
 
     def __init__(
         self,
@@ -303,7 +305,7 @@ class MergeDetectionGraphDataset:
         context_radius=200,
         multiscale=0,
         node_spacing=5,
-        patch_shape=(84, 84, 84),
+        patch_shape=(96, 96, 96),
         transform=False,
         use_random_sites=True,
     ):
@@ -370,7 +372,7 @@ class MergeDetectionGraphDataset:
         # Extract subgraph and image patches centered at site
         subgraph = graph.get_rooted_subgraph(node, self.context_radius)
         img_patch = self.img_readers[brain_id].read(voxel, self.patch_shape)
-        img_patch = img_util.resize(img_util.normalize(img_patch), (64, 64, 64))
+        img_patch = img_util.normalize(img_patch)
         label_patch = self.get_label_mask(subgraph)
         patches = np.stack([img_patch, label_patch], axis=0)
 
@@ -413,7 +415,7 @@ class MergeDetectionGraphDataset:
             if img_util.is_contained(voxel, self.patch_shape, buffer=3):
                 i, j, k = voxel
                 label_mask[i-3:i+3, j-3:j+3, k-3:k+3] = 1
-        return img_util.resize(label_mask, (64, 64, 64)).astype(int)
+        return label_mask
 
     # --- Helpers ---
     def __len__(self):
@@ -421,7 +423,7 @@ class MergeDetectionGraphDataset:
 
 
 # --- Dataloader ---
-class MergeDetectionGraphDataloader:
+class MergeDetectionDataloader:
     """
     DataLoader that uses multithreading to fetch image patches from the cloud
     to form batches.
@@ -450,7 +452,8 @@ class MergeDetectionGraphDataloader:
                 threads.append(executor.submit(self.dataset.__getitem__, idx))
 
             # Process results
-            patches = np.zeros((batch_size, 2, 64, 64, 64), dtype=np.float32)
+            patch_shape = (batch_size, 2,) + self.dataset.patch_shape
+            patches = np.zeros(patch_shape, dtype=np.float32)
             labels = np.zeros((batch_size, 1), dtype=np.float32)
             for i, thread in enumerate(as_completed(threads)):
                 patch, _, label = thread.result()
