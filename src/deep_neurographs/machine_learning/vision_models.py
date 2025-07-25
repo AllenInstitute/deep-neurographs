@@ -4,7 +4,8 @@ Created on Sat July 15 12:00:00 2025
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Code for vision models that perform image classification.
+Code for vision models that perform image classification tasks within
+GraphTrace pipelines.
 
 """
 
@@ -20,42 +21,45 @@ class CNN3D(nn.Module):
     """
     Convolutional neural network that classifies edge proposals given an image
     patch.
-
     """
 
-    def __init__(self, patch_shape, output_dim):
+    def __init__(self, patch_shape, output_dim, dropout=0.1):
         """
         Constructs a ConvNet object.
 
         Parameters
         ----------
-        None
+        patch_shape : Tuple[int]
+            Shape of input image patch.
+        output_dim : int
+            Dimension of output.
+        dropout : float, optional
+            Fraction of values to randomly drop during training. Default is
+            0.1.
 
         Returns
         -------
         None
-
         """
         # Call parent class
         nn.Module.__init__(self)
 
         # Layer 1
-        self.conv1a = self._init_conv_layer(2, 16, 3)
-        self.conv1b = self._init_conv_layer(16, 16, 3)
+        self.conv1a = self._init_conv_layer(2, 16, 3, dropout=dropout)
+        self.conv1b = self._init_conv_layer(16, 16, 3, dropout=dropout)
 
         # Layer 2
-        self.conv2a = self._init_conv_layer(16, 32, 3)
-        self.conv2b = self._init_conv_layer(32, 32, 3)
+        self.conv2a = self._init_conv_layer(16, 32, 3, dropout=dropout)
+        self.conv2b = self._init_conv_layer(32, 32, 3, dropout=dropout)
 
         # Layer 3
-        self.conv3a = self._init_conv_layer(32, 64, 3)
-        self.conv3b = self._init_conv_layer(64, 64, 3)
+        self.conv3 = self._init_conv_layer(32, 64, 3, dropout=dropout)
 
         # Layer 4
-        self.conv4 = self._init_conv_layer(64, 128, 3)
+        self.conv4 = self._init_conv_layer(64, 128, 3, dropout=dropout)
 
         # Layer 5
-        self.conv5 = self._init_conv_layer(128, 256, 3)
+        self.conv5 = self._init_conv_layer(128, 256, 3, dropout=dropout)
 
         # Output layer
         self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
@@ -65,7 +69,9 @@ class CNN3D(nn.Module):
         # Initialize weights
         self.apply(self.init_weights)
 
-    def _init_conv_layer(self, in_channels, out_channels, kernel_size):
+    def _init_conv_layer(
+        self, in_channels, out_channels, kernel_size, dropout=0.1
+    ):
         """
         Initializes a convolutional layer.
 
@@ -77,12 +83,14 @@ class CNN3D(nn.Module):
             Number of channels that are output from this convolutional layer.
         kernel_size : int
             Size of kernel used on convolutional layers.
+        dropout : float, optional
+            Fraction of values to randomly drop during training. Default is
+            0.1.
 
         Returns
         -------
         torch.nn.Sequential
             Sequence of operations that define this layer.
-
         """
         conv_layer = nn.Sequential(
             nn.Conv3d(
@@ -94,17 +102,32 @@ class CNN3D(nn.Module):
             ),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(),
-            nn.Dropout(p=0.1),
+            nn.Dropout3d(p=dropout) if dropout > 0 else nn.Identity(),
         )
         return conv_layer
 
     def _get_flattened_size(self, patch_shape):
-        # For internal use during init
+        """
+        Compute the flattened feature vector size after applying a sequence
+        of convolutional and pooling layers on an input tensor with the given
+        shape.
+
+        Parameters
+        ----------
+        patch_shape : Tuple[int]
+            Shape of input image patch.
+    
+        Returns
+        -------
+        int
+            Length of the flattened feature vector after the convolutions and
+            pooling.
+        """
         with torch.no_grad():
             x = torch.zeros(1, 2, *patch_shape)
             x = self.pool(self.conv1b(self.conv1a(x)))
             x = self.pool(self.conv2b(self.conv2a(x)))
-            x = self.pool(self.conv3b(self.conv3a(x)))
+            x = self.pool(self.conv3(x))
             x = self.pool(self.conv4(x))
             x = self.pool(self.conv5(x))
             return x.view(1, -1).size(1)
@@ -122,7 +145,6 @@ class CNN3D(nn.Module):
         Returns
         -------
         None
-
         """
         if isinstance(m, nn.Conv3d):
             nn.init.kaiming_normal_(
@@ -151,12 +173,11 @@ class CNN3D(nn.Module):
         -------
         torch.Tensor
             Output of neural network.
-
         """
         # Convolutional layers
         x = self.pool(self.conv1b(self.conv1a(x)))
         x = self.pool(self.conv2b(self.conv2a(x)))
-        x = self.pool(self.conv3b(self.conv3a(x)))
+        x = self.pool(self.conv3(x))
         x = self.pool(self.conv4(x))
         x = self.pool(self.conv5(x))
 
@@ -220,7 +241,7 @@ class ViT3D(nn.Module):
 
 
 class PatchEmbedding3D(nn.Module):
-    def __init__(self, in_channels, patch_shape, emb_size, img_shape):
+    def __init__(self, in_channels, patch_shape, emb_size, img_shape, dropout=0.1):
         # Call parent class
         super().__init__()
 
@@ -234,7 +255,7 @@ class PatchEmbedding3D(nn.Module):
         self.proj = nn.Conv3d(
             in_channels, emb_size, kernel_size=patch_shape, stride=patch_shape
         )
-        self.dropout = nn.Dropout(0.1)
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x):
         x = self.proj(x)
@@ -257,9 +278,9 @@ class TransformerEncoderBlock(nn.Module):
         self.mlp = nn.Sequential(
             nn.Linear(emb_size, mlp_dim),
             nn.GELU(),
-            nn.Dropout(dropout),
+            nn.Dropout(p=dropout),
             nn.Linear(mlp_dim, emb_size),
-            nn.Dropout(dropout),
+            nn.Dropout(p=dropout),
         )
 
     def forward(self, x):
@@ -269,7 +290,7 @@ class TransformerEncoderBlock(nn.Module):
 
 
 # --- Helpers ---
-def init_mlp(input_dim, output_dim):
+def init_mlp(input_dim, output_dim, dropout=0.1):
     """
     Initializes a multi-layer perceptron (MLP).
 
@@ -279,20 +300,21 @@ def init_mlp(input_dim, output_dim):
         Dimension of input feature vector.
     output_dim : int
         Dimension of embedded feature vector.
+    dropout : float, optional
+        Fraction of values to randomly drop during training. Default is 0.1.
 
     Returns
     -------
     nn.Sequential
-        ...
-
+        Multi-layer perception network.
     """
     mlp = nn.Sequential(
         nn.Linear(input_dim, 4 * output_dim),
         nn.LeakyReLU(),
-        nn.Dropout(p=0.1),
+        nn.Dropout(p=dropout),
         nn.Linear(4 * output_dim, 2 * output_dim),
         nn.LeakyReLU(),
-        nn.Dropout(p=0.1),
+        nn.Dropout(p=dropout),
         nn.Linear(2 * output_dim, output_dim),
     )
     return mlp
