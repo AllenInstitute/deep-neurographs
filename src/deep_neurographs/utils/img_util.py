@@ -557,6 +557,26 @@ def get_minimal_bbox(voxels, buffer=0):
 
 
 def is_contained(voxel, shape, buffer=0):
+    """
+    Check whether a voxel is within bounds of a given shape, considering a
+    buffer.
+
+    Parameters
+    ----------
+    voxel : Tuple[int]
+        Voxel coordinates to be checked.
+    shape : tuple of int
+        Shape of image volume.
+    buffer : int, optional
+        Number of voxels to pad the bounds by when checking containment.
+        Default 0.
+
+    Returns
+    -------
+    bool
+        True if the voxel is within bounds (with buffer) on all axes, False
+        otherwise.
+    """
     contained_above = all(0 <= v + buffer < s for v, s in zip(voxel, shape))
     contained_below = all(0 <= v - buffer < s for v, s in zip(voxel, shape))
     return contained_above and contained_below
@@ -648,6 +668,21 @@ def normalize(img):
 
 
 def resize(img, new_shape):
+    """
+    Resize a 3D image to the specified new shape using linear interpolation.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        Input 3D image array with shape (depth, height, width).
+    new_shape : tuple of int
+        Desired output shape as (new_depth, new_height, new_width).
+
+    Returns
+    -------
+    np.ndarray
+        Resized 3D image with shape equal to "new_shape".
+    """
     depth, height, width = img.shape
     zoom_factors = np.array(new_shape) / np.array([depth, height, width])
     resized_img = zoom(img, zoom_factors, order=1)

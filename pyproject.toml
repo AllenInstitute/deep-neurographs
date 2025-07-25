@@ -44,8 +44,6 @@ dependencies = [
     'zarr',
 ]
 
-aind-exaspim-image-utils = { git = "https://github.com/AllenNeuralDynamics/aind-exaspim-image-utils.git", branch = "main" }
-
 [project.optional-dependencies]
 dev = [
     'black',

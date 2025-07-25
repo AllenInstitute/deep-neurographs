@@ -531,6 +531,20 @@ class Reader:
 
 # --- Helpers ---
 def get_segment_id(swc_name):
+    """
+    Extract the segment ID from an SWC filename.
+
+    Parameters
+    ----------
+    swc_name : str
+        SWC filename, expected to be in the format "<segment_id>.swc".
+
+    Returns
+    -------
+    int or str
+        Segment ID parsed as an integer if possible; otherwise, the original
+        string.
+    """
     try:
         return ast.literal_eval(swc_name.split(".")[0])
     except:
