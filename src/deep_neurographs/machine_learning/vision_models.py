@@ -116,7 +116,7 @@ class CNN3D(nn.Module):
         ----------
         patch_shape : Tuple[int]
             Shape of input image patch.
-    
+
         Returns
         -------
         int

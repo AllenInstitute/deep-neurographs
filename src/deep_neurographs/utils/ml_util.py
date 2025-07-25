@@ -16,8 +16,8 @@ import numpy as np
 import torch
 
 from deep_neurographs.utils import util
-from deep_neurographs.split_correction import feature_generation
-from deep_neurographs.split_correction.models import (
+from deep_neurographs.split_proofreading import feature_generation
+from deep_neurographs.split_proofreading.models import (
     HGAT,
     MultiModalHGAT,
 )
@@ -125,6 +125,24 @@ def get_inputs(data, device="cpu"):
 
 
 def init_model(is_multimodal, heads_1=2, heads_2=4):
+    """
+    Initialize a HGAT or MultiModalHGAT model based on modality flag.
+
+    Parameters
+    ----------
+    is_multimodal : bool
+        If True, initialize a MultiModalHGAT model; otherwise, use HGAT.
+    heads_1 : int, optional
+        Number of attention heads in the first GAT layer (default is 2).
+    heads_2 : int, optional
+        Number of attention heads in the second GAT layer (default is 4 for
+        multimodal, 2 for unimodal).
+
+    Returns
+    -------
+    torch.nn.Module
+        An initialized instance of HGAT or MultiModalHGAT.
+    """
     node_dict = feature_generation.get_node_dict()
     edge_dict = feature_generation.get_edge_dict()
     if is_multimodal:
@@ -154,6 +172,46 @@ def line_graph(edges):
     graph = nx.Graph()
     graph.add_edges_from(edges)
     return nx.line_graph(graph)
+
+
+def to_cpu(tensor, to_numpy=False):
+    """
+    Move PyTorch tensor to the CPU and optionally convert it to a NumPy array.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        Tensor to be moved to CPU.
+    to_numpy : bool, optional
+        If True, converts the tensor to a NumPy array. Default is False.
+
+    Returns
+    -------
+    torch.Tensor or np.ndarray
+        Tensor or array on CPU.
+    """
+    if to_numpy:
+        return np.array(tensor.detach().cpu())
+    else:
+        return tensor.detach().cpu()
+
+
+def to_tensor(arr):
+    """
+    Converts a numpy array to a tensor.
+
+    Parameters
+    ----------
+    arr : numpy.ndarray
+        Array to be converted.
+
+    Returns
+    -------
+    torch.Tensor
+        Array converted to tensor.
+
+    """
+    return torch.tensor(arr, dtype=torch.float32)
 
 
 def toCPU(tensor):

@@ -12,23 +12,18 @@ Miscellaneous helper routines.
 from botocore import UNSIGNED
 from botocore.config import Config
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
 from google.cloud import storage
 from io import BytesIO
 from random import sample
 from tqdm import tqdm
 from zipfile import ZipFile
 
-import ast
 import boto3
 import json
 import numpy as np
 import os
-import pandas as pd
 import psutil
 import shutil
-
-from aind_exaspim_dataset_utils.smartsheet_util import SmartSheetClient
 
 
 # --- OS utils ---
@@ -537,6 +532,30 @@ def find_best(my_dict, maximize=True):
     return best_key
 
 
+def find_key(my_dict, target_value):
+    """
+    Finds the key corresponding to the given value if it exists; otherwise,
+    returns None.
+
+    Parameters
+    ----------
+    my_dict : dict
+        Dictionary to be searched.
+    target_value : any
+        Value to be searched for in the given dictionary.
+
+    Returns
+    -------
+    hashable
+        Key corresponding to the given value if it exists; otherwise, returns
+        None.
+    """
+    for key, value in my_dict.items():
+        if value == target_value:
+            return key
+    return None
+
+
 def remove_items(my_dict, keys):
     """
     Removes dictionary items corresponding to "keys".
@@ -658,26 +677,3 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
-
-
-def update_smartsheet(access_token, brain_id):
-    # Open smartsheet
-    sheet_name = "ExM Dataset Summary"
-    client = SmartSheetClient(access_token, sheet_name)
-
-    # Create row update
-    updated_row = client.client.models.Row()
-    updated_row.id = client.find_row_id(brain_id)
-    updated_row.cells.append({
-        'column_id': client.column_name_to_id["Split Correction"],
-        'value': True,
-        'strict': False
-    })
-    updated_row.cells.append({
-        'column_id': client.column_name_to_id["Split Correction Date"],
-        'value': datetime.today().strftime("%m/%d/%Y"),
-        'strict': False
-    })
-
-    # Send row update
-    client.client.Sheets.update_rows(client.sheet_id, [updated_row])
