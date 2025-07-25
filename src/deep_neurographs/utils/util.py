@@ -27,7 +27,8 @@ import os
 import pandas as pd
 import psutil
 import shutil
-import smartsheet
+
+from aind_exaspim_dataset_utils.smartsheet_util import SmartSheetClient
 
 
 # --- OS utils ---
@@ -426,14 +427,6 @@ def list_gcs_subdirectories(bucket_name, prefix):
 
 
 # --- S3 utils ---
-def find_most_recent_dirname(results_prefix_list):
-    dates = list()
-    for prefix in results_prefix_list:
-        dirname = prefix.split("/")[-2]
-        dates.append(dirname.replace("results_", ""))
-    return "results_" + sorted(dates)[-1]
-
-
 def list_s3_prefixes(bucket_name, prefix):
     """
     Lists all immediate subdirectories of a given S3 path (prefix).
@@ -463,21 +456,6 @@ def list_s3_prefixes(bucket_name, prefix):
         return [cp["Prefix"] for cp in response["CommonPrefixes"]]
     else:
         return list()
-
-
-def load_somas_from_s3(brain_id):
-    # Find soma results for brain_id
-    bucket_name = 'aind-msma-morphology-data'
-    prefix = f"exaspim_soma_detection/{brain_id}"
-    prefix_list = list_s3_prefixes(bucket_name, prefix)
-
-    # Find most recent result
-    if prefix_list:
-        dirname = find_most_recent_dirname(prefix_list)
-        path = f"s3://{bucket_name}/{prefix}/{dirname}/somas-{brain_id}.csv"
-        return list(pd.read_csv(path)["xyz"].apply(ast.literal_eval))
-    else:
-        return None
 
 
 def upload_dir_to_s3(dir_path, bucket_name, prefix):
@@ -576,49 +554,6 @@ def remove_items(my_dict, keys):
         Updated dictionary.
     """
     return {k: v for k, v in my_dict.items() if k not in keys}
-
-
-# --- SmartSheet utils ---
-def find_row_id(brain_id, sheet):
-    for row in sheet.rows:
-        for cell in row.cells:
-            if cell.display_value == brain_id:
-                return row.id
-    raise Exception(f"Row not found for brain_id={brain_id}")
-
-
-def find_sheet_id(access_token, sheet_name):
-    smartsheet_client = smartsheet.Smartsheet(access_token)
-    response = smartsheet_client.Sheets.list_sheets()
-    for sheet in response.data:
-        if sheet.name == sheet_name:
-            return sheet.id
-
-
-def update_smartsheet(access_token, brain_id):
-    # Open smartsheet
-    sheet_id = find_sheet_id(access_token, "ExM Dataset Summary")
-    smartsheet_client = smartsheet.Smartsheet(access_token)
-    sheet = smartsheet_client.Sheets.get_sheet(sheet_id)
-    column_map = {col.title: col.id for col in sheet.columns}
-    today = datetime.today()
-
-    # Updated row object
-    updated_row = smartsheet.models.Row()
-    updated_row.id = find_row_id(brain_id, sheet)
-    updated_row.cells.append({
-        'column_id': column_map.get('Split Correction'),
-        'value': True,
-        'strict': False
-    })
-    updated_row.cells.append({
-        'column_id': column_map.get('Split Correction Date'),
-        'value': today.strftime("%m/%d/%Y"),
-        'strict': False
-    })
-
-    # Send the update
-    smartsheet_client.Sheets.update_rows(sheet_id, [updated_row])
 
 
 # --- Miscellaneous ---
@@ -723,3 +658,26 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
+
+
+def update_smartsheet(access_token, brain_id):
+    # Open smartsheet
+    sheet_name = "ExM Dataset Summary"
+    client = SmartSheetClient(access_token, sheet_name)
+
+    # Create row update
+    updated_row = client.client.models.Row()
+    updated_row.id = client.find_row_id(brain_id)
+    updated_row.cells.append({
+        'column_id': client.column_name_to_id["Split Correction"],
+        'value': True,
+        'strict': False
+    })
+    updated_row.cells.append({
+        'column_id': client.column_name_to_id["Split Correction Date"],
+        'value': datetime.today().strftime("%m/%d/%Y"),
+        'strict': False
+    })
+
+    # Send row update
+    client.client.Sheets.update_rows(client.sheet_id, [updated_row])

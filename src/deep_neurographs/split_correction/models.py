@@ -463,12 +463,8 @@ class ConvNet(nn.Module):
             Output of neural network.
 
         """
-        # Layer 1
-        x = self.conv1a(x)
-        x = self.conv1b(x)
-        x = self.pool1(x)
-
-        # Layer 2
+        # Convolutional Layers
+        x = self.pool1(self.conv1b(self.conv1a(x)))
         x = self.conv2(x)
         x = self.pool2(x)
 

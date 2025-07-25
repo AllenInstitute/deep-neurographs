@@ -15,7 +15,6 @@ import random
 import torchvision.transforms as transforms
 
 
-# --- Image Transforms ---
 class ImageTransforms:
     """
     Class that applies a sequence of transforms to a 3D image and
@@ -234,7 +233,7 @@ class RandomContrast3D:
 
     """
 
-    def __init__(self, factor_range=(0.9, 1.1)):
+    def __init__(self, factor_range=(0.8, 1.2)):
         """
         Initializes a RandomContrast3D transformer.
 
@@ -276,7 +275,7 @@ class RandomNoise3D:
 
     """
 
-    def __init__(self, max_std=0.04):
+    def __init__(self, max_std=0.06):
         """
         Initializes a RandomNoise3D transformer.
 
