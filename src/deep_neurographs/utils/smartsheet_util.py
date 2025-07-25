@@ -34,8 +34,8 @@ class SmartSheetClient:
 
     # --- Lookup Routines ---
     def find_workspace_sheet_id(self):
-        for ws in client.Workspaces.list_workspaces().data:
-            workspace = client.Workspaces.get_workspace(ws.id)
+        for ws in self.client.Workspaces.list_workspaces().data:
+            workspace = self.client.Workspaces.get_workspace(ws.id)
             for sheet in workspace.sheets:
                 if sheet.name == self.sheet_name:
                     return sheet.id

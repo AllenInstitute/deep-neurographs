@@ -16,6 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import numpy as np
 import os
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -54,33 +55,23 @@ class MergeDetectionTrainer:
         self.writer = SummaryWriter(log_dir=log_dir)
 
     # --- Core Routines ---
-    def run(self, train_dataset, val_dataset):
+    def run(self, train_dataloader, val_dataloader):
         """
         Run the full training and validation loop.
 
         Parameters
         ----------
         train_dataset : torch.utils.data.Dataset
-            Dataset used for training.
+            Dataloader used for training.
         val_dataset : torch.utils.data.Dataset
-            Dataset used for validation.
+            Dataloader used for validation.
 
         Returns
         -------
         None
         """
-        # Initializations
         exp_name = os.path.basename(os.path.normpath(self.log_dir))
         print("\nExperiment:", exp_name)
-
-        train_dataloader = MergeDetectionDataloader(
-            train_dataset, batch_size=self.batch_size
-        )
-        val_dataloader = MergeDetectionDataloader(
-            val_dataset, batch_size=self.batch_size
-        )
-
-        # Main
         for epoch in range(self.max_epochs):
             # Train-Validate
             train_stats = self.train_step(train_dataloader, epoch)
@@ -244,8 +235,7 @@ class MergeDetectionTrainer:
         stats : dict
             Dictionary of metric names to values.
         is_train : bool, optional
-            Indication of whether "stats" were computed during training step.
-            Default is True.
+            Indication of whether stats were computed during training.
 
         Returns
         -------
@@ -306,8 +296,6 @@ class MergeDetectionDataset:
         multiscale=0,
         node_spacing=5,
         patch_shape=(96, 96, 96),
-        transform=False,
-        use_random_sites=True,
     ):
         # Instance attributes
         self.anisotropy = anisotropy
@@ -316,8 +304,7 @@ class MergeDetectionDataset:
         self.merge_sites_df = merge_sites_df
         self.multiscale = multiscale
         self.patch_shape = patch_shape
-        self.transform = ImageTransforms() if transform else None
-        self.use_random_sites = use_random_sites
+        self.transform = ImageTransforms()
 
         # Data structures
         self.img_readers = dict()
@@ -363,9 +350,9 @@ class MergeDetectionDataset:
         self.gt_graphs[brain_id] = self.init_graph(swc_pointer)
 
     # --- Get Examples ---
-    def __getitem__(self, idx):
+    def __getitem__(self, idx, use_random_sites, use_transform):
         # Extract site
-        brain_id, graph, node, is_positive = self.get_site(idx)
+        brain_id, graph, node, is_positive = self.get_site(idx, use_random_sites)
         xyz = graph.node_xyz[node]
         voxel = img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
 
@@ -377,21 +364,21 @@ class MergeDetectionDataset:
         patches = np.stack([img_patch, label_patch], axis=0)
 
         # Apply image augmentation
-        if self.transform:
+        if use_transform:
             _, patches = self.transform(idx, patches)
         return patches, subgraph, int(is_positive)
 
-    def get_site(self, idx):
-        brain_id = self.merge_sites_df["brain_id"][idx]
+    def get_site(self, idx, use_random_sites):
+        brain_id = self.merge_sites_df["brain_id"].iloc[idx]
         is_positive = np.random.random() > 0.5
         if is_positive:
             graph = self.merge_graphs[brain_id]
         else:
-            if np.random.random() > 0.5 and self.use_random_sites:
+            if np.random.random() > 0.5 and use_random_sites:
                 return self.get_random_site()
             else:
                 graph = self.gt_graphs[brain_id]
-        xyz = self.merge_sites_df["xyz"][idx]
+        xyz = self.merge_sites_df["xyz"].iloc[idx]
         node = graph.query_node(xyz)
         return brain_id, graph, node, is_positive
 
@@ -415,7 +402,7 @@ class MergeDetectionDataset:
             if img_util.is_contained(voxel, self.patch_shape, buffer=3):
                 i, j, k = voxel
                 label_mask[i-3:i+3, j-3:j+3, k-3:k+3] = 1
-        return img_util.resize(label_mask, (64, 64, 64)).astype(int)
+        return label_mask
 
     # --- Helpers ---
     def __len__(self):
@@ -429,18 +416,29 @@ class MergeDetectionDataloader:
     to form batches.
     """
 
-    def __init__(self, dataset, batch_size=32):
+    def __init__(
+        self,
+        dataset,
+        idxs,
+        batch_size=32,
+        use_random_sites=False,
+        use_transform=False
+    ):
         # Instance attributes
         self.batch_size = batch_size
         self.dataset = dataset
+        self.idxs = idxs
+        self.use_random_sites = use_random_sites
+        self.use_transform = use_transform
 
     def __iter__(self):
-        for idx in range(0, len(self.dataset), self.batch_size):
-            yield self._load_batch(idx)
+        random.shuffle(self.idxs)
+        for start_idx in range(0, len(self.idxs), self.batch_size):
+            yield self._load_batch(start_idx)
 
     def _load_batch(self, start_idx):
         # Compute batch size
-        n_remaining_examples = len(self.dataset) - start_idx
+        n_remaining_examples = len(self.idxs) - start_idx
         batch_size = min(self.batch_size, n_remaining_examples)
 
         # Generate batch
@@ -449,7 +447,14 @@ class MergeDetectionDataloader:
             threads = list()
             for idx_shift in range(batch_size):
                 idx = start_idx + idx_shift
-                threads.append(executor.submit(self.dataset.__getitem__, idx))
+                threads.append(
+                    executor.submit(
+                        self.dataset.__getitem__,
+                        idx,
+                        self.use_random_sites,
+                        self.use_transform
+                    )
+                )
 
             # Process results
             patch_shape = (batch_size, 2,) + self.dataset.patch_shape
