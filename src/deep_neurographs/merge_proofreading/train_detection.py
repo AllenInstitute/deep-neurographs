@@ -4,8 +4,8 @@ Created on Wed July 2 11:00:00 2025
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Dataset and dataloader utilities for processing merge site data to support
-training neural networks that detect merge errors.
+Dataset and dataloader utilities for processing merge site data to train
+neural networks that detect merge errors.
 
 """
 
@@ -55,6 +55,7 @@ class MergeSiteDataset:
         Shape of the 3D patches to extract (depth, height, width). Default is
         (96, 96, 96).
     """
+
     def __init__(
         self,
         merge_sites_df,
