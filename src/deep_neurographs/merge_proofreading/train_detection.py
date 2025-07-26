@@ -4,7 +4,8 @@ Created on Wed July 2 11:00:00 2025
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Routines for training machine learning models that detect merge mistakes.
+Dataset and dataloader utilities for processing merge site data to support
+training neural networks that detect merge errors.
 
 """
 
@@ -18,9 +19,42 @@ from deep_neurographs.skeleton_graph import SkeletonGraph
 from deep_neurographs.utils import img_util, ml_util, swc_util, util
 
 
-# --- Dataset ---
 class MergeSiteDataset:
+    """
+    Dataset class for loading and processing merge site data.
 
+    Attributes
+    ----------
+    merge_sites_df : pandas.DataFrame
+        DataFrame containing merge sites, must contain the columns:
+        "brain_id", "segmentation_id", "segment_id", and "xyz".
+    anisotropy : Tuple[float], optional
+        Image to physical coordinates scaling factors to account for the
+        anisotropy of the microscope.
+    context_radius : int, optional
+        Radius (in microns) around merge sites used to extract rooted
+        subgraph. Default is 200.
+    gt_graphs : dict[str, SkeletonGraph]
+        Dictionary that maps brain IDs to a graph containing ground truth
+        tracings.
+    gt_kdtrees : scipy.spatial.KDTree
+        KD-Tree built from xyz coordinates stored in "gt_graphs".
+    merge_graphs : dict[str, SkeletonGraph]
+        Dictionary that maps brain IDs to a graph containing fragments that
+        contain merge mistakes.
+    gt_kdtrees : scipy.spatial.KDTree
+        KD-Tree built from xyz coordinates stored in "merge_graphs".
+    img_readers : ImageReader
+        Image reader used to read raw image from cloud bucket.
+    multiscale : int, optional
+        Level in the image pyramid that the voxel coordinate must index into.
+        Default is 0.
+    node_spacing : int, optional
+        Spacing between nodes in the graph. Default is 5 (microns).
+    patch_shape : tuple of int, optional
+        Shape of the 3D patches to extract (depth, height, width). Default is
+        (96, 96, 96).
+    """
     def __init__(
         self,
         merge_sites_df,
@@ -30,6 +64,33 @@ class MergeSiteDataset:
         node_spacing=5,
         patch_shape=(96, 96, 96),
     ):
+        """
+        Instantiates MergeSiteDataset object.
+
+        Parameters
+        ----------
+        merge_sites_df : pandas.DataFrame
+            DataFrame containing merge sites, must contain the columns:
+            "brain_id", "segmentation_id", "segment_id", and "xyz".
+        anisotropy : Tuple[float], optional
+            Image to physical coordinates scaling factors to account for the
+            anisotropy of the microscope.
+        context_radius : int, optional
+            Radius (in microns) around merge sites used to extract rooted
+            subgraph. Default is 200.
+        multiscale : int, optional
+            Level in the image pyramid that the voxel coordinate must index
+            into. Default is 0.
+        node_spacing : int, optional
+            Spacing between nodes in the graph. Default is 5 (microns).
+        patch_shape : tuple of int, optional
+            Shape of the 3D patches to extract (depth, height, width). Default is
+            (96, 96, 96).
+
+        Returns
+        -------
+        None
+        """
         # Instance attributes
         self.anisotropy = anisotropy
         self.context_radius = context_radius
@@ -48,15 +109,52 @@ class MergeSiteDataset:
 
     # --- Load Data ---
     def init_graph(self, swc_pointer):
+        """
+        Initialize a SkeletonGraph built from SWC files.
+    
+        Parameters
+        ----------
+        swc_pointer : any
+            Pointer to SWC files to be loaded into graph.
+    
+        Returns
+        -------
+        SkeletonGraph
+            Graph with loaded data from SWC files.
+        """
         graph = SkeletonGraph(node_spacing=self.node_spacing)
         graph.load(swc_pointer)
         return graph
 
     def init_kdtrees(self):
+        """
+        Initialize KDTrees for both ground truth and merge graphs.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
         self.gt_kdtrees = self._init_kdtree(self.gt_graphs)
         self.merge_kdtrees = self._init_kdtree(self.merge_graphs)
 
     def _init_kdtree(self, graphs):
+        """
+        Build KDTree for each graph contained in a dictionary.
+    
+        Parameters
+        ----------
+        graphs : dict
+            Dictionary mapping brain IDs to SkeletonGraph instances.
+    
+        Returns
+        -------
+        dict
+            Dictionary mapping brain IDs to KDTrees built from the graphs.
+        """
         for brain_id, graph in graphs.items():
             graph.init_kdtree()
 
@@ -142,7 +240,6 @@ class MergeSiteDataset:
         return len(self.merge_sites_df)
 
 
-# --- Dataloader ---
 class MergeSiteDataloader:
     """
     DataLoader that uses multithreading to read image patches from the cloud

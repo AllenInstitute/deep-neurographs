@@ -269,6 +269,21 @@ class GraphLoader:
             edges and values are attributes associated with those edges.
         """
         def dist(i, j):
+            """
+            Computes distance between the given nodes.
+
+            Parameters
+            ----------
+            i : int
+                Node ID.
+            j : int
+                Node ID.
+
+            Returns
+            -------
+            float
+                Distance between nodes.
+            """
             return geometry.dist(graph.graph["xyz"][i], graph.graph["xyz"][j])
 
         # Initializations
@@ -472,6 +487,26 @@ class GraphLoader:
         return path_length(graph, self.min_size) > self.min_size
 
     def smooth_curve_3d(self, graph, attrs, edge, n_pts):
+        """
+        Smooth a 3D curve and update the corresponding edge endpoints in the
+        graph.
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be updated.
+        attrs : dict
+            Dictionary containing "xyz" (list of 3D points) and "radius" (list
+            of scalars) representing the edge to be smoothed.
+        edge : Tuple[int]
+            Start and end node IDs of the edge.
+        n_pts : int
+            Number of points to use for the smoothed curve.
+    
+        Returns
+        -------
+        None
+        """
         attrs["xyz"] = geometry.smooth_curve_3d(attrs["xyz"], n_pts=n_pts)
         attrs["radius"] = geometry.smooth_curve_1d(attrs["radius"], n_pts)
         graph.graph["xyz"][edge[0]] = attrs["xyz"][0]
@@ -672,6 +707,23 @@ def find_leaf(graph):
 
 
 def find_nearby_branching_node(graph, root, max_depth=10):
+    """
+    Search for the nearest branching node starting from a given root node.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+    root : int
+        Node from which to begin the search.
+    max_depth : float
+        Maximum distance to search from the root node.
+
+    Returns
+    -------
+    int
+        Nearest branching node if one is found; otherwise, returns "root".
+    """
     queue = [(root, 0)]
     visited = set(queue)
     while queue:
