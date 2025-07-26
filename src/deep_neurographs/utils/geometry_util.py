@@ -135,16 +135,16 @@ def fit_spline_3d(pts, k=3, s=None):
         Degree of the spline. Default is 3.
     s : float, optional
         A parameter that controls the smoothness of the spline. Default is
-        None
+        None.
 
     Returns
     -------
     UnivariateSpline
-        Spline fit to x-coordinates of "pts".
+        Spline fit to x-coordinates of the given points.
     UnivariateSpline
-        Spline fit to the y-coordinates of "pts".
+        Spline fit to the y-coordinates of the given points.
     UnivariateSpline
-        Spline fit to the z-coordinates of "pts".
+        Spline fit to the z-coordinates of the given points.
     """
     spline_x = fit_spline_1d(pts[:, 0], k=k, s=s)
     spline_y = fit_spline_1d(pts[:, 1], k=k, s=s)
@@ -153,6 +153,24 @@ def fit_spline_3d(pts, k=3, s=None):
 
 
 def fit_spline_1d(pts, k=3, s=None):
+    """
+    Fits a spline to 1D curve.
+
+    Parameters
+    ----------
+    pts : numpy.ndarray
+        Points to be smoothed.
+    k : int, optional
+        Degree of the spline. Default is 3.
+    s : float, optional
+        A parameter that controls the smoothness of the spline. Default is
+        None.
+
+    Returns
+    -------
+    UnivariateSpline
+        Spline fit to the given points.
+    """
     t = np.linspace(0, 1, len(pts))
     s = len(pts) / s if s else len(pts) / 10
     return UnivariateSpline(t, pts, k=k, s=s)
@@ -219,6 +237,22 @@ def shift_path(pts, offset):
 
 
 def smooth_curve_1d(pts, n_pts=None, s=None):
+    """
+    Smooths a 1D curve by fitting a spline and resampling it.
+
+    Parameters
+    ----------
+    n_pts : int or None, optional
+        Number of points to resample.
+    s : float, optional
+        A parameter that controls the smoothness of the spline. Default is
+        None.
+
+    Returns
+    -------
+    numpy.ndarray
+        Smoothed points.
+    """
     # Fit spline
     dt = max(n_pts or len(pts), 5)
     k = min(3, len(pts) - 1)
