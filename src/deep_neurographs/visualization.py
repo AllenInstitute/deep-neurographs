@@ -109,7 +109,7 @@ def visualize_proposals(
         graph,
         graph.proposals,
         color=color,
-        proposal_subset=True,
+        is_proposal_subset=True,
         groundtruth_graph=groundtruth_graph,
         title=title,
     )
@@ -138,7 +138,7 @@ def visualize_groundtruth(
     visualize_subset(
         graph,
         graph.target_edges,
-        proposal_subset=True,
+        is_proposal_subset=True,
         groundtruth_graph=groundtruth_graph,
         title=title,
     )
@@ -149,7 +149,7 @@ def visualize_subset(
     subset,
     color=None,
     width=5,
-    proposal_subset=False,
+    is_proposal_subset=False,
     groundtruth_graph=None,
     title="",
 ):
@@ -180,7 +180,7 @@ def visualize_subset(
     # Plot graph
     data = get_edge_traces(graph, graph.edges, color="black")
     data.append(get_node_traces(graph))
-    if proposal_subset:
+    if is_proposal_subset:
         data.extend(
             get_proposal_traces(graph, subset, color=color, width=width)
         )

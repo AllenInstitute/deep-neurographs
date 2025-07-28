@@ -40,7 +40,7 @@ import os
 import zipfile
 
 from deep_neurographs.skeleton_graph import SkeletonGraph
-from deep_neurographs.split_correction import (
+from deep_neurographs.split_proofreading import (
     groundtruth_generation, proposal_generation
 )
 from deep_neurographs.utils import (
@@ -369,7 +369,7 @@ class ProposalGraph(SkeletonGraph):
         # Set groundtruth
         if groundtruth_graph:
             self.gt_accepts = groundtruth_generation.run(
-                self, groundtruth_graph
+                groundtruth_graph, self
             )
         else:
             self.gt_accepts = set()

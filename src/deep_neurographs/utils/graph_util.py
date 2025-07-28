@@ -126,7 +126,7 @@ class GraphLoader:
         Parameters
         ----------
         segmentation_path : str
-            Path to segmentation stored in GCS bucket.
+            Path to a segmentation stored in a GCS bucket.
 
         Returns
         -------
@@ -168,7 +168,7 @@ class GraphLoader:
 
         Returns
         -------
-        List[dict]
+        irreducibles : List[dict]
             Dictionaries that contain components of the irreducible subgraph
             extracted from each SWC dictionary.
         """
@@ -219,41 +219,38 @@ class GraphLoader:
             Dictionary that each contains the components of an irreducible
             subgraph.
         """
-        try:
-            graph = self.to_graph(swc_dict)
-            irreducibles_list = deque()
-            high_risk_cnt = 0
-            if self.satifies_path_length_condition(graph):
-                # Check for soma merges
-                if len(graph.graph["soma_nodes"]) > 1:
-                    self.remove_soma_merges(graph)
+        graph = self.to_graph(swc_dict)
+        irreducibles_list = deque()
+        high_risk_cnt = 0
+        if self.satifies_path_length_condition(graph):
+            # Check for soma merges
+            if len(graph.graph["soma_nodes"]) > 1:
+                self.remove_soma_merges(graph)
 
-                # Check for high risk merges
-                if self.remove_high_risk_merges_bool:
-                    high_risk_cnt = self.remove_high_risk_merges(graph)
+            # Check for high risk merges
+            if self.remove_high_risk_merges_bool:
+                high_risk_cnt = self.remove_high_risk_merges(graph)
 
-                # Extract irreducibles
-                i = 0
-                leafs = set(get_leafs(graph))
-                while leafs:
-                    # Extract for connected component
-                    leaf = util.sample_once(leafs)
-                    irreducibles, visited = self.get_irreducibles(graph, leaf)
-                    leafs -= visited
+            # Extract irreducibles
+            i = 0
+            leafs = set(get_leafs(graph))
+            while leafs:
+                # Extract for connected component
+                leaf = util.sample_once(leafs)
+                irreducibles, visited = self.get_irreducibles(graph, leaf)
+                leafs -= visited
 
-                    # Store results
-                    if irreducibles:
-                        swc_id = f"{graph.graph['segment_id']}.{i}"
-                        irreducibles["swc_id"] = swc_id
-                        irreducibles_list.append(irreducibles)
-                        i += 1
-        except Exception as e:
-            print("Exception:", e)
+                # Store results
+                if irreducibles:
+                    swc_id = f"{graph.graph['segment_id']}.{i}"
+                    irreducibles["swc_id"] = swc_id
+                    irreducibles_list.append(irreducibles)
+                    i += 1
         return irreducibles_list, high_risk_cnt
 
     def get_irreducibles(self, graph, source):
         """
-        Identifies irreducible edges in a graph by traversing with a DFS.
+        Identifies irreducible components of a connected graph.
 
         Parameters
         ----------
@@ -264,9 +261,9 @@ class GraphLoader:
 
         Returns
         -------
-        dict
-            Dictionary where the keys are tuples representing the irreducible
-            edges and values are attributes associated with those edges.
+        irreducibles : dict
+            Dictionary containing the irreducible components of a connected
+            graph.
         """
         def dist(i, j):
             """
@@ -359,7 +356,8 @@ class GraphLoader:
 
         Returns
         -------
-        None
+        high_risk_cnt : int
+            Number of high risk merges detected.
         """
         high_risk_cnt = 0
         nodes = set()
@@ -412,9 +410,7 @@ class GraphLoader:
 
         Returns
         -------
-        List[dicts]
-            Updated SWC dictionaries, where each dictionary represents a
-            subgraph that was disconnected.
+        None
         """
         soma_nodes = graph.graph["soma_nodes"]
         if len(soma_nodes) <= 20:
@@ -437,12 +433,12 @@ class GraphLoader:
         Parameters
         ----------
         xyz : ArrayLike
-            Physical coordinate to be queried.
+            Coordinate to be queried.
 
         Returns
         -------
         float
-            Distance between a given physical coordinate and the nearest soma
+            Distance between a given xyz coordinate and the nearest soma
             location.
         """
         return self.soma_kdtree.query(xyz)[0] if self.soma_kdtree else np.inf
@@ -458,7 +454,7 @@ class GraphLoader:
 
         Returns
         -------
-        List[int]
+        soma_nodes : Set[int]
             Node IDs that correspond to soma locations.
         """
         soma_nodes = set()
@@ -502,7 +498,7 @@ class GraphLoader:
             Start and end node IDs of the edge.
         n_pts : int
             Number of points to use for the smoothed curve.
-    
+
         Returns
         -------
         None
@@ -524,7 +520,7 @@ class GraphLoader:
 
         Returns
         -------
-        networkx.Graph
+        graph : networkx.Graph
             Graph generated from "swc_dict".
         """
         # Build graph
@@ -554,7 +550,7 @@ def set_node_attrs(graph, nodes):
 
     Returns
     -------
-    dict
+    attrs : dict
         Dictionary where the keys are node ids and values are dictionaries
         containing the "radius" and "xyz" attributes of the nodes.
     """
@@ -581,7 +577,7 @@ def set_edge_attrs(graph, attrs):
 
     Returns
     -------
-    dict
+    attrs : dict
         Updated edge attribute dictionary.
     """
     for e in attrs:
@@ -647,8 +643,10 @@ def find_closest_node(graph, xyz):
 
     Returns
     -------
-    int
-        Node in the graph that is closest to the given "xyz" coordinate.
+    best_node : int
+        Node in the graph that is closest to the given xyz coordinate.
+    best_dist : float
+        Distance between "best_node" and the given xyz coordinate.
     """
     best_dist = np.inf
     best_node = None
@@ -673,7 +671,7 @@ def find_connecting_path(graph, nodes):
 
     Returns
     -------
-    Set[int]
+    path : Set[int]
         Nodes along the shortest paths between somas.
     """
     # Break merges between somas
@@ -754,7 +752,7 @@ def get_component(graph, root):
 
     Returns
     -------
-    Set[int]
+    visited : Set[int]
         Nodes in the connected component corresponding to "root".
     """
     queue = [root]
@@ -769,7 +767,7 @@ def get_component(graph, root):
 
 def get_leafs(graph):
     """
-    Gets leaf nodes of "graph".
+    Gets leaf nodes of the given graph.
 
     Parameters
     ----------
@@ -779,7 +777,7 @@ def get_leafs(graph):
     Returns
     -------
     List[int]
-        Leaf nodes of "graph".
+        Leaf nodes of the given graph.
     """
     return [i for i in graph.nodes if graph.degree[i] == 1]
 
@@ -797,7 +795,7 @@ def largest_components(graph, k):
 
     Returns
     -------
-    List[int]
+    node_ids : List[int]
         List where each entry is a random node from one of the k largest
         connected components.
     """
@@ -855,8 +853,7 @@ def prune_branches(graph, depth):
 
     Returns
     -------
-    networkx.Graph
-        Graph with short branches pruned.
+    None
     """
     for leaf in get_leafs(graph):
         branch = [leaf]
@@ -942,7 +939,7 @@ def to_numpy(attrs):
 
     Returns
     -------
-    dict
+    attrs : dict
         Updated edge attribute dictionary.
     """
     attrs["xyz"] = np.array(attrs["xyz"], dtype=np.float32)

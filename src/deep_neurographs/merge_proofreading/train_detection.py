@@ -112,12 +112,12 @@ class MergeSiteDataset:
     def init_graph(self, swc_pointer):
         """
         Initialize a SkeletonGraph built from SWC files.
-    
+
         Parameters
         ----------
         swc_pointer : any
             Pointer to SWC files to be loaded into graph.
-    
+
         Returns
         -------
         SkeletonGraph
@@ -145,12 +145,12 @@ class MergeSiteDataset:
     def _init_kdtree(self, graphs):
         """
         Build KDTree for each graph contained in a dictionary.
-    
+
         Parameters
         ----------
         graphs : dict
             Dictionary mapping brain IDs to SkeletonGraph instances.
-    
+
         Returns
         -------
         dict
@@ -160,6 +160,21 @@ class MergeSiteDataset:
             graph.init_kdtree()
 
     def load_merge_graphs(self, brain_id, swc_pointer):
+        """
+        Loads and processes fragments containing merge mistakes for a given
+        brain sample, then loads them into "merge_graphs" attribute.
+
+        Parameters
+        ----------
+        brain_id : str
+            Unique identifier for the whole-brain dataset.
+        swc_pointer : any
+            Pointer to SWC files to be loaded into graph.
+
+        Returns
+        -------
+        None
+        """
         # Load graphs
         graph = self.init_graph(swc_pointer)
 
@@ -178,39 +193,61 @@ class MergeSiteDataset:
         self.merge_graphs[brain_id] = graph
 
     def load_gt_graphs(self, brain_id, img_path, swc_pointer):
+        """
+        Loads and processes ground truth tracings and image for a given brain
+        sample, then loads them into "gt_graphs" and "img_readers" attributes.
+
+        Parameters
+        ----------
+        brain_id : str
+            Unique identifier for the whole-brain dataset.
+        swc_pointer : any
+            Pointer to SWC files to be loaded into graph.
+
+        Returns
+        -------
+        None
+        """
         self.img_readers[brain_id] = img_util.init_reader(img_path)
         self.gt_graphs[brain_id] = self.init_graph(swc_pointer)
 
     # --- Get Examples ---
-    def __getitem__(self, idx, use_random_sites, use_transform):
+    def __getitem__(self, idx, use_transform):
         # Extract site
-        brain_id, graph, node, is_positive = self.get_site(idx, use_random_sites)
+        if idx is None:
+            brain_id, graph, node, is_positive = self.get_random_site()
+        else:
+            brain_id, graph, node, is_positive = self.get_site(idx)
         xyz = graph.node_xyz[node]
         voxel = img_util.to_voxels(xyz, self.anisotropy, self.multiscale)
 
         # Extract subgraph and image patches centered at site
         subgraph = graph.get_rooted_subgraph(node, self.context_radius)
-        img_patch = self.img_readers[brain_id].read(voxel, self.patch_shape)
-        img_patch = img_util.normalize(img_patch)
+        img_patch = self.get_img_patch(brain_id, voxel)
         label_patch = self.get_label_mask(subgraph)
-        patches = np.stack([img_patch, label_patch], axis=0)
+        try:
+            patches = np.stack([img_patch, label_patch], axis=0)
+        except Exception as e:
+            print("Line 232 Failed -", e)
+            print(brain_id, voxel, img_patch.shape, label_patch.shape)
+            stop
 
-        # Apply image augmentation
+        # Apply image augmentation (if applicable)
         if use_transform:
             _, patches = self.transform(idx, patches)
         return patches, subgraph, int(is_positive)
 
-    def get_site(self, idx, use_random_sites):
+    def get_site(self, idx):
+        # Extract graph
         brain_id = self.merge_sites_df["brain_id"].iloc[idx]
-        is_positive = np.random.random() > 0.5
+        is_positive = idx > 0
         if is_positive:
             graph = self.merge_graphs[brain_id]
         else:
-            if np.random.random() > 0.5 and use_random_sites:
-                return self.get_random_site()
-            else:
-                graph = self.gt_graphs[brain_id]
-        xyz = self.merge_sites_df["xyz"].iloc[idx]
+            graph = self.gt_graphs[brain_id]
+
+        # Extract site info
+        xyz = self.merge_sites_df["xyz"].iloc[abs(idx)]
         node = graph.query_node(xyz)
         return brain_id, graph, node, is_positive
 
@@ -219,6 +256,10 @@ class MergeSiteDataset:
         graph = self.gt_graphs[brain_id]
         node = np.random.randint(0, graph.number_of_nodes())
         return brain_id, graph, node, False
+
+    def get_img_patch(self, brain_id, center):
+        img_patch = self.img_readers[brain_id].read(center, self.patch_shape)
+        return img_util.normalize(img_patch)
 
     def get_label_mask(self, subgraph):
         # Initializations
@@ -238,13 +279,28 @@ class MergeSiteDataset:
 
     # --- Helpers ---
     def __len__(self):
-        return len(self.merge_sites_df)
+        return 2 * len(self.merge_sites_df) - 1
 
 
 class MergeSiteDataloader:
     """
     DataLoader that uses multithreading to read image patches from the cloud
     to form batches.
+
+    Attributes
+    ----------
+    batch_size : int
+        Number of examples in each batch.
+    dataset : MergeSiteDataset
+        Dataset containing merge sites to be loaded during training.
+    idxs : List[int]
+        Example indexes to load from "dataset". Note: "dataset" contains both
+        train and validation data.
+    use_random_sites : bool
+        Indication of whether to use random non-merge sites sampled from
+        ground tracings during training.
+    use_transform : bool
+        Indication of whether to use data augmentation during training.
     """
 
     def __init__(
@@ -255,47 +311,86 @@ class MergeSiteDataloader:
         use_random_sites=False,
         use_transform=False
     ):
+        """
+        Instantiates MergeSiteDataloader object.
+
+        Parameters
+        ----------
+        dataset : MergeSiteDataset
+            Dataset containing merge sites to be loaded during training.
+        idxs : List[int]
+            Example indexes to load from "dataset". Note: "dataset" contains
+            both train and validation data.
+        batch_size : int, optional
+            Number of examples in each batch. Default is 32.
+        use_random_sites : bool, optional
+            Indication of whether to use random non-merge sites sampled from
+            ground tracings during training. Default is False.
+        use_transform : bool, optional
+            Indication of whether to use data augmentation during training.
+            Default is False.
+
+        Returns
+        -------
+        None
+        """
         # Instance attributes
         self.batch_size = batch_size
         self.dataset = dataset
-        self.idxs = idxs
+        self.idxs = self._load_idxs(idxs)
         self.use_random_sites = use_random_sites
         self.use_transform = use_transform
 
     def __iter__(self):
+        """
+        Generates batches of examples used during training and validation.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        iterator
+            Generates batch of examples used during training and validation.
+        """
         random.shuffle(self.idxs)
-        for start_idx in range(0, len(self.idxs), self.batch_size):
-            yield self._load_batch(start_idx)
+        for i_start in range(0, len(self.idxs), self.batch_size):
+            yield self._load_batch(i_start)
 
-    def _load_batch(self, start_idx):
-        # Compute batch size
-        n_remaining_examples = len(self.idxs) - start_idx
-        batch_size = min(self.batch_size, n_remaining_examples)
-
+    def _load_batch(self, i_start):
         # Generate batch
+        batch_size = min(self.batch_size, len(self.idxs) - i_start)
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
-            for idx_shift in range(batch_size):
-                idx = start_idx + idx_shift
+            for i_offset in range(batch_size):
+                # Get idx
+                idx = self.idxs[i_start + i_offset]
+                if idx < 0 and self.use_random_sites:
+                    idx = None if np.random.random() > 0.5 else idx
+
+                # Submit job
                 threads.append(
                     executor.submit(
-                        self.dataset.__getitem__,
-                        idx,
-                        self.use_random_sites,
-                        self.use_transform
+                        self.dataset.__getitem__, idx, self.use_transform
                     )
                 )
 
             # Process results
             patch_shape = (batch_size, 2,) + self.dataset.patch_shape
-            patches = np.zeros(patch_shape, dtype=np.float32)
-            labels = np.zeros((batch_size, 1), dtype=np.float32)
+            patches = np.empty(patch_shape, dtype=np.float32)
+            labels = np.empty((batch_size, 1), dtype=np.float32)
             for i, thread in enumerate(as_completed(threads)):
                 patch, _, label = thread.result()
                 patches[i] = patch
                 labels[i] = label
         return ml_util.to_tensor(patches), ml_util.to_tensor(labels)
+
+    def _load_idxs(self, idxs):
+        negative_idxs = -np.arange(0, len(idxs))
+        idxs.extend(negative_idxs.tolist())
+        return idxs
 
 
 # -- Helpers --

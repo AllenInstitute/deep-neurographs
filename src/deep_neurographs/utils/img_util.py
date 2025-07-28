@@ -1,5 +1,5 @@
 """
-Created on Sat May 9 11:00:00 2024
+Created on Fri May 8 11:00:00 2024
 
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
@@ -28,12 +28,14 @@ class ImageReader(ABC):
 
     def __init__(self, img_path):
         """
-        Class constructor of image reader.
+        Instantiates ImageReader object.
 
         Parameters
         ----------
         img_path : str
             Path to image.
+        is_segmentation : bool, optional
+            Indication of whether image is a segmentation.
 
         Returns
         -------
@@ -59,54 +61,24 @@ class ImageReader(ABC):
         """
         pass
 
-    def read(self, voxel, shape, from_center=True):
+    def read(self, center, shape):
         """
         Reads a patch from an image given a voxel coordinate and patch shape.
 
         Parameters
         ----------
-        voxel : Tuple[int]
-            Voxel coordinate that is either the center or top-left-front
-            corner of the image patch to be read.
+        center : Tuple[int]
+            Center of image patch to be read.
         shape : Tuple[int]
-            Shape of the image patch to be read.
-        from_center : bool, optional
-            Indication of whether "voxel" is the center or top-left-front
-            corner of the image patch to be read. Default is True.
+            Shape of image patch to be read.
 
         Returns
         -------
         numpy.ndarray
             Image patch.
         """
-        s, e = get_start_end(voxel, shape, from_center=from_center)
-        if len(self.shape()) == 3:
-            return self.img[s[0]: e[0], s[1]: e[1], s[2]: e[2]]
-        elif len(self.shape()) == 5:
-            return self.img[0, 0, s[0]: e[0], s[1]: e[1], s[2]: e[2]]
-        else:
-            raise ValueError(f"Unsupported image shape: {self.shape()}")
-
-    def read_with_bbox(self, bbox):
-        """
-        Reads the image patch defined by a given bounding box.
-
-        Parameters
-        ----------
-        bbox : dict
-            Dictionary that contains min and max coordinates of a bounding
-            box.
-
-        Returns
-        -------
-        numpy.ndarray
-            Image patch.
-        """
-        shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
-        try:
-            return self.read(bbox["min"], shape, from_center=False)
-        except Exception:
-            return np.ones(shape)
+        s = get_slices(center, shape)
+        return self.img[s] if self.img.ndim == 3 else self.img[(0, 0, *s)]
 
     def read_voxel(self, voxel, thread_id=None):
         """
@@ -125,24 +97,6 @@ class ImageReader(ABC):
             Intensity value at voxel.
         """
         return thread_id, self.img[voxel]
-
-    def read_profile(self, spec):
-        """
-        Reads an intensity profile from an image (i.e. image profile).
-
-        Parameters
-        ----------
-        spec : dict
-            Dictionary with the bounding box of the image patch to be read and
-            voxel coordinates of the profile path.
-
-        Returns
-        -------
-        List[float]
-            Image profile.
-        """
-        img_patch = normalize(self.read_with_bbox(spec["bbox"]))
-        return [img_patch[v] for v in map(tuple, spec["profile_path"])]
 
     def shape(self):
         """
@@ -163,7 +117,6 @@ class ImageReader(ABC):
 class TensorStoreReader(ImageReader):
     """
     Class that reads an image with TensorStore library.
-
     """
 
     def __init__(self, img_path):
@@ -214,6 +167,7 @@ class TensorStoreReader(ImageReader):
         -------
         None
         """
+        # Load image
         self.img = ts.open(
             {
                 "driver": self.driver,
@@ -230,6 +184,8 @@ class TensorStoreReader(ImageReader):
                 "recheck_cached_data": "open",
             }
         ).result()
+
+        # Check whether to permute axes
         if self.driver == "neuroglancer_precomputed":
             self.img = self.img[ts.d["channel"][0]]
             self.img = self.img[ts.d[0].transpose[2]]
@@ -238,20 +194,16 @@ class TensorStoreReader(ImageReader):
             self.img = self.img[ts.d[0].transpose[2]]
             self.img = self.img[ts.d[0].transpose[1]]
 
-    def read(self, voxel, shape, from_center=True):
+    def read(self, center, shape):
         """
         Reads a patch from an image given a voxel coordinate and patch shape.
 
         Parameters
         ----------
-        voxel : Tuple[int]
-            Voxel coordinate that is either the center or top-left-front
-            corner of the image patch to be read.
+        center : Tuple[int]
+            Center of image patch to be read.
         shape : Tuple[int]
-            Shape of the image patch to be read.
-        from_center : bool, optional
-            Indication of whether "voxel" is the center or top-left-front
-            corner of the image patch to be read. Default is True.
+            Shape of image patch to be read.
 
         Returns
         -------
@@ -259,10 +211,9 @@ class TensorStoreReader(ImageReader):
             Image patch.
         """
         try:
-            img_patch = super().read(voxel, shape, from_center)
-            return img_patch.read().result()
+            return super().read(center, shape).read().result()
         except Exception:
-            print(f"Unable to read from image patch at{voxel}!")
+            print(f"Unable to read from image patch at {center}!")
             return np.ones(shape)
 
     def read_voxel(self, voxel, thread_id):
@@ -319,6 +270,7 @@ class ZarrReader(ImageReader):
         """
         store = s3fs.S3Map(root=self.img_path, s3=s3fs.S3FileSystem(anon=True))
         self.img = zarr.open(store, mode="r")
+        assert self.img.ndim in (3, 5), "Invalid Smage Shape!"
 
 
 def init_reader(img_path):
@@ -335,149 +287,10 @@ def init_reader(img_path):
     ImageReader
         Image reader.
     """
-    if _is_s3_path(img_path):
+    if img_path.startswith("s3://"):
         return ZarrReader(img_path)
     else:
         return TensorStoreReader(img_path)
-
-
-def get_start_end(voxel, shape, from_center=True):
-    """
-    Gets the start and end indices of the chunk to be read.
-
-    Parameters
-    ----------
-    voxel : tuple
-        Voxel coordinate that is either the center or top-left-front corner of
-        the image patch to be read.
-    shape : Tuple[int]
-        Shape of the image patch to be read.
-    from_center : bool, optional
-        Indication of whether "voxel" is the center or top-left-front corner
-        of the image patch to be read. Default is True.
-
-    Return
-    ------
-    Tuple[List[int]]
-        Start and end indices of the image patch to be read.
-    """
-    if from_center:
-        start = [voxel[i] - shape[i] // 2 for i in range(3)]
-        end = [voxel[i] + shape[i] // 2 for i in range(3)]
-    else:
-        start = voxel
-        end = [voxel[i] + shape[i] for i in range(3)]
-    return start, end
-
-
-def get_profile(img_reader, spec, profile_id):
-    """
-    Gets the image profile for a given proposal.
-
-    Parameters
-    ----------
-    img_reader : ImageReader
-        Image reader.
-    spec : dict
-        Dictionary that contains the image bounding box and coordinates of the
-        image profile path.
-    profile_id : Frozenset[int]
-        Identifier of profile.
-
-    Returns
-    -------
-    dict
-        Dictionary that maps an id (e.g. node, edge, or proposal) to its image
-        profile.
-    """
-    profile = img_reader.read_profile(spec)
-    avg, std = util.get_avg_std(profile)
-    profile.extend([avg, std])
-    return {profile_id: profile}
-
-
-def _is_gcs_path(img_path):
-    """
-    Checks whether image is stored in a GCS bucket.
-
-    Parameters
-    ----------
-    img_path : str
-        Path to image.
-
-    Returns
-    -------
-    bool
-        Indication of whether image is stored in a GCS bucket.
-    """
-    return img_path.startswith("gs://")
-
-
-def _is_s3_path(img_path):
-    """
-    Checks whether image is stored in an S3 bucket.
-
-    Parameters
-    ----------
-    img_path : str
-        Path to image.
-
-    Returns
-    -------
-    bool
-        Indication of whether image is stored in an S3 bucket.
-    """
-    return img_path.startswith("s3://")
-
-
-# --- Coordinate Conversions ---
-def to_physical(voxel, anisotropy, shift=(0, 0, 0)):
-    """
-    Converts a voxel coordinate to a physical coordinate by applying the
-    anisotropy scaling factors.
-
-    Parameters
-    ----------
-    voxel : ArrayLike
-        Voxel coordinate to be converted.
-    anisotropy : ArrayLike
-        Image to physical coordinates scaling factors to account for the
-        anisotropy of the microscope.
-    shift : Tuple[int], optional
-        Shift to be applied to "voxel". Default is (0, 0, 0).
-
-    Returns
-    -------
-    Tuple[float]
-        Physical coordinate.
-    """
-    voxel = voxel[::-1]
-    return tuple([voxel[i] * anisotropy[i] - shift[i] for i in range(3)])
-
-
-def to_voxels(xyz, anisotropy, multiscale=0):
-    """
-    Converts coordinate from a physical to voxel space.
-
-    Parameters
-    ----------
-    xyz : ArrayLike
-        Physical coordiante to be converted.
-    anisotropy : ArrayLike
-        Image to physical coordinates scaling factors to account for the
-        anisotropy of the microscope.
-    multiscale : int, optional
-        Level in the image pyramid that the voxel coordinate must index into.
-        Default is 0.
-
-    Returns
-    -------
-    Tuple[int]
-        Voxel coordinate.
-    """
-    scaling_factor = 1.0 / 2 ** multiscale
-    voxel = [int(scaling_factor * xyz[i] / anisotropy[i]) for i in range(3)]
-    return tuple(voxel[::-1])
 
 
 # --- Helpers ---
@@ -556,59 +369,6 @@ def get_minimal_bbox(voxels, buffer=0):
     return bbox
 
 
-def is_contained(voxel, shape, buffer=0):
-    """
-    Check whether a voxel is within bounds of a given shape, considering a
-    buffer.
-
-    Parameters
-    ----------
-    voxel : Tuple[int]
-        Voxel coordinates to be checked.
-    shape : tuple of int
-        Shape of image volume.
-    buffer : int, optional
-        Number of voxels to pad the bounds by when checking containment.
-        Default 0.
-
-    Returns
-    -------
-    bool
-        True if the voxel is within bounds (with buffer) on all axes, False
-        otherwise.
-    """
-    contained_above = all(0 <= v + buffer < s for v, s in zip(voxel, shape))
-    contained_below = all(0 <= v - buffer < s for v, s in zip(voxel, shape))
-    return contained_above and contained_below
-
-
-def plot_mips(img, vmax=None):
-    """
-    Plots the Maximum Intensity Projections (MIPs) of a 3D image along the XY,
-    XZ, and YZ axes.
-
-    Parameters
-    ----------
-    img : numpy.ndarray
-        Input 3D image to generate MIPs from.
-
-    Returns
-    -------
-    None
-    """
-    vmax = vmax or np.percentile(img, 99.9)
-    fig, axs = plt.subplots(1, 3, figsize=(10, 4))
-    axs_names = ["XY", "XZ", "YZ"]
-    for i in range(3):
-        mip = np.max(img, axis=i)
-        axs[i].imshow(mip, vmax=vmax)
-        axs[i].set_title(axs_names[i], fontsize=16)
-        axs[i].set_xticks([])
-        axs[i].set_yticks([])
-    plt.tight_layout()
-    plt.show()
-
-
 def get_neighbors(voxel, shape):
     """
     Gets the neighbors of a given voxel coordinate.
@@ -644,8 +404,53 @@ def get_neighbors(voxel, shape):
                 # Check if the neighbor is within the bounds of the 3D image
                 if 0 <= nx < depth and 0 <= ny < height and 0 <= nz < width:
                     neighbors.append((nx, ny, nz))
-
     return neighbors
+
+
+def get_slices(center, shape):
+    """
+    Gets the start and end indices of the chunk to be read.
+
+    Parameters
+    ----------
+    center : tuple
+        Center of image patch to be read.
+    shape : Tuple[int]
+        Shape of image patch to be read.
+
+    Return
+    ------
+    Tuple[slice]
+        Slice objects used to index into the image.
+    """
+    start = [c - d // 2 for c, d in zip(center, shape)]
+    return tuple(slice(s, s + d) for s, d in zip(start, shape))
+
+
+def is_contained(voxel, shape, buffer=0):
+    """
+    Check whether a voxel is within bounds of a given shape, considering a
+    buffer.
+
+    Parameters
+    ----------
+    voxel : Tuple[int]
+        Voxel coordinates to be checked.
+    shape : tuple of int
+        Shape of image volume.
+    buffer : int, optional
+        Number of voxels to pad the bounds by when checking containment.
+        Default 0.
+
+    Returns
+    -------
+    bool
+        True if the voxel is within bounds (with buffer) on all axes, False
+        otherwise.
+    """
+    contained_above = all(0 <= v + buffer < s for v, s in zip(voxel, shape))
+    contained_below = all(0 <= v - buffer < s for v, s in zip(voxel, shape))
+    return contained_above and contained_below
 
 
 def normalize(img):
@@ -663,8 +468,39 @@ def normalize(img):
     numpy.ndarray
         Normalized image.
     """
-    mn, mx = np.percentile(img, 5), np.percentile(img, 99.9)
-    return (img - mn) / np.maximum(mx, 1)
+    try:
+        mn, mx = np.percentile(img, [5, 99.9])
+        return (img - mn) / np.maximum(mx, 1)
+    except Exception as e:
+        print("Image Normalization Failed:", e)
+        return np.zeros(img.shape)
+
+
+def plot_mips(img, vmax=None):
+    """
+    Plots the Maximum Intensity Projections (MIPs) of a 3D image along the XY,
+    XZ, and YZ axes.
+
+    Parameters
+    ----------
+    img : numpy.ndarray
+        Input 3D image to generate MIPs from.
+
+    Returns
+    -------
+    None
+    """
+    vmax = vmax or np.percentile(img, 99.9)
+    fig, axs = plt.subplots(1, 3, figsize=(10, 4))
+    axs_names = ["XY", "XZ", "YZ"]
+    for i in range(3):
+        mip = np.max(img, axis=i)
+        axs[i].imshow(mip, vmax=vmax)
+        axs[i].set_title(axs_names[i], fontsize=16)
+        axs[i].set_xticks([])
+        axs[i].set_yticks([])
+    plt.tight_layout()
+    plt.show()
 
 
 def resize(img, new_shape):
@@ -687,3 +523,52 @@ def resize(img, new_shape):
     zoom_factors = np.array(new_shape) / np.array([depth, height, width])
     resized_img = zoom(img, zoom_factors, order=1)
     return resized_img
+
+
+def to_physical(voxel, anisotropy, shift=(0, 0, 0)):
+    """
+    Converts a voxel coordinate to a physical coordinate by applying the
+    anisotropy scaling factors.
+
+    Parameters
+    ----------
+    voxel : ArrayLike
+        Voxel coordinate to be converted.
+    anisotropy : ArrayLike
+        Image to physical coordinates scaling factors to account for the
+        anisotropy of the microscope.
+    shift : Tuple[int], optional
+        Shift to be applied to "voxel". Default is (0, 0, 0).
+
+    Returns
+    -------
+    Tuple[float]
+        Physical coordinate.
+    """
+    voxel = voxel[::-1]
+    return tuple([voxel[i] * anisotropy[i] - shift[i] for i in range(3)])
+
+
+def to_voxels(xyz, anisotropy, multiscale=0):
+    """
+    Converts coordinate from a physical to voxel space.
+
+    Parameters
+    ----------
+    xyz : ArrayLike
+        Physical coordiante to be converted.
+    anisotropy : ArrayLike
+        Image to physical coordinates scaling factors to account for the
+        anisotropy of the microscope.
+    multiscale : int, optional
+        Level in the image pyramid that the voxel coordinate must index into.
+        Default is 0.
+
+    Returns
+    -------
+    Tuple[int]
+        Voxel coordinate.
+    """
+    scaling_factor = 1.0 / 2 ** multiscale
+    voxel = [int(scaling_factor * xyz[i] / anisotropy[i]) for i in range(3)]
+    return tuple(voxel[::-1])
