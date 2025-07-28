@@ -225,12 +225,14 @@ class MergeSiteDataset:
         subgraph = graph.get_rooted_subgraph(node, self.context_radius)
         img_patch = self.get_img_patch(brain_id, voxel)
         label_patch = self.get_label_mask(subgraph)
+
+        # Stack image channels
         try:
             patches = np.stack([img_patch, label_patch], axis=0)
-        except Exception as e:
-            print("Line 232 Failed -", e)
-            print(brain_id, voxel, img_patch.shape, label_patch.shape)
-            stop
+        except ValueError:
+            img_patch = img_util.pad_to_shape(img_patch, self.patch_shape)
+            patches = np.stack([img_patch, label_patch], axis=0)
+            print("Stack Channels Failed -", brain_id, voxel, img_patch.shape)
 
         # Apply image augmentation (if applicable)
         if use_transform:
