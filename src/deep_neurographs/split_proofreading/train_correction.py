@@ -31,9 +31,9 @@ import random
 import torch
 
 from deep_neurographs.proposal_graph import ProposalGraph
-from deep_neurographs.split_correction import datasets
-from deep_neurographs.split_correction.augmentation import ImageTransforms
-from deep_neurographs.split_correction.feature_generation import (
+from deep_neurographs.machine_learning.augmentation import ImageTransforms
+from deep_neurographs.split_proofreading import datasets
+from deep_neurographs.split_proofreading.feature_generation import (
     FeatureGenerator
 )
 from deep_neurographs.utils import ml_util, util
@@ -393,7 +393,7 @@ class GraphDataset:
         )
         batch = {
             "proposals": self.graphs[key].list_proposals(),
-            "graph": self.graphs[key].copy_graph()
+            "graph": self.graphs[key]
         }
 
         # Main

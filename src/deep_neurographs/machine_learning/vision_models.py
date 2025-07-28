@@ -53,18 +53,22 @@ class CNN3D(nn.Module):
         self.conv2b = self._init_conv_layer(32, 32, 3, dropout=dropout)
 
         # Layer 3
-        self.conv3 = self._init_conv_layer(32, 64, 3, dropout=dropout)
+        self.conv3a = self._init_conv_layer(32, 64, 3, dropout=dropout)
+        self.conv3b = self._init_conv_layer(64, 64, 3, dropout=dropout)
 
         # Layer 4
         self.conv4 = self._init_conv_layer(64, 128, 3, dropout=dropout)
 
         # Layer 5
         self.conv5 = self._init_conv_layer(128, 256, 3, dropout=dropout)
+        self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
 
         # Output layer
-        self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
-        flattened_size = self._get_flattened_size(patch_shape)
-        self.output = init_mlp(flattened_size, output_dim)
+        flat_size = self._get_flattened_size(patch_shape)
+        self.output = nn.Sequential(
+            init_mlp(flat_size, flat_size * 2, flat_size // 4),
+            init_mlp(flat_size // 4, flat_size, output_dim),
+        )
 
         # Initialize weights
         self.apply(self.init_weights)
@@ -127,7 +131,7 @@ class CNN3D(nn.Module):
             x = torch.zeros(1, 2, *patch_shape)
             x = self.pool(self.conv1b(self.conv1a(x)))
             x = self.pool(self.conv2b(self.conv2a(x)))
-            x = self.pool(self.conv3(x))
+            x = self.pool(self.conv3b(self.conv3a(x)))
             x = self.pool(self.conv4(x))
             x = self.pool(self.conv5(x))
             return x.view(1, -1).size(1)
@@ -177,7 +181,7 @@ class CNN3D(nn.Module):
         # Convolutional layers
         x = self.pool(self.conv1b(self.conv1a(x)))
         x = self.pool(self.conv2b(self.conv2a(x)))
-        x = self.pool(self.conv3(x))
+        x = self.pool(self.conv3b(self.conv3a(x)))
         x = self.pool(self.conv4(x))
         x = self.pool(self.conv5(x))
 
@@ -290,7 +294,7 @@ class TransformerEncoderBlock(nn.Module):
 
 
 # --- Helpers ---
-def init_mlp(input_dim, output_dim, dropout=0.1):
+def init_mlp(input_dim, hidden_dim, output_dim, dropout=0.1):
     """
     Initializes a multi-layer perceptron (MLP).
 
@@ -309,12 +313,9 @@ def init_mlp(input_dim, output_dim, dropout=0.1):
         Multi-layer perception network.
     """
     mlp = nn.Sequential(
-        nn.Linear(input_dim, 4 * output_dim),
-        nn.LeakyReLU(),
+        nn.Linear(input_dim, hidden_dim),
+        nn.GELU(),
         nn.Dropout(p=dropout),
-        nn.Linear(4 * output_dim, 2 * output_dim),
-        nn.LeakyReLU(),
-        nn.Dropout(p=dropout),
-        nn.Linear(2 * output_dim, output_dim),
+        nn.Linear(hidden_dim, output_dim)
     )
     return mlp

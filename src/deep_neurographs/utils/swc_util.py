@@ -5,11 +5,9 @@ Created on Wed June 5 16:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 
-Routines for working with SWC files.
-
-An SWC file is a text-based file format used to represent the directed
-graphical structure of a neuron. It contains a series of nodes such that each
-has the following attributes:
+Routines for working with SWC files. An SWC file is a text-based file format
+used to represent the directed graphical structure of a neuron. It contains a
+series of nodes such that each has the following attributes:
     "id" (int): node ID
     "type" (int): node type (e.g. soma, axon, dendrite)
     "x" (float): x coordinate
@@ -43,7 +41,7 @@ from deep_neurographs.utils import util
 class Reader:
     """
     Class that reads SWC files stored in a (1) local directory, (2) local ZIP
-    archive, or (3) GCS directory of ZIP archives.
+    archive, or (3) GCS directory, (4) GCS directory of ZIP archives.
     """
 
     def __init__(self, anisotropy=(1.0, 1.0, 1.0), min_size=0):
@@ -83,7 +81,7 @@ class Reader:
 
         Returns
         -------
-        List[dict]
+        Deque[dict]
             List of dictionaries whose keys and values are the attribute names
             and values from the SWC files. Each dictionary contains the
             following items:
@@ -285,7 +283,6 @@ class Reader:
         Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
-
         """
         # List filenames
         swc_paths = util.list_gcs_filenames(gcs_dict, ".swc")
@@ -312,10 +309,9 @@ class Reader:
 
         Returns
         -------
-        Dequeue[dict]
+        swc_dicts : Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
-
         """
         pbar = tqdm(total=len(swc_paths), desc="Read SWCs")
         with ThreadPoolExecutor() as executor:
@@ -347,10 +343,9 @@ class Reader:
 
         Returns
         -------
-        dict
+        swc_dict : dict
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
-
         """
         # Initialize cloud reader
         client = storage.Client()
@@ -553,7 +548,7 @@ def get_segment_id(swc_name):
 
 def get_swc_name(path):
     """
-    Gets name of the SWC file at "path".
+    Gets name of the SWC file loacted at the given path, minus the extension.
 
     Parameters
     ----------
@@ -562,8 +557,8 @@ def get_swc_name(path):
 
     Returns
     -------
-    str
-        SWC filename.
+    name : str
+        Name of the SWC file, minus the extension.
     """
     filename = os.path.basename(path)
     name, ext = os.path.splitext(filename)
@@ -584,7 +579,7 @@ def to_graph(swc_dict, set_attrs=False):
 
     Returns
     -------
-    networkx.Graph
+    graph : networkx.Graph
         Graph built from an SWC file.
     """
     # Reindex nodes: map swc ids to 0...N-1
