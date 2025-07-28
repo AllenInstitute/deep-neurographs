@@ -63,7 +63,7 @@ class ImageReader(ABC):
 
     def read(self, center, shape):
         """
-        Reads a patch from an image given a voxel coordinate and patch shape.
+        Reads an image patch center at the given voxel coordinate.
 
         Parameters
         ----------
@@ -121,7 +121,7 @@ class TensorStoreReader(ImageReader):
 
     def __init__(self, img_path):
         """
-        Constructs a TensorStore image reader.
+        Instantiates TensorStoreReader object.
 
         Parameters
         ----------
@@ -196,7 +196,7 @@ class TensorStoreReader(ImageReader):
 
     def read(self, center, shape):
         """
-        Reads a patch from an image given a voxel coordinate and patch shape.
+        Reads an image patch center at the given voxel coordinate.
 
         Parameters
         ----------
@@ -213,7 +213,7 @@ class TensorStoreReader(ImageReader):
         try:
             return super().read(center, shape).read().result()
         except Exception:
-            print(f"Unable to read from image patch at {center}!")
+            print(f"Unable to read image patch at {center} w/ shape {shape}!")
             return np.ones(shape)
 
     def read_voxel(self, voxel, thread_id):
@@ -243,7 +243,7 @@ class ZarrReader(ImageReader):
 
     def __init__(self, img_path):
         """
-        Constructs a Zarr image reader.
+        Instantiates ZarrReader object.
 
         Parameters
         ----------
@@ -270,7 +270,7 @@ class ZarrReader(ImageReader):
         """
         store = s3fs.S3Map(root=self.img_path, s3=s3fs.S3FileSystem(anon=True))
         self.img = zarr.open(store, mode="r")
-        assert self.img.ndim in (3, 5), "Invalid Smage Shape!"
+        assert self.img.ndim in (3, 5), f"Invalid Img Shape {self.img.shape}!"
 
 
 def init_reader(img_path):
@@ -474,6 +474,30 @@ def normalize(img):
     except Exception as e:
         print("Image Normalization Failed:", e)
         return np.zeros(img.shape)
+
+
+def pad_to_shape(img, target_shape, pad_value=0):
+    """
+    Pads a NumPy image array to the specified target shape.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        Input image with shape (D, H, W).
+    target_shape : tuple of int
+        Desired output shape
+    pad_value : float, optional
+        Value to use for padding. Default is 0.
+
+    Returns
+    -------
+    np.ndarray
+        Padded image with shape equal to target_shape.
+    """
+    pads = list()
+    for s, t in zip(img.shape, target_shape):
+        pads.append(((t - s) // 2, (t - s + 1) // 2))
+    return np.pad(img, pads, mode='constant', constant_values=pad_value)
 
 
 def plot_mips(img, vmax=None):
