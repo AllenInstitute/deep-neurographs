@@ -23,7 +23,7 @@ class CNN3D(nn.Module):
     patch.
     """
 
-    def __init__(self, patch_shape, output_dim, dropout=0.1):
+    def __init__(self, patch_shape, output_dim=1, dropout=0.1):
         """
         Constructs a ConvNet object.
 
@@ -31,8 +31,8 @@ class CNN3D(nn.Module):
         ----------
         patch_shape : Tuple[int]
             Shape of input image patch.
-        output_dim : int
-            Dimension of output.
+        output_dim : int, optional
+            Dimension of output. Default is 1.
         dropout : float, optional
             Fraction of values to randomly drop during training. Default is
             0.1.
