@@ -11,6 +11,7 @@ neural networks that detect merge errors.
 
 from concurrent.futures import as_completed, ThreadPoolExecutor
 
+import networkx as nx
 import numpy as np
 import random
 
@@ -281,7 +282,13 @@ class MergeSiteDataset:
 
     # --- Helpers ---
     def __len__(self):
-        return 2 * len(self.merge_sites_df) - 1
+        return 2 * len(self.merge_sites_df)
+
+    def count_fragments(self):
+        cnt = 0
+        for graph in self.merge_graphs.values():
+            cnt += nx.number_connected_components(graph)
+        return cnt
 
 
 class MergeSiteDataloader:

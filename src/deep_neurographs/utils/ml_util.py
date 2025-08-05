@@ -16,14 +16,76 @@ import numpy as np
 import torch
 
 from deep_neurographs.utils import util
-from deep_neurographs.split_proofreading import feature_generation
-from deep_neurographs.split_proofreading.models import (
-    HGAT,
-    MultiModalHGAT,
-)
 
 GNN_DEPTH = 2
 
+
+# --- GPU Scheduler ---
+import torch
+from multiprocessing import Process, Queue
+from queue import Empty
+
+class GPUScheduler:
+    def __init__(self, model_path, num_gpus):
+        self.model_path = model_path
+        self.num_gpus = num_gpus
+        self.job_queues = []
+        self.return_queues = []
+        self.processes = []
+        self._init_workers()
+
+    def _init_workers(self):
+        for gpu_id in range(self.num_gpus):
+            job_q = Queue()
+            ret_q = Queue()
+            p = Process(
+                target=self._gpu_worker,
+                args=(gpu_id, self.model_path, job_q, ret_q),
+            )
+            p.start()
+            self.job_queues.append(job_q)
+            self.return_queues.append(ret_q)
+            self.processes.append(p)
+
+    def _gpu_worker(self, gpu_id, model_path, job_queue, return_queue):
+        device = torch.device(f"cuda:{gpu_id}")
+        model = torch.load(model_path, map_location=device)
+        model.eval()
+        while True:
+            job = job_queue.get()
+            if job is None:
+                break  # Sentinel to exit
+            batch, job_id = job
+            with torch.no_grad():
+                batch = batch.to(device)
+                preds = model(batch)
+                return_queue.put((job_id, preds.cpu()))
+
+    def submit(self, batch, job_id):
+        """Submit a batch to the next GPU in round-robin fashion."""
+        gpu_id = job_id % self.num_gpus
+        self.job_queues[gpu_id].put((batch, job_id))
+
+    def get_result(self, job_id, timeout=None):
+        """Retrieve results from the return queues."""
+        for q in self.return_queues:
+            try:
+                result_job_id, preds = q.get(timeout=timeout)
+                if result_job_id == job_id:
+                    return preds
+                else:
+                    # Re-enqueue if it's not the one we're looking for
+                    q.put((result_job_id, preds))
+            except Empty:
+                continue
+        return None  # or raise TimeoutError
+
+    def shutdown(self):
+        """Stop all GPU worker processes cleanly."""
+        for q in self.job_queues:
+            q.put(None)
+        for p in self.processes:
+            p.join()
 
 # --- Batch Generation ---
 def get_batch(graph, proposals, batch_size, flagged_proposals=set()):
@@ -124,36 +186,6 @@ def get_inputs(data, device="cpu"):
     return data.x_dict, data.edge_index_dict, data.edge_attr_dict
 
 
-def init_model(is_multimodal, heads_1=2, heads_2=4):
-    """
-    Initialize a HGAT or MultiModalHGAT model based on modality flag.
-
-    Parameters
-    ----------
-    is_multimodal : bool
-        If True, initialize a MultiModalHGAT model; otherwise, use HGAT.
-    heads_1 : int, optional
-        Number of attention heads in the first GAT layer (default is 2).
-    heads_2 : int, optional
-        Number of attention heads in the second GAT layer (default is 4 for
-        multimodal, 2 for unimodal).
-
-    Returns
-    -------
-    torch.nn.Module
-        An initialized instance of HGAT or MultiModalHGAT.
-    """
-    node_dict = feature_generation.get_node_dict()
-    edge_dict = feature_generation.get_edge_dict()
-    if is_multimodal:
-        model = MultiModalHGAT(
-            node_dict, edge_dict, heads_1=heads_1, heads_2=heads_2
-        )
-    else:
-        model = HGAT(node_dict, edge_dict, heads_1=heads_1, heads_2=2)
-    return model
-
-
 def line_graph(edges):
     """
     Initializes a line graph from a list of edges.
@@ -172,6 +204,12 @@ def line_graph(edges):
     graph = nx.Graph()
     graph.add_edges_from(edges)
     return nx.line_graph(graph)
+
+
+def load_model(model, model_path, device="cuda"):
+    model.load_state_dict(torch.load(model_path))
+    model.eval()
+    model.to(device)
 
 
 def to_cpu(tensor, to_numpy=False):

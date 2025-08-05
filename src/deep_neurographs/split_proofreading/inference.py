@@ -46,6 +46,11 @@ from deep_neurographs.split_proofreading import datasets
 from deep_neurographs.split_proofreading.feature_generation import (
     FeatureGenerator,
 )
+from deep_neurographs.split_proofreading import feature_generation
+from deep_neurographs.split_proofreading.models import (
+    HGAT,
+    MultiModalHGAT,
+)
 from deep_neurographs.utils import geometry_util, ml_util, util
 
 
@@ -546,11 +551,9 @@ class InferenceEngine:
         )
 
         # Model
-        self.model = ml_util.init_model(ml_config.is_multimodal)
-        self.model.load_state_dict(torch.load(model_path))
-        self.model.eval()
-        if ml_config.is_multimodal:
-            self.model.to(self.device)
+        device = "cuda" if ml_config.is_multimodal else "cpu"
+        self.model = ml_util.get_model(ml_config.is_multimodal)
+        ml_util.load_model(self.model, model_path, device=device)
 
     def init_dataloader(self):
         if len(self.graph.soma_ids) > 0:
@@ -949,3 +952,34 @@ class SeededGraphDataLoader(GraphDataLoader):
                 # Check if proposal is connected to soma
                 if self.graph.is_soma(i) or self.graph.is_soma(j):
                     batch["soma_proposals"].add(proposal)
+
+
+# --- Helpers ---
+def get_model(is_multimodal, heads_1=2, heads_2=4):
+    """
+    Initialize a HGAT or MultiModalHGAT model based on modality flag.
+
+    Parameters
+    ----------
+    is_multimodal : bool
+        If True, initialize a MultiModalHGAT model; otherwise, use HGAT.
+    heads_1 : int, optional
+        Number of attention heads in the first GAT layer (default is 2).
+    heads_2 : int, optional
+        Number of attention heads in the second GAT layer (default is 4 for
+        multimodal, 2 for unimodal).
+
+    Returns
+    -------
+    torch.nn.Module
+        An initialized instance of HGAT or MultiModalHGAT.
+    """
+    node_dict = feature_generation.get_node_dict()
+    edge_dict = feature_generation.get_edge_dict()
+    if is_multimodal:
+        model = MultiModalHGAT(
+            node_dict, edge_dict, heads_1=heads_1, heads_2=heads_2
+        )
+    else:
+        model = HGAT(node_dict, edge_dict, heads_1=heads_1, heads_2=2)
+    return model
