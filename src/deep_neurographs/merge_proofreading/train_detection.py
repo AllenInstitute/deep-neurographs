@@ -22,7 +22,9 @@ from deep_neurographs.utils import img_util, ml_util, swc_util, util
 
 class MergeSiteDataset:
     """
-    Dataset class for loading and processing merge site data.
+    Dataset class for loading and processing merge site data. The core data
+    structure is the attribute "merge_sites_df" which contains metadata about
+    each merge site.
 
     Attributes
     ----------
