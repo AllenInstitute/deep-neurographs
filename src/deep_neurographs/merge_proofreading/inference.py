@@ -67,7 +67,7 @@ class MergeDetector:
 
     # --- Core routines
     def search_graph(self):
-        # Iterate over dataloader
+        # Iterate over dataset
         detected_merge_sites = list()
         for batch in self.dataset:
             pass
@@ -91,7 +91,7 @@ class IterableGraphDataset(IterableDataset):
         anisotropy=(1.0, 1.0, 1.0),
         batch_size=16,
         prefetch=64,
-        traversal_step=5,
+        traversal_step=10,
     ):
         # Call parent class
         super().__init__()
