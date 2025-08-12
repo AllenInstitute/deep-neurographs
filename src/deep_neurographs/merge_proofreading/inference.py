@@ -7,9 +7,25 @@ Created on Wed August 4 16:00:00 2025
 Code for detecting merge mistakes on skeletons generated from an automated
 image segmentation.
 
+
+---
+        Generates batches by using a DFS to traverse the connected component
+        containing "root". Each batch consists of (1) node ids along a path in
+        the graph and (2) torch tensor of image patches centered at each node.
+
+        Parameters
+        ----------
+        root : int
+            Node ID that represents the starting point of the DFS.
+
+        Returns
+        -------
+        generator
+            Generator that yields batches to be run through a neural network.
 """
 
-from concurrent.futures import as_completed, ProcessPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from torch.utils.data import IterableDataset
 
 import networkx as nx
 import numpy as np
@@ -25,83 +41,144 @@ class MergeDetector:
         graph,
         img_path,
         model,
+        model_path,
         patch_shape,
         anisotropy=(1.0, 1.0, 1.0),
         batch_size=16,
+        prefetch=64,
         remove_detected_sites=False,
         threshold=0.5,
         traversal_step=5,
     ):
         # Instance attributes
         self.graph = graph
-        self.model = model
-        self.patch_shape = patch_shape
-
-        self.anisotropy = anisotropy
-        self.batch_size = batch_size
         self.remove_detected_sites = remove_detected_sites
         self.threshold = threshold
-        self.traversal_step = traversal_step  # not implemented
 
-        # Image reader
-        self.img_reader = img_util.init_reader(img_path)
+        self.dataset = IterableGraphDataset(
+            graph,
+            img_path,
+            patch_shape,
+            anisotropy=anisotropy,
+            batch_size=batch_size,
+            prefetch=prefetch,
+            traversal_step=traversal_step,
+        )
 
-    # --- Core Routines ---
+    # --- Core routines
     def search_graph(self):
-        # Search graphs for merge mistakes
-        with ProcessPoolExecutor(max_workers=16) as executor:
-            #  Assign processes
-            processes = list()
-            visited_components = set()
-            for i in self.graph.get_leafs():
-                component_id = self.graph.node_component_id[i]
-                if component_id not in visited_components:
-                    visited_components.add(component_id)
-                    processes.append(
-                        executor.submit(self.search_component, i)
-                    )
-
-            # Store results
-            detected_merge_sites = list()
-            for process in as_completed(processes):
-                detected_merge_sites.extend(process.result())
-
-        print("# Detected Merges:", len(detected_merge_sites))
+        # Iterate over dataloader
+        detected_merge_sites = list()
+        for batch in self.dataset:
+            pass
 
         # Optionally, remove merge mistakes from graphs
         if self.remove_detected_sites:
             pass
 
-    def search_component(self, root):
-        # Run model to detect merges
-        detected_merge_sites = list()
-        for node_ids, batch in self.generate_batches(root):
-            # --> submit batch to available gpu
-            # --> store locations with prediction above threshold
-            pass
-
-        # Process detected merges - combine nearby sites
-        return detected_merge_sites
-
     def remove_merge_sites(self, detected_merge_sites):
         pass
 
-    # --- Subroutines ---
-    def generate_batches(self, root):
+
+# --- Data Handling ---
+class IterableGraphDataset(IterableDataset):
+
+    def __init__(
+        self,
+        graph,
+        img_path,
+        patch_shape,
+        anisotropy=(1.0, 1.0, 1.0),
+        batch_size=16,
+        prefetch=64,
+        traversal_step=5,
+    ):
+        # Call parent class
+        super().__init__()
+
+        # Instance attributes
+        self.graph = graph
+        self.patch_shape = patch_shape
+
+        self.anisotropy = anisotropy
+        self.batch_size = batch_size
+        self.prefetch = prefetch
+        self.traversal_step = traversal_step  # not implemented
+
+        # Image reader
+        self.img_reader = img_util.init_reader(img_path)
+
+    # --- Core routines ---
+    def __iter__(self):
+        # Subroutines
+        def submit_thread():
+            try:
+                node_ids, patch_centers = next(batch_metadata_iter)
+                thread = executor.submit(self.read_superchunk, patch_centers)
+                pending[thread] = (node_ids, patch_centers)
+            except StopIteration:
+                pass
+
+        # Main
+        batch_metadata_iter = self.generate_batch_metadata()
+        with ThreadPoolExecutor(max_workers=128) as executor:
+            try:
+                # Prefetch batches
+                pending = dict()
+                for _ in range(self.prefetch):
+                    submit_thread()
+
+                # Yield batches
+                while pending:
+                    done, _ = wait(pending.keys(), return_when=FIRST_COMPLETED)
+                    for thread in done:
+                        # Process completed thread
+                        node_ids, patch_centers = pending.pop(thread)
+                        superchunk, offset = thread.result()
+                        patch_centers -= offset
+                        yield self.get_batch(superchunk, patch_centers, node_ids)
+
+                        # Continue submitting threads
+                        submit_thread()
+            finally:
+                pass
+
+    def generate_batch_metadata(self):
         """
-        Generates batches by using a DFS to traverse the connected component
-        containing "root". Each batch consists of (1) node ids along a path in
-        the graph and (2) torch tensor of image patches centered at each node.
+        Generates metadata (node_ids, patch_centers) used to generate batches.
 
         Parameters
         ----------
-        root : int
-            Node ID that represents the starting point of the DFS.
+        None
 
         Returns
         -------
-        generator
-            Generator that yields batches to be run through a neural network.
+        iterator
+            Generator that yields node IDs and patch centers used to generate
+            batches across the whole graph.
+        """
+        visited_ids = set()
+        for i in self.graph.get_leafs():
+            component_id = self.graph.node_component_id[i]
+            if component_id not in visited_ids:
+                visited_ids.add(component_id)
+                yield from self._generate_batch_metadata_for_component(i)
+
+    def _generate_batch_metadata_for_component(self, root):
+        """
+        Generates metadata (node_ids, patch_centers) used to generate batches
+        for the connected component containing the given root node.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        iterator
+            Generator that yields node IDs and patch centers used to generate
+            batches for the connected component containing the given root
+            node.
         """
         node_ids = list()
         patch_centers = list()
@@ -116,9 +193,9 @@ class MergeDetector:
 
             # Check whether to yield batch
             is_node_far = self.graph.dist(root, j) > 512
-            is_batch_full = len(patch_centers) >= self.batch_size
+            is_batch_full = len(patch_centers) == self.batch_size
             if is_node_far or is_batch_full:
-                yield self.get_batch(node_ids, patch_centers)
+                yield node_ids, np.array(patch_centers, dtype=int)
                 node_ids = list()
                 patch_centers = list()
 
@@ -132,21 +209,16 @@ class MergeDetector:
 
         # Yield any remaining nodes after the loop
         if patch_centers:
-            yield self.get_batch(node_ids, patch_centers)
+            yield node_ids, np.array(patch_centers, dtype=int)
 
-    def get_batch(self, node_ids, patch_centers):
-        # Read superchunk
-        patch_centers = np.array(patch_centers, dtype=int)
-        superchunk, offset = self.read_superchunk(patch_centers)
-
-        # Extract patches from superchunk
+    def get_batch(self, superchunk, patch_centers, node_ids):
         batch = np.empty((len(patch_centers), 1,) + self.patch_shape)
         for i, center in enumerate(patch_centers):
-            local_center = (center - offset).astype(int)
-            s = img_util.get_slices(local_center, self.patch_shape)
+            s = img_util.get_slices(center, self.patch_shape)
             batch[i, 0, ...] = superchunk[s]
         return node_ids, torch.tensor(batch, dtype=torch.float)
 
+    # --- Helpers ---
     def read_superchunk(self, patch_centers):
         # Compute bounding box
         buffer = np.array(self.patch_shape) / 2
@@ -157,9 +229,21 @@ class MergeDetector:
         shape = (end - start).astype(int)
         center = (start + shape // 2).astype(int)
         superchunk = img_util.normalize(self.img_reader.read(center, shape))
-        return superchunk, start
+        return superchunk, start.astype(int)
 
-    # --- Helpers ---
-    def get_voxel(self, node_id):
-        xyz = self.graph.node_xyz[node_id]
+    def get_voxel(self, node):
+        """
+        Gets the voxel coordinate of the given node.
+
+        Parameters
+        ----------
+        node : int
+            Node ID.
+
+        Returns
+        -------
+        Tuple[int]
+            Voxel coordinate of the given node.
+        """
+        xyz = self.graph.node_xyz[node]
         return img_util.to_voxels(xyz, self.anisotropy)
