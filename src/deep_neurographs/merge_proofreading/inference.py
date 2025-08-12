@@ -67,7 +67,7 @@ class MergeDetector:
 
     # --- Core routines
     def search_graph(self):
-        # Iterate over dataloader
+        # Iterate over dataset
         detected_merge_sites = list()
         for batch in self.dataset:
             pass
@@ -91,7 +91,7 @@ class IterableGraphDataset(IterableDataset):
         anisotropy=(1.0, 1.0, 1.0),
         batch_size=16,
         prefetch=64,
-        traversal_step=5,
+        traversal_step=10,
     ):
         # Call parent class
         super().__init__()
@@ -221,10 +221,6 @@ class IterableGraphDataset(IterableDataset):
         for i, center in enumerate(patch_centers):
             s = img_util.get_slices(center, self.patch_shape)
             batch[i, 0, ...] = superchunk[s]
-            superchunk[tuple(center)] = 1.5
-        from tifffile import imwrite
-        imwrite("superchunk.tif", superchunk)
-        print("superchunk.shape:", superchunk.shape)
         return node_ids, torch.tensor(batch, dtype=torch.float)
 
     # --- Helpers ---
