@@ -103,7 +103,7 @@ class IterableGraphDataset(IterableDataset):
         self.anisotropy = anisotropy
         self.batch_size = batch_size
         self.prefetch = prefetch
-        self.traversal_step = traversal_step  # not implemented
+        self.traversal_step = traversal_step
 
         # Image reader
         self.img_reader = img_util.init_reader(img_path)
@@ -187,6 +187,7 @@ class IterableGraphDataset(IterableDataset):
             # Check if starting new batch
             if len(patch_centers) == 0:
                 root = i
+                last_node = i
                 node_ids.append(i)
                 patch_centers.append(self.get_voxel(i))
                 visited.add(i)
@@ -201,11 +202,15 @@ class IterableGraphDataset(IterableDataset):
 
             # Visit j
             if j not in visited:
-                node_ids.append(j)
-                patch_centers.append(self.get_voxel(j))
                 visited.add(j)
-                if len(patch_centers) == 1:
-                    root = j
+                is_next = self.graph.dist(last_node, j) >= self.traversal_step
+                is_branching = self.graph.degree[j] >= 3
+                if is_next or is_branching:
+                    last_node = j
+                    node_ids.append(j)
+                    patch_centers.append(self.get_voxel(j))
+                    if len(patch_centers) == 1:
+                        root = j
 
         # Yield any remaining nodes after the loop
         if patch_centers:
@@ -216,6 +221,10 @@ class IterableGraphDataset(IterableDataset):
         for i, center in enumerate(patch_centers):
             s = img_util.get_slices(center, self.patch_shape)
             batch[i, 0, ...] = superchunk[s]
+            superchunk[tuple(center)] = 1.5
+        from tifffile import imwrite
+        imwrite("superchunk.tif", superchunk)
+        print("superchunk.shape:", superchunk.shape)
         return node_ids, torch.tensor(batch, dtype=torch.float)
 
     # --- Helpers ---
