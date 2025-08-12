@@ -207,9 +207,9 @@ def line_graph(edges):
 
 
 def load_model(model, model_path, device="cuda"):
-    model.load_state_dict(torch.load(model_path))
-    model.eval()
     model.to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval()
 
 
 def to_cpu(tensor, to_numpy=False):
