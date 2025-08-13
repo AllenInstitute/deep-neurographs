@@ -297,7 +297,6 @@ class IterableGraphDataset(IterableDataset):
                     voxel[1] - 3: voxel[1] + 3,
                     voxel[2] - 3: voxel[2] + 3
                 ] = 1
-
             # Update queue
             if is_contained:
                 for nb in self.graph.neighbors(node):
