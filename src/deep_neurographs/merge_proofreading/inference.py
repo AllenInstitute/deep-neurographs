@@ -25,7 +25,10 @@ image segmentation.
 """
 
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from time import time
+from torch.nn.functional import sigmoid
 from torch.utils.data import IterableDataset
+from tqdm import tqdm
 
 import networkx as nx
 import numpy as np
@@ -48,9 +51,10 @@ class MergeDetector:
         prefetch=64,
         remove_detected_sites=False,
         threshold=0.5,
-        traversal_step=5,
+        step_size=10,
     ):
         # Instance attributes
+        self.batch_size = batch_size
         self.graph = graph
         self.remove_detected_sites = remove_detected_sites
         self.threshold = threshold
@@ -67,29 +71,39 @@ class MergeDetector:
             anisotropy=anisotropy,
             batch_size=batch_size,
             prefetch=prefetch,
-            traversal_step=traversal_step,
+            step_size=step_size,
         )
 
     # --- Core routines
-    def search_merge_sites(self):
+    def search_graph(self):
+        total = self.graph.number_of_nodes() // 2
+        pbar = tqdm(total=int(total))
+
         # Iterate over dataset
         detected_merge_sites = list()
+        t0 = time()
         for nodes, x_nodes in self.dataset:
             hat_y = self.predict(x_nodes)
-            idxs = np.where(hat_y > self.threshold)[0]
-            detected_merge_sites.extend([nodes[i] for i in idxs])
-            print(hat_y)
+            #idxs = np.where(hat_y > self.threshold)[0]
+            #detected_merge_sites.extend([nodes[i] for i in idxs])
+
+            self.graph.node_radius[np.array(nodes)] = 10 * hat_y
+            pbar.update(self.batch_size)
+
         print("# Detected Merge Sites:", len(detected_merge_sites))
+        print(f"Runtime: {time() - t0 / 60:.2f} mins")
 
         # Optionally, remove merge mistakes from graphs
         if self.remove_detected_sites:
             pass
 
+        self.graph.to_zipped_swcs("./preds-653159.zip", preserve_radius=True)
+
     def predict(self, x):
         with torch.no_grad():
             x = x.to("cuda")
-            hat_y = self.model(x)
-            return ml_util.to_cpu(hat_y, to_numpy=True)
+            hat_y = sigmoid(self.model(x))
+            return np.squeeze(ml_util.to_cpu(hat_y, to_numpy=True))
 
     def remove_merge_sites(self, detected_merge_sites):
         pass
@@ -106,7 +120,7 @@ class IterableGraphDataset(IterableDataset):
         anisotropy=(1.0, 1.0, 1.0),
         batch_size=16,
         prefetch=64,
-        traversal_step=10,
+        step_size=10,
     ):
         # Call parent class
         super().__init__()
@@ -118,7 +132,7 @@ class IterableGraphDataset(IterableDataset):
         self.anisotropy = anisotropy
         self.batch_size = batch_size
         self.prefetch = prefetch
-        self.traversal_step = traversal_step
+        self.step_size = step_size
 
         # Image reader
         self.img_reader = img_util.init_reader(img_path)
@@ -196,6 +210,7 @@ class IterableGraphDataset(IterableDataset):
         """
         nodes = list()
         patch_centers = list()
+        mask_centers = list()
         visited = set()
         for i, j in nx.dfs_edges(self.graph, source=root):
             # Check if starting new batch
@@ -210,14 +225,19 @@ class IterableGraphDataset(IterableDataset):
             is_node_far = self.graph.dist(root, j) > 512
             is_batch_full = len(patch_centers) == self.batch_size
             if is_node_far or is_batch_full:
-                yield nodes, np.array(patch_centers, dtype=int)
+                # Yield batch metadata
+                patch_centers = np.array(patch_centers, dtype=int)
+                nodes = np.array(nodes, dtype=int)
+                yield nodes, patch_centers
+
+                # Reset batch metadata
                 nodes = list()
                 patch_centers = list()
 
             # Visit j
             if j not in visited:
                 visited.add(j)
-                is_next = self.graph.dist(last_node, j) >= self.traversal_step
+                is_next = self.graph.dist(last_node, j) >= self.step_size - 1
                 is_branching = self.graph.degree[j] >= 3
                 if is_next or is_branching:
                     last_node = j
@@ -228,7 +248,9 @@ class IterableGraphDataset(IterableDataset):
 
         # Yield any remaining nodes after the loop
         if patch_centers:
-            yield nodes, np.array(patch_centers, dtype=int)
+            patch_centers = np.array(patch_centers, dtype=int)
+            nodes = np.array(nodes, dtype=int)
+            yield nodes, patch_centers
 
     def get_batch(self, img, offset, patch_centers, nodes):
         # Initializations
@@ -241,6 +263,10 @@ class IterableGraphDataset(IterableDataset):
             s = img_util.get_slices(center, self.patch_shape)
             batch[i, 0, ...] = img[s]
             batch[i, 1, ...] = label_mask[s]
+
+        # Normalize image
+        mn, mx = np.percentile(batch[0, 0, ...], [5, 99.9])
+        batch[:, 0, ...] = (batch[:, 0, ...] - mn) / mx
         return nodes, torch.tensor(batch, dtype=torch.float)
 
     # --- Helpers ---
@@ -253,7 +279,7 @@ class IterableGraphDataset(IterableDataset):
         # Read image
         shape = (end - start).astype(int)
         center = (start + shape // 2).astype(int)
-        superchunk = img_util.normalize(self.img_reader.read(center, shape))
+        superchunk = self.img_reader.read(center, shape)
         return superchunk, start.astype(int)
 
     def get_label_mask(self, nodes, img_shape, offset):
@@ -264,15 +290,13 @@ class IterableGraphDataset(IterableDataset):
             # Visit node
             node = queue.pop()
             voxel = self.get_voxel(node) - offset
-            if img_util.is_contained(voxel, img_shape, buffer=3):
+            is_contained = img_util.is_contained(voxel, img_shape, buffer=3)
+            if is_contained:
                 label_mask[
-                    max(voxel[0] - 3, 0): min(voxel[0] + 3, img_shape[0]),
-                    max(voxel[1] - 3, 0): min(voxel[1] + 3, img_shape[1]),
-                    max(voxel[2] - 3, 0): min(voxel[2] + 3, img_shape[2])
+                    voxel[0] - 3: voxel[0] + 3,
+                    voxel[1] - 3: voxel[1] + 3,
+                    voxel[2] - 3: voxel[2] + 3
                 ] = 1
-                is_contained = True
-            else:
-                is_contained = False
 
             # Update queue
             if is_contained:

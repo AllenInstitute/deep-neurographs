@@ -12,12 +12,14 @@ information into the graph structure.
 
 """
 
+from io import StringIO
 from scipy.spatial import KDTree
 
 import networkx as nx
 import numpy as np
+import zipfile
 
-from deep_neurographs.utils import geometry_util, graph_util as gutil
+from deep_neurographs.utils import geometry_util, graph_util as gutil, util
 
 
 class SkeletonGraph(nx.Graph):
@@ -244,6 +246,64 @@ class SkeletonGraph(nx.Graph):
 
     def get_swc_ids(self):
         return np.unique(list(self.component_id_to_swc_id.values()))
+
+    # --- Writer ---
+    def to_zipped_swcs(self, zip_path, preserve_radius=False):
+        with zipfile.ZipFile(zip_path, "w") as zip_writer:
+            for nodes in nx.connected_components(self):
+                root = util.sample_once(nodes)
+                self.component_to_zipped_swc(
+                    zip_writer, root, preserve_radius=preserve_radius
+                )
+
+    def component_to_zipped_swc(
+        self, zip_writer, root, preserve_radius=False
+    ):
+        """
+        Writes the graph to an SWC file format, which is then stored in a ZIP
+        archive.
+
+        Parameters
+        ----------
+        zip_writer : zipfile.ZipFile
+            A ZipFile object that will store the generated SWC file.
+        root : int
+            Root node of connected component to be written to an SWC file.
+        preserve_radius : bool, optional
+            Indication of whether to preserve radii of nodes or use default
+            radius of 2um
+
+        Returns
+        -------
+        None
+
+        """
+        # Subroutines
+        def write_entry(node, parent):
+            x, y, z = tuple(self.node_xyz[node])
+            r = self.node_radius[node] if preserve_radius else 2
+            node_id = len(node_to_idx) + 1
+            node_to_idx[node] = node_id
+            text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
+
+        # Main
+        with StringIO() as text_buffer:
+            # Preamble
+            text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
+
+            # Write entries
+            node_to_idx = dict()
+            for i, j in nx.dfs_edges(self, source=root):
+                # Special Case: Root
+                if len(node_to_idx) == 0:
+                    write_entry(i, -1)
+
+                # General Case: Non-Root
+                write_entry(j, node_to_idx[i])
+
+            # Finish
+            filename = self.get_swc_id(root)
+            zip_writer.writestr(f"{filename}.swc", text_buffer.getvalue())
 
     # --- Helpers ---
     def dist(self, i, j):
