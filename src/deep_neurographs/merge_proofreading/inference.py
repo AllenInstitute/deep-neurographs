@@ -258,6 +258,7 @@ class IterableGraphDataset(IterableDataset):
         """
         nodes = list()
         patch_centers = list()
+        mask_centers = list()
         visited = set()
         for i, j in nx.dfs_edges(self.graph, source=root):
             # Check if starting new batch
@@ -310,6 +311,10 @@ class IterableGraphDataset(IterableDataset):
             s = img_util.get_slices(center, self.patch_shape)
             batch[i, 0, ...] = img[s]
             batch[i, 1, ...] = label_mask[s]
+
+        # Normalize image
+        mn, mx = np.percentile(batch[0, 0, ...], [5, 99.9])
+        batch[:, 0, ...] = (batch[:, 0, ...] - mn) / mx
         return nodes, torch.tensor(batch, dtype=torch.float)
 
     # --- Helpers ---
@@ -322,7 +327,7 @@ class IterableGraphDataset(IterableDataset):
         # Read image
         shape = (end - start).astype(int)
         center = (start + shape // 2).astype(int)
-        superchunk = img_util.normalize(self.img_reader.read(center, shape))
+        superchunk = self.img_reader.read(center, shape)
         return superchunk, start.astype(int)
 
     def get_label_mask(self, nodes, img_shape, offset):
