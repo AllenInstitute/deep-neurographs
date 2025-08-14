@@ -25,7 +25,6 @@ image segmentation.
 """
 
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from time import time
 from torch.nn.functional import sigmoid
 from torch.utils.data import IterableDataset
 from tqdm import tqdm
@@ -56,6 +55,7 @@ class MergeDetector:
         # Instance attributes
         self.batch_size = batch_size
         self.graph = graph
+        self.patch_shape = patch_shape
         self.remove_detected_sites = remove_detected_sites
         self.threshold = threshold
 
@@ -78,20 +78,25 @@ class MergeDetector:
     def search_graph(self):
         total = self.graph.number_of_nodes() // 2
         pbar = tqdm(total=int(total))
+        self.graph.node_radius[:] = 1
 
         # Iterate over dataset
-        detected_merge_sites = list()
-        t0 = time()
+        merge_sites = list()
+        confidences = list()
         for nodes, x_nodes in self.dataset:
             hat_y = self.predict(x_nodes)
-            #idxs = np.where(hat_y > self.threshold)[0]
-            #detected_merge_sites.extend([nodes[i] for i in idxs])
+            idxs = np.where(hat_y > self.threshold)[0]
+            if len(idxs) > 0:
+                merge_sites.extend(nodes[idxs].tolist())
+                confidences.extend(hat_y[idxs].tolist())
 
+            # temp
             self.graph.node_radius[np.array(nodes)] = 10 * hat_y
             pbar.update(self.batch_size)
 
-        print("# Detected Merge Sites:", len(detected_merge_sites))
-        print(f"Runtime: {time() - t0 / 60:.2f} mins")
+        # Non-maximum suppression of detected sites
+        merge_sites = self.filter_with_nms(merge_sites, confidences)
+        print("# Detected Merge Sites:", len(merge_sites))
 
         # Optionally, remove merge mistakes from graphs
         if self.remove_detected_sites:
@@ -104,6 +109,45 @@ class MergeDetector:
             x = x.to("cuda")
             hat_y = sigmoid(self.model(x))
             return np.squeeze(ml_util.to_cpu(hat_y, to_numpy=True))
+
+    def filter_with_nms(self, merge_sites, confidences):
+        # Sort by confidence
+        idxs = np.flip(np.argsort(confidences))
+        merge_sites = [merge_sites[i] for i in idxs]
+
+        # NMS
+        merge_sites_set = set(merge_sites)
+        filtered_merge_sites = list()
+        while merge_sites:
+            # Root of NMS
+            root = merge_sites.pop()
+            voxel_root = self.graph.get_voxel(root)
+            if root in merge_sites_set:
+                filtered_merge_sites.append(root)
+                merge_sites_set.remove(root)
+            else:
+                continue
+
+            # Search neighborhood - suppression
+            queue = [(root, 0)]
+            visited = set([root])
+            while queue:
+                # Visit node
+                i, dist_i = queue.pop()
+                if i in merge_sites_set:
+                    voxel_i = self.graph.get_voxel(i)
+                    iou = img_util.iou(voxel_i, voxel_root, self.patch_shape)
+                    if iou > 0.55:
+                        merge_sites_set.remove(i)
+                        self.graph.node_radius[i] = 1
+
+                # Populate queue
+                for j in self.graph.neighbors(i):
+                    dist_j = dist_i + self.graph.dist(i, j)
+                    if j not in visited and dist_j < self.patch_shape[0] // 2:
+                        queue.append((j, dist_j))
+                        visited.add(j)
+        return filtered_merge_sites
 
     def remove_merge_sites(self, detected_merge_sites):
         pass
@@ -186,12 +230,16 @@ class IterableGraphDataset(IterableDataset):
             batches across the whole graph.
         """
         visited_ids = set()
+        cnt = 0
         for i in self.graph.get_leafs():
             component_id = self.graph.node_component_id[i]
             if component_id not in visited_ids:
                 visited_ids.add(component_id)
+                cnt += 1
                 yield from self._generate_batch_metadata_for_component(i)
 
+            if cnt > 10:
+                break
     def _generate_batch_metadata_for_component(self, root):
         """
         Generates metadata (nodes, patch_centers) used to generate batches

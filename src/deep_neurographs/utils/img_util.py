@@ -4,7 +4,7 @@ Created on Fri May 8 11:00:00 2024
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
+https://open.quiltdata.com/b/aind-open-data/tree
 Helper routines for reading and processing images.
 
 """
@@ -394,7 +394,7 @@ def get_neighbors(voxel, shape):
     for dx in [-1, 0, 1]:
         for dy in [-1, 0, 1]:
             for dz in [-1, 0, 1]:
-                # Skip the (0, 0, 0) offset, which refers to the voxel itself
+                # Skip the (0, 0, 0) offset
                 if dx == 0 and dy == 0 and dz == 0:
                     continue
 
@@ -453,6 +453,41 @@ def is_contained(voxel, shape, buffer=0):
     return contained_above and contained_below
 
 
+def iou_3d(center1, center2, shape):
+    """
+    Compute IoU between two 3D axis-aligned boxes of the same shape.
+
+    Parameters
+    ----------
+    center1 : Tuple[int]
+        3D center coordinate of box 1.
+    center2 : Tuple[int]
+        3D center coordinate of box 2.
+    shape : Tuple[int]
+        Shape of boxes.
+
+    Returns
+    -------
+    float
+        IoU between the boxes
+    """
+    c1 = np.array(center1, dtype=float)
+    c2 = np.array(center2, dtype=float)
+    s = np.array(shape, dtype=float) / 2.0
+
+    min1, max1 = c1 - s, c1 + s
+    min2, max2 = c2 - s, c2 + s
+
+    # Intersection box dimensions
+    inter_min = np.maximum(min1, min2)
+    inter_max = np.minimum(max1, max2)
+    inter_dims = np.maximum(inter_max - inter_min, 0.0)
+    inter_vol = np.prod(inter_dims)
+
+    vol = np.prod(2 * s)
+    return inter_vol / (2 * vol - inter_vol) if vol > 0 else 0.0
+
+
 def normalize(img):
     """
     Normalizes an image so that the minimum and maximum intensity values are 0
@@ -470,7 +505,7 @@ def normalize(img):
     """
     try:
         mn, mx = np.percentile(img, [5, 99.9])
-        return (img - mn) / np.maximum(mx, 1)
+        return np.clip((img - mn) / np.maximum(mx, 1), None, 1)
     except Exception as e:
         print("Image Normalization Failed:", e)
         return np.zeros(img.shape)
