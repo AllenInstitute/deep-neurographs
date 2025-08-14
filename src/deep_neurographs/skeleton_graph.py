@@ -19,7 +19,7 @@ import networkx as nx
 import numpy as np
 import zipfile
 
-from deep_neurographs.utils import geometry_util, graph_util as gutil, util
+from deep_neurographs.utils import geometry_util, graph_util as gutil, img_util, util
 
 
 class SkeletonGraph(nx.Graph):
@@ -36,6 +36,11 @@ class SkeletonGraph(nx.Graph):
         # Call parent class
         super().__init__()
 
+        # Instance attributes
+        self.anisotropy = anisotropy
+        self.component_id_to_swc_id = dict()
+        self.irreducible = nx.Graph()
+
         # Graph Loader
         self.graph_loader = gutil.GraphLoader(
             anisotropy=anisotropy,
@@ -45,10 +50,6 @@ class SkeletonGraph(nx.Graph):
             prune_depth=prune_depth,
             verbose=verbose,
         )
-
-        # Instance attributes
-        self.component_id_to_swc_id = dict()
-        self.irreducible = nx.Graph()
 
     # --- Build Graph ---
     def load(self, swc_pointer):
@@ -323,6 +324,22 @@ class SkeletonGraph(nx.Graph):
             Euclidean distance between nodes "i" and "j".
         """
         return geometry_util.dist(self.node_xyz[i], self.node_xyz[j])
+
+    def get_voxel(self, i):
+        """
+        Gets the voxel coordinate of the given node.
+
+        Parameters
+        ----------
+        i : int
+            Node ID.
+
+        Returns
+        -------
+        float
+            Voxel coordinate of the given node.
+        """
+        return img_util.to_voxels(self.node_xyz[i], self.anisotropy)
 
     def init_kdtree(self):
         """
