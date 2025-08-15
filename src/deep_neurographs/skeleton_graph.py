@@ -19,7 +19,9 @@ import networkx as nx
 import numpy as np
 import zipfile
 
-from deep_neurographs.utils import geometry_util, graph_util as gutil, img_util, util
+from deep_neurographs.utils import (
+    geometry_util, graph_util as gutil, img_util, util
+)
 
 
 class SkeletonGraph(nx.Graph):
@@ -186,7 +188,31 @@ class SkeletonGraph(nx.Graph):
         self.node_component_id = self.node_component_id[old_node_ids]
 
     # --- Getters ---
+    def get_branchings(self):
+        """
+        Gets all branching nodes in the graph.
+
+        Returns
+        -------
+        List[int]
+            Branching nodes in the graph.
+        """
+        return [i for i in self.nodes if self.degree[i] > 2]
+
     def get_connected_nodes(self, root):
+        """
+        Gets all nodes connected to the given root node.
+
+        Parameters
+        ----------
+        root : int
+            Node ID.
+
+        Returns
+        -------
+        List[int]
+            Nodes connected to the given root.
+        """
         queue = [root]
         visited = set({root})
         while queue:
@@ -199,16 +225,12 @@ class SkeletonGraph(nx.Graph):
 
     def get_leafs(self):
         """
-        Gets all leaf nodes in graph.
-
-        Parameters
-        ----------
-        None
+        Gets all leaf nodes in the graph.
 
         Returns
         -------
         List[int]
-            Leaf nodes in graph.
+            Leaf nodes in the graph.
         """
         return [i for i in self.nodes if self.degree[i] == 1]
 

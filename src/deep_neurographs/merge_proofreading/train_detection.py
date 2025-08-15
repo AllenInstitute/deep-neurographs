@@ -257,9 +257,15 @@ class MergeSiteDataset:
         return brain_id, graph, node, is_positive
 
     def get_random_site(self):
+        # Sample graph
         brain_id = util.sample_once(list(self.gt_graphs.keys()))
         graph = self.gt_graphs[brain_id]
-        node = np.random.randint(0, graph.number_of_nodes())
+
+        # Sample node on graph
+        if random.random() < 0.5:
+            node = np.random.randint(0, graph.number_of_nodes())
+        else:
+            node = util.sample_once(graph.get_branchings())
         return brain_id, graph, node, False
 
     def get_img_patch(self, brain_id, center):
