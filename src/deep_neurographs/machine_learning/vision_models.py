@@ -57,7 +57,8 @@ class CNN3D(nn.Module):
         self.conv3b = self._init_conv_layer(64, 64, 3, dropout=dropout)
 
         # Layer 4
-        self.conv4 = self._init_conv_layer(64, 128, 3, dropout=dropout)
+        self.conv4a = self._init_conv_layer(64, 128, 3, dropout=dropout)
+        self.conv4b = self._init_conv_layer(128, 128, 3, dropout=dropout)
 
         # Layer 5
         self.conv5 = self._init_conv_layer(128, 256, 3, dropout=dropout)
@@ -66,8 +67,9 @@ class CNN3D(nn.Module):
         # Output layer
         flat_size = self._get_flattened_size(patch_shape)
         self.output = nn.Sequential(
-            init_mlp(flat_size, flat_size * 2, flat_size // 4),
-            init_mlp(flat_size // 4, flat_size, output_dim),
+            init_mlp(flat_size, flat_size * 2, flat_size // 2),
+            init_mlp(flat_size // 2, flat_size, flat_size // 4),
+            init_mlp(flat_size // 4, flat_size // 2, output_dim),
         )
 
         # Initialize weights
@@ -97,13 +99,7 @@ class CNN3D(nn.Module):
             Sequence of operations that define this layer.
         """
         conv_layer = nn.Sequential(
-            nn.Conv3d(
-                in_channels,
-                out_channels,
-                kernel_size=kernel_size,
-                stride=1,
-                padding="same",
-            ),
+            nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(),
             nn.Dropout3d(p=dropout) if dropout > 0 else nn.Identity(),
@@ -132,7 +128,7 @@ class CNN3D(nn.Module):
             x = self.pool(self.conv1b(self.conv1a(x)))
             x = self.pool(self.conv2b(self.conv2a(x)))
             x = self.pool(self.conv3b(self.conv3a(x)))
-            x = self.pool(self.conv4(x))
+            x = self.pool(self.conv4b(self.conv4a(x)))
             x = self.pool(self.conv5(x))
             return x.view(1, -1).size(1)
 
@@ -182,7 +178,7 @@ class CNN3D(nn.Module):
         x = self.pool(self.conv1b(self.conv1a(x)))
         x = self.pool(self.conv2b(self.conv2a(x)))
         x = self.pool(self.conv3b(self.conv3a(x)))
-        x = self.pool(self.conv4(x))
+        x = self.pool(self.conv4b(self.conv4a(x)))
         x = self.pool(self.conv5(x))
 
         # Output layer

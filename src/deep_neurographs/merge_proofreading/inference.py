@@ -18,7 +18,7 @@ import networkx as nx
 import numpy as np
 import torch
 
-from deep_neurographs.utils import graph_util as gutil, img_util, ml_util
+from deep_neurographs.utils import img_util, ml_util
 
 
 class MergeDetector:
@@ -226,8 +226,6 @@ class IterableGraphDataset(IterableDataset):
                 cnt += 1
                 yield from self._generate_batch_metadata_for_component(i)
 
-            if cnt > 10:
-                break
     def _generate_batch_metadata_for_component(self, root):
         """
         Generates metadata (nodes, patch_centers) used to generate batches
@@ -246,7 +244,6 @@ class IterableGraphDataset(IterableDataset):
         """
         nodes = list()
         patch_centers = list()
-        mask_centers = list()
         visited = set()
         for i, j in nx.dfs_edges(self.graph, source=root):
             # Check if starting new batch
