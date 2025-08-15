@@ -33,7 +33,7 @@ import networkx as nx
 import numpy as np
 import torch
 
-from deep_neurographs.utils import img_util, ml_util
+from deep_neurographs.utils import graph_util as gutil, img_util, ml_util
 
 
 class MergeDetector:
@@ -84,25 +84,32 @@ class MergeDetector:
         merge_sites = list()
         confidences = list()
         for nodes, x_nodes in self.dataset:
-            hat_y = self.predict(x_nodes)
-            idxs = np.where(hat_y > self.threshold)[0]
+            y_nodes = self.predict(x_nodes)
+            idxs = np.where(y_nodes > self.threshold)[0]
             if len(idxs) > 0:
-                merge_sites.extend(nodes[idxs].tolist())
-                confidences.extend(hat_y[idxs].tolist())
+                try:
+                    merge_sites.extend(nodes[idxs].tolist())
+                    confidences.extend(y_nodes[idxs].tolist())
+                except:
+                    print("hat_y:", y_nodes)
+                    print("idxs:", idxs)
 
             # temp
-            self.graph.node_radius[np.array(nodes)] = 10 * hat_y
+            self.graph.node_radius[np.array(nodes)] = 10 * y_nodes
             pbar.update(self.batch_size)
+
+        self.graph.to_zipped_swcs("./before-nms-653159.zip", preserve_radius=True)
 
         # Non-maximum suppression of detected sites
         merge_sites = self.filter_with_nms(merge_sites, confidences)
         print("# Detected Merge Sites:", len(merge_sites))
+        #print("Total Path Length Traversed:", gutil.path_length(self.graph))
 
         # Optionally, remove merge mistakes from graphs
         if self.remove_detected_sites:
             pass
 
-        self.graph.to_zipped_swcs("./preds-653159.zip", preserve_radius=True)
+        self.graph.to_zipped_swcs("./after-nms-653159.zip", preserve_radius=True)
 
     def predict(self, x):
         with torch.no_grad():
@@ -112,39 +119,39 @@ class MergeDetector:
 
     def filter_with_nms(self, merge_sites, confidences):
         # Sort by confidence
-        idxs = np.flip(np.argsort(confidences))
+        idxs = np.argsort(confidences)
         merge_sites = [merge_sites[i] for i in idxs]
 
         # NMS
         merge_sites_set = set(merge_sites)
-        filtered_merge_sites = list()
+        filtered_merge_sites = set()
         while merge_sites:
-            # Root of NMS
+            # Local max
             root = merge_sites.pop()
-            voxel_root = self.graph.get_voxel(root)
+            xyz_root = self.graph.node_xyz[root]
             if root in merge_sites_set:
-                filtered_merge_sites.append(root)
+                filtered_merge_sites.add(root)
                 merge_sites_set.remove(root)
             else:
                 continue
 
-            # Search neighborhood - suppression
+            # Suppress neighborhood
             queue = [(root, 0)]
             visited = set([root])
             while queue:
                 # Visit node
                 i, dist_i = queue.pop()
                 if i in merge_sites_set:
-                    voxel_i = self.graph.get_voxel(i)
-                    iou = img_util.iou(voxel_i, voxel_root, self.patch_shape)
-                    if iou > 0.55:
+                    xyz_i = self.graph.node_xyz[i]
+                    iou = img_util.iou_3d(xyz_i, xyz_root, self.patch_shape)
+                    if iou > 0.4:
                         merge_sites_set.remove(i)
                         self.graph.node_radius[i] = 1
 
                 # Populate queue
                 for j in self.graph.neighbors(i):
                     dist_j = dist_i + self.graph.dist(i, j)
-                    if j not in visited and dist_j < self.patch_shape[0] // 2:
+                    if j not in visited and dist_j < self.patch_shape[0]:
                         queue.append((j, dist_j))
                         visited.add(j)
         return filtered_merge_sites

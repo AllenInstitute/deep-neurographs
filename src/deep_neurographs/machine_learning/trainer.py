@@ -99,7 +99,7 @@ class Trainer:
     # --- Core Routines ---
     def run(self, train_dataloader, val_dataloader):
         """
-        Run the full training and validation loop.
+        Runs the full training and validation loop.
 
         Parameters
         ----------
@@ -129,7 +129,7 @@ class Trainer:
 
     def train_step(self, train_dataloader, epoch):
         """
-        Perform a single training epoch over the provided DataLoader.
+        Performs a single training epoch over the provided DataLoader.
 
         Parameters
         ----------
@@ -167,7 +167,7 @@ class Trainer:
 
     def validate_step(self, val_dataloader, epoch):
         """
-        Perform a full validation loop over the given dataloader.
+        Performs a full validation loop over the given dataloader.
 
         Parameters
         ----------
@@ -211,14 +211,14 @@ class Trainer:
 
     def forward_pass(self, x, y):
         """
-        Perform a forward pass through the model and compute loss.
+        Performs a forward pass through the model and computes loss.
 
         Parameters
         ----------
         x : torch.Tensor
-            Input tensor with shape (B, C, D, H, W).
+            Input tensor with shape (B, 2, D, H, W).
         y : torch.Tensor
-            Ground truth labels with shape (B, C, D, H, W).
+            Ground truth labels with shape (B, 1).
 
         Returns
         -------
@@ -237,12 +237,12 @@ class Trainer:
     # --- Helpers
     def compute_stats(self, y, hat_y):
         """
-        Compute F1 score, precision, and recall for each sample in a batch.
+        Computes F1 score, precision, and recall for each sample in a batch.
 
         Parameters
         ----------
         y : torch.Tensor
-            Ground truth labels of shape (B, 1, D, H, W) or (B, 1, H, W).
+            Ground truth labels of shape (B, 1).
         hat_y : torch.Tensor
             Model predictions of the same shape as ground truth.
 
@@ -270,7 +270,7 @@ class Trainer:
 
     def report_stats(self, stats, is_train=True):
         """
-        Print a summary of training or validation statistics.
+        Prints a summary of training or validation statistics.
 
         Parameters
         ----------
@@ -290,7 +290,7 @@ class Trainer:
 
     def save_model(self, epoch):
         """
-        Save the current model state to a file.
+        Saves the current model state to a file.
 
         Parameters
         ----------
@@ -308,7 +308,7 @@ class Trainer:
 
     def update_tensorboard(self, stats, epoch, prefix):
         """
-        Log scalar statistics to TensorBoard.
+        Logs scalar statistics to TensorBoard.
 
         Parameters
         ----------
