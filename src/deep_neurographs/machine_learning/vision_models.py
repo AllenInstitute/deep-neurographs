@@ -99,7 +99,12 @@ class CNN3D(nn.Module):
             Sequence of operations that define this layer.
         """
         conv_layer = nn.Sequential(
-            nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size),
+            nn.Conv3d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel_size,
+                padding="same"
+            ),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(),
             nn.Dropout3d(p=dropout) if dropout > 0 else nn.Identity(),

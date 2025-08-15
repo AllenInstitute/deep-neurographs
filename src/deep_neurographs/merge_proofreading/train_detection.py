@@ -28,9 +28,6 @@ class MergeSiteDataset:
 
     Attributes
     ----------
-    merge_sites_df : pandas.DataFrame
-        DataFrame containing merge sites, must contain the columns:
-        "brain_id", "segmentation_id", "segment_id", and "xyz".
     anisotropy : Tuple[float], optional
         Image to physical coordinates scaling factors to account for the
         anisotropy of the microscope.
@@ -42,21 +39,21 @@ class MergeSiteDataset:
         tracings.
     gt_kdtrees : scipy.spatial.KDTree
         KD-Tree built from xyz coordinates stored in "gt_graphs".
+    img_readers : ImageReader
+        Image reader used to read raw image from cloud bucket.
     merge_graphs : dict[str, SkeletonGraph]
         Dictionary that maps brain IDs to a graph containing fragments that
         contain merge mistakes.
-    gt_kdtrees : scipy.spatial.KDTree
-        KD-Tree built from xyz coordinates stored in "merge_graphs".
-    img_readers : ImageReader
-        Image reader used to read raw image from cloud bucket.
+    merge_sites_df : pandas.DataFrame
+        DataFrame containing merge sites, must contain the columns:
+        "brain_id", "segmentation_id", "segment_id", and "xyz".
     multiscale : int, optional
         Level in the image pyramid that the voxel coordinate must index into.
         Default is 0.
     node_spacing : int, optional
         Spacing between nodes in the graph. Default is 5 (microns).
     patch_shape : tuple of int, optional
-        Shape of the 3D patches to extract (depth, height, width). Default is
-        (96, 96, 96).
+        Shape of the 3D image patches to extract. Default is (96, 96, 96).
     """
 
     def __init__(
@@ -90,10 +87,6 @@ class MergeSiteDataset:
         patch_shape : tuple of int, optional
             Shape of the 3D patches to extract (depth, height, width). Default is
             (96, 96, 96).
-
-        Returns
-        -------
-        None
         """
         # Instance attributes
         self.anisotropy = anisotropy
@@ -133,14 +126,6 @@ class MergeSiteDataset:
     def init_kdtrees(self):
         """
         Initialize KDTrees for both ground truth and merge graphs.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
         """
         self.gt_kdtrees = self._init_kdtree(self.gt_graphs)
         self.merge_kdtrees = self._init_kdtree(self.merge_graphs)
@@ -173,10 +158,6 @@ class MergeSiteDataset:
             Unique identifier for the whole-brain dataset.
         swc_pointer : any
             Pointer to SWC files to be loaded into graph.
-
-        Returns
-        -------
-        None
         """
         # Load graphs
         graph = self.init_graph(swc_pointer)
@@ -206,16 +187,36 @@ class MergeSiteDataset:
             Unique identifier for the whole-brain dataset.
         swc_pointer : any
             Pointer to SWC files to be loaded into graph.
-
-        Returns
-        -------
-        None
         """
         self.img_readers[brain_id] = img_util.init_reader(img_path)
         self.gt_graphs[brain_id] = self.init_graph(swc_pointer)
 
     # --- Get Examples ---
     def __getitem__(self, idx, use_transform):
+        """
+        Retrieves a training example consisting of an image patch, its
+        corresponding label mask, and the associated subgraph for a given
+        site.
+        
+        Parameters
+        ----------
+        idx : int or None
+            Index of the site to retrieve. If None, a random site is sampled.
+        use_transform : bool
+            Indication of whether to apply data augmentation transforms to the
+            image and label patches.
+        
+        Returns
+        -------
+        patches : np.ndarray
+            Array of stacked channels containing the image patch and label mask 
+            with shape (2, D, H, W).
+        subgraph : Graph
+            Rooted subgraph centered at the site node.
+        label : int
+            Binary label indicating whether the site is a positive example or
+            negative.
+        """
         # Extract site
         if idx is None:
             brain_id, graph, node, is_positive = self.get_random_site()
@@ -243,6 +244,27 @@ class MergeSiteDataset:
         return patches, subgraph, int(is_positive)
 
     def get_site(self, idx):
+        """
+        Retrieves a site from the dataset.
+    
+        Parameters
+        ----------
+        idx : int
+            Index of the site in "merge_sites_df". Positive indices correspond
+            to merge sites, while non-positive indices correspond to non-merge
+            sites.
+    
+        Returns
+        -------
+        brain_id : str
+            Unique identifier of the brain containing the site.
+        graph : Graph
+            Graph containing the site.
+        node : int
+            Node ID of the site.
+        is_positive : bool
+            True if the site is a merge site, False if it is a non-merge site.
+        """
         # Extract graph
         brain_id = self.merge_sites_df["brain_id"].iloc[idx]
         is_positive = idx > 0
@@ -257,6 +279,20 @@ class MergeSiteDataset:
         return brain_id, graph, node, is_positive
 
     def get_random_site(self):
+        """
+        Randomly selects a non-merge site from the ground truth graphs.
+
+        Returns
+        -------
+        brain_id : hashable
+            Unique identifier of the brain containing the site.
+        graph : Graph
+            Graph containing the site.
+        node : int
+            Node ID of the site.
+        is_positive : bool
+            False, since this method only samples from ground truth sites.
+        """
         # Sample graph
         brain_id = util.sample_once(list(self.gt_graphs.keys()))
         graph = self.gt_graphs[brain_id]
@@ -290,9 +326,25 @@ class MergeSiteDataset:
 
     # --- Helpers ---
     def __len__(self):
+        """
+        Returns the number of positive and negative examples of merge sites.
+
+        Returns
+        -------
+        int
+            Number of positive and negative examples of merge sites.
+        """
         return 2 * len(self.merge_sites_df)
 
     def count_fragments(self):
+        """
+        Counts the number of fragments in the dataset.
+
+        Returns
+        -------
+        cnt : int
+            Number of fragments in the dataset.
+        """
         cnt = 0
         for graph in self.merge_graphs.values():
             cnt += nx.number_connected_components(graph)
@@ -346,10 +398,6 @@ class MergeSiteDataloader:
         use_transform : bool, optional
             Indication of whether to use data augmentation during training.
             Default is False.
-
-        Returns
-        -------
-        None
         """
         # Instance attributes
         self.batch_size = batch_size
@@ -361,10 +409,6 @@ class MergeSiteDataloader:
     def __iter__(self):
         """
         Generates batches of examples used during training and validation.
-
-        Parameters
-        ----------
-        None
 
         Returns
         -------

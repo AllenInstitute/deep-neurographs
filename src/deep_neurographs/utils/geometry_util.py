@@ -505,8 +505,8 @@ def align(neurograph, img, branch_1, branch_2, depth):
 # --- Fragment Filtering ---
 def remove_doubles(graph, max_length):
     """
-    Removes connected components from "graph" that are likely to be a double,
-    which is caused by ghosting in the image.
+    Removes connected components from the graph that are likely duplicates
+    caused by image ghosting artifacts.
 
     Parameters
     ----------
@@ -514,10 +514,6 @@ def remove_doubles(graph, max_length):
         Graph to be searched for doubles.
     max_length : int
         Maximum size of connected components to be searched.
-
-    Returns
-    -------
-    None
     """
     # Initializations
     components = [c for c in nx.connected_components(graph) if len(c) == 2]

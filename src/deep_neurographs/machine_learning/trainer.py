@@ -107,10 +107,6 @@ class Trainer:
             Dataloader used for training.
         val_dataset : torch.utils.data.Dataset
             Dataloader used for validation.
-
-        Returns
-        -------
-        None
         """
         exp_name = os.path.basename(os.path.normpath(self.log_dir))
         print("\nExperiment:", exp_name)
@@ -278,10 +274,6 @@ class Trainer:
             Dictionary of metric names to values.
         is_train : bool, optional
             Indication of whether stats were computed during training.
-
-        Returns
-        -------
-        None
         """
         summary = "   Train: " if is_train else "   Val: "
         for key, value in stats.items():
@@ -296,10 +288,6 @@ class Trainer:
         ----------
         epoch : int
             Current training epoch.
-
-        Returns
-        -------
-        None
         """
         date = datetime.today().strftime("%Y%m%d")
         filename = f"{self.model_name}-{date}-{epoch}-{self.best_f1:.4f}.pth"
@@ -318,10 +306,6 @@ class Trainer:
             Current training epoch.
         prefix : str
             Prefix to prepend to each metric name when logging.
-
-        Returns
-        -------
-        None
         """
         for key, value in stats.items():
             self.writer.add_scalar(prefix + key, stats[key], epoch)
