@@ -7,21 +7,6 @@ Created on Wed August 4 16:00:00 2025
 Code for detecting merge mistakes on skeletons generated from an automated
 image segmentation.
 
-
----
-        Generates batches by using a DFS to traverse the connected component
-        containing "root". Each batch consists of (1) node ids along a path in
-        the graph and (2) torch tensor of image patches centered at each node.
-
-        Parameters
-        ----------
-        root : int
-            Node ID that represents the starting point of the DFS.
-
-        Returns
-        -------
-        generator
-            Generator that yields batches to be run through a neural network.
 """
 
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
@@ -87,18 +72,12 @@ class MergeDetector:
             y_nodes = self.predict(x_nodes)
             idxs = np.where(y_nodes > self.threshold)[0]
             if len(idxs) > 0:
-                try:
-                    merge_sites.extend(nodes[idxs].tolist())
-                    confidences.extend(y_nodes[idxs].tolist())
-                except:
-                    print("hat_y:", y_nodes)
-                    print("idxs:", idxs)
+                merge_sites.extend(nodes[idxs].tolist())
+                confidences.extend(y_nodes[idxs].tolist())
 
             # temp
             self.graph.node_radius[np.array(nodes)] = 10 * y_nodes
             pbar.update(self.batch_size)
-
-        self.graph.to_zipped_swcs("./before-nms-653159.zip", preserve_radius=True)
 
         # Non-maximum suppression of detected sites
         merge_sites = self.filter_with_nms(merge_sites, confidences)
@@ -109,13 +88,13 @@ class MergeDetector:
         if self.remove_detected_sites:
             pass
 
-        self.graph.to_zipped_swcs("./after-nms-653159.zip", preserve_radius=True)
+        self.graph.to_zipped_swcs("./pred-653159.zip", preserve_radius=True)
 
-    def predict(self, x):
+    def predict(self, x_nodes):
         with torch.no_grad():
-            x = x.to("cuda")
-            hat_y = sigmoid(self.model(x))
-            return np.squeeze(ml_util.to_cpu(hat_y, to_numpy=True))
+            x_nodes = x_nodes.to("cuda")
+            y_nodes = sigmoid(self.model(x_nodes))
+            return np.squeeze(ml_util.to_cpu(y_nodes, to_numpy=True), axis=1)
 
     def filter_with_nms(self, merge_sites, confidences):
         # Sort by confidence
