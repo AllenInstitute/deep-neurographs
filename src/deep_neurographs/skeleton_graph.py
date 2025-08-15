@@ -6,9 +6,8 @@ Created on Wed July 2 14:00:00 2025
 
 
 Implementation of a custom subclass of Networkx.Graph called "SkeletonGraph".
-After initializing an instance of this subclass, the graph is built by reading
-and processing SWC files (i.e. neuron fragments). It then stores the relevant
-information into the graph structure.
+The graph is constructed by reading and processing SWC files (i.e. neuron
+fragments). It then stores the relevant information into the graph structure.
 
 """
 
@@ -132,10 +131,6 @@ class SkeletonGraph(nx.Graph):
         component_id : str
             Connected component ID used to map node IDs back to SWC IDs via
             "self.component_id_to_swc_id".
-
-        Returns
-        -------
-        None
         """
         # Determine orientation of attributes
         i, j = tuple(edge_id)
@@ -294,12 +289,7 @@ class SkeletonGraph(nx.Graph):
             Root node of connected component to be written to an SWC file.
         preserve_radius : bool, optional
             Indication of whether to preserve radii of nodes or use default
-            radius of 2um
-
-        Returns
-        -------
-        None
-
+            radius of 2um. Default is False.
         """
         # Subroutines
         def write_entry(node, parent):
@@ -366,14 +356,6 @@ class SkeletonGraph(nx.Graph):
     def init_kdtree(self):
         """
         Initializes KD-Tree from node xyz coordinates.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
         """
         self.kdtree = KDTree(self.node_xyz)
 
