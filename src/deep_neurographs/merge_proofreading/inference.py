@@ -126,7 +126,7 @@ class MergeDetector:
         merge_sites_set = set(merge_sites)
         filtered_merge_sites = set()
         while merge_sites:
-            # Root of NMS
+            # Local max
             root = merge_sites.pop()
             xyz_root = self.graph.node_xyz[root]
             if root in merge_sites_set:
@@ -135,7 +135,7 @@ class MergeDetector:
             else:
                 continue
 
-            # Search neighborhood - suppression
+            # Suppress neighborhood
             queue = [(root, 0)]
             visited = set([root])
             while queue:
@@ -245,6 +245,8 @@ class IterableGraphDataset(IterableDataset):
                 cnt += 1
                 yield from self._generate_batch_metadata_for_component(i)
 
+            if cnt > 10:
+                break
     def _generate_batch_metadata_for_component(self, root):
         """
         Generates metadata (nodes, patch_centers) used to generate batches
