@@ -79,6 +79,8 @@ class MergeDetector:
             self.graph.node_radius[np.array(nodes)] = 10 * y_nodes
             pbar.update(self.batch_size)
 
+        self.graph.to_zipped_swcs("./before-nms-653159.zip", preserve_radius=True)
+
         # Non-maximum suppression of detected sites
         merge_sites = self.filter_with_nms(merge_sites, confidences)
         print("# Detected Merge Sites:", len(merge_sites))
