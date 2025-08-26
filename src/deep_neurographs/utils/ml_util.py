@@ -180,43 +180,5 @@ def to_tensor(arr):
     -------
     torch.Tensor
         Array converted to tensor.
-
     """
     return torch.tensor(arr, dtype=torch.float32)
-
-
-def toCPU(tensor):
-    """
-    Moves tensor from GPU to CPU.
-
-    Parameters
-    ----------
-    tensor : torch.Tensor
-        Tensor to be moved to CPU.
-
-    Returns
-    -------
-    list
-        Tensor moved to CPU and converted into a list.
-
-    """
-    return tensor.detach().cpu().tolist()
-
-
-def toTensor(my_list):
-    """
-    Converts a list to a tensor with contiguous memory.
-
-    Parameters
-    ----------
-    my_list : list
-        List to be converted into a tensor.
-
-    Returns
-    -------
-    torch.Tensor
-        Tensor.
-
-    """
-    arr = np.array(my_list, dtype=np.int64).tolist()
-    return torch.Tensor(arr).t().contiguous().long()

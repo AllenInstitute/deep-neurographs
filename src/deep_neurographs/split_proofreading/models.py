@@ -16,6 +16,8 @@ import re
 import torch
 import torch.nn.init as init
 
+from deep_neurographs.split_proofreading import feature_generation
+
 
 class HGAT(torch.nn.Module):
     """
@@ -482,6 +484,35 @@ class ConvNet(nn.Module):
 
 
 # --- Helpers ---
+def init_model(is_multimodal, heads_1=2, heads_2=4):
+    """
+    Initialize a HGAT or MultiModalHGAT model based on modality flag.
+
+    Parameters
+    ----------
+    is_multimodal : bool
+        If True, initialize a MultiModalHGAT model; otherwise, use HGAT.
+    heads_1 : int, optional
+        Number of attention heads in the first GAT layer. Default is 2.
+    heads_2 : int, optional
+        Number of attention heads in the second GAT layer. Default is 2.
+
+    Returns
+    -------
+    torch.nn.Module
+        An initialized instance of HGAT or MultiModalHGAT.
+    """
+    node_dict = feature_generation.get_node_dict()
+    edge_dict = feature_generation.get_edge_dict()
+    if is_multimodal:
+        model = MultiModalHGAT(
+            node_dict, edge_dict, heads_1=heads_1, heads_2=heads_2
+        )
+    else:
+        model = HGAT(node_dict, edge_dict, heads_1=heads_1, heads_2=heads_2)
+    return model
+
+
 def init_gat_same(hidden_dim, edge_dim, heads):
     gat = nn_geometric.GATv2Conv(
         -1, hidden_dim, dropout=0.25, edge_dim=edge_dim, heads=heads

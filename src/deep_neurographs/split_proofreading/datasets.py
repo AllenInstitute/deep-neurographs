@@ -217,7 +217,7 @@ class HeteroGraphDataset:
                 e_1 = frozenset({-1, -2})
                 e_2 = frozenset({-2, -3})
                 edges = [[n - 1, n - 2], [n - 2, n - 1]]
-                self.data[edge_type].edge_index = ml_util.toTensor(edges)
+                self.data[edge_type].edge_index = toTensor(edges)
                 if node_type == "branch":
                     self.idxs_branches["idx_to_id"][n - 1] = e_1
                     self.idxs_branches["idx_to_id"][n - 2] = e_2
@@ -313,7 +313,7 @@ class HeteroGraphDataset:
             v1 = self.idxs_proposals["id_to_idx"][frozenset(e1)]
             v2 = self.idxs_proposals["id_to_idx"][frozenset(e2)]
             edge_index.extend([[v1, v2], [v2, v1]])
-        return ml_util.toTensor(edge_index)
+        return toTensor(edge_index)
 
     def branch_to_branch(self):
         """
@@ -339,7 +339,7 @@ class HeteroGraphDataset:
                 v1 = self.idxs_branches["id_to_idx"][frozenset(e1)]
                 v2 = self.idxs_branches["id_to_idx"][frozenset(e2)]
                 edge_index.extend([[v1, v2], [v2, v1]])
-        return ml_util.toTensor(edge_index)
+        return toTensor(edge_index)
 
     def branch_to_proposal(self):
         """
@@ -369,7 +369,7 @@ class HeteroGraphDataset:
                 if frozenset((j, k)) not in self.proposals:
                     v2 = self.idxs_branches["id_to_idx"][frozenset((j, k))]
                     edge_index.extend([[v2, v1]])
-        return ml_util.toTensor(edge_index)
+        return toTensor(edge_index)
 
     # Set Edge Attributes
     def set_edge_attrs(self, x_nodes, edge_type, idx_map):
@@ -475,7 +475,7 @@ class HeteroGraphMultiModalDataset(HeteroGraphDataset):
                 e_1 = frozenset({-1, -2})
                 e_2 = frozenset({-2, -3})
                 edges = [[n - 1, n - 2], [n - 2, n - 1]]
-                self.data[edge_type].edge_index = ml_util.toTensor(edges)
+                self.data[edge_type].edge_index = toTensor(edges)
                 if node_type == "branch":
                     self.idxs_branches["idx_to_id"][n - 1] = e_1
                     self.idxs_branches["idx_to_id"][n - 2] = e_2
@@ -552,3 +552,21 @@ def n_edge_features(x):
     """
     key = sample(list(x.keys()), 1)[0]
     return x[key].shape[0]
+
+
+def toTensor(arr):
+    """
+    Converts an array to a tensor with contiguous memory.
+
+    Parameters
+    ----------
+    arr : ArrayLike
+        Array to be converted.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor.
+    """
+    #arr = np.array(my_list, dtype=np.int64).tolist()
+    return torch.Tensor(arr).t().contiguous().long()
