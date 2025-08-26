@@ -91,6 +91,7 @@ class MergeDetector:
             pass
 
         self.graph.to_zipped_swcs("./pred-653159.zip", preserve_radius=True)
+        return merge_sites
 
     def predict(self, x_nodes):
         with torch.no_grad():
