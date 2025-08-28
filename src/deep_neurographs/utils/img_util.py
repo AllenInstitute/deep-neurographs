@@ -504,8 +504,8 @@ def normalize(img):
         Normalized image.
     """
     try:
-        mn, mx = np.percentile(img, [5, 99.9])
-        return np.clip((img - mn) / np.maximum(mx, 1), None, 1)
+        mn, mx = np.percentile(img, [1, 99.9])
+        return np.clip((img - mn) / (mx - mn), 0, 1)
     except Exception as e:
         print("Image Normalization Failed:", e)
         return np.zeros(img.shape)

@@ -126,7 +126,7 @@ class MergeDetector:
                 if i in merge_sites_set:
                     xyz_i = self.graph.node_xyz[i]
                     iou = img_util.iou_3d(xyz_i, xyz_root, self.patch_shape)
-                    if iou > 0.4:
+                    if iou > 0.3:
                         merge_sites_set.remove(i)
                         self.graph.node_radius[i] = 1
 
@@ -299,8 +299,8 @@ class IterableGraphDataset(IterableDataset):
             batch[i, 1, ...] = label_mask[s]
 
         # Normalize image
-        mn, mx = np.percentile(batch[0, 0, ...], [5, 99.9])
-        batch[:, 0, ...] = (batch[:, 0, ...] - mn) / mx
+        mn, mx = np.percentile(batch[0, 0, ...], [1, 99.9])
+        batch[:, 0, ...] = np.clip((batch[:, 0, ...] - mn) / (mx - mn), 0, 1)
         return nodes, torch.tensor(batch, dtype=torch.float)
 
     # --- Helpers ---

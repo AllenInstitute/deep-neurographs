@@ -776,7 +776,7 @@ class ProposalGraph(SkeletonGraph):
     def to_zipped_swcs(self, swc_dir, preserve_radius=False, sampling_rate=1):
         # Initializations
         n = nx.number_connected_components(self)
-        batch_size = n / 1000 if n > 10 ** 4 else n
+        batch_size = max(1, n // 1000) if n > 10 ** 4 else n
         util.mkdir(swc_dir)
 
         # Main
@@ -785,9 +785,9 @@ class ProposalGraph(SkeletonGraph):
             # Assign threads
             batch = list()
             threads = list()
-            for nodes in nx.connected_components(self):
+            for i, nodes in enumerate(nx.connected_components(self)):
                 batch.append(nodes)
-                if len(batch) == batch_size:
+                if len(batch) >= batch_size or i == n - 1:
                     # Zip batch
                     zip_path = os.path.join(swc_dir, f"{zip_cnt}.zip")
                     threads.append(
@@ -841,12 +841,12 @@ class ProposalGraph(SkeletonGraph):
                     # Get attributes
                     x, y, z = tuple(self.node_xyz[i])
                     if preserve_radius:
-                        r = self.nodes[i]["radius"]
+                        r = self.node_radius[i]
                     else:
-                        r = 6 if self.nodes[i]["radius"] == 5.3141592 else 2
+                        r = 6 if self.node_radius[i] == 5.3141592 else 2
 
                     # Write entry
-                    text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} -1")
+                    text_buffer.write(f"\n1 2 {x} {y} {z} {r} -1")
                     node_to_idx[i] = 1
                     n_entries += 1
 
@@ -867,6 +867,7 @@ class ProposalGraph(SkeletonGraph):
             filename = self.get_swc_id(i)
             filename = util.set_zip_path(zip_writer, filename, ".swc")
             zip_writer.writestr(filename, text_buffer.getvalue())
+            print(filename)
 
     def branch_to_zip(
         self,
@@ -891,7 +892,7 @@ class ProposalGraph(SkeletonGraph):
                 r = 6 if branch_radius[k] == 5.3141592 else 2
 
             # Write entry
-            text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
+            text_buffer.write(f"\n{node_id} 2 {x} {y} {z} {r} {parent}")
             n_entries += 1
         return text_buffer, n_entries
 
