@@ -319,6 +319,14 @@ class SkeletonGraph(nx.Graph):
             zip_writer.writestr(f"{filename}.swc", text_buffer.getvalue())
 
     # --- Helpers ---
+    def path_length_of_component(self, root, max_depth=np.inf):
+        length = 0
+        for i, j in nx.dfs_edges(self, source=root):
+            length += self.dist(i, j)
+            if length > max_depth:
+                break
+        return length
+
     def dist(self, i, j):
         """
         Computes the Euclidean distance between nodes "i" and "j".
@@ -360,6 +368,6 @@ class SkeletonGraph(nx.Graph):
         self.kdtree = KDTree(self.node_xyz)
 
     def query_node(self, xyz):
-        # this breaks if node was deleted after kdtree was built
+        # this breaks if node is deleted after kdtree was built
         _, idx = self.kdtree.query(xyz)
         return idx

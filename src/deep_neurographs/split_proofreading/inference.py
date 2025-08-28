@@ -201,6 +201,7 @@ class InferencePipeline:
         self.graph = ProposalGraph(
             anisotropy=self.graph_config.anisotropy,
             min_size=self.graph_config.min_size,
+            min_size_with_proposals=self.graph_config.min_size_with_proposals,
             node_spacing=self.graph_config.node_spacing,
             prune_depth=self.graph_config.prune_depth,
             remove_high_risk_merges=self.graph_config.remove_high_risk_merges,
@@ -436,6 +437,7 @@ class InferencePipeline:
             "brain_id": self.brain_id,
             "segmentation_id": self.segmentation_id,
             "min_fragment_size": f"{self.graph_config.min_size}um",
+            "min_fragment_size_with_proposals": f"{self.graph_config.min_size_with_proposals}um",
             "node_spacing": self.graph_config.node_spacing,
             "remove_doubles": self.graph_config.remove_doubles,
             "use_somas": len(self.soma_centroids) > 0,

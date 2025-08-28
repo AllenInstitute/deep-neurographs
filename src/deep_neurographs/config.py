@@ -24,39 +24,40 @@ class GraphConfig:
     anisotropy : Tuple[float], optional
         Scaling factors applied to xyz coordinates to account for anisotropy
         of microscope. Note this instance of "anisotropy" is only used while
-        reading SWC files. The default is (1.0, 1.0, 1.0).
+        reading SWC files. Default is (1.0, 1.0, 1.0).
     complex_bool : bool
         Indication of whether to generate complex proposals, meaning proposals
-        between leaf and non-leaf nodes. The default is False.
+        between leaf and non-leaf nodes. Default is False.
     img_bbox : dict, optional
         Dictionary with the keys "min" and "max" which specify a bounding box
-        in an image. The default is None.
+        in an image. Default is None.
     long_range_bool : bool, optional
         Indication of whether to generate simple proposals within a scaled
-        distance of "search_radius" from leaves without any proposals. The
-        default is False.
+        distance of "search_radius" from leaves without any proposals. Default
+        is False.
     min_size : float, optional
         Minimum path length (in microns) of swc files which are stored as
-        connected components in the FragmentsGraph. The default is 30.
+        connected components in the FragmentsGraph. Default is 30.
+    min_size_with_proposals : float, optional
+        Minimum fragment path length required for proposals. Default is 0.
     node_spacing : int, optional
-        Spacing (in microns) between nodes. The default is 2.
+        Spacing (in microns) between nodes. Default is 2.
     proposals_per_leaf : int
-        Maximum number of proposals generated for each leaf. The default is 3.
+        Maximum number of proposals generated for each leaf. Default is 3.
     prune_depth : int, optional
-        Branches in graph less than "prune_depth" microns are pruned. The
-        default is 16.
+        Branches in graph less than "prune_depth" microns are pruned. Default
+        is 16.
     remove_doubles : bool, optional
         ...
     remove_high_risk_merges : bool, optional
         Indication of whether to remove high risk merge sites (i.e. close
-        branching points). The default is False.
+        branching points). Default is False.
     smooth_bool : bool, optional
-        Indication of whether to smooth branches in the graph. The default is
+        Indication of whether to smooth branches in the graph. Default is
         True.
     trim_endpoints_bool : bool, optional
         Indication of whether to endpoints of branches with exactly one
-        proposal. The default is True.
-
+        proposal. Default is True.
     """
 
     anisotropy: Tuple[float] = field(default_factory=tuple)
@@ -64,6 +65,7 @@ class GraphConfig:
     img_bbox: dict = None
     long_range_bool: bool = True
     min_size: float = 30.0
+    min_size_with_proposals: float = 0
     node_spacing: int = 2
     proposals_per_leaf: int = 3
     prune_depth: float = 24.0
@@ -84,7 +86,7 @@ class MLConfig:
     anisotropy : Tuple[float], optional
         Scaling factors applied to xyz coordinates to account for anisotropy
         of microscope. Note this instance of "anisotropy" is only used to read
-        image while generating features. The default is (1.0, 1.0, 1.0).
+        image while generating features. Default is (1.0, 1.0, 1.0).
     batch_size : int
         The number of samples processed in one batch during training or
         inference. Default is 1000.
@@ -97,7 +99,6 @@ class MLConfig:
         A general threshold value used for classification. Default is 0.6.
     model_type : str
         Type of machine learning model to use. Default is "GraphNeuralNet".
-
     """
     anisotropy: Tuple[float] = field(default_factory=tuple)
     batch_size: int = 160
@@ -116,7 +117,6 @@ class Config:
     """
     A configuration class for managing and storing settings related to graph
     and machine learning models.
-
     """
 
     def __init__(self, graph_config: GraphConfig, ml_config: MLConfig):
@@ -133,7 +133,6 @@ class Config:
         ml_config : MLConfig
             An instance of the "MLConfig" class that includes configuration
             parameters for machine learning models.
-
         """
         self.graph_config = graph_config
         self.ml_config = ml_config
