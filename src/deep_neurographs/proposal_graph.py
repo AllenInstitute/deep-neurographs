@@ -63,6 +63,7 @@ class ProposalGraph(SkeletonGraph):
         self,
         anisotropy=(1.0, 1.0, 1.0),
         min_size=30.0,
+        min_size_with_proposals=0,
         node_spacing=1,
         prune_depth=20.0,
         remove_high_risk_merges=False,
@@ -72,35 +73,36 @@ class ProposalGraph(SkeletonGraph):
         verbose=False,
     ):
         """
-        Initializes an instance of FragmentsGraph.
+        Instantiates a ProposalGraph object.
 
         Parameters
         ----------
         anisotropy : Tuple[int], optional
             Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. The default is (1.0, 1.0, 1.0).
+            anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
         min_size : float, optional
-            Minimum path length of swc files that are loaded into the
-            FragmentsGraph. The default is 30.0 microns.
+            Minimum path length of fragments loaded into the ProposalGraph.
+            Default is 30.0um.
+        min_size_with_proposals : float, optional
+            Minimum fragment path length required for proposals. Default is 0.
         node_spacing : int, optional
-            Sampling rate for nodes in FragmentsGraph. Every "node_spacing"
-            node is retained.
+            Distance between points in edges.
         prune_depth : int, optional
             Branches with length less than "prune_depth" microns are removed.
-            The default is 16.0 microns.
+            Default is 16.0um.
         remove_high_risk_merges : bool, optional
             Indication of whether to remove high risk merge sites (i.e. close
-            branching points). The default is False.
+            branching points). Default is False.
         segmentation_path : str, optional
-            Path to segmentation stored in GCS bucket. The default is None.
+            Path to segmentation stored in GCS bucket. Default is None.
         smooth_bool : bool, optional
             Indication of whether to smooth xyz coordinates from SWC files.
-            The default is True.
+            Default is True.
         soma_centroids : List[Tuple[float]] or None, optional
-            Physcial coordinates of soma centroids. The default is None.
+            Phyiscal coordinates of soma centroids. Default is None.
         verbose : bool, optional
             Indication of whether to display a progress bar while building
-            FragmentsGraph. The default is True.
+            ProposalGraph. Default is True.
 
         Returns
         -------
@@ -132,6 +134,7 @@ class ProposalGraph(SkeletonGraph):
 
         # Instance attributes - Proposals
         self.merged_ids = set()
+        self.min_size_with_proposals = min_size_with_proposals
         self.proposals = set()
         self.n_merges_blocked = 0
         self.n_proposals_blocked = 0
@@ -331,24 +334,19 @@ class ProposalGraph(SkeletonGraph):
         search_radius : float
             Search radius used to generate proposals.
         complex_bool : bool, optional
-            Indication of whether to generate complex proposals. The default
-            is False.
+            Indication of whether to generate proposals between leaf and
+            non-leaf nodes. Default is False.
         gt_graph : networkx.Graph, optional
-            Ground truth graph. The default is None.
+            Ground truth graph. Default is None.
         long_range_bool : bool, optional
-            Indication of whether to generate long range proposals. The
-            default is False.
+            Indication of whether to generate long range proposals. Default is
+            False.
         proposals_per_leaf : int, optional
-            Maximum number of proposals generated for each leaf. The default
-            is 3.
+            Maximum number of proposals generated for each leaf. Default is 3.
         trim_endpoints_bool : bool, optional
-            Indication of whether to trim endpoints. The default is True.
-
-        Returns
-        -------
-        None
+            Indication of whether to trim endpoints. Default is True.
         """
-        # Initializations
+        # Reset proposals
         self.proposals = set()
         self.node_proposals = defaultdict(set)
         self.set_proposals_per_leaf(proposals_per_leaf)
@@ -867,7 +865,6 @@ class ProposalGraph(SkeletonGraph):
             filename = self.get_swc_id(i)
             filename = util.set_zip_path(zip_writer, filename, ".swc")
             zip_writer.writestr(filename, text_buffer.getvalue())
-            print(filename)
 
     def branch_to_zip(
         self,
