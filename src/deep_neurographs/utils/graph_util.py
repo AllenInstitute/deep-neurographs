@@ -825,11 +825,12 @@ def path_length(graph, max_length=np.inf):
         Graph whose nodes have an attribute called "xyz" which represents
         a 3d coordinate.
     max_length : float
-        ...
+        Maximum physical distance to search along the graph. Limits traversal
+        depth and can improve performance.
 
     Returns
     -------
-    float
+    length : float
         Path length of graph.
     """
     length = 0

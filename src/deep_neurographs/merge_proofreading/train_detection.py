@@ -78,13 +78,13 @@ class MergeSiteDataset:
             anisotropy of the microscope.
         context_radius : int, optional
             Radius (in microns) around merge sites used to extract rooted
-            subgraph. Default is 200.
+            subgraph. Default is 200um.
         multiscale : int, optional
             Level in the image pyramid that the voxel coordinate must index
             into. Default is 0.
         node_spacing : int, optional
-            Spacing between nodes in the graph. Default is 5 (microns).
-        patch_shape : tuple of int, optional
+            Spacing between nodes in the graph. Default is 5um.
+        patch_shape : Tuple[int], optional
             Shape of the 3D patches to extract (depth, height, width). Default is
             (96, 96, 96).
         """
@@ -197,7 +197,7 @@ class MergeSiteDataset:
         Retrieves a training example consisting of an image patch, its
         corresponding label mask, and the associated subgraph for a given
         site.
-        
+
         Parameters
         ----------
         idx : int or None
@@ -205,12 +205,12 @@ class MergeSiteDataset:
         use_transform : bool
             Indication of whether to apply data augmentation transforms to the
             image and label patches.
-        
+
         Returns
         -------
         patches : np.ndarray
-            Array of stacked channels containing the image patch and label mask 
-            with shape (2, D, H, W).
+            Array of stacked channels containing the image patch and label
+            mask with shape (2, D, H, W).
         subgraph : Graph
             Rooted subgraph centered at the site node.
         label : int
@@ -246,14 +246,14 @@ class MergeSiteDataset:
     def get_site(self, idx):
         """
         Retrieves a site from the dataset.
-    
+
         Parameters
         ----------
         idx : int
             Index of the site in "merge_sites_df". Positive indices correspond
             to merge sites, while non-positive indices correspond to non-merge
             sites.
-    
+
         Returns
         -------
         brain_id : str
@@ -306,7 +306,7 @@ class MergeSiteDataset:
 
     def get_img_patch(self, brain_id, center):
         img_patch = self.img_readers[brain_id].read(center, self.patch_shape)
-        return img_util.normalize(img_patch)
+        return img_util.normalize(np.minimum(img_patch, 2000))
 
     def get_label_mask(self, subgraph):
         # Initializations
@@ -455,6 +455,36 @@ class MergeSiteDataloader:
 
 
 # -- Helpers --
+def get_brain_segmentation_pairs(merge_sites_df, idxs):
+    brain_segmentation_pairs = set()
+    for idx in idxs:
+        brain_id = merge_sites_df["brain_id"][idx]
+        segmentation_id = merge_sites_df["segmentation_id"][idx]
+        brain_segmentation_pairs.add((brain_id, segmentation_id))
+    return brain_segmentation_pairs
+
+
+def get_groundtruth_sites(merge_sites_df, brain_id):
+    """
+    Gets the ground-truth merge sites (xyz coordinates) for a given brain.
+
+    Parameters
+    ----------
+    merge_sites_df : pd.DataFrame
+        DataFrame containing merge sites, must contain the columns:
+        "brain_id", "segmentation_id", "segment_id", and "xyz".
+    brain_id : str
+        Unique identifier for a whole-brain dataset.
+
+    Returns
+    -------
+    numpy.ndarray
+        Ground-truth merge sites (xyz coordinates) for a given brain.
+    """
+    idx_mask = merge_sites_df["brain_id"] == brain_id
+    return np.array(merge_sites_df.loc[idx_mask, "xyz"].tolist())
+
+
 def shift_voxel(voxel, center, patch_shape):
     voxel = [v - c + s // 2 for v, c, s in zip(voxel, center, patch_shape)]
     return tuple(voxel)

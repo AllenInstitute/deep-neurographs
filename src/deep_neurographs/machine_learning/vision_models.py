@@ -23,7 +23,15 @@ class CNN3D(nn.Module):
     patch.
     """
 
-    def __init__(self, patch_shape, output_dim=1, dropout=0.1):
+    def __init__(
+        self,
+        patch_shape,
+        output_dim=1,
+        dropout=0.1,
+        n_conv_layers=5,
+        n_feat_channels=16,
+        use_double_conv=True
+    ):
         """
         Constructs a ConvNet object.
 
@@ -36,33 +44,28 @@ class CNN3D(nn.Module):
         dropout : float, optional
             Fraction of values to randomly drop during training. Default is
             0.1.
-
-        Returns
-        -------
-        None
+        n_conv_layers : int, optional
+            Number of convolutional layers. Default is 5.
+        use_double_conv : bool, optional
+            Indication of whether to use double convolution. Default is True.
         """
         # Call parent class
         nn.Module.__init__(self)
 
-        # Layer 1
-        self.conv1a = self._init_conv_layer(2, 16, 3, dropout=dropout)
-        self.conv1b = self._init_conv_layer(16, 16, 3, dropout=dropout)
-
-        # Layer 2
-        self.conv2a = self._init_conv_layer(16, 32, 3, dropout=dropout)
-        self.conv2b = self._init_conv_layer(32, 32, 3, dropout=dropout)
-
-        # Layer 3
-        self.conv3a = self._init_conv_layer(32, 64, 3, dropout=dropout)
-        self.conv3b = self._init_conv_layer(64, 64, 3, dropout=dropout)
-
-        # Layer 4
-        self.conv4a = self._init_conv_layer(64, 128, 3, dropout=dropout)
-        self.conv4b = self._init_conv_layer(128, 128, 3, dropout=dropout)
-
-        # Layer 5
-        self.conv5 = self._init_conv_layer(128, 256, 3, dropout=dropout)
+        # Class attributes
+        self.dropout = dropout
         self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.use_double_conv = use_double_conv
+
+        # Dynamically build convolutional layers
+        layers = []
+        in_channels = 2
+        out_channels = n_feat_channels
+        for i in range(n_conv_layers):
+            layers.append(self._init_conv_layer(in_channels, out_channels, 3))
+            in_channels = out_channels
+            out_channels *= 2
+        self.conv_layers = nn.ModuleList(layers)
 
         # Output layer
         flat_size = self._get_flattened_size(patch_shape)
@@ -76,7 +79,7 @@ class CNN3D(nn.Module):
         self.apply(self.init_weights)
 
     def _init_conv_layer(
-        self, in_channels, out_channels, kernel_size, dropout=0.1
+        self, in_channels, out_channels, kernel_size
     ):
         """
         Initializes a convolutional layer.
@@ -89,27 +92,32 @@ class CNN3D(nn.Module):
             Number of channels that are output from this convolutional layer.
         kernel_size : int
             Size of kernel used on convolutional layers.
-        dropout : float, optional
-            Fraction of values to randomly drop during training. Default is
-            0.1.
 
         Returns
         -------
         torch.nn.Sequential
             Sequence of operations that define this layer.
         """
-        conv_layer = nn.Sequential(
-            nn.Conv3d(
-                in_channels,
-                out_channels,
-                kernel_size=kernel_size,
-                padding="same"
-            ),
-            nn.BatchNorm3d(out_channels),
-            nn.LeakyReLU(),
-            nn.Dropout3d(p=dropout) if dropout > 0 else nn.Identity(),
-        )
-        return conv_layer
+
+        def conv_block(in_channels, out_channels):
+            return nn.Sequential(
+                nn.Conv3d(
+                    in_channels,
+                    out_channels,
+                    kernel_size=kernel_size,
+                    padding="same"
+                ),
+                nn.BatchNorm3d(out_channels),
+                nn.LeakyReLU(inplace=True),
+            )
+
+        if self.use_double_conv:
+            return nn.Sequential(
+                conv_block(in_channels, out_channels),
+                conv_block(out_channels, out_channels),
+            )
+        else:
+            return conv_block(in_channels, out_channels)
 
     def _get_flattened_size(self, patch_shape):
         """
@@ -130,11 +138,9 @@ class CNN3D(nn.Module):
         """
         with torch.no_grad():
             x = torch.zeros(1, 2, *patch_shape)
-            x = self.pool(self.conv1b(self.conv1a(x)))
-            x = self.pool(self.conv2b(self.conv2a(x)))
-            x = self.pool(self.conv3b(self.conv3a(x)))
-            x = self.pool(self.conv4b(self.conv4a(x)))
-            x = self.pool(self.conv5(x))
+            for conv in self.conv_layers:
+                x = conv(x)
+                x = self.pool(x)
             return x.view(1, -1).size(1)
 
     @staticmethod
@@ -146,10 +152,6 @@ class CNN3D(nn.Module):
         ----------
         m : nn.Module
             PyTorch layer or module.
-
-        Returns
-        -------
-        None
         """
         if isinstance(m, nn.Conv3d):
             nn.init.kaiming_normal_(
@@ -180,11 +182,9 @@ class CNN3D(nn.Module):
             Output of neural network.
         """
         # Convolutional layers
-        x = self.pool(self.conv1b(self.conv1a(x)))
-        x = self.pool(self.conv2b(self.conv2a(x)))
-        x = self.pool(self.conv3b(self.conv3a(x)))
-        x = self.pool(self.conv4b(self.conv4a(x)))
-        x = self.pool(self.conv5(x))
+        for conv in self.conv_layers:
+            x = conv(x)
+            x = self.pool(x)
 
         # Output layer
         x = x.view(x.size(0), -1)

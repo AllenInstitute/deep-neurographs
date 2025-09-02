@@ -175,10 +175,11 @@ class Trainer:
         Returns
         -------
         tuple
-            stats : dict
-                Dictionary of aggregated validation metrics.
-            is_best : bool
-                True if the current F1 score is the best so far.
+            A tuple containing:
+                stats : dict
+                    Dictionary of aggregated validation metrics.
+                is_best : bool
+                    True if the current F1 score is the best so far.
         """
         loss, y, hat_y = list(), list(), list()
         with torch.no_grad():
@@ -219,10 +220,11 @@ class Trainer:
         Returns
         -------
         tuple
-            hat_y : torch.Tensor
-                Model predictions.
-            loss : torch.Tensor
-                Computed loss value.
+            A tuple containing:
+                hat_y : torch.Tensor
+                    Model predictions.
+                loss : torch.Tensor
+                    Computed loss value.
         """
         x = x.to("cuda", dtype=torch.float32)
         y = y.to("cuda", dtype=torch.float32)

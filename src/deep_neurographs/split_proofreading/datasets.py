@@ -39,13 +39,12 @@ def init(features, graph, gt_accepts=set()):
     graph : networkx.Graph
         Graph used by gnn to classify proposals.
     gt_accepts : Set[Frozenset[int]]
-        Ground truth set of proposals are accepts.
+        Ground truth set of proposals are accepts. Default is an empty set.
 
     Returns
     -------
     HeteroGraphDataset
         Custom dataset.
-
     """
     # Extract features -- rewrite as build_feature_matrix
     idxs, x_dict = dict(), dict()
@@ -82,7 +81,6 @@ def init(features, graph, gt_accepts=set()):
 class HeteroGraphDataset:
     """
     Custom dataset for heterogenous graphs.
-
     """
 
     def __init__(
@@ -113,11 +111,6 @@ class HeteroGraphDataset:
         idx_to_id : dict
             Dictionary that maps an edge id in "graph" to its index
             in either x_branches or x_proposals.
-
-        Returns
-        -------
-        None
-
         """
         # Conversion idxs
         self.idxs_branches = idxs["branches"]
@@ -149,15 +142,6 @@ class HeteroGraphDataset:
     def init_edges(self):
         """
         Initializes edge index for a graph dataset.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         # Compute edges
         proposal_edges = self.proposal_to_proposal()
@@ -172,15 +156,6 @@ class HeteroGraphDataset:
     def init_edge_attrs(self, x_nodes):
         """
         Initializes edge attributes.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         # Proposal edges
         edge_type = ("proposal", "edge", "proposal")
@@ -230,25 +205,16 @@ class HeteroGraphDataset:
         """
         Gets the dimension of feature vector for branches.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         int
             Dimension of feature vector for branches.
-
         """
         return self.data["branch"]["x"].size(1)
 
     def n_proposal_features(self):
         """
         Gets the dimension of feature vector for proposals.
-
-        Parameters
-        ----------
-        None
 
         Returns
         -------
@@ -262,15 +228,10 @@ class HeteroGraphDataset:
         """
         Gets the dimension of feature vector for edges.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         int
             Dimension of feature vector for edges.
-
         """
         edge_type = ("proposal", "edge", "proposal")
         return self.data[edge_type]["x"].size(1)
@@ -279,15 +240,10 @@ class HeteroGraphDataset:
         """
         Counts the number of proposals in the dataset.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         int
             Number of proposals across all graphs in self.
-
         """
         return len(self.proposals)
 
@@ -296,16 +252,11 @@ class HeteroGraphDataset:
         """
         Generates edge indices between nodes corresponding to proposals.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         list
             Edges generated from line_graph generated from proposals which are
             part of an edge_index for a graph dataset.
-
         """
         edge_index = []
         line_graph = ml_util.line_graph(self.proposals)
@@ -320,16 +271,11 @@ class HeteroGraphDataset:
         Generates edge indices between nodes corresponding to branches
         (i.e. edges in some neurograph).
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         torch.Tensor
             Edges generated from "branches_line_graph" which are a subset of
             an edge_index for a graph dataset.
-
         """
         edge_index = []
         for e1, e2 in nx.line_graph(self.graph).edges:
@@ -346,16 +292,11 @@ class HeteroGraphDataset:
         Generates edge indices between nodes that correspond to proposals and
         edges.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         torch.Tensor
             Edges generated from proposals which are a subset of an edge_index
             for a graph dataset.
-
         """
         edge_index = []
         for p in self.proposals:
@@ -380,11 +321,6 @@ class HeteroGraphDataset:
         Parameters
         ----------
         ...
-
-        Returns
-        -------
-        None
-
         """
         attrs = []
         if self.data[edge_type].edge_index.size(0) > 0:
@@ -406,11 +342,6 @@ class HeteroGraphDataset:
         Parameters
         ----------
         ...
-
-        Returns
-        -------
-        None
-
         """
         attrs = []
         for i in range(self.data[edge_type].edge_index.size(1)):
@@ -422,6 +353,7 @@ class HeteroGraphDataset:
 
 
 class HeteroGraphMultiModalDataset(HeteroGraphDataset):
+
     def __init__(
         self,
         graph,
@@ -501,7 +433,6 @@ def node_intersection(idx_map, e1, e2):
     -------
     int
         Common node between "e1" and "e2".
-
     """
     hat_e1 = idx_map["idx_to_id"][int(e1)]
     hat_e2 = idx_map["idx_to_id"][int(e2)]
@@ -526,7 +457,6 @@ def hetero_node_intersection(idx_map_1, idx_map_2, e1, e2):
     -------
     int
         Common node between "e1" and "e2".
-
     """
     hat_e1 = idx_map_1["idx_to_id"][int(e1)]
     hat_e2 = idx_map_2["idx_to_id"][int(e2)]
@@ -548,7 +478,6 @@ def n_edge_features(x):
     -------
     int
         Number of edge features.
-
     """
     key = sample(list(x.keys()), 1)[0]
     return x[key].shape[0]
