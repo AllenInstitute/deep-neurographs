@@ -14,7 +14,6 @@ Conventions:
 Note: We assume that a segmentation mask corresponds to multiscale 0. Thus,
       the instance attribute "self.multiscale" corresponds to the multiscale
       of the input image.
-
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -69,10 +68,6 @@ class FeatureGenerator:
         segmentation_path : str, optional
             Path to the segmentation assumed to be stored on a GCS bucket. The
             default is None.
-
-        Returns
-        -------
-        None
         """
         # Sanity check
         if is_multimodal and not segmentation_path:
@@ -98,10 +93,6 @@ class FeatureGenerator:
         """
         Gets the number of points on an image profile.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         int
@@ -115,7 +106,6 @@ class FeatureGenerator:
 
         Parameters
         ----------
-
         batch : dict
             Dictionary that contains the items (1) "proposals" which are the
             proposals from "fragments_graph" that features will be generated
@@ -293,7 +283,7 @@ class FeatureGenerator:
         Parameters
         ----------
         proposals : List[Frozenset[int]]
-            List of proposals for which features will be generated.
+            Proposals for which features will be generated.
 
         Returns
         -------
@@ -532,10 +522,6 @@ def get_node_dict():
     """
     Returns the number of features for different node types.
 
-    Parameters
-    ----------
-    None
-
     Returns
     -------
     dict
@@ -547,10 +533,6 @@ def get_node_dict():
 def get_edge_dict():
     """
     Returns the number of features for different edge types.
-
-    Parameters
-    ----------
-    None
 
     Returns
     -------

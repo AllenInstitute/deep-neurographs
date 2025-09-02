@@ -179,6 +179,7 @@ class SkeletonGraph(nx.Graph):
         for (i, j) in old_irr_edge_ids:
             self.irreducible.add_edge(old_to_new[i], old_to_new[j])
 
+        self.node_radius = self.node_radius[old_node_ids]
         self.node_xyz = self.node_xyz[old_node_ids]
         self.node_component_id = self.node_component_id[old_node_ids]
 

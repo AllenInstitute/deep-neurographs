@@ -59,27 +59,23 @@ def run(gt_graph, pred_graph):
     for proposal in pred_graph.proposals:
         # Extract proposal info
         i, j = tuple(proposal)
-        id_i = pred_graph.node_component_id[i]
-        id_j = pred_graph.node_component_id[j]
+        id1 = pred_graph.node_component_id[i]
+        id2 = pred_graph.node_component_id[j]
 
-        # Check if aligned to ground truth skeletons
-        if id_i not in pred_to_gt or id_j not in pred_to_gt:
+        # Check if fragments are aligned to the same ground truth skeletons
+        if pred_to_gt[id1] != pred_to_gt[id2] or pred_to_gt[id1] is None:
             continue
 
-        # Check if aligned to the same ground truth skeletons
-        if pred_to_gt[id_i] != pred_to_gt[id_j]:
-            continue
-
-        # Check if structurally consistent
+        # Check if proposal is structurally consistent
         consistent = is_structurally_consistent(
-            gt_graph, pred_graph, gt_kdtree, pred_to_gt[id_i], proposal
+            gt_graph, pred_graph, gt_kdtree, pred_to_gt[id1], proposal
         )
         if consistent:
             gt_accepts.append(proposal)
     return gt_accepts
 
 
-def get_pred_to_gt_mapping(gt_graph, pred_graph, kdtree):
+def get_pred_to_gt_mapping(gt_graph, pred_graph, gt_kdtree):
     """
     Gets fragments aligned to a single ground truth skeleton and builds a
     dictionary that maps these fragment IDs to the corresponding ground truth
@@ -91,6 +87,8 @@ def get_pred_to_gt_mapping(gt_graph, pred_graph, kdtree):
         Graph built from ground truth SWC files.
     pred_graph : FragmentsGraph
         Graph build from predicted SWC files.
+    gt_kdtree : scipy.spatial.KDTree
+        KD-Tree built from xyz coordinates in ground truth graph.
 
     Returns
     -------
@@ -98,16 +96,16 @@ def get_pred_to_gt_mapping(gt_graph, pred_graph, kdtree):
         Dictionary that maps fragment IDs to the corresponding ground truth
         ID.
     """
-    pred_to_gt = dict()
+    pred_to_gt = defaultdict(lambda: None)
     for nodes in nx.connected_components(pred_graph):
-        gt_id = find_aligned_component(gt_graph, pred_graph, nodes, kdtree)
+        gt_id = find_aligned_component(gt_graph, pred_graph, gt_kdtree, nodes)
         if gt_id:
-            i = util.sample_once(nodes)
-            pred_to_gt[pred_graph.node_component_id[i]] = gt_id
+            node = util.sample_once(nodes)
+            pred_to_gt[pred_graph.node_component_id[node]] = gt_id
     return pred_to_gt
 
 
-def find_aligned_component(gt_graph, pred_graph, nodes, kdtree):
+def find_aligned_component(gt_graph, pred_graph, gt_kdtree, nodes):
     """
     Determines whether a fragment is spatially aligned to a single connected
     component in the ground truth graph. The given nodes are projected onto
@@ -121,6 +119,8 @@ def find_aligned_component(gt_graph, pred_graph, nodes, kdtree):
         Graph built from ground truth SWC files.
     pred_graph : FragmentsGraph
         Graph build from predicted SWC files.
+    gt_kdtree : scipy.spatial.KDTree
+        KD-Tree built from node xyz coordinates in ground truth graph.
     nodes : Set[int]
         Nodes from a connected component in "pred_graph".
 
@@ -135,7 +135,7 @@ def find_aligned_component(gt_graph, pred_graph, nodes, kdtree):
     point_cnt = 0
     for edge in pred_graph.subgraph(nodes).edges:
         for xyz in pred_graph.edges[edge]["xyz"]:
-            hat_xyz = geometry_util.kdtree_query(kdtree, xyz)
+            hat_xyz = geometry_util.kdtree_query(gt_kdtree, xyz)
             hat_id = gt_graph.xyz_to_component_id(hat_xyz)
             d = geometry_util.dist(hat_xyz, xyz)
             dists[hat_id].append(d)
@@ -156,7 +156,7 @@ def find_aligned_component(gt_graph, pred_graph, nodes, kdtree):
         return None
 
 
-def is_structurally_consistent(gt_graph, pred_graph, kdtree, gt_id, proposal):
+def is_structurally_consistent(gt_graph, pred_graph, gt_kdtree, gt_id, proposal):
     """
     Determines whether the proposal connects two branches that correspond to
     either the same or adjacent branches on the ground truth. If either
@@ -178,8 +178,8 @@ def is_structurally_consistent(gt_graph, pred_graph, kdtree, gt_id, proposal):
     """
     # Find irreducible edges in gt_graph closest to edges connected to proposal
     i, j = tuple(proposal)
-    hat_edge_i = find_closest_gt_edge(gt_graph, pred_graph, kdtree, gt_id, i)
-    hat_edge_j = find_closest_gt_edge(gt_graph, pred_graph, kdtree, gt_id, j)
+    hat_edge_i = find_closest_gt_edge(gt_graph, pred_graph, gt_kdtree, gt_id, i)
+    hat_edge_j = find_closest_gt_edge(gt_graph, pred_graph, gt_kdtree, gt_id, j)
     if hat_edge_i is None or hat_edge_j is None:
         return False
 
@@ -209,12 +209,12 @@ def is_structurally_consistent(gt_graph, pred_graph, kdtree, gt_id, proposal):
     return False
 
 
-def find_closest_gt_edge(gt_graph, pred_graph, kdtree, gt_id, i):
+def find_closest_gt_edge(gt_graph, pred_graph, gt_kdtree, gt_id, i):
     depth = 16
     while depth <= 64:
         # Search for edge
         hat_edge_i = project_region(
-            gt_graph, pred_graph, kdtree, gt_id, i, depth
+            gt_graph, pred_graph, gt_kdtree, gt_id, i, depth
         )
 
         # Check result
@@ -225,7 +225,7 @@ def find_closest_gt_edge(gt_graph, pred_graph, kdtree, gt_id, i):
     return hat_edge_i
 
 
-def project_region(gt_graph, pred_graph, kdtree, gt_id, i, depth=16):
+def project_region(gt_graph, pred_graph, gt_kdtree, gt_id, i, depth=16):
     """
     Projects the edges (up to a certain depth) connected to node i onto
     target graph.
@@ -238,7 +238,7 @@ def project_region(gt_graph, pred_graph, kdtree, gt_id, i, depth=16):
     hits = defaultdict(list)
     for edge_xyz_list in pred_graph.truncated_edge_attr_xyz(i, 24):
         for xyz in edge_xyz_list:
-            hat_xyz = geometry_util.kdtree_query(kdtree, xyz)
+            hat_xyz = geometry_util.kdtree_query(gt_kdtree, xyz)
             hat_edge = gt_graph.xyz_to_edge[hat_xyz]
             if gt_graph.node_component_id[hat_edge[0]] == gt_id:
                 hits[hat_edge].append(hat_xyz)

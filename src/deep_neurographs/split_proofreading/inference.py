@@ -46,7 +46,6 @@ from deep_neurographs.split_proofreading import datasets
 from deep_neurographs.split_proofreading.feature_generation import (
     FeatureGenerator,
 )
-from deep_neurographs.split_proofreading import feature_generation
 from deep_neurographs.split_proofreading.models import init_model
 from deep_neurographs.utils import geometry_util, ml_util, util
 
