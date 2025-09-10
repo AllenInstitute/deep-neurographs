@@ -49,7 +49,7 @@ class ImageTransforms:
 
         Returns
         -------
-        numpy.ndarray
+        patches : numpy.ndarray
             Transformed 3D image and segmentation patch.
         """
         # Geometric transforms
@@ -91,7 +91,7 @@ class RandomFlip3D:
 
         Returns
         -------
-        numpy.ndarray
+        patches : numpy.ndarray
             Flipped 3D image and segmentation patch.
         """
         for axis in self.axes:
@@ -132,7 +132,7 @@ class RandomRotation3D:
 
         Returns
         -------
-        numpy.ndarray
+        patches : numpy.ndarray
             Rotated 3D image and segmentation patch.
         """
         for axes in self.axes:
@@ -171,7 +171,7 @@ class RandomScale3D:
 
         Returns
         -------
-        numpy.ndarray
+        patches : numpy.ndarray
             Rescaled 3D image and segmentation patch.
         """
         # Sample new image shape
@@ -212,13 +212,13 @@ class RandomContrast3D:
         """
         self.factor_range = factor_range
 
-    def __call__(self, img):
+    def __call__(self, img_patch):
         """
         Applies contrast to the input 3D image.
 
         Parameters
         ----------
-        img : numpy.ndarray
+        img_patch : numpy.ndarray
             Image to which contrast will be added.
 
         Returns
@@ -227,7 +227,7 @@ class RandomContrast3D:
             Contrasted 3D image.
         """
         factor = random.uniform(*self.factor_range)
-        return np.clip(img * factor, 0, 1)
+        return np.clip(img_patch * factor, 0, 1)
 
 
 class RandomNoise3D:
@@ -235,37 +235,36 @@ class RandomNoise3D:
     Adds random Gaussian noise to a 3D image.
     """
 
-    def __init__(self, max_std=0.06):
+    def __init__(self, max_std=0.05):
         """
         Initializes a RandomNoise3D transformer.
 
         Parameters
         ----------
-        mean : float, optional
-            Mean of the Gaussian noise distribution. Default is 0.06.
-        std : float, optional
-            Standard deviation of the Gaussian noise distribution. Default is
-            0.025.
+        max_std : float, optional
+            Maximum standard deviation of the Gaussian noise distribution.
+            Default is 0.05.
         """
         self.max_std = max_std
 
-    def __call__(self, img):
+    def __call__(self, img_patch):
         """
         Adds Gaussian noise to the input 3D image.
 
         Parameters
         ----------
-        img : np.ndarray
+        img_patch : np.ndarray
             Image to which noise will be added.
 
         Returns
         -------
-        numpy.ndarray
+        img_patch : numpy.ndarray
             Noisy 3D image.
         """
         std = self.max_std * random.random()
-        noise = np.random.normal(0, std, img.shape)
-        return img + noise
+        noise = np.random.normal(0, std, img_patch.shape)
+        img_patch = img_patch + noise
+        return img_patch
 
 
 # --- Helpers ---
@@ -285,7 +284,7 @@ def rotate3d(img_patch, angle, axes):
 
     Returns
     -------
-    numpy.ndarray
+    img_patch : numpy.ndarray
         Rotated 3D image patch.
     """
     img_patch = rotate(
