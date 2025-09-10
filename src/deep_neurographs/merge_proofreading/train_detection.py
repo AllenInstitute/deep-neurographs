@@ -10,6 +10,7 @@ neural networks that detect merge errors.
 """
 
 from concurrent.futures import as_completed, ThreadPoolExecutor
+from scipy.spatial import KDTree
 
 import networkx as nx
 import numpy as np
@@ -33,7 +34,7 @@ class MergeSiteDataset:
         anisotropy of the microscope.
     context_radius : int, optional
         Radius (in microns) around merge sites used to extract rooted
-        subgraph. Default is 200.
+        subgraph.
     gt_graphs : dict[str, SkeletonGraph]
         Dictionary that maps brain IDs to a graph containing ground truth
         tracings.
@@ -49,11 +50,10 @@ class MergeSiteDataset:
         "brain_id", "segmentation_id", "segment_id", and "xyz".
     multiscale : int, optional
         Level in the image pyramid that the voxel coordinate must index into.
-        Default is 0.
     node_spacing : int, optional
-        Spacing between nodes in the graph. Default is 5 (microns).
+        Spacing between nodes in the graph.
     patch_shape : tuple of int, optional
-        Shape of the 3D image patches to extract. Default is (96, 96, 96).
+        Shape of the 3D image patches to extract.
     """
 
     def __init__(
@@ -103,6 +103,7 @@ class MergeSiteDataset:
         self.gt_kdtrees = dict()
         self.merge_graphs = dict()
         self.merge_kdtrees = dict()
+        self.merge_site_kdtrees = dict()
 
     # --- Load Data ---
     def init_graph(self, swc_pointer):
@@ -127,8 +128,14 @@ class MergeSiteDataset:
         """
         Initialize KDTrees for both ground truth and merge graphs.
         """
+        # Build kd-trees from node xyz coordinates
         self.gt_kdtrees = self._init_kdtree(self.gt_graphs)
         self.merge_kdtrees = self._init_kdtree(self.merge_graphs)
+
+        # Build kd-tree from merge sites
+        for brain_id in self.merge_sites_df["brain_id"].unique():
+            pts = extract_merge_xyz(self.merge_sites_df, brain_id)
+            self.merge_site_kdtrees[brain_id] = KDTree(pts)
 
     def _init_kdtree(self, graphs):
         """
@@ -236,7 +243,6 @@ class MergeSiteDataset:
         except ValueError:
             img_patch = img_util.pad_to_shape(img_patch, self.patch_shape)
             patches = np.stack([img_patch, label_patch], axis=0)
-            print("Stack Channels Failed -", brain_id, voxel, img_patch.shape)
 
         # Apply image augmentation (if applicable)
         if use_transform:
@@ -284,9 +290,9 @@ class MergeSiteDataset:
 
         Returns
         -------
-        brain_id : hashable
+        brain_id : str
             Unique identifier of the brain containing the site.
-        graph : Graph
+        graph : SkeletonGraph
             Graph containing the site.
         node : int
             Node ID of the site.
@@ -295,18 +301,26 @@ class MergeSiteDataset:
         """
         # Sample graph
         brain_id = util.sample_once(list(self.gt_graphs.keys()))
-        graph = self.gt_graphs[brain_id]
+        graph = self.merge_graphs[brain_id]
 
         # Sample node on graph
-        if random.random() < 0.5:
-            node = np.random.randint(0, graph.number_of_nodes())
-        else:
-            node = util.sample_once(graph.get_branchings())
+        while True:
+            # Sample node
+            if random.random() < 0.5:
+                node = np.random.randint(0, graph.number_of_nodes())
+            else:
+                node = util.sample_once(graph.get_branchings())
+
+            # Check if node is close to merge site
+            xyz = graph.node_xyz[node]
+            d, _ = self.merge_site_kdtrees[brain_id].query(xyz)
+            if d > 40:
+                break
         return brain_id, graph, node, False
 
     def get_img_patch(self, brain_id, center):
         img_patch = self.img_readers[brain_id].read(center, self.patch_shape)
-        return img_util.normalize(np.minimum(img_patch, 2000))
+        return img_util.normalize(np.minimum(img_patch, 1000))
 
     def get_label_mask(self, subgraph):
         # Initializations
@@ -464,9 +478,9 @@ def get_brain_segmentation_pairs(merge_sites_df, idxs):
     return brain_segmentation_pairs
 
 
-def get_groundtruth_sites(merge_sites_df, brain_id):
+def extract_merge_xyz(merge_sites_df, brain_id):
     """
-    Gets the ground-truth merge sites (xyz coordinates) for a given brain.
+    Gets the xyz coordinates of merge sites for a given brain.
 
     Parameters
     ----------

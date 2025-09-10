@@ -9,8 +9,10 @@ tasks within the GraphTrace pipeline.
 
 """
 
+from contextlib import nullcontext
 from datetime import datetime
 from sklearn.metrics import precision_score, recall_score, accuracy_score
+from torch import autocast
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 
@@ -35,6 +37,8 @@ class Trainer:
         Best F1 score achieved so far on valiation dataset.
     criterion : torch.nn.BCEWithLogitsLoss
         Loss function used during training.
+    device : str, optional
+        Device that model is run on. Default is "cuda".
     log_dir : str
         Path to directory that tensorboard and checkpoints are saved to.
     max_epochs : int
@@ -57,8 +61,10 @@ class Trainer:
         model_name,
         output_dir,
         batch_size=32,
+        device="cuda",
         lr=1e-3,
         max_epochs=200,
+        use_amp=True,
     ):
         """
         Instantiates a Trainer object.
@@ -73,10 +79,12 @@ class Trainer:
             Directory that tensorboard and model checkpoints are written to.
         batch_size : int, optional
             Number of samples per batch during training. Default is 32.
-        lr : float
-            Learning rate.
-        max_epochs : int
-            Maximum number of training epochs.
+        lr : float, optional
+            Learning rate. Default is 1e-3.
+        max_epochs : int, optional
+            Maximum number of training epochs. Default is 200.
+        use_amp : bool, optional
+            Indication of whether to use mixed precision. Default is True.
         """
         # Initializations
         exp_name = "session-" + datetime.today().strftime("%Y%m%d_%H%M")
@@ -93,8 +101,14 @@ class Trainer:
         self.criterion = nn.BCEWithLogitsLoss()
         self.model = model.to("cuda")
         self.optimizer = optim.AdamW(self.model.parameters(), lr=lr)
+        self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=25)
         self.writer = SummaryWriter(log_dir=log_dir)
+
+        if use_amp:
+            self.autocast = autocast(device_type="cuda", dtype=torch.float16)
+        else:
+            self.autocast = nullcontext()
 
     # --- Core Routines ---
     def run(self, train_dataloader, val_dataloader):
@@ -136,19 +150,20 @@ class Trainer:
 
         Returns
         -------
-        dict
+        stats : dict
             Dictionary of aggregated training metrics.
         """
         self.model.train()
         loss, y, hat_y = list(), list(), list()
         for x_i, y_i in train_dataloader:
             # Forward pass
+            self.optimizer.zero_grad()
             hat_y_i, loss_i = self.forward_pass(x_i, y_i)
 
             # Backward pass
-            self.optimizer.zero_grad()
-            loss_i.backward()
-            self.optimizer.step()
+            self.scaler.scale(loss_i).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
 
             # Store results
             y.extend(ml_util.to_cpu(y_i, True).flatten().tolist())
@@ -174,12 +189,10 @@ class Trainer:
 
         Returns
         -------
-        tuple
-            A tuple containing:
-                stats : dict
-                    Dictionary of aggregated validation metrics.
-                is_best : bool
-                    True if the current F1 score is the best so far.
+        stats : dict
+            Dictionary of aggregated validation metrics.
+        is_best : bool
+            True if the current F1 score is the best so far.
         """
         loss, y, hat_y = list(), list(), list()
         with torch.no_grad():
@@ -219,17 +232,16 @@ class Trainer:
 
         Returns
         -------
-        tuple
-            A tuple containing:
-                hat_y : torch.Tensor
-                    Model predictions.
-                loss : torch.Tensor
-                    Computed loss value.
+        hat_y : torch.Tensor
+            Model predictions.
+        loss : torch.Tensor
+            Computed loss value.
         """
-        x = x.to("cuda", dtype=torch.float32)
-        y = y.to("cuda", dtype=torch.float32)
-        hat_y = self.model(x)
-        loss = self.criterion(hat_y, y)
+        with self.autocast:
+            x = x.to("cuda")
+            y = y.to("cuda")
+            hat_y = self.model(x)
+            loss = self.criterion(hat_y, y)
         return hat_y, loss
 
     # --- Helpers
@@ -246,8 +258,8 @@ class Trainer:
 
         Returns
         -------
-        dict
-            Dictionary containing lists of per-sample metrics.
+        stats : Dict
+            Dictionary of metric names to values.
         """
         # Reformat predictions
         hat_y = (np.array(hat_y) > 0).astype(int)
@@ -303,7 +315,7 @@ class Trainer:
         Parameters
         ----------
         stats : dict
-            Dictionary of metric names (str) to lists of values.
+            Dictionary of metric names to lists of values.
         epoch : int
             Current training epoch.
         prefix : str

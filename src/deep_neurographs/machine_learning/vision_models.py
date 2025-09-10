@@ -178,8 +178,8 @@ class CNN3D(nn.Module):
 
         Returns
         -------
-        torch.Tensor
-            Output of neural network.
+        x : torch.Tensor
+            Output of the neural network.
         """
         # Convolutional layers
         for conv in self.conv_layers:
@@ -194,6 +194,7 @@ class CNN3D(nn.Module):
 
 # --- Transformers ---
 class ViT3D(nn.Module):
+
     def __init__(
         self,
         in_channels=1,
@@ -303,14 +304,16 @@ def init_mlp(input_dim, hidden_dim, output_dim, dropout=0.1):
     ----------
     input_dim : int
         Dimension of input feature vector.
-    output_dim : int
+    hidden_dim : int
         Dimension of embedded feature vector.
+    output_dim : int
+        Dimension of output feature vector.
     dropout : float, optional
         Fraction of values to randomly drop during training. Default is 0.1.
 
     Returns
     -------
-    nn.Sequential
+    mlp : nn.Sequential
         Multi-layer perception network.
     """
     mlp = nn.Sequential(
