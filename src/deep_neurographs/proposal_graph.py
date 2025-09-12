@@ -4,7 +4,6 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 Implementation of a custom subclass of Networkx.Graph called "ProposalGraph".
 After initializing an instance of this subclass, the graph is built by reading
 and processing SWC files (i.e. neuron fragments). It then stores the relevant
@@ -56,7 +55,6 @@ class ProposalGraph(SkeletonGraph):
     stores a dense path of points connecting irreducible nodes. Additionally,
     the graph has an attribute called "proposals", which is a set of potential
     connections between pairs of neuron fragments.
-
     """
 
     def __init__(
@@ -103,10 +101,6 @@ class ProposalGraph(SkeletonGraph):
         verbose : bool, optional
             Indication of whether to display a progress bar while building
             ProposalGraph. Default is True.
-
-        Returns
-        -------
-        None
         """
         # Call parent class
         super().__init__()
@@ -150,10 +144,6 @@ class ProposalGraph(SkeletonGraph):
         swc_pointer : Any
             Pointer to SWC files to be loaded, see "swc_util.Reader" for
             documentation.
-
-        Returns
-        -------
-        None
         """
         # Extract irreducible components from SWC files
         irreducibles = self.graph_loader.run(swc_pointer)
@@ -184,10 +174,6 @@ class ProposalGraph(SkeletonGraph):
         component_id : int
             Connected component ID used to map node IDs back to SWC IDs via
             "self.component_id_to_swc_id".
-
-        Returns
-        -------
-        None
         """
         # Component ID
         self.component_id_to_swc_id[component_id] = irreducibles["swc_id"]
@@ -210,10 +196,6 @@ class ProposalGraph(SkeletonGraph):
             Edge to be added.
         attrs : dict
             Dictionary of attributes of "edge" obtained from an SWC file.
-
-        Returns
-        -------
-        None
         """
         i, j = tuple(edge_id)
         self.add_edge(i, j, radius=attrs["radius"], xyz=attrs["xyz"])
@@ -230,10 +212,6 @@ class ProposalGraph(SkeletonGraph):
             Node to be removed.
         j : int
             Node to be removed.
-
-        Returns
-        -------
-        None
         """
         # Remove xyz entries
         self.xyz_to_edge.pop(tuple(self.node_xyz[i]), None)
@@ -255,10 +233,6 @@ class ProposalGraph(SkeletonGraph):
         ----------
         node_type : None or str
             Type of node used to build kdtree.
-
-        Returns
-        -------
-        None
         """
         if node_type == "leaf":
             self.leaf_kdtree = self.get_kdtree(node_type=node_type)
@@ -380,11 +354,6 @@ class ProposalGraph(SkeletonGraph):
         ----------
         proposals_per_leaf : int
             Maximum number of proposals per leaf.
-
-        Returns
-        -------
-        None
-
         """
         self.proposals_per_leaf = proposals_per_leaf
 
@@ -398,10 +367,6 @@ class ProposalGraph(SkeletonGraph):
             Node ID.
         j : int
             Node ID
-
-        Returns
-        -------
-        None
         """
         proposal = frozenset({i, j})
         self.node_proposals[i].add(j)
@@ -416,10 +381,6 @@ class ProposalGraph(SkeletonGraph):
         ----------
         proposal : Frozenset[int]
             Pair of node IDs corresponding to a proposal.
-
-        Returns
-        -------
-        None
         """
         i, j = tuple(proposal)
         self.node_proposals[i].remove(j)
@@ -480,10 +441,6 @@ class ProposalGraph(SkeletonGraph):
         """
         Lists proposals in self.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         List[Frozenset[int]]
@@ -495,10 +452,6 @@ class ProposalGraph(SkeletonGraph):
     def n_proposals(self):
         """
         Counts the number of proposals.
-
-        Parameters
-        ----------
-        None
 
         Returns
         -------
@@ -637,10 +590,6 @@ class ProposalGraph(SkeletonGraph):
             Connected component id.
         root : int
             Node ID
-
-        Returns
-        -------
-        None
         """
         queue = [root]
         visited = set(queue)

@@ -36,7 +36,6 @@ def visualize_connected_components(
     Returns
     -------
     None or list[graph_objects]
-
     """
     # Initializations
     colors = plc.qualitative.Bold
@@ -74,11 +73,6 @@ def visualize_graph(graph, title=""):
         Graph to be visualized.
     title : str, optional
         Title of the plot. Default is "".
-
-    Returns
-    -------
-    None
-
     """
     data = get_edge_traces(graph, graph.edges)
     data.append(get_node_traces(graph))
@@ -99,11 +93,6 @@ def visualize_proposals(
         Graph generated from groundtruth tracings. The default is None.
     title : str, optional
         Title of the plot. Default is "Proposals".
-
-    Returns
-    -------
-    None
-
     """
     visualize_subset(
         graph,
@@ -129,11 +118,6 @@ def visualize_groundtruth(
         Graph generated from groundtruth tracings. The default is None.
     title : str, optional
         Title of the plot. Default is "Ground Truth - Accepted Proposals".
-
-    Returns
-    -------
-    None
-
     """
     visualize_subset(
         graph,
@@ -171,11 +155,6 @@ def visualize_subset(
         Graph generated from ground truth tracings. The default is None.
     title : str, optional
         Title of the plot. Default is "Proposals".
-
-    Returns
-    -------
-    None
-
     """
     # Plot graph
     data = get_edge_traces(graph, graph.edges, color="black")
@@ -197,7 +176,7 @@ def visualize_subset(
     plot(data, title)
 
 
-# utils
+# --- Helpers ---
 def get_node_traces(graph):
     trace = go.Scatter3d(
         x=graph.node_xyz[:, 0],

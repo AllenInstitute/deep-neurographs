@@ -300,7 +300,7 @@ class MergeSiteDataset:
             False, since this method only samples from ground truth sites.
         """
         # Sample graph
-        brain_id = util.sample_once(list(self.gt_graphs.keys()))
+        brain_id = util.sample_once(list(self.merge_graphs.keys()))
         graph = self.merge_graphs[brain_id]
 
         # Sample node on graph
@@ -443,7 +443,7 @@ class MergeSiteDataloader:
                 # Get idx
                 idx = self.idxs[i_start + i_offset]
                 if idx < 0 and self.use_random_sites:
-                    idx = None if np.random.random() > 0.5 else idx
+                    idx = None if np.random.random() < 0.7 else idx
 
                 # Submit job
                 threads.append(
