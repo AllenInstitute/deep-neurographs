@@ -278,6 +278,20 @@ class Trainer:
         }
         return stats
 
+    def load_pretrained_weights(self, model_path):
+        """
+        Loads a pretrained model weights from a checkpoint file.
+
+        Parameters
+        ----------
+        model_path : str
+            Path to the checkpoint file containing the saved weights.
+        """
+        device = next(self.model.parameters()).device
+        self.model.load_state_dict(
+            torch.load(model_path, map_location=device)
+        )
+
     def report_stats(self, stats, is_train=True):
         """
         Prints a summary of training or validation statistics.

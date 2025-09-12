@@ -4,7 +4,6 @@ Created on Wed July 2 14:00:00 2025
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 Implementation of a custom subclass of Networkx.Graph called "SkeletonGraph".
 The graph is constructed by reading and processing SWC files (i.e. neuron
 fragments). It then stores the relevant information into the graph structure.
@@ -104,7 +103,7 @@ class SkeletonGraph(nx.Graph):
 
         Returns
         -------
-        dict
+        node_id_mapping : Dict[int, int]
             Dictionary mapping the original node IDs from "node_dict" to the
             new node IDs assigned in the graph.
         """
