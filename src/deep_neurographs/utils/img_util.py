@@ -89,10 +89,6 @@ class ImageReader(ABC):
         """
         Gets the shape of image.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         Tuple[int]
@@ -317,7 +313,7 @@ def get_minimal_bbox(voxels, buffer=0):
 
     Returns
     -------
-    dict
+    Dict[str, numpy.ndarray]
         Bounding box.
     """
     bbox = {
@@ -335,7 +331,7 @@ def get_neighbors(voxel, shape):
     ----------
     voxel : Tuple[int]
         Voxel coordinate in a 3D image.
-    shape : Tuplep[int]
+    shape : Tuple[int]
         Shape of the 3D image that voxel is contained within.
 
     Returns
@@ -371,7 +367,7 @@ def get_slices(center, shape):
 
     Parameters
     ----------
-    center : tuple
+    center : Tuple[int]
         Center of image patch to be read.
     shape : Tuple[int]
         Shape of image patch to be read.
@@ -394,7 +390,7 @@ def is_contained(voxel, shape, buffer=0):
     ----------
     voxel : Tuple[int]
         Voxel coordinates to be checked.
-    shape : tuple of int
+    shape : Tuple[int]
         Shape of image volume.
     buffer : int, optional
         Number of voxels to pad the bounds by when checking containment.
@@ -475,16 +471,16 @@ def pad_to_shape(img, target_shape, pad_value=0):
 
     Parameters
     ----------
-    img : np.ndarray
+    img : numpy.ndarray
         Input image with shape (D, H, W).
-    target_shape : tuple of int
+    target_shape : Tuple[int]
         Desired output shape
     pad_value : float, optional
         Value to use for padding. Default is 0.
 
     Returns
     -------
-    np.ndarray
+    numpy.ndarray
         Padded image with shape equal to target_shape.
     """
     pads = list()
@@ -502,10 +498,8 @@ def plot_mips(img, vmax=None):
     ----------
     img : numpy.ndarray
         Input 3D image to generate MIPs from.
-
-    Returns
-    -------
-    None
+    vmax : None or float
+        Brightness intensity used as upper limit of the colormap.
     """
     vmax = vmax or np.percentile(img, 99.9)
     fig, axs = plt.subplots(1, 3, figsize=(10, 4))
@@ -526,14 +520,14 @@ def resize(img, new_shape):
 
     Parameters
     ----------
-    img : np.ndarray
+    img : numpy.ndarray
         Input 3D image array with shape (depth, height, width).
-    new_shape : tuple of int
+    new_shape : Tuple[int]
         Desired output shape as (new_depth, new_height, new_width).
 
     Returns
     -------
-    np.ndarray
+    numpy.ndarray
         Resized 3D image with shape equal to "new_shape".
     """
     depth, height, width = img.shape
