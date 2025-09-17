@@ -499,7 +499,7 @@ def plot_mips(img, vmax=None):
     img : numpy.ndarray
         Input 3D image to generate MIPs from.
     vmax : None or float
-        Brightness intensity used as upper limit of the colormap.
+        Brightness intensity used as upper limit of the colormap. Default is None.
     """
     vmax = vmax or np.percentile(img, 99.9)
     fig, axs = plt.subplots(1, 3, figsize=(10, 4))
