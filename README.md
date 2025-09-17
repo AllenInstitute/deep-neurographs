@@ -16,9 +16,9 @@
    <b> Figure: </b>NeuronProofreader reconnects fragmented neuron segments into coherent traces.
 </p>
 
-## Overview
+## Split Mistake Proofreading
 
-The neuron fragment split correction pipeline consists of three main steps:
+The split correction proofreading pipeline consists of three main steps:
 
 <blockquote>
   <p>a. <strong>Graph Construction</strong>: Reads neuron fragments stored as SWC files and loads them into a Networkx graph.</p>
@@ -34,19 +34,9 @@ The neuron fragment split correction pipeline consists of three main steps:
 </p>
 
 
-## Inference
+## Merge Mistake Proofreading
 
-### Step 1: Graph Construction
-
-To do...
-
-### Step 2: Proposal Generation
-
-To do...
-
-### Step 3: Proposal Classification
-
-To do...
+In progress...
 
 ## Installation
 To use the software, in the root directory, run
