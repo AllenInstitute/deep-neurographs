@@ -4,6 +4,8 @@ Created on Sat Nov 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
+Code for processing geometric data.
+
 """
 
 from collections import defaultdict
