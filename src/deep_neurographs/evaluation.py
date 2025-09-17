@@ -37,7 +37,6 @@ def compute_metrics(graph, proposals, accepts):
     -------
     dict
         Results of evaluation where the keys are identical to "METRICS_LIST".
-
     """
     n_pos = len([p for p in proposals if p in graph.gt_accepts])
     a_baseline = n_pos / (len(proposals) if len(proposals) > 0 else 1)
@@ -74,7 +73,6 @@ def get_accuracy(graph, proposals, accepts):
     float, float, float, float, float, float
         Number true positives, number of false positives, accuracy, precision,
         recall, and F1-score.
-
     """
     tp, tn, fp, fn = get_detection_cnts(graph, proposals, accepts)
     a = (tp + tn) / len(proposals) if len(proposals) else 1
@@ -103,7 +101,6 @@ def get_detection_cnts(graph, proposals, accepts):
     float, float, float, float
         Number of true positives, true negatives, false positives, and false
         negatives.
-
     """
     tp, tn, fp, fn = 0, 0, 0, 0
     for p in proposals:

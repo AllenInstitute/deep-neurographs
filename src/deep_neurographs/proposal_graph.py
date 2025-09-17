@@ -9,22 +9,6 @@ After initializing an instance of this subclass, the graph is built by reading
 and processing SWC files (i.e. neuron fragments). It then stores the relevant
 information into the graph structure.
 
-    Graph Construction Algorithm:
-        1. Read Neuron Fragments
-            Reads SWC files and stores the contents in a dictionary with the
-            keys: "id", "xyz", "radius", "pid", and "swc_id". Each SWC file is
-            assumed to contain uniformly spaced points, each separated by 1
-            voxel.
-
-        2. Extract Irreducibles
-            Finds the components of the irreducible subgraph from each SWC
-            file. The irreducible components of a graph are the following:
-                (1) Leafs: Nodes of degree 1
-                (2) Branchings: Nodes of degree 3+
-                (3) Edges: Paths between irreducible nodes
-
-        3. Add Irreducibles
-            to do...
 """
 
 from collections import defaultdict

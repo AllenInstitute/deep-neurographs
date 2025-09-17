@@ -35,7 +35,7 @@ def visualize_connected_components(
 
     Returns
     -------
-    None or list[graph_objects]
+    None or List[graph_objects]
     """
     # Initializations
     colors = plc.qualitative.Bold

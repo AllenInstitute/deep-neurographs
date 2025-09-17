@@ -4,7 +4,6 @@ Created on Sun July 16 14:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 Miscellaneous helper routines.
 
 """
@@ -78,8 +77,8 @@ def list_paths(directory, extension=None):
     directory : str
         Directory to be searched.
     extension : str, optional
-        If provided, only paths of files with the extension are returned. The
-        default is None.
+        If provided, only paths of files with the extension are returned.
+        Default is None.
 
     Returns
     -------
@@ -103,10 +102,10 @@ def list_subdirs(path, keyword=None, return_paths=False):
         Path to directory containing subdirectories to be listed.
     keyword : str, optional
         Only subdirectories containing "keyword" are contained in list that is
-        returned. The default is None.
+        returned. Default is None.
     return_paths : bool
-        Indication of whether to return full path of subdirectories. The
-        default is False.
+        Indication of whether to return full path of subdirectories.
+        Default is False.
 
     Returns
     -------
@@ -134,7 +133,7 @@ def mkdir(path, delete=False):
         Path of directory to be created.
     delete : bool, optional
         Indication of whether to delete directory at path if it already
-        exists. The default is False.
+        exists. Default is False.
 
     Returns
     -------
@@ -154,10 +153,6 @@ def rmdir(path):
     ----------
     path : str
         Path to directory and subdirectories to be deleted if they exist.
-
-    Returns
-    -------
-    None
     """
     if os.path.exists(path):
         shutil.rmtree(path)
@@ -235,10 +230,6 @@ def combine_zips(zip_paths, output_zip_path):
         List of ZIP archieves to be combined.
     output_zip_path : str
         Path to ZIP archive to be written.
-
-    Returns
-    -------
-    None
     """
     seen_files = set()
     with ZipFile(output_zip_path, 'w') as out_zip:
@@ -316,10 +307,6 @@ def write_json(path, contents):
         Path that txt file is written to.
     contents : dict
         Contents to be written to JSON file.
-
-    Returns
-    -------
-    None
     """
     with open(path, "w") as f:
         json.dump(contents, f)
@@ -335,10 +322,6 @@ def write_list(path, my_list):
         Path where text file is to be written.
     my_list : list
         The list of items to write to the file.
-
-    Returns
-    -------
-    None
     """
     with open(path, "w") as file:
         for item in my_list:
@@ -355,10 +338,6 @@ def write_txt(path, contents):
         Path that txt file is written to.
     contents : str
         String to be written to txt file.
-
-    Returns
-    -------
-    None
     """
     f = open(path, "w")
     f.write(contents)
@@ -465,10 +444,6 @@ def upload_dir_to_s3(dir_path, bucket_name, prefix):
         Name of S3 bucket.
     prefix : str
         Path within S3 bucket.
-
-    Returns
-    -------
-    None
     """
     with ThreadPoolExecutor() as executor:
         for name in os.listdir(dir_path):
@@ -491,10 +466,6 @@ def upload_file_to_s3(source_path, bucket_name, destination_path):
         Name of S3 bucket.
     destination_path : str
         Path within S3 bucket that source file is to be written to.
-
-    Returns
-    -------
-    None
     """
     s3 = boto3.client('s3')
     s3.upload_file(source_path, bucket_name, destination_path)
@@ -515,7 +486,7 @@ def find_best(my_dict, maximize=True):
 
     Returns
     -------
-    hashable data type
+    hashable
         Key associated with the longest list or largest integer in "my_dict".
     """
     best_key = None
@@ -579,10 +550,6 @@ def remove_items(my_dict, keys):
 def get_memory_usage():
     """
     Gets the current memory usage in gigabytes.
-
-    Parameters
-    ----------
-    None
 
     Returns
     -------
@@ -659,7 +626,7 @@ def time_writer(t, unit="seconds"):
     t : float
         Runtime.
     unit : str, optional
-        Unit that the given time is expressed in.
+        Unit that the given time is expressed in. Default is "seconds".
 
     Returns
     -------

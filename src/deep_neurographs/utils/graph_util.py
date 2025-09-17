@@ -4,7 +4,6 @@ Created on Wed June 5 16:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 Code that loads and preprocesses neuron fragments stored as swc files, then
 constructs a custom graph object called a "FragmentsGraph".
 
@@ -70,33 +69,29 @@ class GraphLoader:
         ----------
         anisotropy : List[float], optional
             Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. The default is (1.0, 1.0, 1.0).
+            anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
         min_size : float, optional
             Minimum path length of swc files that are loaded into the
-            FragmentsGraph. The default is 24.0 microns.
+            FragmentsGraph. Default is 24.0 microns.
         node_spacing : int, optional
             Sampling rate for nodes in FragmentsGraph. Every "node_spacing"
-            node is retained. The default is 1.
+            node is retained. Default is 1.
         prune_depth : int, optional
             Branches with length less than "prune_depth" microns are pruned.
-            The default is 20.0 microns.
+            Default is 20.0 microns.
         remove_high_risk_merges : bool, optional
             Indication of whether to remove high risk merge sites (i.e. close
-            branching points). The default is False.
+            branching points). Default is False.
         segmentation_path : str, optional
-            Path to segmentation stored in GCS bucket. The default is None.
+            Path to segmentation stored in GCS bucket. Default is None.
         smooth_bool : bool, optional
             Indication of whether to smooth xyz coordinates from SWC files.
-            The default is True.
+            Default is True.
         soma_centroids : List[Tuple[float]] or None, optional
-            Physcial coordinates of soma centroids. The default is None.
+            Physcial coordinates of soma centroids. Default is None.
         verbose : bool, optional
             Indication of whether to display a progress bar while building
-            FragmentsGraph. The default is True.
-
-        Returns
-        -------
-        None
+            FragmentsGraph. Default is True.
         """
         # Instance attributes
         self.id_to_soma = defaultdict(list)
@@ -127,10 +122,6 @@ class GraphLoader:
         ----------
         segmentation_path : str
             Path to a segmentation stored in a GCS bucket.
-
-        Returns
-        -------
-        None
         """
         reader = img_util.TensorStoreReader(segmentation_path)
         with ThreadPoolExecutor() as executor:
@@ -179,26 +170,32 @@ class GraphLoader:
         desc = "Extract Graphs"
         pbar = tqdm(total=len(swc_dicts), desc=desc) if self.verbose else None
         multiprocessing.set_start_method('spawn', force=True)
-        high_risk_cnt = 0
         with ProcessPoolExecutor() as executor:
+            # Start processes
+            pending = set()
+            for _ in range(min(512, len(swc_dicts))):
+                pending.add(executor.submit(self.extract, swc_dicts.pop()))
+
+            # Yield processes
             irreducibles = deque()
-            processes = list()
-            while swc_dicts:
-                processes.append(
-                    executor.submit(self.extract, swc_dicts.pop())
-                )
-                if len(processes) > 5000 or not swc_dicts:
-                    # Store results
-                    for process in as_completed(processes):
-                        result, cnt = process.result()
-                        high_risk_cnt += cnt
-                        irreducibles.extend(result)
-                        pbar.update(1) if self.verbose else None
+            high_risk_cnt = 0
+            while pending or swc_dicts:
+                for process in as_completed(pending):
+                    # Store completed processes
+                    result, cnt = process.result()
+                    pending.remove(process)
+                    high_risk_cnt += cnt
+                    irreducibles.extend(result)
+                    pbar.update(1) if self.verbose else None
 
-                    # Reset processes
-                    processes = list()
+                    # Continue submitting processes
+                    if swc_dicts:
+                        pending.add(
+                            executor.submit(self.extract, swc_dicts.pop())
+                        )
 
-        if self.verbose and high_risk_cnt > 0:
+        # Report results
+        if self.verbose:
             print("# High Risk Merges Detected:", high_risk_cnt)
         return irreducibles
 
@@ -407,10 +404,6 @@ class GraphLoader:
             Contents of an SWC file.
         somas_xyz : List[Tuple[float]]
             Physical coordinates representing soma locations.
-
-        Returns
-        -------
-        None
         """
         soma_nodes = graph.graph["soma_nodes"]
         if len(soma_nodes) <= 20:
@@ -851,10 +844,6 @@ def prune_branches(graph, depth):
         Graph to be searched.
     depth : float
         Length of branches that are pruned.
-
-    Returns
-    -------
-    None
     """
     for leaf in get_leafs(graph):
         branch = [leaf]
@@ -885,10 +874,6 @@ def remove_nearby_nodes(graph, roots, max_dist=5.0):
         Root nodes.
     max_dist : float, optional
         Maximum distance within which nodes are removed. The default is 5.0.
-
-    Returns
-    -------
-    None
     """
     nodes = set()
     while len(roots) > 0:
