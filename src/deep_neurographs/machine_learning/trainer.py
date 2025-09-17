@@ -99,7 +99,7 @@ class Trainer:
         self.model_name = model_name
 
         self.criterion = nn.BCEWithLogitsLoss()
-        self.model = model.to("cuda")
+        self.model = model.to(device)
         self.optimizer = optim.AdamW(self.model.parameters(), lr=lr)
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=25)
@@ -242,7 +242,7 @@ class Trainer:
             y = y.to("cuda")
             hat_y = self.model(x)
             loss = self.criterion(hat_y, y)
-        return hat_y, loss
+            return hat_y, loss
 
     # --- Helpers
     def compute_stats(self, y, hat_y):
