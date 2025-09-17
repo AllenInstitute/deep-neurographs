@@ -1,4 +1,4 @@
-# GraphTrace
+# Neuron Proofreader
 
 [![License](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
 ![Code Style](https://img.shields.io/badge/code%20style-black-black)
@@ -8,7 +8,7 @@
 ![Python](https://img.shields.io/badge/python->=3.7-blue?logo=python)
 
 
-<b> GraphTrace</b> is a Python library that automatically corrects split errors in fragmented neuron segmentations from whole-brain images. It takes SWC files as input and uses a graph-based neural network pipeline to propose, score, and merge candidate connections between neuron fragments. GraphTrace efficiently handles datasets with millions of fragments across whole-brain volumes, enabling high-throughput proofreading and reconstruction at scale.
+<b> NeuronProofreader</b> is a Python library that automatically corrects split errors in fragmented neuron segmentations from whole-brain images. It takes SWC files as input and uses a graph-based neural network pipeline to propose, score, and merge candidate connections between neuron fragments. GraphTrace efficiently handles datasets with millions of fragments across whole-brain volumes, enabling high-throughput proofreading and reconstruction at scale.
 
 <p>
   <img src="imgs/result.png" width="900" alt="">
