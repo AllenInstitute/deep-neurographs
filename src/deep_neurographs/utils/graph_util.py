@@ -4,7 +4,7 @@ Created on Wed June 5 16:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Code that loads and preprocesses neuron fragments stored as swc files, then
+Code that loads and preprocesses neuron fragments stored as SWC files, then
 constructs a custom graph object called a "FragmentsGraph".
 
     Graph Loading Algorithm:
