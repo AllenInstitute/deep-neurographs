@@ -4,7 +4,6 @@ Created on Fri May 8 11:00:00 2024
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-https://open.quiltdata.com/b/aind-open-data/tree
 Helper routines for reading and processing images.
 
 """
