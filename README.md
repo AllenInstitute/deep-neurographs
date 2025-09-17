@@ -8,7 +8,7 @@
 ![Python](https://img.shields.io/badge/python->=3.7-blue?logo=python)
 
 
-<b> NeuronProofreader</b> is a Python library that automatically corrects split errors in fragmented neuron segmentations from whole-brain images. It takes SWC files as input and uses a graph-based neural network pipeline to propose, score, and merge candidate connections between neuron fragments. GraphTrace efficiently handles datasets with millions of fragments across whole-brain volumes, enabling high-throughput proofreading and reconstruction at scale.
+<b> NeuronProofreader</b> is a Python library for automated proofreading of neuron reconstructions. It corrects both <b>split</b>  (over-fragmented neurons) and <b>merge</b>  (erroneously joined neurons) errors in large-scale connectomics datasets. The library processes neuron fragments in SWC format using a multimodal pipeline that identifies and corrects topological errors in whole-brain reconstructions.
 
 <p>
   <img src="imgs/result.png" width="900" alt="">
