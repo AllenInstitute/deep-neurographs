@@ -4,7 +4,6 @@ Created on Wed June 5 16:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 Routines for working with SWC files. An SWC file is a text-based file format
 used to represent the directed graphical structure of a neuron. It contains a
 series of nodes such that each has the following attributes:
@@ -52,14 +51,10 @@ class Reader:
         ----------
         anisotropy : Tuple[float], optional
             Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
+            anisotropy of the microscope. Default is [1.0, 1.0, 1.0].
         min_size : int, optional
             Threshold on the number nodes in SWC files that are parsed and
-            returned. The default is 0.
-
-        Returns
-        -------
-        None
+            returned. Default is 0.
         """
         self.anisotropy = anisotropy
         self.min_size = min_size
@@ -501,7 +496,7 @@ class Reader:
         for i, line in enumerate(content):
             if line.startswith("# OFFSET"):
                 offset = self.read_xyz(line.split()[2:5])
-            if not line.startswith("#"):
+            if not line.startswith("#") and len(line) > 0:
                 return content[i:], offset
 
     def read_xyz(self, xyz_str, offset=(0, 0, 0)):
@@ -575,7 +570,7 @@ def to_graph(swc_dict, set_attrs=False):
         Contents of an SWC file.
     set_attrs : bool, optional
         Indication of whether to set "xyz" and "radius" as graph-level
-        attributes.
+        attributes. Default is False.
 
     Returns
     -------

@@ -4,7 +4,6 @@ Created on Sat Sept 16 16:00:00 2024
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 This module defines a set of configuration classes used for setting up various
 aspects of a system involving graphs, proposals, and machine learning (ML).
 

@@ -113,7 +113,6 @@ def get_inputs(data, device="cpu"):
             - x (dict): Node features dictionary.
             - edge_index (dict): Edge indices dictionary.
             - edge_attr (dict): Edge attributes dictionary.
-
     """
     data.to(device)
     return data.x_dict, data.edge_index_dict, data.edge_attr_dict
@@ -132,7 +131,6 @@ def line_graph(edges):
     -------
     networkx.Graph
         Line graph generated from a list of edges.
-
     """
     graph = nx.Graph()
     graph.add_edges_from(edges)

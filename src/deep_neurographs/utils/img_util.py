@@ -36,10 +36,6 @@ class ImageReader(ABC):
             Path to image.
         is_segmentation : bool, optional
             Indication of whether image is a segmentation.
-
-        Returns
-        -------
-        None
         """
         self.img = None
         self.img_path = img_path
@@ -50,14 +46,6 @@ class ImageReader(ABC):
         """
         This method should be implemented by subclasses to load the image
         based on img_path.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
         """
         pass
 
@@ -127,10 +115,6 @@ class TensorStoreReader(ImageReader):
         ----------
         img_path : str
             Path to image.
-
-        Returns
-        -------
-        None
         """
         self.driver = self.init_driver(img_path)
         super().__init__(img_path)
@@ -138,10 +122,6 @@ class TensorStoreReader(ImageReader):
     def init_driver(self, img_path):
         """
         Gets the storage driver needed to read the image.
-
-        Parameters
-        ----------
-        None
 
         Returns
         -------
@@ -158,14 +138,6 @@ class TensorStoreReader(ImageReader):
     def _load_image(self):
         """
         Loads image using the TensorStore library.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
         """
         # Load image
         self.img = ts.open(
@@ -238,7 +210,6 @@ class TensorStoreReader(ImageReader):
 class ZarrReader(ImageReader):
     """
     Class that reads image with Zarr library.
-
     """
 
     def __init__(self, img_path):
@@ -249,24 +220,12 @@ class ZarrReader(ImageReader):
         ----------
         img_path : str
             Path to image.
-
-        Returns
-        -------
-        None
         """
         super().__init__(img_path)
 
     def _load_image(self):
         """
         Loads image using the Zarr library.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
         """
         store = s3fs.S3Map(root=self.img_path, s3=s3fs.S3FileSystem(anon=True))
         self.img = zarr.open(store, mode="r")
