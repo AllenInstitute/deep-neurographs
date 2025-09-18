@@ -19,13 +19,12 @@ import torch.nn as nn
 # --- CNNs ---
 class CNN3D(nn.Module):
     """
-    Convolutional neural network that classifies edge proposals given an image
-    patch.
+    Convolutional neural network for 3D images.
     """
 
     def __init__(
         self,
-        patch_shape,
+        token_shape,
         output_dim=1,
         dropout=0.1,
         n_conv_layers=5,
@@ -37,7 +36,7 @@ class CNN3D(nn.Module):
 
         Parameters
         ----------
-        patch_shape : Tuple[int]
+        token_shape : Tuple[int]
             Shape of input image patch.
         output_dim : int, optional
             Dimension of output. Default is 1.
@@ -68,7 +67,7 @@ class CNN3D(nn.Module):
         self.conv_layers = nn.ModuleList(layers)
 
         # Output layer
-        flat_size = self._get_flattened_size(patch_shape)
+        flat_size = self._get_flattened_size(token_shape)
         self.output = nn.Sequential(
             init_mlp(flat_size, flat_size * 2, flat_size // 2),
             init_mlp(flat_size // 2, flat_size, flat_size // 4),
@@ -119,7 +118,7 @@ class CNN3D(nn.Module):
         else:
             return conv_block(in_channels, out_channels)
 
-    def _get_flattened_size(self, patch_shape):
+    def _get_flattened_size(self, token_shape):
         """
         Compute the flattened feature vector size after applying a sequence
         of convolutional and pooling layers on an input tensor with the given
@@ -127,7 +126,7 @@ class CNN3D(nn.Module):
 
         Parameters
         ----------
-        patch_shape : Tuple[int]
+        token_shape : Tuple[int]
             Shape of input image patch.
 
         Returns
@@ -137,7 +136,7 @@ class CNN3D(nn.Module):
             pooling.
         """
         with torch.no_grad():
-            x = torch.zeros(1, 2, *patch_shape)
+            x = torch.zeros(1, 2, *token_shape)
             for conv in self.conv_layers:
                 x = conv(x)
                 x = self.pool(x)
@@ -197,10 +196,10 @@ class ViT3D(nn.Module):
 
     def __init__(
         self,
-        in_channels=1,
-        img_shape=(64, 64, 64),
-        patch_shape=(8, 8, 8),
-        emb_size=512,
+        in_channels=2,
+        img_shape=(128, 128, 128),
+        token_shape=(8, 8, 8),
+        emb_dim=512,
         depth=6,
         heads=8,
         mlp_dim=1024,
@@ -209,29 +208,29 @@ class ViT3D(nn.Module):
         super().__init__()
 
         # Class attributes
-        self.patch_shape = patch_shape
-        self.grid_size = [img_shape[i] // patch_shape[i] for i in range(3)]
+        self.token_shape = token_shape
+        self.grid_size = [img_shape[i] // token_shape[i] for i in range(3)]
 
-        # Transformer Layers
-        self.patch_embed = PatchEmbedding3D(
-            in_channels, patch_shape, emb_size, img_shape
+        # Transformer layers
+        self.img_token_embed = ImageTokenEmbedding3D(
+            in_channels, token_shape, emb_dim, img_shape
         )
         self.transformer = nn.Sequential(
             *[
-                TransformerEncoderBlock(emb_size, heads, mlp_dim)
+                TransformerEncoderBlock(emb_dim, heads, mlp_dim)
                 for _ in range(depth)
             ]
         )
         self.output_head = nn.Linear(
-            emb_size, np.prod(patch_shape) * in_channels
+            emb_dim, np.prod(token_shape) * in_channels
         )
 
     def forward(self, x):
         batch_size = x.size(0)
-        x = self.patch_embed(x)
+        x = self.img_token_embed(x)
         x = self.transformer(x)
         x = self.output_head(x)
-        x = x.view(batch_size, -1, *self.patch_shape)
+        x = x.view(batch_size, -1, *self.token_shape)
         x = rearrange(
             x,
             "(b d h w) c pd ph pw -> b c (d pd) (h ph) (w pw)",
@@ -239,31 +238,83 @@ class ViT3D(nn.Module):
             d=self.grid_size[0],
             h=self.grid_size[1],
             w=self.grid_size[2],
-            pd=self.patch_shape[0],
-            ph=self.patch_shape[1],
-            pw=self.patch_shape[2],
+            pd=self.token_shape[0],
+            ph=self.token_shape[1],
+            pw=self.token_shape[2],
         )
         return x
 
 
-class PatchEmbedding3D(nn.Module):
-    def __init__(self, in_channels, patch_shape, emb_size, img_shape, dropout=0.1):
+class ImageTokenEmbedding3D(nn.Module):
+    """
+    A class for learning image token embeddings for transformer-based
+    architectures.
+
+    Attributes
+    ----------
+    dropout : nn.Dropout
+        Dropout layer.
+    emb_dim : int
+        Dimension of the embedding space.
+    pos_embedding : nn.Parameter
+        Learnable position encoding.
+    proj : nn.Conv3d
+        Convolutional layer that generates a learnable projection of the
+        tokens.
+    token_shape : Tuple[int]
+        Shape of each token (D, H, W).
+    """
+
+    def __init__(
+        self, in_channels, token_shape, emb_dim, img_shape, dropout=0.1
+    ):
+        """
+        Instantiates a ImageTokenEmbedding3D object.
+
+        Parameters
+        ----------
+        in_channels : int
+            Number of input channels in the image.
+        token_shape : Tuple[int]
+            Shape of each token (D, H, W).
+        emb_dim : int
+            Dimension of the embedding space.
+        img_shape : Tuple[int]
+            Shape of the input image (D, H, W).
+        dropout : float, optional
+            Dropout probability applied after adding positional embeddings.
+            Default is 0.1.
+        """
         # Call parent class
         super().__init__()
 
         # Class attributes
-        self.patch_shape = patch_shape
-        self.emb_size = emb_size
+        self.emb_dim = emb_dim
+        self.token_shape = token_shape
 
         # Embedding
-        n_patches = np.prod([img_shape[i] // patch_shape[i] for i in range(3)])
-        self.pos_embedding = nn.Parameter(torch.randn(1, n_patches, emb_size))
+        n_tokens = np.prod([s // ts for s, ts in zip(img_shape, token_shape)])
+        self.pos_embedding = nn.Parameter(torch.randn(1, n_tokens, emb_dim))
         self.proj = nn.Conv3d(
-            in_channels, emb_size, kernel_size=patch_shape, stride=patch_shape
+            in_channels, emb_dim, kernel_size=token_shape, stride=token_shape
         )
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x):
+        """
+        Forward pass that converts an input image into a sequence of token
+        embeddings.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (B, C, D, H, W).
+
+        Returns
+        -------
+        torch.Tensor
+            Token embeddings of shape (B, N, E).
+        """
         x = self.proj(x)
         x = rearrange(x, "b c d h w -> b (d h w) c")
         x = x + self.pos_embedding
@@ -271,27 +322,69 @@ class PatchEmbedding3D(nn.Module):
 
 
 class TransformerEncoderBlock(nn.Module):
-    def __init__(self, emb_size, heads, mlp_dim, dropout=0.1):
+    """
+    Single transformer encoder block.
+
+    Attributes
+    ----------
+    attn : nn.MultiheadAttention
+        Multihead attention block.
+    dropout : nn.Dropout
+        Dropout layer.
+    mlp : nn.Sequential
+        Multi-layer perceptron.
+    norm1 : nn.LayerNorm
+        Applies layer normalization over a mini-batch of the inputs.
+    norm2 : nn.LayerNorm
+        Applied layer normalization over a mini-batch of the outputs of the
+        multihead attention block.
+    """
+
+    def __init__(self, emb_dim, heads, mlp_dim, dropout=0.1):
+        """
+        Instantiates a TransformerEncoderBlock object.
+
+        Parameters
+        ----------
+        emb_dim : int
+            Dimension of the embedding space.
+        heads : int
+            Number of attention heads.
+        mlp_dim : int
+            Dimensionality of the hidden layer in the MLP.
+        dropout : float, optional
+            Dropout probability applied after attention and MLP layers.
+            Default is 0.1.
+        """
         # Call parent class
         super().__init__()
 
         # Attention head
-        self.norm1 = nn.LayerNorm(emb_size)
+        self.norm1 = nn.LayerNorm(emb_dim)
         self.attn = nn.MultiheadAttention(
-            emb_size, heads, dropout=dropout, batch_first=True
+            emb_dim, heads, dropout=dropout, batch_first=True
         )
-        self.norm2 = nn.LayerNorm(emb_size)
-        self.mlp = nn.Sequential(
-            nn.Linear(emb_size, mlp_dim),
-            nn.GELU(),
-            nn.Dropout(p=dropout),
-            nn.Linear(mlp_dim, emb_size),
-            nn.Dropout(p=dropout),
-        )
+        self.norm2 = nn.LayerNorm(emb_dim)
+        self.mlp = init_mlp(emb_dim, mlp_dim, emb_dim, dropout)
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x):
+        """
+        Forward pass of the encoder block.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (B, N, E).
+
+        Returns
+        -------
+        x : torch.Tensor
+            Output tensor of shape (B, N, E), same as input.
+        """
         x = x + self.attn(self.norm1(x), self.norm1(x), self.norm1(x))[0]
         x = x + self.mlp(self.norm2(x))
+        x = self.dropout(x)
         return x
 
 
@@ -300,7 +393,7 @@ def init_mlp(input_dim, hidden_dim, output_dim, dropout=0.1):
     """
     Initializes a multi-layer perceptron (MLP).
 
-    Parametersƒ
+    Parameters
     ----------
     input_dim : int
         Dimension of input feature vector.
