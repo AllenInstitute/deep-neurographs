@@ -22,11 +22,11 @@ import numpy as np
 import os
 import zipfile
 
-from deep_neurographs.skeleton_graph import SkeletonGraph
-from deep_neurographs.split_proofreading import (
+from neuron_proofreader.skeleton_graph import SkeletonGraph
+from neuron_proofreader.split_proofreading import (
     groundtruth_generation, proposal_generation
 )
-from deep_neurographs.utils import (
+from neuron_proofreader.utils import (
     geometry_util as geometry, graph_util as gutil, util,
 )
 

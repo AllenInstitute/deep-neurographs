@@ -17,7 +17,7 @@ import networkx as nx
 import numpy as np
 import zipfile
 
-from deep_neurographs.utils import (
+from neuron_proofreader.utils import (
     geometry_util, graph_util as gutil, img_util, util
 )
 

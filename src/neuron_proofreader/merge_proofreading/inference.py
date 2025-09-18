@@ -18,7 +18,7 @@ import networkx as nx
 import numpy as np
 import torch
 
-from deep_neurographs.utils import img_util, ml_util
+from neuron_proofreader.utils import img_util, ml_util
 
 
 class MergeDetector:

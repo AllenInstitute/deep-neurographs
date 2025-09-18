@@ -30,7 +30,7 @@ from collections import defaultdict
 import networkx as nx
 import numpy as np
 
-from deep_neurographs.utils import geometry_util, util
+from neuron_proofreader.utils import geometry_util, util
 
 
 def run(gt_graph, pred_graph):

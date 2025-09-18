@@ -36,7 +36,7 @@ import networkx as nx
 import numpy as np
 import os
 
-from deep_neurographs.utils import (
+from neuron_proofreader.utils import (
     geometry_util as geometry, img_util, swc_util, util
 )
 

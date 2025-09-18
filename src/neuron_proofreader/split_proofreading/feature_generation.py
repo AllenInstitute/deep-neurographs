@@ -7,10 +7,6 @@ Created on Sat July 15 9:00:00 2023
 Generates features for training a machine learning model and performing
 inference.
 
-Conventions:
-    (1) "xyz" refers to a physical coordinate such as those from an SWC file
-    (2) "voxel" refers to a voxel coordinate in a whole-brain image.
-
 Note: We assume that a segmentation mask corresponds to multiscale 0. Thus,
       the instance attribute "self.multiscale" corresponds to the multiscale
       of the input image.
@@ -20,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from deep_neurographs.utils import geometry_util, img_util, util
+from neuron_proofreader.utils import geometry_util, img_util, util
 
 
 class FeatureGenerator:
