@@ -30,13 +30,13 @@ import os
 import random
 import torch
 
-from deep_neurographs.proposal_graph import ProposalGraph
-from deep_neurographs.machine_learning.augmentation import ImageTransforms
-from deep_neurographs.split_proofreading import datasets
-from deep_neurographs.split_proofreading.feature_generation import (
+from neuron_proofreader.proposal_graph import ProposalGraph
+from neuron_proofreader.machine_learning.augmentation import ImageTransforms
+from neuron_proofreader.split_proofreading import datasets
+from neuron_proofreader.split_proofreading.feature_generation import (
     FeatureGenerator
 )
-from deep_neurographs.utils import ml_util, util
+from neuron_proofreader.utils import ml_util, util
 
 
 # --- Custom Trainer ---
@@ -60,11 +60,6 @@ class Trainer:
         Parameters
         ----------
         ...
-
-        Returns
-        -------
-        None.
-
         """
         # Initializations
         exp_name = "session-" + datetime.today().strftime("%Y%m%d_%H%M")
@@ -268,11 +263,7 @@ class GraphDataset:
     # --- Data Properties ---
     def __len__(self):
         """
-        Counts the number of graphs.
-
-        Parameters
-        ----------
-        None
+        Counts the number of graphs in the dataset.
 
         Returns
         -------
@@ -283,11 +274,7 @@ class GraphDataset:
 
     def n_proposals(self):
         """
-        Counts the number of proposals.
-
-        Parameters
-        ----------
-        None
+        Counts the number of proposals in the dataset.
 
         Returns
         -------
@@ -298,17 +285,12 @@ class GraphDataset:
 
     def n_accepts(self):
         """
-        Counts the number of accepted proposals in the ground truth across all
-        graphs.
-
-        Parameters
-        ----------
-        None
+        Counts the number of ground truth accepted proposals in the dataset.
 
         Returns
         -------
         int
-            Number of accepted proposals in the ground truth.
+            Number of ground truth accepted proposals in the dataset.
         """
         cnts = [len(graph.gt_accepts) for graph in self.graphs.values()]
         return np.sum(cnts)
@@ -316,10 +298,6 @@ class GraphDataset:
     def p_accepts(self):
         """
         Computes the percentage of accepted proposals in ground truth.
-
-        Parameters
-        ----------
-        None
 
         Returns
         -------

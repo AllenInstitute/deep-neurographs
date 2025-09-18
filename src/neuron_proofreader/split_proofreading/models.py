@@ -16,13 +16,12 @@ import re
 import torch
 import torch.nn.init as init
 
-from deep_neurographs.split_proofreading import feature_generation
+from neuron_proofreader.split_proofreading import feature_generation
 
 
 class HGAT(torch.nn.Module):
     """
     Heterogeneous graph attention network that classifies proposals.
-
     """
     # Class attributes
     relation_types = [
@@ -42,7 +41,6 @@ class HGAT(torch.nn.Module):
     ):
         """
         Constructs a heterogeneous graph neural network.
-
         """
         super().__init__()
         # Nonlinear activation
@@ -108,15 +106,6 @@ class HGAT(torch.nn.Module):
     def init_weights(self):
         """
         Initializes linear layers.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         for layer in [self.input_nodes, self.output]:
             for param in layer.parameters():
@@ -138,7 +127,6 @@ class HGAT(torch.nn.Module):
         -------
         dict
             Feature matrices with activation applied.
-
         """
         x_dict = {key: self.leaky_relu(x) for key, x in x_dict.items()}
         return x_dict
@@ -171,7 +159,6 @@ class MultiModalHGAT(torch.nn.Module):
     """
     Heterogeneous graph attention network that processes multimodal features
     such as image patches and feature vectors.
-
     """
     # Class attributes
     relations = [
@@ -218,7 +205,6 @@ class MultiModalHGAT(torch.nn.Module):
         -------
         List[Tuple[str]]
             List of relations.
-
         """
         return cls.relations
 
@@ -236,11 +222,6 @@ class MultiModalHGAT(torch.nn.Module):
             Output dimension for the embeddings. Note that the proposal output
             dimension must be divided by 2 to account for the image patch
             features.
-
-        Returns
-        -------
-        None
-
         """
         input_dim_b = node_input_dims["branch"]
         input_dim_p = node_input_dims["proposal"]
@@ -260,11 +241,6 @@ class MultiModalHGAT(torch.nn.Module):
             Dictionary containing the input dimensions for each edge type.
         output_dim : int
             Output dimension for the embeddings.
-
-        Returns
-        -------
-        None
-
         """
         self.edge_embedding = nn.ModuleDict()
         for key, input_dim in edge_input_dims.items():
@@ -279,11 +255,6 @@ class MultiModalHGAT(torch.nn.Module):
         ----------
         output_dim : int
             Output dimension for the embeddings.
-
-        Returns
-        -------
-        None
-
         """
         self.patch_embedding = ConvNet(output_dim)
 
@@ -303,15 +274,6 @@ class MultiModalHGAT(torch.nn.Module):
     def init_weights(self):
         """
         Initializes linear layers.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         for layer in [self.node_embedding, self.patch_embedding, self.output]:
             for param in layer.parameters():
@@ -346,21 +308,11 @@ class ConvNet(nn.Module):
     """
     Convolutional neural network that classifies edge proposals given an image
     patch.
-
     """
 
     def __init__(self, output_dim):
         """
         Constructs a ConvNet object.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         # Call parent class
         nn.Module.__init__(self)
@@ -405,7 +357,6 @@ class ConvNet(nn.Module):
         -------
         torch.nn.Sequential
             Sequence of operations that define this layer.
-
         """
         conv_layer = nn.Sequential(
             nn.Conv3d(
@@ -430,11 +381,6 @@ class ConvNet(nn.Module):
         ----------
         m : nn.Module
             PyTorch layer or module.
-
-        Returns
-        -------
-        None
-
         """
         if isinstance(m, nn.Conv3d):
             init.kaiming_normal_(
@@ -463,7 +409,6 @@ class ConvNet(nn.Module):
         -------
         torch.Tensor
             Output of neural network.
-
         """
         # Convolutional Layers
         x = self.pool1(self.conv1b(self.conv1a(x)))
@@ -547,7 +492,6 @@ def init_mlp(input_dim, output_dim):
     -------
     nn.Sequential
         ...
-
     """
     mlp = nn.Sequential(
         nn.Linear(input_dim, 2 * output_dim),

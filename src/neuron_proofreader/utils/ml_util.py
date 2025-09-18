@@ -15,7 +15,7 @@ import networkx as nx
 import numpy as np
 import torch
 
-from deep_neurographs.utils import util
+from neuron_proofreader.utils import util
 
 GNN_DEPTH = 2
 

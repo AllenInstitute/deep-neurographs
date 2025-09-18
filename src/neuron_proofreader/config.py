@@ -121,7 +121,7 @@ class Config:
     def __init__(self, graph_config: GraphConfig, ml_config: MLConfig):
         """
         Initializes a Config object which is used to manage settings used to
-        run a GraphTrace pipeline.
+        run the proofreading pipeline.
 
         Parameters
         ----------

@@ -41,21 +41,22 @@ import numpy as np
 import os
 import torch
 
-from deep_neurographs.proposal_graph import ProposalGraph
-from deep_neurographs.split_proofreading import datasets
-from deep_neurographs.split_proofreading.feature_generation import (
+from neuron_proofreader.proposal_graph import ProposalGraph
+from neuron_proofreader.split_proofreading import datasets
+from neuron_proofreader.split_proofreading.feature_generation import (
     FeatureGenerator,
 )
-from deep_neurographs.split_proofreading.models import init_model
-from deep_neurographs.utils import geometry_util, ml_util, util
+from neuron_proofreader.split_proofreading.models import init_model
+from neuron_proofreader.utils import geometry_util, ml_util, util
 
 
 class InferencePipeline:
     """
-    Class that executes the full GraphTrace inference pipeline by performing
-    the following steps: (1) Graph Construction, (2) Proposal Generation, and
-    (3) Proposal Classification.
-
+    Class that executes the full split proofreader inference pipeline by
+    performing the following steps:
+        (1) Graph Construction
+        (2) Proposal Generation
+        (3) Proposal Classification.
     """
 
     def __init__(
@@ -95,11 +96,6 @@ class InferencePipeline:
             Physcial coordinates of soma centroids. The default is None.
         s3_dict : dict, optional
             ...
-
-        Returns
-        -------
-        None
-
         """
         # Instance attributes
         self.accepted_proposals = list()
@@ -133,11 +129,6 @@ class InferencePipeline:
         swc_pointer : Any
             Pointer to SWC files used to build an instance of FragmentGraph,
             see "swc_util.Reader" for further documentation.
-
-        Returns
-        -------
-        None
-
         """
         # Initializations
         self.log_experiment()
@@ -187,11 +178,6 @@ class InferencePipeline:
         fragment_pointer : dict, list, str
             Pointer to SWC files used to build an instance of FragmentGraph,
             see "swc_util.Reader" for further documentation.
-
-        Returns
-        -------
-        None
-
         """
         self.report("Step 1: Build Fragments Graph")
         t0 = time()
@@ -266,15 +252,6 @@ class InferencePipeline:
         """
         Generates proposals for the fragments graph based on the specified
         configuration.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         # Main
         t0 = time()
@@ -300,15 +277,6 @@ class InferencePipeline:
         generates features and runs a GNN to make predictions. Proposals with
         a prediction above "self.threshold" are accepted and added to the
         graph as an edge.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         # Initializations
         self.report("Step 3: Run Inference")
@@ -340,15 +308,6 @@ class InferencePipeline:
         """
         Saves the processed results from running the inference pipeline,
         namely the corrected SWC files and a list of the merged SWC ids.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         # Save temp result on local machine
         temp_dir = os.path.join(self.output_dir, "temp")
@@ -375,15 +334,6 @@ class InferencePipeline:
     def save_to_s3(self):
         """
         Saves a corrected swc files to s3 along with metadata and runtimes.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         bucket_name = self.s3_dict["bucket_name"]
         for name in os.listdir(self.output_dir):
@@ -402,15 +352,6 @@ class InferencePipeline:
         """
         Writes the accepted proposals from the graph to a text file. Each line
         contains the two swc ids as comma separated values.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         suffix = f"-{round_id}" if round_id else ""
         path = os.path.join(self.output_dir, f"connections{suffix}.txt")
@@ -421,15 +362,6 @@ class InferencePipeline:
     def write_metadata(self):
         """
         Writes metadata about the current pipeline run to a JSON file.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         metadata = {
             "date": datetime.today().strftime("%Y-%m-%d"),
@@ -466,15 +398,6 @@ class InferencePipeline:
     def report_graph(self, prefix="\n"):
         """
         Prints an overview of the graph's structure and memory usage.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         # Compute values
         n_components = nx.number_connected_components(self.graph)
@@ -494,7 +417,6 @@ class InferenceEngine:
     """
     Class that runs inference with a machine learning model that has been
     trained to classify edge proposals.
-
     """
 
     def __init__(
@@ -523,12 +445,7 @@ class InferenceEngine:
         radius : float
             Search radius used to generate proposals.
         segmentation_path : str, optional
-            Path to segmentation stored in GCS bucket. The default is None.
-
-        Returns
-        -------
-        None
-
+            Path to segmentation stored in GCS bucket. Default is None.
         """
         # Instance attributes
         self.batch_size = ml_config.batch_size
@@ -579,7 +496,6 @@ class InferenceEngine:
             Updated graph with accepted proposals added as edges.
         list
             Accepted proposals.
-
         """
         # Initializations
         dataloader = self.init_dataloader()
@@ -623,7 +539,6 @@ class InferenceEngine:
         dict
             A dictionary that maps a proposal to the model's prediction (i.e.
             probability).
-
         """
         # Generate predictions
         with torch.no_grad():
@@ -656,7 +571,6 @@ class InferenceEngine:
         -------
         list
             Proposals to be added as edges to "graph".
-
         """
         # Partition proposals into best and the rest
         preds = {k: v for k, v in preds.items() if v > self.threshold}
@@ -688,7 +602,6 @@ class InferenceEngine:
             Proposal IDs determined to be the best.
         list
             All other proposal IDs.
-
         """
         best_probs, probs = list(), list()
         best_proposals, proposals = list(), list()
@@ -719,7 +632,6 @@ class InferenceEngine:
         List[frozenset]
             List of proposals that do not create a cycle when iteratively
             added to "graph".
-
         """
         accepts = list()
         for proposal in proposals:
@@ -770,7 +682,6 @@ class GraphDataLoader:
         Set[Frozenset[int]]
             Connected component that "proposal" belongs to in the proposal
             induced subgraph.
-
         """
         queue = deque([proposal])
         visited = set()

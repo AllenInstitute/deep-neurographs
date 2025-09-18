@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from deep_neurographs.utils import geometry_util, img_util, util
+from neuron_proofreader.utils import geometry_util, img_util, util
 
 
 class FeatureGenerator:

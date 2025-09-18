@@ -22,7 +22,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from deep_neurographs.utils import ml_util, util
+from neuron_proofreader.utils import ml_util, util
 
 
 class Trainer:

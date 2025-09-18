@@ -17,7 +17,7 @@ from tqdm import tqdm
 import networkx as nx
 import numpy as np
 
-from deep_neurographs.utils import img_util
+from neuron_proofreader.utils import img_util
 
 
 # --- Directionals ---

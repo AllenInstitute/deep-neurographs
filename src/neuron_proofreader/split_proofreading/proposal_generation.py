@@ -4,7 +4,6 @@ Created on Sat July 15 9:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 Code that generates edge proposals for a given fragments graph.
 
 """
@@ -14,7 +13,7 @@ from collections import deque
 import numpy as np
 from tqdm import tqdm
 
-from deep_neurographs.utils import geometry_util
+from neuron_proofreader.utils import geometry_util
 
 DOT_THRESHOLD = -0.3
 SEARCH_SCALING_FACTOR = 1.5

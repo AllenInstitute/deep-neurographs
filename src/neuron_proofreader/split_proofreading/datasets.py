@@ -17,11 +17,11 @@ import numpy as np
 import torch
 from torch_geometric.data import HeteroData as HeteroGraphData
 
-from deep_neurographs.split_proofreading.feature_generation import (
+from neuron_proofreader.split_proofreading.feature_generation import (
     get_matrix,
     get_patches_matrix,
 )
-from deep_neurographs.utils import ml_util
+from neuron_proofreader.utils import ml_util
 
 DTYPE = torch.float32
 

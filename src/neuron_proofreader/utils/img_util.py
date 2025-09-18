@@ -17,7 +17,7 @@ import s3fs
 import tensorstore as ts
 import zarr
 
-from deep_neurographs.utils import util
+from neuron_proofreader.utils import util
 
 
 class ImageReader(ABC):

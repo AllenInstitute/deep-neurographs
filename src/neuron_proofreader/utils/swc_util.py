@@ -34,7 +34,7 @@ import networkx as nx
 import numpy as np
 import os
 
-from deep_neurographs.utils import util
+from neuron_proofreader.utils import util
 
 
 class Reader:

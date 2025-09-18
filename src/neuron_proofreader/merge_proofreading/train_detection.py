@@ -16,9 +16,9 @@ import networkx as nx
 import numpy as np
 import random
 
-from deep_neurographs.machine_learning.augmentation import ImageTransforms
-from deep_neurographs.skeleton_graph import SkeletonGraph
-from deep_neurographs.utils import img_util, ml_util, swc_util, util
+from neuron_proofreader.machine_learning.augmentation import ImageTransforms
+from neuron_proofreader.skeleton_graph import SkeletonGraph
+from neuron_proofreader.utils import img_util, ml_util, swc_util, util
 
 
 class MergeSiteDataset:
