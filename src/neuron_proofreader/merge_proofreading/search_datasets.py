@@ -75,6 +75,12 @@ class SearchDataset(IterableDataset, ABC):
             self.get_input = self.get_patch
         self.collate_fn = multimodal_collate if modality != "image" else None
 
+        # Same as ProposalFeatureExtractor: patches are resized with torch
+        # ops from "prefetch" Python threads, and each would otherwise spin
+        # up its own intra-op pool. That oversubscription saturated all
+        # cores at ~22 patches/s; one thread per op gives ~52/s.
+        torch.set_num_threads(1)
+
     # --- Core routines ---
     def __iter__(self):
         patch_queue = Queue(maxsize=self.prefetch)

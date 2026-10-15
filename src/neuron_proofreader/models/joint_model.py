@@ -197,8 +197,11 @@ class JointProofreader(nn.Module):
     def _encode_image(self, x_img, task_conv, task_pool, vision_proj):
         """
         Run the shared encoder once, then apply the task-specific 1x1 conv and
-        pool on the final stage. Returns the projected image embedding.
+        pool on the final stage. Returns the projected image embedding, always
+        in fp32 so the tree encoders and heads see the dtype they were trained
+        with even when the image path runs in fp16 (see "half_vision").
         """
+        x_img = x_img.to(next(self.vision.parameters()).dtype)
         stages = self.vision.encode(x_img)
 
         # Shared multi-scale pooling (mirrors CNN3D.forward with use_output_head=False).
@@ -217,7 +220,30 @@ class JointProofreader(nn.Module):
         mx = F.adaptive_max_pool3d(task_out, 1).flatten(1)
         task = torch.cat([center, mx], dim=1)
 
-        return vision_proj(torch.cat([shared, task], dim=1))
+        return vision_proj(torch.cat([shared, task], dim=1)).float()
+
+    def half_vision(self):
+        """
+        Runs the image path (shared CNN3D backbone plus the task-specific
+        conv, pool and projection) in fp16, leaving the tree encoders, GAT
+        layers and heads in fp32.
+
+        The backbone is memory-bandwidth bound, so halving its activations
+        is ~1.8x faster on an L4; autocast gives nothing because it keeps
+        GroupNorm in fp32. The tree encoders stay fp32 because they build
+        fp32 tensors from numpy inside the forward pass.
+        """
+        for module in (
+            self.vision,
+            self.merge_task_conv,
+            self.merge_task_pool,
+            self.merge_vision_proj,
+            self.split_task_conv,
+            self.split_task_pool,
+            self.split_vision_proj,
+        ):
+            module.half()
+        return self
 
     def _forward_merge(self, x):
         x_img = x["img"]

@@ -278,9 +278,11 @@ def find_max_eval_batch_size(
         Largest batch size that ran successfully.
     """
 
+    dtype = next(model.parameters()).dtype
+
     def fits(batch_size):
         try:
-            x = torch.zeros((batch_size, *input_shape), device=device)
+            x = torch.zeros((batch_size, *input_shape), device=device, dtype=dtype)
             with torch.no_grad():
                 model(x)
             del x

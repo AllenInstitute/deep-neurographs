@@ -600,8 +600,25 @@ def soften_mask(mask, sigma):
     """
     if not sigma or sigma <= 0 or not mask.any():
         return mask
-    d = distance_transform_edt(mask == 0)
-    return np.exp(-0.5 * (d / sigma) ** 2).astype(mask.dtype)
+
+    # The tube is below exp(-12.5) ~ 4e-6 beyond 5 sigma, so the EDT only
+    # needs the foreground bounding box plus that margin; a full-volume EDT
+    # was the single most expensive CPU step per patch.
+    margin = int(np.ceil(5 * sigma))
+    bbox = tuple(
+        slice(
+            max(int(idx[0]) - margin, 0),
+            min(int(idx[-1]) + margin + 1, n),
+        )
+        for idx, n in zip(
+            (np.flatnonzero(mask.any(axis=axes)) for axes in ((1, 2), (0, 2), (0, 1))),
+            mask.shape,
+        )
+    )
+    d = distance_transform_edt(mask[bbox] == 0)
+    out = np.zeros(mask.shape, dtype=mask.dtype)
+    out[bbox] = np.exp(-0.5 * (d / sigma) ** 2)
+    return out
 
 
 def to_physical(voxel, anisotropy, offset=(0, 0, 0)):

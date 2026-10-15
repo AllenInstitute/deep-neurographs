@@ -34,10 +34,14 @@ class TensorStoreImage:
 
     # One context for every image so the cache pool and request concurrency
     # limits are global; ts.open otherwise gives each image its own pool.
+    #
+    # Chunks are 128x256x256 uint16, so a 128^3 patch decodes up to 8 of
+    # them; with 8 decode threads that capped reads at ~37/s, 16 gives ~51/s
+    # and beyond that the GCS link saturates.
     context = ts.Context(
         {
             "cache_pool": {"total_bytes_limit": cache_bytes},
-            "data_copy_concurrency": {"limit": 8},
+            "data_copy_concurrency": {"limit": 16},
             "gcs_request_concurrency": {"limit": 64},
         }
     )
