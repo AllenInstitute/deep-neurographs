@@ -191,7 +191,10 @@ def proposal_rooted_subgraph(
     queue = [(i, start_dist[i]), (j, start_dist[j])]
     while queue:
         u, dist_u = queue.pop()
-        for v in graph.neighbors(u):
+        # rustworkx returns neighbors in an order that changes between calls,
+        # which would make the subgraph's node numbering, and so the curve
+        # decomposition fed to the model, differ from one extraction to the next.
+        for v in sorted(graph.neighbors(u)):
             dist_v = dist_u + graph.dist(u, v)
             if v not in visited and dist_v < depth:
                 idx = subgraph.add_node(None)

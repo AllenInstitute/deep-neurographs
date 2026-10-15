@@ -34,7 +34,7 @@ class SubgraphSampler:
     # seed whose cluster still fits in the batch.
     max_lookahead = 20
 
-    def __init__(self, graph, gnn_depth=2, max_proposals=64):
+    def __init__(self, graph, gnn_depth=2, max_proposals=64, proposals=None):
         """
         Instantiates a SubgraphSampler object.
 
@@ -46,12 +46,16 @@ class SubgraphSampler:
             Depth of graph neural network. Default is 2.
         max_proposals : int, optional
             Maximum number of proposals in subgraph. Default is 64.
+        proposals : Iterable[Frozenset[int]], optional
+            Subset of the graph's proposals to sample. Default is all of them.
         """
         # Instance attributes
         self.max_proposals = max_proposals
         self.gnn_depth = gnn_depth
         self.graph = graph
-        self.proposals = set(graph.list_proposals())
+        self.proposals = set(
+            graph.list_proposals() if proposals is None else proposals
+        )
 
         # Spatial visiting order
         self.ordered_proposals = self.sort_spatially(self.proposals)

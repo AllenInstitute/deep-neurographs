@@ -23,9 +23,11 @@ Code that executes the full split correction pipeline.
 
 """
 
+from scipy.spatial import KDTree
 from time import time
 from tqdm import tqdm
 
+import numpy as np
 import pandas as pd
 import os
 import torch
@@ -178,9 +180,14 @@ class LearnedSplitProofreader:
         self.generate_proposals(proposals_config)
         total_proposals = self.dataset.n_proposals()
 
-        # Run inference
+        # Run inference. Scores are kept across rounds; a proposal is only
+        # re-scored once an accepted merge lands within reach of its features
+        # (image patch or tree subgraph), since nothing else changes them.
         cnt = 0
         t0 = time()
+        preds = dict()
+        stale = set(self.dataset.list_proposals())
+        reach = self.feature_reach()
         for only_leaf2leaf in [True, False]:
             # Reset threshold
             name = "_leaf2leaf" if only_leaf2leaf else ""
@@ -190,23 +197,35 @@ class LearnedSplitProofreader:
 
             # Generate predictions
             while self.dataset.proposals:
-                # Generate proposal predictons
+                # Score proposals whose features changed since last scored
                 cnt += 1
                 self.log(
                     f"\n--- Threshold={new_threshold} w/ only_leaf2leaf={only_leaf2leaf} ---"
                 )
-                preds = self.predict_proposals(
-                    suffix=f"{name}_round={cnt}_threshold={new_threshold}"
+                preds.update(self.predict_proposals(stale))
+                self.log(
+                    f"# Proposals Scored: {len(stale)} of {self.dataset.n_proposals()}"
+                )
+                self.save_model_predictions(
+                    preds, suffix=f"{name}_round={cnt}_threshold={new_threshold}"
                 )
 
                 # Merge accepted proposals
                 cur_threshold = new_threshold
+                accepts_before = set(self.dataset.accepts)
                 self.merge_with_threshold_schedule(
                     preds, cur_threshold, dt=dt, only_leaf2leaf=only_leaf2leaf
                 )
 
                 # Remove rejected proposals
                 self.remove_proposals(preds, removal_threshold)
+
+                # Invalidate scores near this round's merges
+                accepted = self.dataset.accepts - accepts_before
+                remaining = set(self.dataset.list_proposals())
+                preds = {p: v for p, v in preds.items() if p in remaining}
+                stale = remaining - preds.keys()
+                stale |= self.proposals_within(accepted, remaining, reach)
 
                 # Update acceptance threshold
                 if cur_threshold <= min_threshold:
@@ -303,25 +322,62 @@ class LearnedSplitProofreader:
         self.log(f"Module Runtime: {t:.2f} {unit}\n")
         return preds
 
-    def predict_proposals(self, suffix=""):
+    def predict_proposals(self, proposals):
         """
-        Performs inference over all proposals and saves model predictions.
+        Performs inference over the given proposals.
+
+        Parameters
+        ----------
+        proposals : Iterable[Frozenset[int]]
+            Proposals to score.
 
         Returns
         -------
         preds : Dict[Frozenset[int], float]
             Dictionary that maps proposals to the model prediction.
         """
-        # Main
         preds = dict()
-        pbar = tqdm(total=self.dataset.n_proposals(), desc="Inference")
-        for data in self.dataset:
+        proposals = list(proposals)
+        if not proposals:
+            return preds
+
+        pbar = tqdm(total=len(proposals), desc="Inference")
+        for data in self.dataset.iter_proposals(proposals):
             preds.update(self.predict(data))
             pbar.update(data.n_proposals())
-
-        # Save results
-        self.save_model_predictions(preds, suffix=suffix)
         return preds
+
+    def feature_reach(self):
+        """
+        Returns the distance (in microns) from a proposal endpoint beyond
+        which a graph change cannot alter the proposal's features. The tree
+        subgraph extends "max_depth" from the proposal midpoint and the image
+        patch is sized to the proposal length plus padding, so both are
+        bounded by the longest proposal plus the larger of the two.
+        """
+        dataset = self.dataset
+        padding = dataset.feature_extractor.image_extractor.patch_loader.padding
+        padding *= np.max(dataset.anisotropy)
+        depth = getattr(dataset, "tree_extractor", None)
+        depth = depth.max_depth if depth else 0
+        max_length = max(
+            map(dataset.proposal_length, dataset.list_proposals()), default=0
+        )
+        return max(depth, padding) + max_length
+
+    def proposals_within(self, accepted, proposals, radius):
+        """
+        Returns the proposals with an endpoint within "radius" of the
+        midpoint of any accepted proposal.
+        """
+        if not accepted or not proposals:
+            return set()
+        kdtree = KDTree([self.dataset.proposal_midpoint(p) for p in accepted])
+        proposals = list(proposals)
+        xyz = np.array([self.dataset.node_xyz[i] for p in proposals for i in p])
+        hits = kdtree.query_ball_point(xyz, radius, return_length=True) > 0
+        hits = hits.reshape(len(proposals), 2).any(axis=1)
+        return {p for p, hit in zip(proposals, hits) if hit}
 
     def merge_proposals(self, preds, threshold, only_leaf2leaf=False):
         """

@@ -68,6 +68,7 @@ class FragmentsDataset(IterableDataset):
         self.gt_path = gt_path
         self.prefetch = prefetch
         self.transform = img_config.transform
+        self._proposal_subset = None
 
         # Feature extractor
         self.feature_extractor = FeaturePipeline(
@@ -142,8 +143,33 @@ class FragmentsDataset(IterableDataset):
         sampler : SubgraphSampler
             Subgraph sampler that is used to iterate over dataset.
         """
-        sampler = SubgraphSampler(self.graph, max_proposals=self.batch_size)
+        sampler = SubgraphSampler(
+            self.graph,
+            max_proposals=self.batch_size,
+            proposals=self._proposal_subset,
+        )
         return iter(sampler)
+
+    def iter_proposals(self, proposals):
+        """
+        Iterates over only the given proposals, otherwise exactly as
+        "__iter__" does.
+
+        Parameters
+        ----------
+        proposals : Iterable[Frozenset[int]]
+            Proposals to extract features for.
+
+        Yields
+        ------
+        HeteroGraphData
+            Input data.
+        """
+        self._proposal_subset = list(proposals)
+        try:
+            yield from self
+        finally:
+            self._proposal_subset = None
 
 
 class FragmentsDatasetCollection(IterableDataset):
