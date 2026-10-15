@@ -464,14 +464,14 @@ class LearnedSplitProofreader:
         Dict[Frozenset[int], float]
             Dictionary that maps proposal IDs to model predictions.
         """
-        # Generate predictions
+        # Generate predictions. No autocast: it keeps GroupNorm in fp32 so
+        # it never sped up the backbone, and it would undo "half_vision".
         with torch.inference_mode():
             x = data.get_inputs().to(self.device)
             x["img"] = x["img"].contiguous(
                 memory_format=torch.channels_last_3d
             )
-            with torch.autocast(device_type="cuda", dtype=torch.float16):
-                hat_y = torch.sigmoid(self.model(x))
+            hat_y = torch.sigmoid(self.model(x))
 
         # Reformat predictions
         idx_to_id = data.idxs_proposals.idx_to_id
