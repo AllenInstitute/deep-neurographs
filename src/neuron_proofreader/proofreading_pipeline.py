@@ -97,6 +97,7 @@ class ProofreadPipeline:
             anisotropy=config.anisotropy,
             min_cable_length=config.min_cable_length,
             node_spacing=config.node_spacing,
+            use_anisotropy=config.use_anisotropy,
             verbose=config.verbose,
         )
         self.graph.load(swcs_path)
