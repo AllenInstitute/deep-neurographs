@@ -40,6 +40,7 @@ class ProposalGraph(FragmentsGraph):
         min_cable_length=0,
         node_spacing=1,
         prune_depth=20.0,
+        use_anisotropy=True,
         verbose=True,
         **kwargs,
     ):
@@ -58,6 +59,8 @@ class ProposalGraph(FragmentsGraph):
         prune_depth : float, optional
             Branches with length less than "prune_depth" microns are removed.
             Default is 20um.
+        use_anisotropy : bool, optional
+            Whether to apply anisotropy to SWC coordinates. Default is True.
         verbose : bool, optional
             Indication of whether to display a progress bar while building
             graph. Default is True.
@@ -68,6 +71,7 @@ class ProposalGraph(FragmentsGraph):
             min_cable_length=min_cable_length,
             node_spacing=node_spacing,
             prune_depth=prune_depth,
+            use_anisotropy=use_anisotropy,
             verbose=verbose,
         )
 

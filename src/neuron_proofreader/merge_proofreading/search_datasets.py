@@ -344,7 +344,10 @@ class SparseSearchDataset(SearchDataset):
         self.search_mode = "sparse"
 
     def estimate_iterations(self):
-        return len(self.branching_nodes())
+        # Only fragments above min_search_size are searched
+        valid_ids = list(self.find_fragments_to_search())
+        nodes = np.array(self.branching_nodes(), dtype=int)
+        return int(np.isin(self.node_component_id[nodes], valid_ids).sum())
 
     def generate_component_sites(self, root):
         visited = set()
