@@ -17,15 +17,11 @@ readme = "README.md"
 dynamic = ["version"]
 
 dependencies = [
-    'aiobotocore==2.13.3',
     'boto3',
     'botocore==1.34.162',
-    'einops',
-    'fastremap',
     'gcsfs',
     'google-cloud-storage',
     'matplotlib',
-    'more_itertools',
     'rustworkx',
     'pandas',
     'plotly',
@@ -33,15 +29,11 @@ dependencies = [
     'scikit-image',
     'scikit-learn',
     'scipy',
-    'smartsheet-python-sdk',
     'tensorboard',
     'tensorstore==0.1.71',
     'torch',
-    'torcheval',
-    'torchvision',
     'torch_geometric==2.5.3',
     'tqdm',
-    'urllib3==1.26.15',
     "aind-exaspim-dataset-utils @ git+https://github.com/AllenNeuralDynamics/aind-exaspim-dataset-utils.git@main"
 ]
 
