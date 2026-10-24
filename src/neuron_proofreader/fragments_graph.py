@@ -15,7 +15,7 @@ import numpy as np
 
 from arborist.skeleton_graph import SkeletonGraph
 from arborist.utils.graph_loading import GraphLoader
-from neuron_proofreader.utils import geometry_util, img_util, util
+from neuron_proofreader.utils import geometry_util, img_util, io_util
 
 
 class FragmentsGraph(SkeletonGraph):
@@ -226,8 +226,8 @@ class FragmentsGraph(SkeletonGraph):
         """
         Clips skeletons to the bounding box defined in a metadata JSON file.
         """
-        if util.check_gcs_file_exists(metadata_path):
-            metadata = util.read_json(metadata_path)
+        if io_util.check_gcs_file_exists(metadata_path):
+            metadata = io_util.read_json(metadata_path)
             origin = metadata["chunk_origin"][::-1]
             shape = metadata["chunk_shape"][::-1]
             nodes = list()

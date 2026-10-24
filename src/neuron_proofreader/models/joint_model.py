@@ -16,12 +16,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from arborist.models.arborist import Arborist
-from neuron_proofreader.models.new_gnn_models import (
+from neuron_proofreader.models.gnn_models import (
     ProposalTreeEncoder,
     _build_hetero_gat,
     proposal_length_feature,
 )
-from neuron_proofreader.models.new_vision_models import CNN3D, CenterWeightedPool3D
+from neuron_proofreader.models.vision_models import CNN3D, CenterWeightedPool3D
 from neuron_proofreader.models.proofreading_models import ArboristVisionMergeDetector
 from neuron_proofreader.utils.ml_util import FeedForwardNet
 

@@ -29,7 +29,7 @@ from neuron_proofreader.split_proofreading.split_inference import (
     LearnedSplitProofreader,
     SomaSplitProofreader,
 )
-from neuron_proofreader.utils import geometry_util, util
+from neuron_proofreader.utils import geometry_util, io_util, util
 
 
 class ProofreadPipeline:
@@ -71,7 +71,7 @@ class ProofreadPipeline:
         self.step_cnt = 0
 
         # Logger
-        util.mkdir(self.output_dir)
+        io_util.mkdir(self.output_dir)
         log_path = os.path.join(self.output_dir, "summary.txt")
         self.log_handle = open(log_path, "a")
         self.log(log_preamble)
@@ -334,7 +334,7 @@ class ProofreadPipeline:
     def save_fragment_ids(self):
         path = f"{self.output_dir}/segment_ids.txt"
         segment_ids = list(self.graph.component_id_to_swc_id.values())
-        util.write_list(path, segment_ids)
+        io_util.write_list(path, segment_ids)
 
     def _img_config(self, patch_shape, percentiles=None):
         if patch_shape is None and percentiles is None:
@@ -348,7 +348,7 @@ class ProofreadPipeline:
 
     def _step_dir(self, name):
         path = os.path.join(self.output_dir, f"step{self.step_cnt}_{name}")
-        util.mkdir(path)
+        io_util.mkdir(path)
         return path
 
     def save_final_result(self):
@@ -359,7 +359,7 @@ class ProofreadPipeline:
 
     def save_graph(self, dirname):
         dirpath = os.path.join(self.output_dir, dirname)
-        util.mkdir(dirpath)
+        io_util.mkdir(dirpath)
         self.graph.to_zipped_swcs(
             os.path.join(dirpath, "swcs.zip"), use_radius=True
         )

@@ -19,7 +19,7 @@ import torch.nn.functional as F
 
 from scipy.ndimage import distance_transform_edt
 
-from neuron_proofreader.utils import util
+from neuron_proofreader.utils import io_util
 
 
 # --- Visualization ---
@@ -244,8 +244,8 @@ def find_img_path(root_prefix, brain_id):
     str
         Path of the found dataset subdirectory within the specified GCS bucket.
     """
-    bucket_name, _ = util.parse_cloud_path(root_prefix)
-    for prefix in util.list_gcs_subprefixes(root_prefix):
+    bucket_name, _ = io_util.parse_cloud_path(root_prefix)
+    for prefix in io_util.list_gcs_subprefixes(root_prefix):
         if brain_id in prefix:
             img_path = f"gs://{bucket_name}/{prefix}whole-brain/fused.zarr"
             return img_path
@@ -357,9 +357,9 @@ def get_storage_driver(img_path):
     str
         Storage driver needed to read the image.
     """
-    if util.is_s3_path(img_path):
+    if io_util.is_s3_path(img_path):
         return "s3"
-    elif util.is_gcs_path(img_path):
+    elif io_util.is_gcs_path(img_path):
         return "gcs"
     else:
         raise ValueError(f"Unsupported path type: {img_path}")
@@ -438,7 +438,7 @@ def is_precomputed(img_path):
     """
     try:
         # Build kvstore spec
-        bucket_name, path = util.parse_cloud_path(img_path)
+        bucket_name, path = io_util.parse_cloud_path(img_path)
         kv = {"driver": "gcs", "bucket": bucket_name, "path": path}
 
         # Open the info file

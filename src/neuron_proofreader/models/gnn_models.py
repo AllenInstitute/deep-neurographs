@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 
 from arborist.models.arborist import Arborist
-from neuron_proofreader.models.new_vision_models import CNN3D
+from neuron_proofreader.models.vision_models import CNN3D
 from neuron_proofreader.split_proofreading import split_feature_extraction
 from neuron_proofreader.utils.ml_util import FeedForwardNet
 
@@ -114,7 +114,7 @@ class NewVisionHGAT(nn.Module):
     """
     Heterogeneous graph attention network for split correction.
 
-    Uses the updated CNN3D backbone from new_vision_models for image patch
+    Uses the updated CNN3D backbone from vision_models for image patch
     encoding. Branch and proposal nodes are embedded from geometry features;
     proposal nodes are then augmented with per-patch image embeddings before
     two rounds of heterogeneous message passing classify each proposal.

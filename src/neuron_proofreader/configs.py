@@ -18,7 +18,7 @@ import os
 from neuron_proofreader.machine_learning.image_augmentation import (
     ImageTransforms,
 )
-from neuron_proofreader.utils import util
+from neuron_proofreader.utils import io_util
 
 
 class Config(ABC):
@@ -52,7 +52,31 @@ class Config(ABC):
             Path to directory to save JSON file.
         """
         path = os.path.join(output_dir, f"{self.name}.json")
-        util.write_json(path, self.to_dict())
+        io_util.write_json(path, self.to_dict())
+
+
+@dataclass
+class DatasetConfig(Config):
+    """
+    Configuration class for the dataset that is proofread.
+
+    Attributes
+    ----------
+    brain_id : str
+        Unique identifier of the whole-brain dataset.
+    fragments_path : str
+        Path to the directory (local or cloud) containing fragment SWC files.
+    img_path : str
+        Path to the whole-brain image.
+    segmentation_id : str
+        Unique identifier of the segmentation that fragments come from.
+    """
+
+    brain_id: str = None
+    fragments_path: str = None
+    img_path: str = None
+    name: str = "dataset_config"
+    segmentation_id: str = None
 
 
 @dataclass
@@ -238,6 +262,7 @@ class ProposalsConfig(Config):
     allow_nonleaf_proposals: bool = False
     max_proposals_per_leaf: int = 3
     min_size_with_proposals: float = 0
+    name: str = "proposals_config"
     trim_endpoints_bool: bool = True
     search_radius: float = 25
     search_scaling_factor: float = 1.5
