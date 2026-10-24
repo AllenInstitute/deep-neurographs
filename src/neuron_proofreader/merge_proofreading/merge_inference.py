@@ -39,7 +39,7 @@ from neuron_proofreader.merge_proofreading.search_datasets import (
     SparseSearchDataset,
     multimodal_collate,
 )
-from neuron_proofreader.utils import img_util, util
+from neuron_proofreader.utils import img_util, io_util, util
 
 
 class MergeProofreader(ABC):
@@ -372,7 +372,7 @@ class MLMergeProofreader(MergeProofreader):
             "search_mode": self.dataset.search_mode,
             "subgraph_radius": self.dataset.subgraph_radius,
         }
-        util.write_json(json_path, parameters)
+        io_util.write_json(json_path, parameters)
 
     def save_predictions(self):
         nodes = np.array(self.visited_sites, dtype=int)

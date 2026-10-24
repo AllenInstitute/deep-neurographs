@@ -41,7 +41,7 @@ from neuron_proofreader.machine_learning.image_dataloader import (
 from neuron_proofreader.fragments_graph import FragmentsGraph
 from arborist.data.augmentation import GraphTransforms
 from arborist.utils.swc_loading import Reader
-from neuron_proofreader.utils import ml_util, util
+from neuron_proofreader.utils import io_util, ml_util, util
 from neuron_proofreader.utils.graph_util import subgraph_to_tree_sample
 
 
@@ -407,7 +407,7 @@ class BrainDatasetCollection(Dataset):
             }
             for bd in self.datasets
         ]
-        util.write_json(path, config)
+        io_util.write_json(path, config)
 
     # --- Dataset Interface ---
     def __len__(self):
@@ -704,8 +704,8 @@ def create_dataset_collection(
             img_config.set_val_mode()
 
     # Load image prefixes
-    bucket, root_prefix = util.parse_cloud_path(sites_root_path)
-    img_prefixes = util.read_json(img_prefixes_path)
+    bucket, root_prefix = io_util.parse_cloud_path(sites_root_path)
+    img_prefixes = io_util.read_json(img_prefixes_path)
 
     # Iterate over brains
     datasets = list()
@@ -750,6 +750,6 @@ def create_dataset_collection(
 
 def get_segmentation_id(sites_path, brain_id):
     brain_sites_path = os.path.join(sites_path, brain_id)
-    subprefixes = util.list_gcs_subprefixes(brain_sites_path)
+    subprefixes = io_util.list_gcs_subprefixes(brain_sites_path)
     assert len(subprefixes) == 1
     return subprefixes[0].split("/")[-2]

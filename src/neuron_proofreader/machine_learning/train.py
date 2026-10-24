@@ -26,7 +26,7 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.optim as optim
 
-from neuron_proofreader.utils import img_util, ml_util, util
+from neuron_proofreader.utils import img_util, io_util, ml_util
 
 
 class Trainer:
@@ -115,7 +115,7 @@ class Trainer:
         if exp_name is None:
             exp_name = "session-" + datetime.today().strftime("%Y%m%d_%H%M")
         log_dir = os.path.join(output_dir, exp_name)
-        util.mkdir(log_dir)
+        io_util.mkdir(log_dir)
 
         # Instance attributes
         self.best_f1 = 0
@@ -206,7 +206,7 @@ class Trainer:
         else:
             self.model.eval()
             if self.n_mips > 0:
-                util.mkdir(self.mips_dir, True)
+                io_util.mkdir(self.mips_dir, True)
                 n = len(dataloader.dataset)
                 self._mip_idxs = set(random.sample(range(n), min(self.n_mips, n)))
             if self.n_mistake_mips > 0:
@@ -387,7 +387,7 @@ class Trainer:
         Saves the buffered mistake MIPs for this epoch to disk.
         """
         epoch_dir = os.path.join(self.mistake_mips_dir, f"epoch_{epoch:03d}")
-        util.mkdir(epoch_dir)
+        io_util.mkdir(epoch_dir)
         for i, (img, outcome) in enumerate(self._mistake_buf):
             path = os.path.join(epoch_dir, f"{outcome}_{i:02d}.png")
             img_util.plot_image_and_segmentation_mips(img[0], 2 * img[1], path)

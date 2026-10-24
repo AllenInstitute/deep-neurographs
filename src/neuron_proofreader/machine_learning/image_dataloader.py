@@ -17,7 +17,7 @@ from neuron_proofreader.configs import ImageConfig
 from neuron_proofreader.machine_learning.image_augmentation import (
     ImageTransforms,
 )
-from neuron_proofreader.utils import geometry_util, img_util, util
+from neuron_proofreader.utils import geometry_util, img_util, io_util
 
 
 class TensorStoreImage:
@@ -56,7 +56,7 @@ class TensorStoreImage:
             Path to image.
         """
         # Load image
-        bucket_name, inner_path = util.parse_cloud_path(img_path)
+        bucket_name, inner_path = io_util.parse_cloud_path(img_path)
         self.img_path = img_path
         self.img = ts.open(
             {
