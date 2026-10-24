@@ -32,7 +32,7 @@ from neuron_proofreader.utils.ml_util import TensorDict
 def multimodal_collate(batch):
     """
     Collate a batch of (node, img_patch, tree_sample) tuples produced by
-    get_patch_and_arborist.
+    get_patch_and_subgraph.
 
     Returns
     -------
@@ -48,13 +48,18 @@ def multimodal_collate(batch):
 # --- Datasets ---
 class SearchDataset(IterableDataset, ABC):
 
+    search_mode = None
+    patch_loader_cls = None
+    default_step_size = None
+
     def __init__(
         self,
         graph,
         img_config,
         modality="image",
         min_search_size=0,
-        prefetch=32,
+        prefetch=64,
+        step_size=None,
         subgraph_radius=100,
     ):
         # Call parent class
@@ -64,13 +69,15 @@ class SearchDataset(IterableDataset, ABC):
         self.graph = graph
         self.modality = modality
         self.min_size = min_search_size
+        self.patch_loader = self.patch_loader_cls(graph, img_config)
         self.patch_shape = img_config.patch_shape
         self.prefetch = prefetch
+        self.step_size = step_size or self.default_step_size
         self.subgraph_radius = subgraph_radius
 
         # Input getter
         if modality != "image":
-            self.get_input = self.get_patch_and_arborist
+            self.get_input = self.get_patch_and_subgraph
         else:
             self.get_input = self.get_patch
         self.collate_fn = multimodal_collate if modality != "image" else None
@@ -135,6 +142,11 @@ class SearchDataset(IterableDataset, ABC):
         Abstract method to be implemented by subclasses.
         """
         pass
+
+    def get_patch_and_subgraph(self, *args):
+        for node, patch in self.get_patch(*args):
+            subgraph = self.graph.rooted_subgraph(node, self.subgraph_radius)
+            yield node, patch, subgraph_to_tree_sample(subgraph, 0)
 
     # --- Helpers ---
     def __getattr__(self, name):
@@ -214,31 +226,9 @@ class SearchDataset(IterableDataset, ABC):
 class DenseSearchDataset(SearchDataset):
 
     max_batch_span = 512
-
-    def __init__(
-        self,
-        graph,
-        img_config,
-        modality="image",
-        min_search_size=0,
-        prefetch=64,
-        step_size=40,
-        subgraph_radius=100,
-    ):
-        # Call parent class
-        super().__init__(
-            graph,
-            img_config,
-            modality=modality,
-            min_search_size=min_search_size,
-            prefetch=prefetch,
-            subgraph_radius=subgraph_radius,
-        )
-
-        # Instance attributes
-        self.patch_loader = DetectionBatchLoader(self.graph, img_config)
-        self.search_mode = "dense"
-        self.step_size = step_size
+    search_mode = "dense"
+    patch_loader_cls = DetectionBatchLoader
+    default_step_size = 40
 
     def generate_component_sites(self, root):
         """
@@ -289,16 +279,6 @@ class DenseSearchDataset(SearchDataset):
             s = img_util.get_slices(center, self.patch_shape)
             yield node, img[(slice(0, 2), *s)]
 
-    def get_patch_and_arborist(self, nodes, img, offset):
-        img = torch.from_numpy(img).float()
-        voxels = np.array([self.node_voxel(i) for i in nodes], dtype=int)
-        for node, center in zip(nodes, voxels - offset):
-            s = img_util.get_slices(center, self.patch_shape)
-            patch = img[(slice(0, 2), *s)]
-            subgraph = self.graph.rooted_subgraph(node, self.subgraph_radius)
-            tree_sample = subgraph_to_tree_sample(subgraph, 0)
-            yield node, patch, tree_sample
-
     # --- Helpers ---
     def estimate_iterations(self):
         """
@@ -319,29 +299,9 @@ class DenseSearchDataset(SearchDataset):
 
 class SparseSearchDataset(SearchDataset):
 
-    def __init__(
-        self,
-        graph,
-        img_config,
-        modality="image",
-        min_search_size=0,
-        prefetch=64,
-        step_size=10,
-        subgraph_radius=100,
-    ):
-        # Call parent class
-        super().__init__(
-            graph,
-            img_config,
-            modality=modality,
-            min_search_size=min_search_size,
-            prefetch=prefetch,
-            subgraph_radius=subgraph_radius,
-        )
-
-        # Instance attributes
-        self.patch_loader = DetectionPatchLoader(self.graph, img_config)
-        self.search_mode = "sparse"
+    search_mode = "sparse"
+    patch_loader_cls = DetectionPatchLoader
+    default_step_size = 10
 
     def estimate_iterations(self):
         # Only fragments above min_search_size are searched
@@ -358,9 +318,3 @@ class SparseSearchDataset(SearchDataset):
 
     def get_patch(self, node, img):
         yield node, torch.from_numpy(img).float()
-
-    def get_patch_and_arborist(self, node, img):
-        patch = torch.from_numpy(img).float()
-        subgraph = self.graph.rooted_subgraph(node, self.subgraph_radius)
-        tree_sample = subgraph_to_tree_sample(subgraph, 0)
-        yield node, patch, tree_sample

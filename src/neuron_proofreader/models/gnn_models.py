@@ -1,192 +1,264 @@
 """
-Created on Fri April 11 11:00:00 2024
+Created on Fri Sep 25 2026
 
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Graph neural network architectures that classify edge proposals.
+Split-correction GNN models using the updated CNN3D vision backbone.
 
 """
 
-from torch import nn
 from torch_geometric import nn as nn_geometric
 
-import ast
 import torch
-import torch.nn.init as init
+import torch.nn as nn
 
-from neuron_proofreader.models.vision_models import CNN3D
+from arborist.models.arborist import Arborist
+from neuron_proofreader.models.new_vision_models import CNN3D
 from neuron_proofreader.split_proofreading import split_feature_extraction
 from neuron_proofreader.utils.ml_util import FeedForwardNet
 
 
-# --- Models ---
-class VisionHGAT(torch.nn.Module):
+def proposal_length_feature(tree_samples, device, dtype=torch.float32):
     """
-    Heterogeneous graph attention network that processes multimodal features
-    such as image patches and feature vectors.
+    Log-scaled proposal length, one scalar per sample. Length is a property
+    of the candidate edge that neither the rooted-subgraph curves nor the
+    resized image patch expose, so it is fed to models explicitly.
+
+    Parameters
+    ----------
+    tree_samples : List[TreeSample]
+        Samples produced by ProposalTreeFeatureExtractor.
+
+    Returns
+    -------
+    torch.Tensor
+        Shape (n_samples, 1), values log1p(length_in_microns).
+    """
+    lengths = torch.tensor(
+        [s.proposal_length for s in tree_samples], device=device, dtype=dtype
+    )
+    return torch.log1p(lengths).unsqueeze(1)
+
+
+class ProposalTreeEncoder(nn.Module):
+    """
+    Encodes proposal-rooted TreeSamples into fixed-size embeddings using
+    Arborist. The two curves incident to the root (one per side of the
+    proposal) are mean-pooled after the GraphTransformer has contextualized
+    them against the rest of the subgraph.
+
+    Parameters
+    ----------
+    latent_dim : int, optional
+        Arborist latent dimension and output embedding size. Default is 64.
+    pretrained_curve_encoder_path : str or None, optional
+        Path to a CurveAutoencoder checkpoint whose encoder weights are loaded
+        into the CurveEncoder. Default is None.
+    freeze_curve_encoder : bool, optional
+        If True and a pretrained path is provided, the CurveEncoder is frozen.
+        Default is True.
+    **arborist_kwargs
+        Forwarded to the Arborist constructor.
     """
 
-    # Class attributes
-    relations = [
-        str(("branch", "to", "branch")),
-        str(("proposal", "to", "proposal")),
-        str(("branch", "to", "proposal")),
-        str(("proposal", "to", "branch")),
+    def __init__(
+        self,
+        latent_dim=64,
+        pretrained_curve_encoder_path=None,
+        freeze_curve_encoder=True,
+        **arborist_kwargs,
+    ):
+        super().__init__()
+        self.config = {"latent_dim": latent_dim, **arborist_kwargs}
+        self.arborist = Arborist(latent_dim=latent_dim, **arborist_kwargs)
+        if pretrained_curve_encoder_path is not None:
+            self._load_curve_encoder(pretrained_curve_encoder_path)
+            if freeze_curve_encoder:
+                for p in self.arborist.curve_encoder.parameters():
+                    p.requires_grad_(False)
+
+    def _load_curve_encoder(self, path):
+        ckpt = torch.load(path, weights_only=False)
+        state = ckpt.get("model_state", ckpt)
+        encoder_state = {
+            k[len("encoder."):]: v
+            for k, v in state.items()
+            if k.startswith("encoder.")
+        }
+        self.arborist.curve_encoder.load_state_dict(encoder_state)
+
+    @torch._dynamo.disable
+    def forward(self, tree_samples):
+        """
+        Parameters
+        ----------
+        tree_samples : List[TreeSample]
+            One sample per proposal, in proposal-index order.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape (n_proposals, latent_dim).
+        """
+        with torch.amp.autocast("cuda", enabled=False):
+            zs = []
+            for sample in tree_samples:
+                _, z_curves = self.arborist.encode(sample)
+                idx = sample.root_curve_indices or range(len(z_curves))
+                zs.append(z_curves[list(idx)].mean(dim=0))
+        return torch.stack(zs)
+
+
+class NewVisionHGAT(nn.Module):
+    """
+    Heterogeneous graph attention network for split correction.
+
+    Uses the updated CNN3D backbone from new_vision_models for image patch
+    encoding. Branch and proposal nodes are embedded from geometry features;
+    proposal nodes are then augmented with per-patch image embeddings before
+    two rounds of heterogeneous message passing classify each proposal.
+    """
+
+    _RELATIONS = [
+        ("branch", "to", "branch"),
+        ("proposal", "to", "proposal"),
+        ("branch", "to", "proposal"),
+        ("proposal", "to", "branch"),
     ]
 
     def __init__(
         self,
         patch_shape,
-        disable_msg_passing=False,
+        gnn_hidden_dim=64,
+        img_embed_dim=64,
         heads=4,
-        hidden_dim=128,
-        n_layers=2,
     ):
-        # Call parent class
+        """
+        Instantiates a NewVisionHGAT object.
+
+        Parameters
+        ----------
+        patch_shape : Tuple[int]
+            Spatial shape of image patches (D, H, W) — no channel dimension.
+        gnn_hidden_dim : int, optional
+            Hidden dimension for branch and proposal geometry embeddings.
+            Default is 64.
+        img_embed_dim : int, optional
+            Output dimension of the image patch encoder. Default is 64.
+        heads : int, optional
+            Number of attention heads per GAT layer. Default is 4.
+        """
         super().__init__()
 
-        # Initial embeddings
-        self.node_embedding = init_node_embedding(hidden_dim)
-        self.patch_embedding = init_patch_embedding(
-            patch_shape, hidden_dim // 2
+        feats = split_feature_extraction.get_feature_dict()
+
+        # Node feature embeddings: branch→gnn_hidden_dim,
+        # proposal→gnn_hidden_dim//2 (img features fill the other half).
+        self.node_embedding = nn.ModuleDict({
+            "branch": FeedForwardNet(feats["branch"], gnn_hidden_dim, 3),
+            "proposal": FeedForwardNet(
+                feats["proposal"], gnn_hidden_dim // 2, 3
+            ),
+        })
+
+        # Image patch embedding: 2-channel input (raw image + segmentation mask).
+        self.patch_embedding = CNN3D(
+            (2,) + tuple(patch_shape),
+            output_dim=img_embed_dim,
+            use_output_head=True,
         )
 
-        # Message passing layers
-        self.disable_msg_passing = disable_msg_passing
-        if self.disable_msg_passing:
-            self.gat1 = self.init_mlp_layers(hidden_dim, n_layers)
-            self.gat2 = self.init_mlp_layers(hidden_dim, n_layers)
-            self.output = nn.Linear(hidden_dim, 1)
-        else:
-            self.gat1 = self.init_gat(hidden_dim, hidden_dim, heads)
-            self.gat2 = self.init_gat(hidden_dim * heads, hidden_dim, heads)
-            self.output = nn.Linear(hidden_dim * heads**2, 1)
+        # Heterogeneous GAT layers.
+        # After node embedding + image fusion, proposal nodes have dim
+        # gnn_hidden_dim//2 + img_embed_dim; branch nodes have dim
+        # gnn_hidden_dim.  GATv2Conv handles mismatched dims via lazy
+        # (-1) input initialisation.
+        self.gat1 = _build_hetero_gat(gnn_hidden_dim, heads)
+        self.gat2 = _build_hetero_gat(gnn_hidden_dim * heads, heads)
+        self.output = nn.Linear(gnn_hidden_dim * heads ** 2, 1)
 
-        # Initialize weights
-        self.init_weights()
+        self.config = {
+            "patch_shape": tuple(patch_shape),
+            "gnn_hidden_dim": gnn_hidden_dim,
+            "img_embed_dim": img_embed_dim,
+            "heads": heads,
+        }
 
-    def init_gat(self, hidden_dim, edge_dim, heads):
-        gat_dict = dict()
-        for relation in VisionHGAT.relations:
-            # Parse relation string
-            relation = ast.literal_eval(relation)
-            node_type_1, _, node_type_2 = relation
-            is_same = node_type_1 == node_type_2
+        self._init_weights()
 
-            # Initialize layer
-            init_gat = init_gat_same if is_same else init_gat_mixed
-            gat_dict[relation] = init_gat(hidden_dim, edge_dim, heads)
-        return nn_geometric.HeteroConv(gat_dict)
-
-    def init_mlp_layers(self, hidden_dim, n_layers=2):
-        layers = nn.ModuleList()
-        for _ in range(n_layers):
-            layers.append(
-                nn_geometric.HeteroDictLinear(
-                    hidden_dim, hidden_dim, types=("branch", "proposal")
-                )
-            )
-        return layers
-
-    def init_weights(self):
-        """
-        Initializes linear layers.
-        """
-        for layer in [self.node_embedding, self.patch_embedding, self.output]:
-            for param in layer.parameters():
-                if len(param.shape) > 1:
-                    init.kaiming_normal_(param)
+    def _init_weights(self):
+        for module in [self.node_embedding, self.output]:
+            for p in module.parameters():
+                if p.dim() > 1:
+                    nn.init.kaiming_normal_(p)
                 else:
-                    init.zeros_(param)
+                    nn.init.zeros_(p)
 
     def forward(self, input_dict):
+        """
+        Parameters
+        ----------
+        input_dict : dict
+            Must contain:
+              "img"            – (N_proposals, 2, D, H, W) image patches
+              "x_dict"         – dict mapping node type → feature tensor
+              "edge_index_dict" – dict mapping edge type → (2, E) index tensor
+
+        Returns
+        -------
+        torch.Tensor
+            Per-proposal logits with shape (N_proposals, 1).
+        """
         x_dict = input_dict["x_dict"]
         x_img = input_dict["img"]
         edge_index_dict = input_dict["edge_index_dict"]
 
-        # Initial embedding. Patches arrive as float16; outside autocast the
-        # convolutions need them in the weight dtype.
+        # Patches may arrive as float16 from the dataloader; convolutions need
+        # them in the parameter dtype when not running inside autocast.
         if not torch.is_autocast_enabled():
             x_img = x_img.to(next(self.patch_embedding.parameters()).dtype)
         x_img = self.patch_embedding(x_img)
+
+        # Embed node geometry features, then fuse image embeddings into proposals.
         for key, f in self.node_embedding.items():
             x_dict[key] = f(x_dict[key])
         x_dict["proposal"] = torch.cat((x_dict["proposal"], x_img), dim=1)
 
-        # Message passing
-        if self.disable_msg_passing:
-            for layer in self.gat1:
-                x_dict = layer(x_dict)
-            for layer in self.gat2:
-                x_dict = layer(x_dict)
-        else:
-            x_dict = self.gat1(x_dict, edge_index_dict)
-            x_dict = self.gat2(x_dict, edge_index_dict)
+        # Two rounds of heterogeneous message passing.
+        x_dict = self.gat1(x_dict, edge_index_dict)
+        x_dict = self.gat2(x_dict, edge_index_dict)
         return self.output(x_dict["proposal"])
 
+    def save(self, path):
+        torch.save({"config": self.config, "state_dict": self.state_dict()}, path)
 
-# --- Helpers ---
-def init_gat_same(hidden_dim, edge_dim, heads):
-    gat = nn_geometric.GATv2Conv(
-        -1, hidden_dim, dropout=0.1, edge_dim=edge_dim, heads=heads
-    )
-    return gat
-
-
-def init_gat_mixed(hidden_dim, edge_dim, heads):
-    gat = nn_geometric.GATv2Conv(
-        (hidden_dim, hidden_dim),
-        hidden_dim,
-        add_self_loops=False,
-        dropout=0.1,
-        edge_dim=edge_dim,
-        heads=heads,
-    )
-    return gat
+    @classmethod
+    def load(cls, path, map_location=None):
+        ckpt = torch.load(path, map_location=map_location, weights_only=True)
+        model = cls(**ckpt["config"])
+        model.load_state_dict(ckpt["state_dict"])
+        return model
 
 
-def init_node_embedding(output_dim):
+def _build_hetero_gat(out_dim, heads):
     """
-    Builds a node embedding layer using a feed forward network for each
-    node type.
-
-    Parameters
-    ----------
-    output_dim : int
-        Output dimension for the embeddings. Note that the proposal output
-        dimension must be divided by 2 to account for the image patch
-        features.
+    Builds a HeteroConv with GATv2Conv for every relation in NewVisionHGAT.
+    Same-type relations use a single input-dim spec; cross-type relations use
+    a pair so GATv2Conv can handle bipartite input.
     """
-    # Get feature dimensions
-    node_input_dims = split_feature_extraction.get_feature_dict()
-    dim_b = node_input_dims["branch"]
-    dim_p = node_input_dims["proposal"]
-
-    # Set node embedding layer
-    node_embedding = nn.ModuleDict(
-        {
-            "branch": FeedForwardNet(dim_b, output_dim, 3),
-            "proposal": FeedForwardNet(dim_p, output_dim // 2, 3),
-        }
-    )
-    return node_embedding
-
-
-def init_patch_embedding(patch_shape, output_dim):
-    """
-    Builds the initial image patch embedding layer using a Convolutional
-    Neural Network (CNN).
-
-    Parameters
-    ----------
-    output_dim : int
-        Output dimension of the embedding.
-    """
-    patch_embedding = CNN3D(
-        patch_shape,
-        output_dim=output_dim,
-        n_conv_layers=6,
-        n_feat_channels=24,
-    )
-    return patch_embedding
+    gat_dict = {}
+    for rel in NewVisionHGAT._RELATIONS:
+        src, _, dst = rel
+        if src == dst:
+            conv = nn_geometric.GATv2Conv(-1, out_dim, dropout=0.1, heads=heads)
+        else:
+            conv = nn_geometric.GATv2Conv(
+                (-1, -1),
+                out_dim,
+                add_self_loops=False,
+                dropout=0.1,
+                heads=heads,
+            )
+        gat_dict[rel] = conv
+    return nn_geometric.HeteroConv(gat_dict)
